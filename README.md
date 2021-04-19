@@ -1,4 +1,4 @@
-# Publishing Data Repository (oar-pdr)
+# Publishing Data Repository: Python Support (oar-pdr-py)
 
 This repository provides Python components that implement key services
 for the NIST Publishing Data Repository (PDR) platform.  Python is
@@ -18,7 +18,10 @@ the following goals:
      multiple publication channels
   *  Integrate with a new oar-pdr2 that combines the multi-language
      implementations into a single repository via language-based
-     submodules.  
+     submodules.
+
+For deeper history of the python code, consult the git logs for
+oar-pdr v1.4.7.  
 
 ## Contents
 
