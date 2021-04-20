@@ -2,6 +2,18 @@ import os, sys, subprocess, pdb, unittest
 from distutils.core import setup
 from distutils.command.build import build as _build
 
+CLASSIFIERS = [
+    'Operating System :: POSIX',
+    'Operating System :: MacOS :: MacOS X',
+    'Intended Audience :: Science/Research',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.5',
+    'Programming Language :: Python :: 3.6',
+    'Programming Language :: Python :: 3.7',
+    'Topic :: Scientific/Engineering'
+]
+
 def set_version():
     try:
         pkgdir = os.environ.get('PACKAGE_DIR', '..')
@@ -91,9 +103,11 @@ setup(name='nistoar',
       url='https://github.com/usnistgov/oar-pdr-py',
       scripts=[ ],
       packages=[
+          'nistoar.pdr',
           'nistoar.testing'
       ],
       package_data={'nistoar.pdr': [ 'data/*' ]},
-      cmdclass={'build': build}
+      cmdclass={'build': build},
+      classifiers=CLASSIFIERS
 )
 
