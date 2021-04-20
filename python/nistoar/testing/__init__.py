@@ -129,7 +129,7 @@ class Tempfiles(object):
         """
         remove all files and directories being tracked by this instance.
         """
-        for i in xrange(len(self._files)):
+        for i in range(len(self._files)):
             filen = self._files.pop()
             path = os.path.join(self._root, filen)
             if os.path.exists(path):

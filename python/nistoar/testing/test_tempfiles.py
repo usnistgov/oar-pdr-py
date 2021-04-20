@@ -9,11 +9,11 @@ class TestFunctions(test.TestCase):
     def test_tmpdir(self):
         td = tmpdir()
         self.assertEqual(os.path.dirname(td), os.getcwd())
-        self.assertRegexpMatches(os.path.basename(td), r"^_test.\d+$")
+        self.assertRegex(os.path.basename(td), r"^_test.\d+$")
 
         td = tmpdir("/tmp")
         self.assertEqual(os.path.dirname(td), "/tmp")
-        self.assertRegexpMatches(os.path.basename(td), r"^_test.\d+$")
+        self.assertRegex(os.path.basename(td), r"^_test.\d+$")
 
         td = tmpdir(dirname="_goob")
         self.assertEqual(os.path.dirname(td), os.getcwd())
@@ -28,20 +28,20 @@ class TestFunctions(test.TestCase):
         base = os.path.basename(tdir)
 
         td = ensure_tmpdir()
-        self.assertEquals(td, tdir)
+        self.assertEqual(td, tdir)
         self.assertTrue(os.path.exists(td))
         self.assertTrue(os.path.isdir(td))
         self.assertEqual(os.path.dirname(td), os.getcwd())
-        self.assertRegexpMatches(os.path.basename(tdir), r"^_test.\d+$")
+        self.assertRegex(os.path.basename(tdir), r"^_test.\d+$")
         shutil.rmtree(td)
         assert not os.path.exists(td)
 
         td = ensure_tmpdir("/tmp")
-        self.assertEquals(td, os.path.join("/tmp", base))
+        self.assertEqual(td, os.path.join("/tmp", base))
         self.assertTrue(os.path.exists(td))
         self.assertTrue(os.path.isdir(td))
         self.assertEqual(os.path.dirname(td), "/tmp")
-        self.assertRegexpMatches(os.path.basename(td), r"^_test.\d+$")
+        self.assertRegex(os.path.basename(td), r"^_test.\d+$")
         shutil.rmtree(td)
         assert not os.path.exists(td)
 
