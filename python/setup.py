@@ -103,7 +103,8 @@ setup(name='nistoar',
       url='https://github.com/usnistgov/oar-pdr-py',
       scripts=[ ],
       packages=[
-          'nistoar.pdr',
+          'nistoar.pdr', 'nistoar.pdr.preserve', 'nistoar.pdr.preserve.bagit', 
+          'nistoar.pdr.preserve.bagit.validate', 'nistoar.pdr.preserve.bagit.tools',
           'nistoar.testing'
       ],
       package_data={'nistoar.pdr': [ 'data/*' ]},
