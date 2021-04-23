@@ -129,61 +129,6 @@ class NERDError(StateException):
         super(NERDError, self).__init__(msg, cause, sys=sys)
         self.source = src
 
-class SIPDirectoryError(PDRException):
-    """
-    a class indicating a problem with the given directory containing 
-    the submission data.
-    """
-    def __init__(self, dir=None, problem=None, cause=None, msg=None, sys=None):
-        """
-        initial the exception.  By default the exception message will
-        be formatted by combining the directory name and the problem statement.
-        This can be overridden by providing a verbatim message via the msg
-        parameter.
-
-        If no arguments are provided, it is assumed that the problem is that 
-        an SIP directory was not provided.
-
-        :param dir  str:   the directory giving the problem
-        :param problem str:   a statement of what the problem is; this should not
-                           include the name of the directroy.
-        :param cause Exception:  a caught exception that represents the 
-                           underlying cause of the problem.  
-        :param msg  str:   a fully formatted to string to use as the exception
-                           message instead of one formed by combining the 
-                           directory name and its problem.
-        :param sys SystemInfo:  a SystemInfo instance that can provide 
-                        information as to the cause of the 
-        """
-        self.dir = dir
-        if not problem:
-            if cause:
-                problem = str(cause)
-            elif not dir:
-                problem = "SIP directory not provided"
-        if not msg:
-            if dir:
-                msg = "Problem with SIP directory, {0}: {1}".format(dir, problem)
-            else:
-                msg = problem
-        super(SIPDirectoryError, self).__init__(msg, cause, sys)
-        self.problem = problem
-                    
-class SIPDirectoryNotFound(SIPDirectoryError):
-    """
-    An exception indicating the SIPDirectory does not exist
-    """
-    def __init__(self, dir=None, cause=None, msg=None, sys=None):
-        """
-        :param dir  str:   the directory giving the problem
-        :param cause Exception:  a caught exception that represents the 
-                           underlying cause of the problem.  
-        :param msg  str:   A message to override the default.
-        """
-        prob = "directory not found"
-        super(SIPDirectoryNotFound, self).__init__(dir, prob, cause, msg, sys)
-
-
 class PDRServiceException(PDRException):
     """
     an exception indicating a problem using a PDR service.

@@ -76,15 +76,12 @@ class RESTServiceClient(object):
             relurl = '/'+relurl
 
         try:
-            out = urllib.request.urlopen(self.base+relurl)
+            return urllib.request.urlopen(self.base+relurl)
 
+        except urllib.request.HTTPError as out:
             code = out.getcode()
             hdrs = out.info()
-            reason = "(unknown)"
-            if 'status' in hdrs:
-                reason = hdrs['status']
-                if re.match(r'^\d{3} ', reason):
-                    reason = reason[4:]
+            reason = out.reason
 
             if code >= 500:
                 raise DistribServerError(relurl, code, reason)
@@ -101,7 +98,6 @@ class RESTServiceClient(object):
                                message="Unexpected response from server: {0} {1}"
                                         .format(code, reason))
 
-            return out
         except IOError as ex:
             raise DistribServerError(message="Trouble connecting to distribution"
                                      +" service: "+str(ex), cause=ex)
