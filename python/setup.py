@@ -106,7 +106,7 @@ setup(name='nistoar',
           'nistoar.pdr', 'nistoar.pdr.preserve', 'nistoar.pdr.preserve.bagit', 
           'nistoar.pdr.preserve.bagit.validate', 'nistoar.pdr.preserve.bagit.tools',
           'nistoar.pdr.describe', 'nistoar.pdr.distrib', 'nistoar.pdr.publish',
-          'nistoar.pdr.publish.bagger', 
+          'nistoar.pdr.publish.bagger', 'nistoar.pdr.notify',
           'nistoar.testing'
       ],
       package_data={'nistoar.pdr': [ 'data/*' ]},
