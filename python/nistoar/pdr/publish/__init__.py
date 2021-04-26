@@ -1,5 +1,10 @@
 """
-Provide tools creating and updating PDR data publications
+Provide tools creating and updating PDR data publications.  
+
+The primary aim of this package is to produce complete SIPs that can be preserved into long-term 
+storage (after conversion to an AIP) and ingested into the PDR.  Typically, the SIP takes the form 
+of an unserialized BagIt bag that conforms to the NIST Preservation Bag Profile; however, this 
+publishing model does not require this.  
 """
 from ..exceptions import *
 from ... import pdr as _pdr
