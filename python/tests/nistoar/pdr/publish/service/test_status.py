@@ -295,62 +295,29 @@ class TestSIPStatus(test.TestCase):
         self.assertEqual(self.status.data['user']['message'], "chugging...")
 
     def test_user_export(self):
+        self.status.start('goob')
         self.status.update(status.FAILED)
-        self.status = status.SIPStatus.for_update('ffff', self.cfg)
-        self.status.start("goob1")
+        self.status.start('gurn')
+
         data = self.status.user_export()
         self.assertIn('id',  data)
         self.assertIn('state',  data)
+        self.assertIn('siptype', data)
         self.assertIn('history', data)
         self.assertEqual(data['id'],  'ffff')
         self.assertEqual(data['state'],  status.PROCESSING)
+        self.assertEqual(data['siptype'],  'gurn')
         self.assertEqual(data['history'][0]['state'],  status.FAILED)
-        
-    def test_reset(self):
-        self.assertEqual(self.status.state, status.NOT_FOUND)
+        self.assertEqual(data['history'][0]['siptype'],  'goob')
 
-        self.status.reset()
-        self.assertEqual(self.status.state, status.PENDING)
-        self.assertEqual(self.status.data['history'], [])
-        
-        self.status.start("goob1")
-        self.status.update(status.FAILED)
-        self.status.reset()
-        self.assertEqual(self.status.state, status.PENDING)
-        self.assertEqual(self.status.data['history'][0]['state'], status.FAILED)
-
-        
-
-    def test_for_update(self):
-        self.status.start("goob1")
-        self.status.update(status.FAILED)
-
-        self.status = status.SIPStatus.for_update('ffff', self.cfg)
+    def test_revert(self):
+        self.test_user_export()
+        self.status.revert()
         self.assertEqual(self.status.id, 'ffff')
-        self.assertEqual(self.status.data['user']['state'], status.PENDING)
-        self.assertIn('update_time', self.status.data['user'])
-        self.assertIn('history', self.status.data)
-        history = self.status.data['history']
-        self.assertEqual(len(history), 1)
-        self.assertNotIn('history', history[0])
-        self.assertNotIn('id', history[0])
-        self.assertEqual(history[0]['state'], status.FAILED)
-
-        self.status.update(status.PUBLISHED)
-        self.status = status.SIPStatus.for_update('ffff', self.cfg)
-        self.assertEqual(self.status.id, 'ffff')
-        self.assertEqual(self.status.data['user']['state'], status.PENDING)
-        self.assertIn('update_time', self.status.data['user'])
-        self.assertIn('history', self.status.data)
-        history = self.status.data['history']
-        self.assertEqual(len(history), 2)
-        self.assertNotIn('history', history[0])
-        self.assertNotIn('id', history[0])
-        self.assertEqual(history[0]['state'], status.PUBLISHED)
-        self.assertNotIn('history', history[1])
-        self.assertNotIn('id', history[1])
-        self.assertEqual(history[1]['state'], status.FAILED)
-
+        self.assertEqual(self.status.state, status.FAILED)
+        self.assertEqual(self.status.siptype, 'goob')
+        self.assertEqual(self.status.history, [])
+        
     def test_record_progress(self):
         self.assertEqual(self.status.data['user']['state'], status.NOT_FOUND)
 

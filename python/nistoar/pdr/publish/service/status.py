@@ -198,9 +198,10 @@ class SIPStatus(object):
             self._data = OrderedDict([
                 ('sys', {}),
                 ('user', OrderedDict([
+                    ('id', ''),
                     ('state', NOT_FOUND),
-                    ('message', user_message[NOT_FOUND]),
                     ('siptype', '')
+                    ('message', user_message[NOT_FOUND]),
                 ])),
                 ('history', [])
             ])
@@ -268,17 +269,22 @@ class SIPStatus(object):
         self._data['user']['updated'] = time.asctime()
         SIPStatusFile.write(self._cachefile, self._data)
         
-    def update(self, label, message=None, cache=True):
+    def update(self, label, message=None, sysdata=None, cache=True):
         """
         change the state of the processing.  In addition to updating the 
         data in-memory, the full, current set of status metadata will be 
         flushed to disk.
 
-        :param label   str:  one of the recognized state labels defined in this
-                             class's module (e.g. PENDING).  
-        :param message str:  an optional message for display to the end user
-                             explaining this state.  If not provided, a default
-                             explanation is set. 
+        :param str    label:  one of the recognized state labels defined in this
+                              class's module (e.g. PENDING).  
+        :param str  message:  an optional message for display to the end user
+                              explaining this state.  If not provided, a default
+                              explanation is set. 
+        :param dict sysdata:  extra internal data properties to update.  This will
+                              not be included in the user-exported data, but it 
+                              will get cached.
+        :param bool   cache:  if True (default), persist the status information after 
+                              update.
         """
         if label not in states:
             raise ValueError("Not a recognized state label: "+label)
@@ -289,7 +295,7 @@ class SIPStatus(object):
         if cache:
             self.cache()
 
-    def reset(self, message=None):
+    def remember(self, cache=True):
         """
         Save the current status information as part of its history and then 
         reset that status to PENDING,
@@ -298,16 +304,43 @@ class SIPStatus(object):
                              explaining this state.  If not provided, a default
                              explanation is set. 
         """
-        if 'update_time' in self._data['user']:
+        if 'update_time' not in self._data['user']:
             # save the current status only if it was previously cached to disk
-            oldstatus = deepcopy(self._data['user'])
-            del oldstatus['id']
-            if 'history' in self.data:
-                self._data['history'].insert(0, oldstatus)
-            else:
-                self._data['history'] = [ oldstatus ]
+            return
+        
+        oldstatus = deepcopy(self._data['user'])
+        del oldstatus['id']
+        if 'history' in self.data:
+            self._data['history'].insert(0, oldstatus)
+        else:
+            self._data['history'] = [ oldstatus ]
 
-        self.update(PENDING, message)
+        if cache:
+            self.update(PENDING, message)
+
+    def revert(self):
+        """
+        reset this status to the last state saved to the status history.  This is usually the state just 
+        before the last call to start().  This should be called if SIP processing is canceled.
+        """
+        self.refresh()
+        if 'history' in self.data and len(self.data['history']) > 0:
+            id = self.id
+            self._data['user'] = self._data['history'].pop(0)
+            self._data['user']['id'] = id
+            self.cache()
+        else:
+            self._data['sys'] = {}
+            self._data['user'] = OrderedDict([
+                ('id', self._data['user']['id']),
+                ('state', NOT_FOUND),
+                ('siptype', self._data['user']['siptype']),
+                ('message', user_message[NOT_FOUND])
+            ])
+            self._data['history'] = []
+            if os.path.exists(self._cachefile):
+                os.remove(self._cachefile)
+            
 
     def start(self, siptype, message=None):
         """
@@ -318,9 +351,14 @@ class SIPStatus(object):
                              explaining this state.  If not provided, a default
                              explanation is set. 
         """
+        self.refresh()
+        if self.state == PUBLISHED or self.state == FAILED:
+            self.remember(False)
         self._data['user']['siptype'] = siptype;
         self._data['user']['start_time'] = time.time()
         self._data['user']['started'] = time.asctime()
+        if self.state == FAILED and self._data['sys']:
+            self._data['sys'] = {}
         self.update(PROCESSING, message)
 
     def record_progress(self, message):
@@ -349,20 +387,6 @@ class SIPStatus(object):
             out['published'] = True
         return out
 
-
-    @classmethod
-    def for_update(cls, sipid, cfg=None, sysdata=None):
-        """
-        create an SIPStatus to track an update to a previously preserved SIP.  
-        """
-        out = SIPStatus(sipid, cfg, sysdata)
-        if 'update_time' not in out.data['user']:
-            return out
-
-        out.reset("update requested; will start shortly")
-        return out
-
-        
     @classmethod
     def requests(cls, config):
         """
