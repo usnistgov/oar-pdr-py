@@ -36,6 +36,9 @@ class SimArchive(object):
     def ediid_to_id(self, ediid):
         return self.lu.get(ediid)
 
+    def ids(self):
+        return [f[:-5] for f in os.listdir(self.dir) if f.endswith(".json")]
+
 class SimRMM(object):
     def __init__(self, recdir):
         self.archive = SimArchive(recdir)
@@ -116,40 +119,47 @@ class SimRMMHandler(object):
             path = path.rstrip('/')
         if path.startswith("records"):
             path = path[len("records"):].lstrip('/')
-        id = None
+        ids = []
         print("path="+str(path)+"; params="+str(params))
-        if not path and params and "@id" in params:
+        if not path and "@id" in params:
             path = params["@id"]
             path = (len(path) > 0 and path[0]) or ''
         if path:
             if path.startswith("ark:/88434/"):
-                id = path[len("ark:/88434/"):]
+                ids = [path[len("ark:/88434/"):]]
             else:
                 self.arch.loadlu()
-                id = self.arch.ediid_to_id(path)
+                ids = [self.arch.ediid_to_id(path)]
+        else:
+            ids = self.arch.ids()
 
-        if id:
+        out = { "ResultCount": 0, "PageSize": 0, "ResultData": [] }
+        for id in ids:
             mdfile = os.path.join(self.arch.dir, id+".json")
-        if not id or not os.path.exists(mdfile):
-            if not id:
-                id = "resource"
-            return self.send_error(404, id + " does not exist")
+            if os.path.exists(mdfile):
+                try:
+                    with open(mdfile) as fd:
+                        data = json.load(fd, object_pairs_hook=OrderedDict)
+                    data["_id"] ={"timestamp":1521220572,"machineIdentifier":3325465}
+                    out["ResultData"].append(data)
+                    out["ResultCount"] += 1
+                    out["PageSize"] += 1
 
-        try:
-            with open(mdfile) as fd:
-                data = json.load(fd, object_pairs_hook=OrderedDict)
-                data["_id"] ={"timestamp":1521220572,"machineIdentifier":3325465}
-                if params and "@id" in params:
-                    data = { "ResultCount": 1, "PageSize": 0,
-                             "ResultData": [ data ] }
-        except Exception as ex:
-            print(str(ex))
-            return self.send_error(500, "Internal error")
+                except Exception as ex:
+                    print(str(ex))
+                    if len(ids) == 1:
+                        return self.send_error(500, "Internal error")
 
+        if len(ids) == 1:
+            if len(out["ResultData"]) == 0:
+                return self.send_error(404, id + " does not exist")
+            elif path and (not params or not params['@id']):
+                out = out["ResultData"][0]
+            
         self.set_response(200, "Identifier exists")
         self.add_header('Content-Type', 'application/json')
         self.end_headers()
-        out = json.dumps(data, indent=2) + "\n"
+        out = json.dumps(out, indent=2) + "\n"
         return [ out.encode() ]
             
             

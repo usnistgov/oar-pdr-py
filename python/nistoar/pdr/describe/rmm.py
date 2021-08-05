@@ -20,8 +20,7 @@ class MetadataClient(object):
 
     def describe(self, id):
         """
-        return the NERDm metadata describing the data entity with the given
-        ID.  
+        return the NERDm metadata describing the data entity with the given ID.  
         """
         url = None
         if id.startswith("ark:"):
@@ -37,6 +36,7 @@ class MetadataClient(object):
         if "_id" in out:
             del out['_id']
         return out
+
 
     def _url_for_pdr_id(self, id):
         return self.baseurl + "records?@id=" + id
@@ -88,6 +88,58 @@ class MetadataClient(object):
                                  message="Trouble connecting to distribution"
                                  +" service: "+ str(ex), cause=ex)
 
+    def search(self, query=None):
+        """
+        return the NERDm record matching a given query.  All records are returned if a query is not 
+        provided.  
+
+        [Document RMM search paramters]
+
+        :param dict query:  a dictionary whose properties specify the RMM search query parameters by name
+        """
+        qstr = ""
+        if query:
+            qstr = "&".join(["%s=%s" % i for i in query.items()])
+        url = self.baseurl + "records?" + qstr
+
+        hdrs = { "Accept": "application/json" }
+        try:
+            resp = requests.get(url, headers=hdrs)
+
+            if resp.status_code >= 500:
+                raise RMMServerError("records", resp.status_code, resp.reason)
+            elif resp.status_code >= 400 and (resp.status_code != 404 or resp.status_code != 406):
+                raise RMMClientError("records", resp.status_code, resp.reason)
+            elif resp.status_code != 200:
+                raise RMMServerError("records", resp.status_code, resp.reason,
+                               message="Unexpected response from server: {0} {1}"
+                                        .format(resp.status_code, resp.reason))
+
+            # This gets around an incorrect implementation of the RMM service
+            out = resp.json()
+            if "Message" in out and "ResultData" not in out:
+                if "No record available" in out['Message']:
+                    # RMM should have responded with 404!
+                    return []
+                raise RMMServerError("records", message="Unexpected response: "+
+                                     out['Message'])
+
+            return out['ResultData']
+        except ValueError as ex:
+            if resp.text and ("<body" in resp.text or "<BODY" in resp.text):
+                raise RMMServerError(id,
+                                     message="HTML returned where JSON "+
+                                     "expected (is service URL correct?)")
+            else:
+                raise RMMServerError(id,
+                                     message="Unable to parse response as "+
+                                     "JSON (is service URL correct?)")
+        except requests.RequestException as ex:
+            raise RMMServerError(id,
+                                 message="Trouble connecting to metadata"
+                                 +" service: "+ str(ex), cause=ex)
+
+        
             
 class RMMServerError(PDRServerError):
     """

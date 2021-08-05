@@ -84,6 +84,13 @@ class TestMetadataClient(test.TestCase):
         data = self.cli.describe("ABCDEFG")
         self.assertEqual(data['@id'], 'ark:/88434/pdr02d4t')
 
+    def test_search(self):
+        data = self.cli.search()
+        self.assertEqual(len(data), 2)
+
+        ids = [d['@id'] for d in data if '@id' in d]
+        self.assertIn("ark:/88434/pdr02d4t", ids)
+        self.assertIn("ark:/88434/edi00hw91c", ids)
         
 
         

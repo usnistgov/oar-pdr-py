@@ -84,6 +84,12 @@ class TestArchive(test.TestCase):
     def test_ediid_to_id(self):
         self.assertEqual(self.arch.ediid_to_id("ABCDEFG"), "pdr02d4t")
 
+    def test_ids(self):
+        ids = self.arch.ids();
+        self.assertEqual(len(ids), 2)
+        self.assertIn("pdr02d4t", ids)
+        self.assertIn("pdr2210", ids)
+
 class TestSimService(test.TestCase):
 
     @classmethod
@@ -124,7 +130,27 @@ class TestSimService(test.TestCase):
         data = resp.json()
         self.assertEqual(data["@id"], id)
         
-                             
+    def test_search_all(self):
+        resp = requests.get(baseurl)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.reason, "Identifier exists")
+        data = resp.json()
+        self.assertIn("ResultData", data)
+        ids = [d['@id'] for d in data["ResultData"] if '@id' in d]
+
+        # the exact # of results depends on whether test_post_rec runs before or after this test
+        self.assertGreaterEqual(len(data["ResultData"]), 2)
+        self.assertGreaterEqual(data["ResultCount"], 2)
+        self.assertGreaterEqual(data["PageSize"], 2)
+        self.assertLessEqual(len(data["ResultData"]), 3)
+        self.assertLessEqual(data["ResultCount"], 3)
+        self.assertLessEqual(data["PageSize"], 3)
+
+        self.assertIn("ark:/88434/pdr02d4t", ids)
+        self.assertIn("ark:/88434/edi00hw91c", ids)
+        if len(ids) > 2:
+            self.assertIn("ark:/55121/mds1-1000", ids)
+
 
 
 if __name__ == '__main__':
