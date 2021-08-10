@@ -3,9 +3,10 @@ Tools for serializing and running checksums on bags
 """
 import subprocess as sp
 from io import StringIO
-import logging, os
+import logging, os, zipfile, re
 
 from .exceptions import BagSerializationError
+from ...exceptions import StateException
 from .. import sys as _sys
 
 def _exec(cmd, dir, log):
@@ -82,6 +83,60 @@ def zip_serialize(bagdir, destdir, log, destfile=None):
 
     return destfile
 
+def zip_deserialize(bagfile, destdir, log):
+    """
+    unpack a zip-serialized bag into a specified directory
+    :param str bagfile:  the name of the serialized bag file
+    :param str destdir:  the output directory to write the the unpacked bag into
+    :param log:   the Logger object to send comments to 
+    """
+    if not os.path.isfile(bagfile):
+        raise StateException("Can't unpack a missing bag file: "+bagfile)
+    if not os.path.isdir(destdir):
+        raise StateException("Can't unpack a serialized bag into missing destination diretory: "
+                             +destdir)
+    outbag = zip_determine_bagname(bagfile)
+    if os.path.exists(outbag):
+        raise StateException("Destination bag already exists: "+outbag)
+
+    bagfile = os.path.join(os.getcwd(), bagfile)
+
+    cmd = "unzip -q %s" % bagfile
+    try:
+        _exec(cmd.split(), destdir, log)
+    except sp.CalledProcessError as ex:
+        if os.path.exists(outbag):
+            try:
+                shutil.rmtree(outbag)
+            except Exception:
+                pass
+        message = zip_error.get(str(ex.returncode))
+        if not message:
+            message = "Bag deserialzation failure using zip (consult log)"
+        raise BagSerializationError(message, os.path.basename(bagfile), ex, sys=_sys)
+
+def zip_determine_bagname(bagfile):
+    """
+    peek into the zip-serialized bag and determine its name.  It will look for the bag-info.txt file
+    and determine the name of its parent directory.  A BagSerializationError is raised if the file 
+    does not appear to be a readable zipfile containing a legal bag.  
+    """
+    baginfore = re.compile(r"^[^/]+/bag-info.txt$")
+    try:
+        infos = []
+        with zipfile.ZipFile(bagfile) as zf:
+            infos = [f for f in zf.namelist() if baginfore.match(f)]
+        if len(infos) == 0:
+            raise BagSerializationError("%s: not a bag file (missing bag-info.txt file)" % bagfile, bagfile)
+        if len(infos) > 1:
+            raise BagSerializationError("%s: not a bag file (too many bag-info.txt files)" % bagfile, bagfile)
+
+        return infos[0].split('/')[0]
+
+    except zipfile.BadZipFile as ex:
+        raise BagSerializationError("%s: not a legal zip file (too many bag-info.txt files)" % bagfile,
+                                    bagfile)
+
 def zip7_serialize(bagdir, destdir, log, destfile=None):
     """
     serialize a bag with 7zip
@@ -99,7 +154,7 @@ def zip7_serialize(bagdir, destdir, log, destfile=None):
         destfile = name+'.7z'
     destfile = os.path.join(destdir, destfile)
     
-    cmd = "7z a -t7z".split() + [ destfile, name ]
+    cmd = "7z a -t7z -bsp0".split() + [ destfile, name ]
     try:
         _exec(cmd, parent, log)
     except sp.CalledProcessError as ex:
@@ -115,6 +170,39 @@ def zip7_serialize(bagdir, destdir, log, destfile=None):
         raise BagSerializationError(msg, name, ex, sys=_sys)
 
     return destfile
+
+def zip7_deserialize(bagfile, destdir, log):
+    """
+    unpack a zip-serialized bag into a specified directory
+    :param str bagfile:  the name of the serialized bag file
+    :param str destdir:  the output directory to write the the unpacked bag into
+    :param log:   the Logger object to send comments to 
+    """
+    if not os.path.isfile(bagfile):
+        raise StateException("Can't unpack a missing bag file: "+bagfile)
+    if not os.path.isdir(destdir):
+        raise StateException("Can't unpack a serialized bag into missing destination diretory: "
+                             +destdir)
+    outbag = os.path.join(destdir, os.path.splitext(os.path.basename(bagfile))[0])
+    if os.path.exists(outbag):
+        raise StateException("Destination bag already exists: "+outbag)
+
+    bagfile = os.path.join(os.getcwd(), bagfile)
+
+    cmd = "7z x %s -bso0 -bsp0" % bagfile
+    try:
+        _exec(cmd.split(), destdir, log)
+    except sp.CalledProcessError as ex:
+        if os.path.exists(outbag):
+            try:
+                shutil.rmtree(outbag)
+            except Exception:
+                pass
+        message = zip_error.get(str(ex.returncode))
+        if not message:
+            message = "Bag deserialzation failure using zip (consult log)"
+        raise BagSerializationError(message, os.path.basename(bagfile), ex, sys=_sys)
+    
 
 class Serializer(object):
     """
@@ -169,9 +257,33 @@ class Serializer(object):
             if self.log:
                 log = self.log
             else:
-                log = logging.getLogger(_sys.system_abbrev).\
-                              getChild(_sys.subsystem_abbrev)
-        return self._map[format](bagdir, destdir, log)
+                log = logging.getLogger(_sys.system_abbrev).getChild(_sys.subsystem_abbrev)
+
+        return self._map[format][0](bagdir, destdir, log)
+
+    def deserialize(self, bagfile, destdir, format=None, log=None):
+        """
+        unpack a bag file based on the serialization format indicated by its name
+        :param str bagfile:  the name of the serialized bag file
+        :param str destdir:  the output directory to write the the unpacked bag into
+        :param str format:   the serialization format to assume; if None, the format will 
+                               discerned from the bag file's name
+        :param log:   the Logger object to send comments to 
+        """
+        if not format:
+            format = os.path.splitext(bagfile)[1][1:]
+            if not format or len(format) > 5:
+                raise BagSerializationError("Unable to determine serialization format for "+bagfile)
+        if format not in self._map:
+            raise BagSerializationError("Serialization format not supported: "+
+                                        str(format))
+        if not log:
+            if self.log:
+                log = self.log
+            else:
+                log = logging.getLogger(_sys.system_abbrev).getChild(_sys.subsystem_abbrev)
+
+        return self._map[format][1](bagfile, destdir, log)
 
 class DefaultSerializer(Serializer):
     """
@@ -180,6 +292,6 @@ class DefaultSerializer(Serializer):
 
     def __init__(self, log=None):
         super(DefaultSerializer, self).__init__({
-            "zip": zip_serialize,
-            "7z": zip7_serialize
+            "zip": (zip_serialize, zip_deserialize),
+            "7z": (zip7_serialize, zip7_deserialize)
         }, log)
