@@ -95,7 +95,7 @@ def zip_deserialize(bagfile, destdir, log):
     if not os.path.isdir(destdir):
         raise StateException("Can't unpack a serialized bag into missing destination diretory: "
                              +destdir)
-    outbag = zip_determine_bagname(bagfile)
+    outbag = os.path.join(destdir, zip_determine_bagname(bagfile))
     if os.path.exists(outbag):
         raise StateException("Destination bag already exists: "+outbag)
 
@@ -114,6 +114,8 @@ def zip_deserialize(bagfile, destdir, log):
         if not message:
             message = "Bag deserialzation failure using zip (consult log)"
         raise BagSerializationError(message, os.path.basename(bagfile), ex, sys=_sys)
+
+    return outbag
 
 def zip_determine_bagname(bagfile):
     """
@@ -202,7 +204,8 @@ def zip7_deserialize(bagfile, destdir, log):
         if not message:
             message = "Bag deserialzation failure using zip (consult log)"
         raise BagSerializationError(message, os.path.basename(bagfile), ex, sys=_sys)
-    
+
+    return outbag
 
 class Serializer(object):
     """

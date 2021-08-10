@@ -58,7 +58,7 @@ class TestSerialize(test.TestCase):
         outzip = os.path.join(self.tmpdir, destfile)
         self.assertTrue(not os.path.exists(outzip))
 
-        ser.zip_serialize(badsip, self.tmpdir, log, destfile)
+        self.assertEqual(ser.zip_serialize(badsip, self.tmpdir, log, destfile), outzip)
         self.assertTrue(os.path.exists(outzip))
         self.assertTrue(zip.is_zipfile(outzip))
         z = zip.ZipFile(outzip)
@@ -98,7 +98,7 @@ class TestSerialize(test.TestCase):
 
         outbag = os.path.join(self.tmpdir, "metadatabag")
         self.assertTrue(not os.path.exists(outbag))
-        ser.zip_deserialize(outzip, self.tmpdir, log)
+        self.assertEqual(ser.zip_deserialize(outzip, self.tmpdir, log), outbag)
         self.assertTrue(os.path.exists(outbag))
         self.assertTrue(os.path.exists(os.path.join(outbag,"preserv.log")))
         
@@ -135,7 +135,7 @@ class TestSerialize(test.TestCase):
 
         outbag = os.path.join(self.tmpdir, "metadatabag")
         self.assertTrue(not os.path.exists(outbag))
-        ser.zip7_deserialize(outzip, self.tmpdir, log)
+        self.assertEqual(ser.zip7_deserialize(outzip, self.tmpdir, log), outbag)
         self.assertTrue(os.path.exists(outbag))
         self.assertTrue(os.path.exists(os.path.join(outbag,"preserv.log")))
         
@@ -176,7 +176,7 @@ class TestDefaultSerializer(test.TestCase):
         outzip = os.path.join(tmpdir, "metadatabag.zip")
         self.assertTrue(not os.path.exists(outzip))
 
-        self.ser.serialize(bagdir, os.path.dirname(outzip), "zip", log)
+        self.assertEqual(self.ser.serialize(bagdir, os.path.dirname(outzip), "zip", log), outzip)
         self.assertTrue(os.path.exists(outzip))
         self.assertTrue(zip.is_zipfile(outzip))
         z = zip.ZipFile(outzip)
@@ -187,7 +187,7 @@ class TestDefaultSerializer(test.TestCase):
 
         outbag = os.path.join(tmpdir, "metadatabag")
         self.assertTrue(not os.path.exists(outbag))
-        self.ser.deserialize(outzip, tmpdir)
+        self.assertEqual(self.ser.deserialize(outzip, tmpdir), outbag)
         self.assertTrue(os.path.exists(outbag))
         self.assertTrue(os.path.exists(os.path.join(outbag, "preserv.log")))
         
