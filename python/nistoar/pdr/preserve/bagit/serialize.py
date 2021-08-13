@@ -10,7 +10,6 @@ from ...exceptions import StateException
 from .. import sys as _sys
 
 def _exec(cmd, dir, log):
-    log.info("serializing bag: %s", ' '.join(cmd))
     log.debug("expecting bag in dir: %s", dir)
 
     out = None
@@ -68,6 +67,7 @@ def zip_serialize(bagdir, destdir, log, destfile=None):
                              +destdir)
     
     cmd = "zip -qr".split() + [ os.path.abspath(destfile), name ]
+    log.info("serializing bag: %s", ' '.join(cmd))
     try:
         _exec(cmd, parent, log)
     except sp.CalledProcessError as ex:
@@ -102,6 +102,7 @@ def zip_deserialize(bagfile, destdir, log):
     bagfile = os.path.join(os.getcwd(), bagfile)
 
     cmd = "unzip -q %s" % bagfile
+    log.debug("unserializing bag: %s", cmd)
     try:
         _exec(cmd.split(), destdir, log)
     except sp.CalledProcessError as ex:
@@ -157,6 +158,7 @@ def zip7_serialize(bagdir, destdir, log, destfile=None):
     destfile = os.path.join(destdir, destfile)
     
     cmd = "7z a -t7z -bsp0".split() + [ destfile, name ]
+    log.info("serializing bag: %s", ' '.join(cmd))
     try:
         _exec(cmd, parent, log)
     except sp.CalledProcessError as ex:
@@ -192,6 +194,7 @@ def zip7_deserialize(bagfile, destdir, log):
     bagfile = os.path.join(os.getcwd(), bagfile)
 
     cmd = "7z x %s -bso0 -bsp0" % bagfile
+    log.debug("unserializing bag: %s", cmd)
     try:
         _exec(cmd.split(), destdir, log)
     except sp.CalledProcessError as ex:
