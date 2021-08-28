@@ -59,7 +59,11 @@ class SimArchive(object):
         self.loadinfo()
 
     def add_file(self, filename, size, hash):
-        m = bagvnmre.search(filename)
+        try: 
+            m = bagvnmre.search(filename)
+        except TypeError as ex:
+            print("Unexpected arg for filename: %s (%s)" % (str(filename), str(type(filename))))
+            raise
         if m:
             aid = m.group(1)
             vers = m.group(2)
@@ -84,10 +88,13 @@ class SimArchive(object):
         
     def loadinfo(self):
         self._aips = {}
-        for f in os.listdir(self.dir):
+        try: 
+          for f in os.listdir(self.dir):
             hash = checksum_of(os.path.join(self.dir, f))
             size = os.stat(os.path.join(self.dir, f)).st_size
             self.add_file(f, size, hash)
+        except TypeError as ex:
+            print("...occuring in "+str(self.dir))
 
     @property
     def aipids(self):
@@ -387,4 +394,8 @@ class SimDistribHandler(object):
         
             
 archdir = uwsgi.opt.get("archive_dir", def_archdir)
+try:
+    archdir = archdir.decode()
+except (UnicodeDecodeError, AttributeError):
+    pass
 application = SimDistrib(archdir)
