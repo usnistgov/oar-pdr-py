@@ -32,7 +32,7 @@ description = """
   a name of the form, AIPID-vV_V_V.json. 
 """
 
-def load_into(subparser):
+def load_into(subparser, current_dests):
     """
     load this command into a CLI by defining the command's arguments and options.
     :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 

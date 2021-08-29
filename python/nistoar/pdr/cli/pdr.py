@@ -86,7 +86,7 @@ class CommandSuite(object):
     """
     an interface for running the sub-commands of a parent command
     """
-    def __init__(self, suitename, parent_parser):
+    def __init__(self, suitename, parent_parser, current_dests=None):
         """
         create a command interface
         :param str suitename:  the command name used to access this suites' subcommands
@@ -98,6 +98,9 @@ class CommandSuite(object):
         if parent_parser:
             self._subparser_src = parent_parser.add_subparsers(title="subcommands", dest=suitename+"_subcmd")
         self._cmds = {}
+        self._dests = set()
+        if current_dests:
+            self._dests.update(current_dests)
 
     def load_subcommand(self, cmdmod, cmdname=None):
         """
@@ -105,8 +108,10 @@ class CommandSuite(object):
 
         The cmdmod arguemnt is a module or object that must specify a load_into() function, a help string 
         property, and default_name string property.  The load_into() should accept two arguments: an 
-        ArgumentParser instance and a string giving the name that the command suite should be accessed by
-        (which can be None to use the default name).  Its implementation should load its command-line option 
+        ArgumentParser instance and a list of destination names for parameters that have already been defined.
+        The intent of the second argument is to allow a subcommand to determine whether an option has already
+        been defined by its parent command (if it hasn't, it may choose to define it itself).  The function's
+        implementation should load its command-line option 
         and argument defintions into ArgumentParser.  It should return either None or CommandSuite instance.  
         If None, then the given cmd module/object must also include an execute() function (that has the same 
         signature as the execute function in this class).  
@@ -119,7 +124,7 @@ class CommandSuite(object):
             cmdname = cmdmod.default_name
         subparser = self._subparser_src.add_parser(cmdname, description=cmdmod.description,
                                                    help=cmdmod.help, formatter_class=_MyHelpFormatter)
-        subcmd = cmdmod.load_into(subparser)
+        subcmd = cmdmod.load_into(subparser, self._dests)
         
         if not subcmd:
             subcmd = cmdmod
@@ -194,6 +199,7 @@ class PDRCLI(CommandSuite):
 
         super(PDRCLI, self).__init__(progname, None)
         self.parser = define_opts(self.suitename)
+        self._dests.update([a.dest for a in self.parser._actions])
         self._subparser_src = self.parser.add_subparsers(title="commands", dest="cmd")
         self._defconffile = defconffile
         
@@ -211,11 +217,13 @@ class PDRCLI(CommandSuite):
         """
         load a subcommand into this suite of subcommands.  
 
-        The cmdmod arguemnt is a module or object that must specify a load_into() function, a help string 
+        The cmdmod argument is a module or object that must specify a load_into() function, a help string 
         property, and default_name string property.  The load_into() should accept two arguments: an 
-        ArgumentParser instance and a string giving the name that the command suite should be accessed by
-        (which can be None to use the default name).  Its implementation should load its command-line option 
-        and argument defintions into the ArgumentParser.  It should return either None or CommandSuite 
+        ArgumentParser instance and a list of destination names for parameters that have already been defined.
+        The intent of the second argument is to allow a subcommand to determine whether an option has already
+        been defined by its parent command (if it hasn't, it may choose to define it itself).  The function's
+        implementation should load its command-line option 
+        and argument defintions into the ArgumentParser.  It should return either None or a CommandSuite 
         instance.  If None, then the given cmd module/object must also include an execute() function (that 
         has the same signature as the execute function in the CommandSuite class).  
 
@@ -239,7 +247,9 @@ class PDRCLI(CommandSuite):
             raise TypeError("load(): exit_offset not an int")
 
         subparser = self._subparser_src.add_parser(cmdname, help=cmdmod.help)
-        cmd = cmdmod.load_into(subparser)
+        cmd = cmdmod.load_into(subparser, self._dests)
+        self._dests.update([a.dest for a in subparser._actions])
+
         if not cmd:
             cmd = cmdmod
         self._cmds[cmdname] = (cmd, exit_offset)

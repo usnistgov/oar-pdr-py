@@ -4,7 +4,6 @@ metadata API (exactly as the ``describe`` command does) or from the public archi
 (as the ``md recover`` command does).
 """
 import logging, argparse, sys, os, shutil, time, tempfile, re, json
-from urllib.parse import urlparse, urljoin
 
 from nistoar.pdr.preserve.bagit import NISTBag
 from nistoar.pdr.utils import write_json
@@ -14,6 +13,8 @@ from nistoar.pdr.describe import MetadataClient, RMMServerError, IDNotFound
 from nistoar.pdr.distrib import (RESTServiceClient, BagDistribClient,
                                  DistribServerError, DistribResourceNotFound)
 from nistoar.pdr.preserve.bagit.serialize import DefaultSerializer
+from . import process_svcep_args, define_comm_md_opts
+
 from nistoar.pdr.constants import RELHIST_EXTENSION, VERSION_EXTENSION_PAT, to_version_ext, ARK_PFX_PAT
 VERSION_EXTENSION_RE = re.compile(VERSION_EXTENSION_PAT)
 ARK_PFX_RE = re.compile(ARK_PFX_PAT)
@@ -36,11 +37,13 @@ description = """
   to a specific file.  
 """
 
-def load_into(subparser):
+def load_into(subparser, current_dests):
     """
     load this command into a CLI by defining the command's arguments and options
     :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 
                                                 interface into it 
+    :param set current_dests:  the current set of destination names that have been defined so far; this
+                               can indicate if a parent command has defined required options already
     :rtype: None
     """
     p = subparser
@@ -55,15 +58,8 @@ def load_into(subparser):
                         "all ID classes)")
     p.add_argument("-A", "--from-aip", action="store_const", dest="src", const="aip",
                    help="extract the requested metadata from the appropriate AIP")
-    p.add_argument("-U", "--services-base-url", metavar="BASEURL", type=str, dest='srvrbase',
-                   help="use this base URL as the basis for the PDR's RMM and distribution services.  "+
-                        "The default is https://data.nist.gov/.")
-    p.add_argument("-D", "--dist-base-url", metavar="BASEURL", type=str, dest='distbase',
-                   help="use this base URL for the distribution service from which AIPs should be "+
-                        "donwloaded.  The default is is BASE/od/ds")
-    p.add_argument("-R", "--rmm-base-url", metavar="BASEURL", type=str, dest='rmmbase',
-                   help="use this base URL for the RMM service that should be used when ALL is requested as "+
-                        "an AIPID.  The default is is BASE/rmm")
+    if 'rmmbase' not in current_dests:
+        define_comm_md_opts(p)
 
 def execute(args, config=None, log=None):
     """
@@ -247,48 +243,6 @@ def extract_from_AIP(id, distribsvc, version=None, mdsvc=None, tmpdir=None, conf
             raise
 
 def _process_args(args, config, cmd, log=None):
+    process_svcep_args(args, config, cmd, log)
 
-    # ensure the args.srvrbase, the PDR's services base URL
-    srvrbase = args.srvrbase
-    if not srvrbase:
-        srvrbase = config.get("nist_pdr_base", "https://data.nist.gov/")
-
-    try:
-        _check_url(srvrbase)
-    except ValueError as ex:
-        if args.srvrbase:
-            raise PDRCommandFailure(cmd, "Bad PDR URL provided: %s: %s" % (args.srvrbase, str(ex)))
-        else:
-            raise ConfigurationException(cmd, "Config parameter, nist_pdr_base: bad value: %s: %s" %
-                                         (args.srvrbase, str(ex)), 3)
-    args.srvrbase = srvrbase
-    if args.srvrbase and not args.srvrbase.endswith('/'):
-        args.srvrbase += '/'
-
-    if args.src == "aip":
-        if not args.distbase:
-            args.distbase = config.get("pdr_dist_base", urljoin(args.srvrbase, "od/ds/"))
-        else:
-            args.distbase = urljoin(args.srvrbase, args.distbase)
-        try:
-            _check_url(args.distbase)
-        except ValueError as ex:
-            raise PDRCommandFailure(cmd, "Bad distrib service URL: %s: %s" % (args.distbase, str(ex)))
-
-    else:    # defaults to "desc"
-        if not args.rmmbase:
-            args.rmmbase = config.get("pdr_rmm_base", urljoin(args.srvrbase, "rmm/"))
-        else:
-            args.rmmbase = urljoin(args.srvrbase, args.rmmbase)
-        try:
-            _check_url(args.rmmbase)
-        except ValueError as ex:
-            raise PDRCommandFailure(cmd, "Bad RMM service URL: %s: %s" % (args.rmmbase, str(ex)))
-
-def _check_url(url):
-    purl = urlparse(url)
-    if not purl.netloc or not purl.scheme:
-        raise ValueError("absolute URL required")
-    if purl.scheme != "http" and purl.scheme != "https":
-        raise ValueError("unsupported URL scheme: "+purl.scheme)
 
