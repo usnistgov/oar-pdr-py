@@ -14,6 +14,7 @@ from nistoar.pdr.distrib import (RESTServiceClient, BagDistribClient,
                                  DistribServerError, DistribResourceNotFound)
 from nistoar.pdr.publish.bagger.utils import Version
 from nistoar.pdr.preserve.bagit.serialize import DefaultSerializer
+from ._args import process_svcep_args, define_comm_md_opts
 
 arkre = re.compile(r"^ark:/\d+/")
 
@@ -32,11 +33,14 @@ description = """
   a name of the form, AIPID-vV_V_V.json. 
 """
 
-def load_into(subparser, current_dests):
+def load_into(subparser, current_dests, as_cmd=None):
     """
     load this command into a CLI by defining the command's arguments and options.
     :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 
                                                 interface into it 
+    :param set current_dests:  the current set of destination names that have been defined so far; this
+                               can indicate if a parent command has defined required options already
+    :param str as_cmd:  the command name that this command is being loaded as (ignored)
     :rtype: None
     """
     p = subparser
@@ -69,15 +73,9 @@ def load_into(subparser, current_dests):
     p.add_argument("-V", "--select-version", metavar="VERSION", action="append", dest="inclvers",
                    help="write out records only for specified versions; include multiple times for multiple "+
                         "versions")
-    p.add_argument("-U", "--services-base-url", metavar="BASEURL", type=str, dest='srvrbase',
-                   help="use this base URL as the basis for the PDR's RMM and distribution services.  "+
-                        "The default is https://data.nist.gov/.")
-    p.add_argument("-D", "--dist-base-url", metavar="BASEURL", type=str, dest='distbase',
-                   help="use this base URL for the distribution service from which AIPs should be "+
-                        "donwloaded.  The default is is BASE/od/ds")
-    p.add_argument("-R", "--rmm-base-url", metavar="BASEURL", type=str, dest='rmmbase',
-                   help="use this base URL for the RMM service that should be used when ALL is requested as "+
-                        "an AIPID.  The default is is BASE/rmm")
+    if 'rmmbase' not in current_dests:
+        define_comm_md_opts(p)
+
     return None
 
 def execute(args, config=None, log=None):
@@ -262,40 +260,8 @@ def _process_args(args, config, cmd, log=None):
     if args.inclvers:
         args.inclvers = [v.replace('_', '.') for v in args.inclvers]
 
-    # ensure the args.srvrbase, the PDR's services base URL
-    srvrbase = args.srvrbase
-    if not srvrbase:
-        srvrbase = config.get("nist_pdr_base", "https://data.nist.gov/")
-
-    try:
-        _check_url(srvrbase)
-    except ValueError as ex:
-        if args.srvrbase:
-            raise PDRCommandFailure(cmd, "Bad PDR URL provided: %s: %s" % (args.srvrbase, str(ex)))
-        else:
-            raise ConfigurationException(cmd, "Config parameter, nist_pdr_base: bad value: %s: %s" %
-                                         (args.srvrbase, str(ex)), 3)
-    args.srvrbase = srvrbase
-    if args.srvrbase and not args.srvrbase.endswith('/'):
-        args.srvrbase += '/'
-
-    if not args.distbase:
-        args.distbase = config.get("pdr_dist_base", urljoin(args.srvrbase, "od/ds/"))
-    else:
-        args.distbase = urljoin(args.srvrbase, args.distbase)
-    try:
-        _check_url(args.distbase)
-    except ValueError as ex:
-        raise PDRCommandFailure(cmd, "Bad distrib service URL: %s: %s" % (args.distbase, str(ex)))
-
-    if not args.rmmbase:
-        args.rmmbase = config.get("pdr_rmm_base", urljoin(args.srvrbase, "rmm/"))
-    else:
-        args.rmmbase = urljoin(args.srvrbase, args.rmmbase)
-    try:
-        _check_url(args.rmmbase)
-    except ValueError as ex:
-        raise PDRCommandFailure(cmd, "Bad RMM service URL: %s: %s" % (args.rmmbase, str(ex)))
+    # ensure the PDR's services base URLs
+    process_svcep_args(args, config, cmd, log)
 
 def _check_url(url):
     purl = urlparse(url)

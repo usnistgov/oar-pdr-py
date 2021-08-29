@@ -101,6 +101,8 @@ class CommandSuite(object):
         self._dests = set()
         if current_dests:
             self._dests.update(current_dests)
+        if parent_parser:
+            self._dests.update([a.dest for a in parent_parser._actions])
 
     def load_subcommand(self, cmdmod, cmdname=None):
         """
@@ -124,7 +126,7 @@ class CommandSuite(object):
             cmdname = cmdmod.default_name
         subparser = self._subparser_src.add_parser(cmdname, description=cmdmod.description,
                                                    help=cmdmod.help, formatter_class=_MyHelpFormatter)
-        subcmd = cmdmod.load_into(subparser, self._dests)
+        subcmd = cmdmod.load_into(subparser, self._dests, cmdname)
         
         if not subcmd:
             subcmd = cmdmod
@@ -247,7 +249,7 @@ class PDRCLI(CommandSuite):
             raise TypeError("load(): exit_offset not an int")
 
         subparser = self._subparser_src.add_parser(cmdname, help=cmdmod.help)
-        cmd = cmdmod.load_into(subparser, self._dests)
+        cmd = cmdmod.load_into(subparser, self._dests, cmdname)
         self._dests.update([a.dest for a in subparser._actions])
 
         if not cmd:

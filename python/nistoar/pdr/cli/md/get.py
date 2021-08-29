@@ -13,7 +13,7 @@ from nistoar.pdr.describe import MetadataClient, RMMServerError, IDNotFound
 from nistoar.pdr.distrib import (RESTServiceClient, BagDistribClient,
                                  DistribServerError, DistribResourceNotFound)
 from nistoar.pdr.preserve.bagit.serialize import DefaultSerializer
-from . import process_svcep_args, define_comm_md_opts
+from ._args import process_svcep_args, define_comm_md_opts
 
 from nistoar.pdr.constants import RELHIST_EXTENSION, VERSION_EXTENSION_PAT, to_version_ext, ARK_PFX_PAT
 VERSION_EXTENSION_RE = re.compile(VERSION_EXTENSION_PAT)
@@ -37,13 +37,14 @@ description = """
   to a specific file.  
 """
 
-def load_into(subparser, current_dests):
+def load_into(subparser, current_dests, as_cmd=None):
     """
     load this command into a CLI by defining the command's arguments and options
     :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 
                                                 interface into it 
     :param set current_dests:  the current set of destination names that have been defined so far; this
                                can indicate if a parent command has defined required options already
+    :param str as_cmd:  the command name that this command is being loaded as (ignored)
     :rtype: None
     """
     p = subparser
