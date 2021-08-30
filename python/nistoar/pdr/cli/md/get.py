@@ -20,7 +20,7 @@ VERSION_EXTENSION_RE = re.compile(VERSION_EXTENSION_PAT)
 ARK_PFX_RE = re.compile(ARK_PFX_PAT)
 
 default_name = "get"
-help = "retrieve NERDm records from the PDR (via its public APIs)"
+help = "retrieve a NERDm record from the PDR (via its public APIs)"
 description = """
   Retrieve a NERDm record from the PDR given its ID.  By default, the record is pulled from the PDR's 
   metadata (or "describe") service; however it can be extracted from the archive information packages
@@ -61,6 +61,8 @@ def load_into(subparser, current_dests, as_cmd=None):
                    help="extract the requested metadata from the appropriate AIP")
     if 'rmmbase' not in current_dests:
         define_comm_md_opts(p)
+
+    return None
 
 def execute(args, config=None, log=None):
     """
