@@ -173,7 +173,7 @@ class CommandSuite(object):
         subcmd = getattr(args, self.suitename+"_subcmd")
         cmd = self._cmds.get(subcmd)
         if cmd is None:
-            raise PDRCommandFailure(args.cmd, "Unrecognized subcommand of "+cmdname+": "+subcmd, 1)
+            raise PDRCommandFailure(args.cmd, "Unrecognized subcommand of "+cmdname+": "+subcmd, 2)
 
         config = self.extract_config_for_cmd(config, subcmd, cmd)
 
@@ -206,7 +206,7 @@ class PDRCLI(CommandSuite):
         self._defconffile = defconffile
         
         self._cmds = {}
-        self._next_exit_offset = 10
+        self._next_exit_offset = 0  # this is being deprecated
 
     def parse_args(self, args):
         """
@@ -233,18 +233,21 @@ class PDRCLI(CommandSuite):
         :param str     cmdname: the name to assign the sub-command, used on the command-line to invoke it;
                                 if None, the default name provided in the module will be used.
         :param int exit_offset: an integer offset to add to any status values that resutl from a 
-                                  PDRCommandFailure is raised via the execute() command.  
+                                  PDRCommandFailure is raised via the execute() command.  (Note this 
+                                  feature is being deprecated
         """
         if not hasattr(cmdmod, "load_into"):
             raise StateException("command module/object has no load_into() function: " + repr(cmdmod))
         if not cmdname:
             cmdname = cmdmod.default_name
         if not exit_offset:
-            taken = [c[1] for c in self._cmds.values()]
-            while self._next_exit_offset in taken:
-                self._next_exit_offset += 10
-            exit_offset = self._next_exit_offset
-            self._next_exit_offset += 10
+            ## this feature is being deprecated
+            # taken = [c[1] for c in self._cmds.values()]
+            # while self._next_exit_offset in taken:
+            #     self._next_exit_offset += 10
+            # exit_offset = self._next_exit_offset
+            # self._next_exit_offset += 10
+            exit_offset = 0
         if not isinstance(exit_offset, int):
             raise TypeError("load(): exit_offset not an int")
 
@@ -316,7 +319,7 @@ class PDRCLI(CommandSuite):
             OAR_CONFIG_APP = "pdr-cli"
             if not cfgmod.service:
                 raise PDRCommandFailure(args.cmd,
-                                        "Live system not detected; config service not availalbe", 2)
+                                        "Live system not detected; config service not availalbe", 5)
             config = cfgmod.service.get(OAR_CONFIG_APP)
         elif self._defconffile and os.path.isfile(self._defconffile):
             config = cfgmod.load_from_file(self._defconffile)
@@ -336,7 +339,7 @@ class PDRCLI(CommandSuite):
             args = self.parse_args(args)
         cmd = self._cmds.get(args.cmd)
         if cmd is None:
-            raise PDRCommandFailure(args.cmd, "Unrecognized command: "+args.cmd, 1)
+            raise PDRCommandFailure(args.cmd, "Unrecognized command: "+args.cmd, 2)
 
         if config is None:
             config = self.load_config(args)
@@ -364,6 +367,6 @@ class PDRCLI(CommandSuite):
             ex.stat += cmd[1]
             raise ex
         except ConfigurationException as ex:
-            raise PDRCommandFailure(args.cmd, "Configuration error: "+str(ex), 2, ex)
+            raise PDRCommandFailure(args.cmd, "Configuration error: "+str(ex), 6, ex)
 
 

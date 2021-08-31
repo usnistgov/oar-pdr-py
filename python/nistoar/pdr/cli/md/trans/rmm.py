@@ -76,7 +76,7 @@ def execute(args, config=None, log=None):
 
     if args.outfile and os.path.isdir(args.outfile):
         # write out as three files
-        raise PDRCommandFailure(cmd, "3-file output not yet implemented", 5)
+        raise PDRCommandFailure(cmd, "3-file output not yet implemented", 2)
         
     _write_record_for_cmd(rec, args, cmd, config, log)
 

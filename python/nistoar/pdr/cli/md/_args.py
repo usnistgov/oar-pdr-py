@@ -39,10 +39,10 @@ def process_svcep_args(args, config, cmd, log=None):
         check_url(srvrbase)
     except ValueError as ex:
         if args.srvrbase:
-            raise PDRCommandFailure(cmd, "Bad PDR URL provided: %s: %s" % (args.srvrbase, str(ex)))
+            raise PDRCommandFailure(cmd, "Bad PDR URL provided: %s: %s" % (args.srvrbase, str(ex)), 7)
         else:
-            raise ConfigurationException(cmd, "Config parameter, nist_pdr_base: bad value: %s: %s" %
-                                         (args.srvrbase, str(ex)), 3)
+            raise ConfigurationException("Config parameter, nist_pdr_base: bad value: %s: %s" %
+                                         (args.srvrbase, str(ex)))
     args.srvrbase = srvrbase
     if args.srvrbase and not args.srvrbase.endswith('/'):
         args.srvrbase += '/'
@@ -53,7 +53,7 @@ def process_svcep_args(args, config, cmd, log=None):
     try:
         check_url(args.distbase)
     except ValueError as ex:
-        raise PDRCommandFailure(cmd, "Bad distrib service URL: %s: %s" % (args.distbase, str(ex)))
+        raise PDRCommandFailure(cmd, "Bad distrib service URL: %s: %s" % (args.distbase, str(ex)), 7)
 
     if not args.rmmbase:
         args.rmmbase = config.get("pdr_rmm_base", "rmm/")
@@ -61,7 +61,7 @@ def process_svcep_args(args, config, cmd, log=None):
     try:
         check_url(args.rmmbase)
     except ValueError as ex:
-        raise PDRCommandFailure(cmd, "Bad RMM service URL: %s: %s" % (args.rmmbase, str(ex)))
+        raise PDRCommandFailure(cmd, "Bad RMM service URL: %s: %s" % (args.rmmbase, str(ex)), 7)
 
 def check_url(url):
     """

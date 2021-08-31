@@ -10,7 +10,7 @@ include:
 See also :py:module:`nistoar.pdr.describe.cmd` for the ``describe`` command.
 """
 from nistoar.pdr import cli
-from . import latest # , rmm
+from . import latest rmm
 from .._args import process_svcep_args, define_comm_md_opts
 from ._comm import *
 # from ._comm import _get_record_for_cmd, _write_record_for_cmd
@@ -36,6 +36,6 @@ def load_into(subparser, current_dests=None, as_cmd=None):
         as_cmd = default_name
     out = cli.CommandSuite(as_cmd, p, current_dests)
     out.load_subcommand(latest)
-#    out.load_subcommand(rmm)
+    out.load_subcommand(rmm)
     return out
 

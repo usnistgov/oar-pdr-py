@@ -92,11 +92,11 @@ def execute(args, config=None, log=None):
             rec = describe(args.id, args.rmmbase, args.version, config)
 
     except (IDNotFound, DistribResourceNotFound) as ex:
-        raise PDRCommandFailure(cmd, "ID not found: "+args.id, 2)
+        raise PDRCommandFailure(cmd, "ID not found: "+args.id, 1)
     except (RMMServerError, DistribServerError) as ex:
-        raise PDRCommandFailure(cmd, "Unexpected service failure: "+str(ex), 4)
+        raise PDRCommandFailure(cmd, "Unexpected service failure: "+str(ex), 5)
     except Exception as ex:
-        raise PDRCommandFailure(cmd, "Unexpected failure retrieving metadata: "+str(ex), 4)
+        raise PDRCommandFailure(cmd, "Unexpected failure retrieving metadata: "+str(ex), 8)
 
     # write the output
     fp = None   # file object for file output
@@ -112,7 +112,7 @@ def execute(args, config=None, log=None):
 
     except OSError as ex:
         raise PDRCommandFailure(cmd, "Failed to write data to %s: %s" %
-                                ((fp and args.outfile) or "standard out", str(ex)), 3)
+                                ((fp and args.outfile) or "standard out", str(ex)), 4)
     finally:
         if fp: fp.close()
 

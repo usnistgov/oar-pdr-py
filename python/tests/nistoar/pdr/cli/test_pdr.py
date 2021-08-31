@@ -86,7 +86,7 @@ class TestPDRCLI(test.TestCase):
         self.assertEqual(cmd.parser.prog, "pdr")
         self.assertIsNotNone(cmd._subparser_src)
         self.assertEqual(cmd._cmds, {})
-        self.assertEqual(cmd._next_exit_offset, 10)
+        self.assertEqual(cmd._next_exit_offset, 0)  # Note: exit offsets are being deprecated
 
         cmd = cli.PDRCLI("goob")
         self.assertEqual(cmd.suitename, "goob")
@@ -94,7 +94,7 @@ class TestPDRCLI(test.TestCase):
         self.assertEqual(cmd.parser.prog, "goob")
         self.assertIsNotNone(cmd._subparser_src)
         self.assertEqual(cmd._cmds, {})
-        self.assertEqual(cmd._next_exit_offset, 10)
+        self.assertEqual(cmd._next_exit_offset, 0)  # Note: exit offsets are being deprecated
 
     def test_configure_log_defs(self):
         p = cli.define_opts()
@@ -192,7 +192,7 @@ class TestPDRCLI(test.TestCase):
             self.default_name = "mock"
             self.help = "mighty helpful"
             self.last_exec = None
-        def load_into(self, sp):
+        def load_into(self, sp, dest_names, cmdname):
             sp.help = "helpful"
             sp.add_argument("uid", metavar="ID", type=str, help="the ID to use")
         def execute(self, args, config, log):
@@ -206,23 +206,23 @@ class TestPDRCLI(test.TestCase):
         cmd.load_subcommand(tstmod)
         self.assertIn("mock", cmd._cmds)
         self.assertTrue(cmd._cmds["mock"][0] is tstmod)
-        self.assertEqual(cmd._cmds["mock"][1], 10)
-        self.assertEqual(cmd._next_exit_offset, 20)
+        self.assertEqual(cmd._cmds["mock"][1], 0)   # Note: exit offsets are being deprecated
+        self.assertEqual(cmd._next_exit_offset, 0)  # Note: exit offsets are being deprecated
 
         cmd.load_subcommand(tstmod, "gurn", 20)
         self.assertIn("mock", cmd._cmds)
         self.assertIn("gurn", cmd._cmds)
         self.assertTrue(cmd._cmds["gurn"][0] is tstmod)
         self.assertEqual(cmd._cmds["gurn"][1], 20)
-        self.assertEqual(cmd._next_exit_offset, 20)
+        self.assertEqual(cmd._next_exit_offset, 0)
 
         cmd.load_subcommand(tstmod, "foo")
         self.assertIn("mock", cmd._cmds)
         self.assertIn("gurn", cmd._cmds)
         self.assertIn("foo", cmd._cmds)
         self.assertTrue(cmd._cmds["foo"][0] is tstmod)
-        self.assertEqual(cmd._cmds["foo"][1], 30)
-        self.assertEqual(cmd._next_exit_offset, 40)
+        self.assertEqual(cmd._cmds["foo"][1], 0)    # Note: exit offsets are being deprecated
+        self.assertEqual(cmd._next_exit_offset, 0)  # Note: exit offsets are being deprecated
 
         cmd.execute("-q gurn cranston".split())
         self.assertEqual(tstmod.last_exec['args'].cmd, "gurn")
