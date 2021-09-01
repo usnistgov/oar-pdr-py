@@ -13,20 +13,22 @@ def define_comm_trans_opts(subparser):
     define some arguments that apply to all trans subcommands.  These are:
      - --from-aip    - pulls the input record from an AIP
      - --from-mdserv - pulls the input record from the metadata service
-     - ID|FILE       - the identifier for the source of the input record
+     - --from-file   - the identifier for the source of the input record
+     - --output-file - set sending output to a file
+     - --version     - pull the specified version from the service
 
     This is not called trans command level; rather it is intended to be called by the `define_opts()` 
     functions of the individual transformer commands to load the common options.  
     """
     p = subparser
-    p.add_argument("id", metavar="ID|FILE", type=str, nargs="?",
-                   help="the name of the file containing the input record (or the record's identifier"
-                        "when --from-aip or --from-mdserv is used) to translate.  "+
-                        "If not provided, the standard input is read for the data")
-    p.add_argument("-A", "--from-aip", action="store_const", dest="src", const="aip",
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("-A", "--from-aip", metavar="ID", type=str, action="store", dest="aipsrc", 
                    help="extract the requested metadata from the appropriate AIP")
-    p.add_argument("-M", "--from-mdserv", action="store_const", dest="src", const="md",
+    g.add_argument("-M", "--from-mdserv", metavar="ID", type=str, action="store", dest="mdsrc", 
                    help="pull the requested metadata from the public PDR metadata service")
+    g.add_argument("-F", "--from-file", metavar="FILE", type=str, action="store", dest="filesrc", 
+                   help="read the requested metadata from the named file")
+    
     p.add_argument("-o", "--output-file", metavar="FILE", type=str, dest="outfile",
                    help="write the output to the named file instead of standard out")
     p.add_argument("-V", "--get-version", metavar="VER", type=str, dest="version",
@@ -65,14 +67,15 @@ def _get_record_for_cmd(args, cmd, config=None, log=None):
     :param dict config:  configuration parameters that modifies the behavior of the service
     :param Logger  log:  the logger to send messages to.
     """
-    if args.src:
+    src = args.aipsrc or args.mdsrc
+    if src:
         try:
 
-            return get_input_rec(args.id, args.version, args.rmmbase,
-                                 args.src=='aip', args.distbase, config, log)
+            return get_input_rec(src, args.version, args.rmmbase,
+                                 bool(args.aipsrc), args.distbase, config, log)
 
         except (IDNotFound, DistribResourceNotFound) as ex:
-            raise PDRCommandFailure(cmd, "ID not found: "+args.id, 1)
+            raise PDRCommandFailure(cmd, "ID not found: "+src, 1)
         except (RMMServerError, DistribServerError) as ex:
             raise PDRCommandFailure(cmd, "Unexpected service failure: "+str(ex), 5)
         except Exception as ex:
@@ -82,15 +85,15 @@ def _get_record_for_cmd(args, cmd, config=None, log=None):
         fd = None
         id = None
         try:
-            if args.id:
-                fd = open(args.id)
+            if args.filesrc:
+                fd = open(args.filesrc)
                 id = fd
             else:
                 id = sys.stdin
             return json.load(fd, object_pairs_hook=OrderedDict)
         except Exception as ex:
             raise PDRCommandFailure(cmd, "Failed to read input record from " +
-                                    ((fd is None and "stdin") or args.id) + ": " + str(ex), 3)
+                                    ((fd is None and "stdin") or args.filesrc) + ": " + str(ex), 3)
         finally:
             if fd:
                 fd.close()

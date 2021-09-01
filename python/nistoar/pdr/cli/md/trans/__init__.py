@@ -10,7 +10,7 @@ include:
 See also :py:module:`nistoar.pdr.describe.cmd` for the ``describe`` command.
 """
 from nistoar.pdr import cli
-from . import latest rmm
+from . import latest, rmm
 from .._args import process_svcep_args, define_comm_md_opts
 from ._comm import *
 # from ._comm import _get_record_for_cmd, _write_record_for_cmd
