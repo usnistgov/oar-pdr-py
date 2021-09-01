@@ -10,7 +10,7 @@ include
 See also :py:module:`nistoar.pdr.describe.cmd` for the ``describe`` command.
 """
 from nistoar.pdr import cli
-from . import recover, get, trans # , fix
+from . import recover, get, trans, fix
 from ._args import process_svcep_args, define_comm_md_opts
 
 default_name = "md"
@@ -38,7 +38,7 @@ def load_into(subparser, current_dests=None, as_cmd=None):
     out.load_subcommand(get)
     out.load_subcommand(trans)
     out.load_subcommand(recover)
-#    out.load_subcommand(fix)
+    out.load_subcommand(fix)
     
     return out
 
