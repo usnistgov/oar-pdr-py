@@ -49,7 +49,7 @@ class TestRmmCmd(test.TestCase):
         outf = os.path.join(self.tmpdir.name, "out.json")
         self.assertTrue(not os.path.exists(outf))
 
-        cmdline = "-q rmm -o %s %s" % (outf, hitsc)
+        cmdline = "-q rmm -o %s -F %s" % (outf, hitsc)
         self.cmd.execute(cmdline.split(), {})
         self.assertTrue(os.path.isfile(outf))
 
