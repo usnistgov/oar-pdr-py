@@ -6,6 +6,10 @@ test infrastructure and utilities usable throughout the nistoar library
 
 import os, shutil
 
+__all__ = [
+    'ensure_tmpdir', 'tmpdir', 'rmtmpdir', 'Tempfiles'
+]
+
 tmpname = "_test"
 
 def ensure_tmpdir(basedir=None, dirname=None):
@@ -69,6 +73,7 @@ class Tempfiles(object):
     It is instantiated with a base directory where temporary directories and 
     files can be created.  Full paths to a temporary file or directory can 
     be gotten, then, by calling the instance as a function:
+    .. code-block:: python
 
        ts = Tempfiles(basedir)
        tmpfile = ts("testoutput.txt")
@@ -79,6 +84,7 @@ class Tempfiles(object):
        tmpfile = ts.track("testoutput.txt")
 
     Temporary directories that should be cleaned up can be created with mkdir():
+    .. code-block:: python
 
        tmpdir = ts.mkdir("mytempdir")
 
