@@ -234,6 +234,10 @@ class BagBuilder(PreservationSystem):
                 # delay saving id to metadata
                 self._id = self._fix_id(id)
 
+        self._nerdm_schema_id = NERDM_SCH_ID
+        if isinstance(self.cfg.get('ensure_nerdm_type_on_add', True), str):
+            self._nerdm_schema_id = self.cfg.get('ensure_nerdm_type_on_add', NERDM_SCH_ID);
+
     def __del__(self):
         self._unset_logfile()
 
@@ -1538,11 +1542,11 @@ class BagBuilder(PreservationSystem):
             self.record(msg)
         
         # validate type
-        if mdata.get("_schema") != NERDM_SCH_ID:
+        if mdata.get("_schema") != self._nerdm_sch_id:
             if self.cfg.get('ensure_nerdm_type_on_add', True):
                 raise NERDError("Not a NERDm Resource Record; wrong schema id: "+
                                 str(mdata.get("_schema")))
-            else:
+            elif not mdata.get("_schema").startswith(NERDM_SCH_ID_BASE):
                 self.log.warning("provided NERDm data does not look like a "+
                                  "Resource record")
         
@@ -2121,8 +2125,8 @@ class BagBuilder(PreservationSystem):
             initdata['External-Description'] = desc
         else:
             initdata['External-Description'] = \
-"This collection contains data for the NIST data resource entitled, {0}". \
-format(nerdm['title'])
+              "This collection contains data for the NIST data resource entitled, {0}". \
+              format(nerdm['title'])
 
         initdata['External-Identifier'] = [self.id]
         if nerdm.get('doi'):

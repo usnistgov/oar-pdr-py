@@ -54,6 +54,7 @@ class TestBuilder2(test.TestCase):
                 "Organization-Address": ["100 Bureau Dr.",
                                          "Gaithersburg, MD 20899"]
             }
+            "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.5"
         }
 
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
