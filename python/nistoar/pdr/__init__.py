@@ -164,9 +164,9 @@ def find_merge_etc(config=None):
         basedir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
                                             os.path.abspath(nistoar.__file__)))))
         candidates = [os.path.join(basedir, 'etc', 'merge')]
-        candidates.append(os.path.join(basedir, 'oar-metadata', 'etc', 'merge'))
+        candidates.append(os.path.join(basedir, 'metadata', 'etc', 'merge'))
         basedir = os.path.dirname(basedir)
-        candidates.append(os.path.join(basedir, 'oar-metadata', 'etc', 'merge'))
+        candidates.append(os.path.join(basedir, 'metadata', 'etc', 'merge'))
         candidates.append(os.path.join(basedir, 'etc', 'merge'))
 
     for dir in candidates:
@@ -276,8 +276,8 @@ def find_schema_dir(config=None):
                   os.path.dirname(                       # nistoar
                   os.path.abspath(nistoar.__file__)))))) # __init__.py
 
-        # then the schema would be under {root}/oar-metadata/model
-        candidates.append(os.path.join(basedir, 'oar-metadata', 'model'))
+        # then the schema would be under {root}/metadata/model
+        candidates.append(os.path.join(basedir, 'metadata', 'model'))
 
         # assume library being used from its source code location
         basedir = os.path.dirname(                      # {root}
@@ -285,8 +285,8 @@ def find_schema_dir(config=None):
                   os.path.dirname(                      # nistoar
                   os.path.abspath(nistoar.__file__))))  # __init__.py
 
-        # and is under {root}/oar-metadata/model
-        candidates.append(os.path.join(basedir, 'oar-metadata', 'model'))
+        # and is under {root}/metadata/model
+        candidates.append(os.path.join(basedir, 'metadata', 'model'))
 
     for dir in candidates:
         if os.path.exists(dir):
