@@ -66,7 +66,7 @@ DOWNLOADABLEFILE_TYPE = NERDPUB_PRE + ":DownloadableFile"
 SUBCOLL_TYPE = NERDPUB_PRE + ":Subcollection"
 NERDM_CONTEXT = "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld"
 DISTSERV = "https://"+PDR_PUBLIC_SERVER+"/od/ds/"
-DEF_MERGE_CONV = "midas0"
+DEF_MERGE_CONV = "pdp0"
 
 class BagBuilder(PreservationSystem):
     """
@@ -360,6 +360,17 @@ class BagBuilder(PreservationSystem):
         # for backward compatiblity
         self.disconnect_logfile()
         self.log.debug("Deprecated _unset_logfile() called")
+
+    def destroy(self):
+        """
+        remove the underlying bag from disk and return this builder to a virgin state
+        """
+        self.disconnect_logfile()
+        try:
+            shutil.rmtree(self.bagdir)
+        finally:
+            self._bag = None
+
 
     @property
     def bagname(self):
@@ -1064,6 +1075,7 @@ class BagBuilder(PreservationSystem):
             return self._update_nonfile_metadata(destpath, mdata, comptype,
                                                  message)
         else:
+            # also handles top-level resource metadata
             return self._update_file_metadata(destpath, mdata, comptype, message)
 
             
@@ -1214,6 +1226,7 @@ class BagBuilder(PreservationSystem):
             return self._update_nonfile_annotations(destpath, mdata, comptype,
                                                     message)
         else:
+            # also handles resource-level annotations
             return self._update_file_annotations(destpath, mdata, comptype,
                                                  message)
 
