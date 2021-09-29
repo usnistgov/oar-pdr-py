@@ -71,7 +71,7 @@ class RMMLoader(IDLoader):
         self.cli = MetadataClient(self.cfg['metadata_service']['service_endpoint'])
 
     def iter(self):
-        recs = self.cli.search()
+        recs = self.cli.search({'include':'@id','exclude':'_id'})
         for r in recs:
             if self.prefix and not r.get('@id', '').startswith(self.prefix):
                 continue
@@ -265,9 +265,9 @@ class PDRIDRegistry(CachingIDRegistry):
                                   for.  When the registry is initialized, only IDs using this shoulder 
                                   will be loaded.  This value will override the ark_shoulder config 
                                   parameter.  If not specified, all known IDs will be loaded
-        :param bool initcache:  if True (default), load all identifiers known to the PDR matching the 
-                                  idshldr into the registry's cache.  If False, loading will be delayed 
-                                  until init_cache() is called.  
+        :param bool initcache:  if True (default) and is necessary, load all identifiers known to the 
+                                  PDR matching the idshldr into the registry's cache.  If False, loading 
+                                  will be delayed until init_cache() is called.  
         :raise StateException:  if the given parent directory is not an existing directory
         """
         if not parentdir:
@@ -276,12 +276,16 @@ class PDRIDRegistry(CachingIDRegistry):
             idshldr = config.get('id_shoulder')
         prefix = None
         if idshldr:
-            prefix = "ark:/%s/%s" % (config.get('naan', ARK_NAAN), idshldr)
+            prefix = "ark:/%s/%s-" % (config.get('naan', ARK_NAAN), idshldr)
 
         def projector(md):
             out = {}
             if 'pdr:sipid' in md:
                 out['sipid'] = md['pdr:sipid']
+            if 'pdr:aipid' in md:
+                out['aipid'] = md['pdr:aipid']
+            if 'ediid' in md:
+                out['ediid'] = md['ediid']
             return out
 
         initloader = None
