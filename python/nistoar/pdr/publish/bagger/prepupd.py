@@ -5,20 +5,18 @@ head bags from cache or long-term storage.
 """
 import os, shutil, json, logging, re
 from abc import ABCMeta, abstractmethod, abstractproperty
-from collections import OrderedDict
+from collections import OrderedDict, Mapping
 from zipfile import ZipFile
 from time import mktime
 
 from .base import sys as _sys
-from .. import (ConfigurationException, StateException, CorruptedBagError,
-                NERDError)
+from .. import (ConfigurationException, StateException, CorruptedBagError, NERDError)
 from . import utils as bagutils
 from ...describe import rmm
 from ... import distrib
 from ...exceptions import IDNotFound
 from ... import utils
-from ...preserve.bagit.builder import BagBuilder
-from ..preserve.bagit.bag import NISTBag
+from ...preserve.bagit import NISTBag, BagBuilder
 
 deflog = logging.getLogger(_sys.system_abbrev).getChild(_sys.subsystem_abbrev)
 
@@ -60,6 +58,7 @@ class HeadBagCacher(object):
         ensure a copy of the serialized head bag in the cache
         :rtype: str giving the path to the cached, serialized head bag or 
                 None if no such bag exists.  
+        :raise CorruptedBagError: if confirm=True and the cached bag proves to be corrupted
         """
         bagcli = distrib.BagDistribClient(aipid, self.distsvc)
 
@@ -91,7 +90,7 @@ class HeadBagCacher(object):
 
         return bagfile
 
-    def confirm_bagfile(self, baginfo, purge_on_error=True):
+    def confirm_bagfile(self, baginfo: Mapping, purge_on_error: bool=True):
         """
         Make sure the cached bag described by bag metadata was transfered
         correctly by checking it checksum.  
@@ -144,8 +143,17 @@ class HeadBagCacher(object):
 class UpdatePrepService(object):
     """
     a factory class that creates UpdatePrepper instances
+
+    This service is configured by the following parameters:
+    :param str headbag_cache:  the directory where retrieved serialized head bags are cached
+    :param str     store_dir:  the directory where published bags are placed to be made public;
+                                  often head bags can be retrieved from here.
+    :param Mapping distrib_service:  configuration for the data distribution service, used to 
+                               retrieve head bags (if not in the cache or available in store_dir).
+    :param Mapping metadata_service:  configuration for the metadata retrieval service (RMM), used to 
+                               retrieve NERDm records.
     """
-    def __init__(self, config):
+    def __init__(self, config: Mapping):
         self.cfg = config
 
         self.sercache = self.cfg.get('headbag_cache')
@@ -162,11 +170,19 @@ class UpdatePrepService(object):
         if scfg.get('service_endpoint'):
             self.mdsvc  = rmm.MetadataClient(scfg.get('service_endpoint'))
 
-    def prepper_for(self, aipid, version=None, log=None):
+    def prepper_for(self, pdrid: str, aipid: str, version: str=None, log=None):
         """
-        return an UpdatePrepper instance for the given dataset identifier
+        return an UpdatePrepper instance for the SIP that has been assigned given 
+        PDR and AIP identifiers.
+        :param str pdrid:    the PDR identifier assigned to the SIP.  This is used to pull the previously 
+                             published NERDm record from the RMM
+        :param str aipid:    the AIP identifier associated with the PDR ID.  This is used to pull 
+                             the previously preserved head bag.
+        :param str version:  the specific version to retrieve of the publication to draw from.  If None
+                             (typically), the latest version is retrieved
+        :param Logger log:   the logger to record messages to during preparation
         """
-        return UpdatePrepper(aipid, self.cfg, self.cacher, self.mdsvc,
+        return UpdatePrepper(pdrid, aipid, self.cfg, self.cacher, self.mdsvc,
                              self.storedir, version, log)
 
 
@@ -177,7 +193,7 @@ class UpdatePrepper(object):
     system.  
     """
 
-    def __init__(self, aipid, config, headcacher, pubmdclient, storedir=None,
+    def __init__(self, pdrid, aipid, config, headcacher, pubmdclient, storedir=None,
                  version=None, log=None):
         """
         create the prepper for the given dataset identifier.  
@@ -185,6 +201,7 @@ class UpdatePrepper(object):
         This is not intended to be instantiated directly by the user; use
         the UpdatePrepService.prepper_for() factory method. 
         """
+        self.pdrid = pdrid
         self.aipid = aipid
         self.cacher = headcacher
         self.storedir = storedir
@@ -197,7 +214,10 @@ class UpdatePrepper(object):
             raise StateException("UpdatePrepper: not a directory: "+self.mdcache)
 
         if not log:
-            log = deflog.getChild(self.aipid[:8]+'...')
+            nm = self.aipid
+            if len(nm) > 12:
+                nm = "..."+nm[8:]
+            log = deflog.getChild(nm)
         self.log = log
 
     def cache_headbag(self):
@@ -226,7 +246,7 @@ class UpdatePrepper(object):
                 # not configured to consult repository
                 return None
             try:
-                data = self.mdcli.describe(self.aipid)
+                data = self.mdcli.describe(self.pdrid)
                 with open(out, 'w') as fd:
                     json.dump(data, fd, indent=2)
             except IDNotFound as ex:

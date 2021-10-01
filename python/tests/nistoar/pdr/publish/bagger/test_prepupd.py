@@ -1,5 +1,6 @@
 import os, pdb, sys, json, requests, logging, time, re, hashlib, shutil
 from collections import OrderedDict
+from pathlib import Path
 import unittest as test
 
 from nistoar.testing import *
@@ -11,9 +12,9 @@ from nistoar.pdr.preserve.bagit import NISTBag
 from nistoar.pdr.utils import read_nerd
 from nistoar.nerdm.constants import CORE_SCHEMA_URI, PUB_SCHEMA_URI, BIB_SCHEMA_URI
 
-bagsrcdir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-mdsrcdir = os.path.join(os.path.dirname(os.path.dirname(bagsrcdir)), "describe", "data")
-storedir = os.path.join(os.path.dirname(os.path.dirname(mdsrcdir)), "distrib", "data")
+bagsrcdir = Path(__file__).parents[2] / 'preserve' / 'data'
+mdsrcdir = bagsrcdir.parents[1] / 'describe' / 'data'
+storedir = bagsrcdir.parents[1] / 'distrib' / 'data'
 
 loghdlr = None
 rootlog = None
@@ -42,6 +43,7 @@ class SimRMMClient(object):
     def __init__(self, cache):
         self.dir = cache
     def describe(self, id):
+        id = re.sub(r'^ark:/\d+/', '', id)
         nf = os.path.join(self.dir, id+".json")
         if os.path.exists(nf):
             with open(nf) as fd:
@@ -52,11 +54,11 @@ class SimRMMClient(object):
 
     @classmethod
     def fill_cache(cls, cachedir):
-        shutil.copyfile(os.path.join(mdsrcdir, "pdr02d4t.json"),
+        shutil.copyfile(os.path.join(str(mdsrcdir), "pdr02d4t.json"),
                         os.path.join(cachedir, "ABCDEFG.json"))
-        shutil.copyfile(os.path.join(mdsrcdir, "pdr02d4t.json"),
+        shutil.copyfile(os.path.join(str(mdsrcdir), "pdr02d4t.json"),
                         os.path.join(cachedir, "pdr02d4t.json"))
-        shutil.copyfile(os.path.join(mdsrcdir, "pdr2210.json"),
+        shutil.copyfile(os.path.join(str(mdsrcdir), "pdr2210.json"),
                         os.path.join(cachedir, "pdr2210.json"))
 
 class SimDistClient(object):
@@ -98,17 +100,17 @@ class SimDistClient(object):
 
     @classmethod
     def fill_cache(cls, cachedir):
-        src = os.path.join(bagsrcdir, "samplembag")
-        dest = os.path.join(cachedir, "ABCDEFG.1.mbag0_4-2.zip")
+        src = os.path.join(str(bagsrcdir), "samplembag")
+        dest = os.path.join(str(cachedir), "ABCDEFG.1.mbag0_4-2.zip")
         oldwd = os.getcwd()
-        os.chdir(bagsrcdir)
+        os.chdir(str(bagsrcdir))
         try:
             cmd = "zip -qr {0} {1}".format(dest, "samplembag")
             os.system(cmd)
         finally:
             os.chdir(oldwd)
         out = checksum_of(dest)
-        shutil.copy(dest, os.path.join(cachedir, "ABCDEFG.2.mbag0_4-4.zip"))
+        shutil.copy(dest, os.path.join(str(cachedir), "ABCDEFG.2.mbag0_4-4.zip"))
         return out
                     
 
@@ -193,7 +195,7 @@ class TestUpdatePrepService(test.TestCase):
 
 
     def test_prepper_for(self):
-        prepper = self.prepsvc.prepper_for("ABCDEFG", "2.0")
+        prepper = self.prepsvc.prepper_for("hdl:20.88888/abcdefg", "ABCDEFG", "2.0")
         self.assertEqual(prepper.cacher.cachedir, self.config['headbag_cache'])
         self.assertEqual(prepper.aipid, "ABCDEFG")
 
@@ -228,7 +230,7 @@ class TestUpdatePrepper(test.TestCase):
             }
         }
         self.prepsvc = prepupd.UpdatePrepService(self.config)
-        self.prepr = self.prepsvc.prepper_for("ABCDEFG")
+        self.prepr = self.prepsvc.prepper_for("ark:/88434/pdr02d4t", "ABCDEFG")
         self.prepr.mdcli = self.mdcli
         self.prepr.cacher.distsvc = self.distcli
 
@@ -276,6 +278,7 @@ class TestUpdatePrepper(test.TestCase):
         self.assertEqual(self.prepr.latest_version("repo"), "1.0")
         self.assertEqual(self.prepr.latest_version(), "1.0")
         self.prepr.aipid = "goober"
+        self.prepr.pdrid = "ark:/88888/goober"
         self.assertEqual(self.prepr._latest_version_from_repo(), "0")
 
     def test_latest_version_from_dir(self):
@@ -403,7 +406,7 @@ class TestUpdatePrepper(test.TestCase):
         root = os.path.join(self.workdir, "goober")
         self.assertTrue(not os.path.exists(root))
 
-        self.prepr = self.prepsvc.prepper_for("goober")
+        self.prepr = self.prepsvc.prepper_for("ark:/88484/goober", "goober")
         self.prepr.mdcli = self.mdcli
 
         self.assertFalse(self.prepr.create_new_update(root))
@@ -435,15 +438,15 @@ class TestUpdatePrepper(test.TestCase):
         self.assertEqual(self.prepr.find_bag_in_store("0"), sf0)
 
     def test_create_new_update_fromstore(self):
-        shutil.copy(os.path.join(storedir, "pdr2210.3_1_3.mbag0_3-5.zip"),
-                    self.storedir)
+        shutil.copy(os.path.join(str(storedir), "pdr2210.3_1_3.mbag0_3-5.zip"),
+                    str(self.storedir))
         with open(os.path.join(self.storedir,
                                "pdr2210.3_1_3.mbag0_3-5.zip.sha256"),'w') as fd:
             pass
     
         cachedbag = os.path.join(self.headcache, "pdr2210.3_1_3.mbag0_3-5.zip")
 
-        self.prepr = self.prepsvc.prepper_for("pdr2210")
+        self.prepr = self.prepsvc.prepper_for("ark:/88434/pdr2210", "pdr2210")
         self.prepr.mdcli = self.mdcli
         self.prepr.cacher.distsvc = self.distcli
 
