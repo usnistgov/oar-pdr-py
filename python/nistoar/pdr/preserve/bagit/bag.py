@@ -15,7 +15,7 @@ from ....nerdm.convert import ComponentCounter, HierarchyBuilder
 POD_FILENAME = "pod.json"
 NERDMD_FILENAME = "nerdm.json"
 ANNOTS_FILENAME = "annot.json"
-DEFAULT_MERGE_CONVENTION = "midas1"
+DEFAULT_MERGE_CONVENTION = "pdp0"
 
 JQLIB = def_jq_libdir
 MERGECONF = def_merge_etcdir
@@ -199,6 +199,34 @@ class NISTBag(PreservationSystem):
         if not os.path.exists(annotfile):
             return OrderedDict()
         return self.read_nerd(annotfile)
+
+    def has_component(self, filepath):
+        """
+        return True if the bag has a particular component registered into it--i.e. has metadata for 
+        the identified component.  
+        :param str filepath:   the filepath value for a DownloadableFile component or id destination string 
+                               for a non-DownloadableFile component.  An id destination string starts with 
+                               the prefix "@id:" and is followed by the component's relative identifier 
+                               (i.e. what appears as its "@id" property).  
+        :rtype: bool
+        """
+        if not filepath:
+            raise ValueError("has_component: empty or null filepath given")
+        if filepath.startswith("@id:pdr:f/"):
+            filepath = filepath[len("@id:pdr:f/"):]
+        elif filepath.startswith("@id:cmps/"):
+            filepath = filepath[len("@id:cmps/"):]
+        if filepath.startswith("@id:"):
+            # non-file component
+            filepath = filepath[4:]
+            md = self.nerd_metadata_for('', True)
+            for c in md.get('components', []):
+                if c.get('@id','') == filepath:
+                    return True
+            return False
+        else:
+            # file component
+            return os.path.exists(self.nerd_file_for(filepath))
 
     def nerdm_record(self, merge_annots=None, incl_inventory=False,
                      incl_hierarchy=False):

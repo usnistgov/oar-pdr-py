@@ -137,7 +137,7 @@ class TestNISTBag(test.TestCase):
         self.assertEqual(nerd['ediid'], "3A1EE2F169DD3B8CE0531A570681DB5D1491")
         self.assertEqual(nerd['@type'], ["nrdp:PublicDataResource"])
 
-        nerd = self.bag.nerd_metadata_for("", True)
+        nerd = self.bag.nerd_metadata_for("", "midas1")
         self.assertIn('authors', nerd)
 
         # new default merge policy; title can be overridden!
@@ -157,7 +157,7 @@ class TestNISTBag(test.TestCase):
         self.assertNotIn("previewURL", nerd)
         self.assertTrue(nerd['title'].startswith("JSON version of"))
         
-        nerd = self.bag.nerd_metadata_for("trial1.json", True)
+        nerd = self.bag.nerd_metadata_for("trial1.json", "midas1")
         self.assertIn("previewURL", nerd)
         # new default merge policy; title can be overridden!
         #
@@ -172,6 +172,17 @@ class TestNISTBag(test.TestCase):
 
         with self.assertRaises(bagex.ComponentNotFound):
             self.bag.nerd_metadata_for('goober')
+
+    def test_has_component(self):
+        self.assertTrue(self.bag.has_component('trial3/trial3a.json'))
+        self.assertTrue(not self.bag.has_component('trial3/trial3b.json'))
+        self.assertTrue(self.bag.has_component('@id:cmps/trial3/trial3a.json'))
+        self.assertTrue(self.bag.has_component('@id:pdr:f/trial3/trial3a.json'))
+        self.assertTrue(not self.bag.has_component('@id:pdr:f/trial3/trial3b.json'))
+
+        self.assertTrue(self.bag.has_component('@id:#doi:10.18434/T4SW26'))
+        self.assertTrue(not self.bag.has_component('@id:10.18434/T4SW26'))
+        
         
     def test_nerdm_record(self):
         data = self.bag.nerdm_record()
@@ -225,7 +236,7 @@ class TestNISTBag(test.TestCase):
                     if 'filepath' in c and c['filepath'] == "trial1.json"][0]
         self.assertNotIn('previewURL', trial1)
 
-        nerd = self.bag.nerdm_record(True)
+        nerd = self.bag.nerdm_record("midas1")
 
         self.assertIn('authors', nerd)
         # new default merge policy; title can be overridden!
