@@ -14,8 +14,7 @@ from nistoar.pdr import ARK_NAAN
 from nistoar.pdr.describe import MetadataClient
 from nistoar.pdr.exceptions import StateException, ConfigurationException
 
-from nistoar.pdr.publish import sys as _sys
-syslog = logging.getLogger().getChild(_sys.system_abbrev).getChild(_sys.subsystem_abbrev)
+from nistoar.pdr.publish import system 
 
 __all__ = [ 'IDLoader', 'RMMLoader', 'CachingIDRegistry', 'PDRIDRegistry' ]
 
@@ -123,10 +122,11 @@ class CachingIDRegistry(IDRegistry):
         self.data = ChainMap(self.uncached, self.cached)
         self.name = name
 
+        _sys = system.get_global_system() or system
         nm = type(self).__name__
         if self.name:
             nm += ":" + self.name
-        self.log = syslog.getChild(nm)
+        self.log = _sys.getSysLogger().getChild(nm)
         self.lock = threading.RLock()
 
         # set up the registry disk storage

@@ -53,8 +53,9 @@ class TestBuilder2(test.TestCase):
                 'NIST-BagIt-Version': "X.3",
                 "Organization-Address": ["100 Bureau Dr.",
                                          "Gaithersburg, MD 20899"]
-            }
-            "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.5"
+            },
+            "ensure_nerdm_type_on_add": False,
+            "merge_convention": "midas0"
         }
 
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
@@ -988,6 +989,7 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(self.bag._bag.dir, bagdir)
 
     def test_determine_file_comp_type(self):
+        self.bag.cfg['recognize_checksum_files'] = True
         self.assertEqual(self.bag._determine_file_comp_type("goob.txt"),
                           "DataFile")
         self.assertEqual(self.bag._determine_file_comp_type("goob.txt.sha256"),
@@ -1169,6 +1171,8 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(mdata['downloadURL'], dlurl)
 
     def test_add_res_nerd(self):
+        self.cfg['ensure_nerdm_type_on_add'] = bldr.NERDM_SCH_ID_BASE + "v0.4"
+        self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
         self.assertIsNone(self.bag.ediid)
         with open(os.path.join(datadir, "_nerdm.json")) as fd:
             mdata = json.load(fd)
@@ -1221,6 +1225,9 @@ class TestBuilder2(test.TestCase):
         self.assertFalse(os.path.exists(self.bag.bag.nerd_file_for("trial3/trial3a.json")))
 
     def test_add_ds_pod_convert(self):
+        self.cfg['ensure_nerdm_type_on_add'] = bldr.NERDM_SCH_ID_BASE + "v0.5"
+        self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
+
         self.assertIsNone(self.bag.ediid)
         podfile = os.path.join(datadir, "_pod.json")
         with open(podfile) as fd:
@@ -1731,7 +1738,7 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(len(oxum), 1)
         oxum = [int(n) for n in oxum[0].split(': ')[1].split('.')]
         self.assertEqual(oxum[1], 14)
-        self.assertEqual(oxum[0], 12180)  # this will change if logging changes
+        self.assertEqual(oxum[0], 12249)  # this will change if logging changes
 
         bagsz = [l for l in lines if "Bag-Size: " in l]
         self.assertEqual(len(bagsz), 1)
@@ -1749,23 +1756,13 @@ class TestBuilder2(test.TestCase):
         self.bag.ensure_bagdir()
         with self.assertRaises(bldr.BagProfileError):
             self.bag.write_about_file()
-        
+        aboutfile = os.path.join(self.bag.bagdir,"about.txt")
+        self.assertTrue( not os.path.exists(aboutfile) )
+
         with open(os.path.join(datadir, "_nerdm.json")) as fd:
             mdata = json.load(fd)
         self.bag.add_res_nerd(mdata)
-        with self.assertRaises(bldr.BagProfileError):
-            self.bag.write_about_file()
         
-        podfile = os.path.join(datadir, "_pod.json")
-        with open(podfile) as fd:
-            poddata = json.load(fd)
-
-        # Make sure we can handle unicode data
-        poddata['description'] += " at \u03bb = 20cm."
-        self.bag.add_ds_pod(poddata, convert=False)
-
-        aboutfile = os.path.join(self.bag.bagdir,"about.txt")
-        self.assertTrue( not os.path.exists(aboutfile) )
         self.bag.write_about_file()
         self.assertTrue( os.path.exists(aboutfile) )
 

@@ -1,11 +1,9 @@
-import os, sys, pdb, shutil, logging, json, re
+import os, sys, pdb, shutil, logging, json, re, importlib
 import unittest as test
 from nistoar.testing import *
-from nistoar.pdr import def_jq_libdir
 
-import nistoar.pdr.config as config
+from nistoar.pdr import config
 from nistoar.pdr.exceptions import ConfigurationException
-import imp
 
 datadir = os.path.join(os.path.dirname(__file__), "data")
 tmpd = None
@@ -412,7 +410,7 @@ class TestConfigService(test.TestCase):
         self.assertIsNone(config.service)
         try:
             os.environ['OAR_CONFIG_SERVICE'] = "https://config.org/oar/"
-            imp.reload(config)
+            importlib.reload(config)
             self.assertIsNotNone(config.service)
             self.assertEqual(config.service._base, "https://config.org/oar/")
             self.assertIsNone(config.service._prof)

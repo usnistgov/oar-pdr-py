@@ -1,7 +1,7 @@
 """
 Tools for building a NIST Preservation bags
 """
-import os, errno, logging, re, pkg_resources, textwrap, datetime
+import os, errno, logging, re, pkg_resources, textwrap, datetime, shutil
 import pynoid as noid
 from shutil import copy as filecopy, rmtree
 from copy import deepcopy
@@ -22,7 +22,7 @@ from ...utils import (build_mime_type_map, checksum_of, measure_dir_size,
 
 from ....id import PDRMinter
 from ... import def_jq_libdir, def_etc_dir
-from ...config import load_from_file, merge_config
+from ....base.config import load_from_file, merge_config
 from .bag import NISTBag
 from .exceptions import BadBagRequest
 from .validate.nist import NISTAIPValidator
@@ -237,6 +237,8 @@ class BagBuilder(PreservationSystem):
         self._nerdm_schema_id = NERDM_SCH_ID
         if isinstance(self.cfg.get('ensure_nerdm_type_on_add', True), str):
             self._nerdm_schema_id = self.cfg.get('ensure_nerdm_type_on_add', NERDM_SCH_ID);
+            if not self._nerdm_schema_id.endswith('#'):
+                self._nerdm_schema_id += '#'
 
     def __del__(self):
         self._unset_logfile()
@@ -1463,7 +1465,7 @@ class BagBuilder(PreservationSystem):
 
     def _determine_file_comp_type(self, filename):
         ext = os.path.splitext(filename)[1][1:]
-        if ext in ["sha256", "sha512", "md5"]:
+        if self.cfg.get('recognize_checksum_files') and ext in ["sha256", "sha512", "md5"]:
             return "ChecksumFile"
         return "DataFile"
 
@@ -1555,7 +1557,8 @@ class BagBuilder(PreservationSystem):
             self.record(msg)
         
         # validate type
-        if mdata.get("_schema") != self._nerdm_sch_id:
+        if mdata.get("_schema") != self._nerdm_schema_id and \
+           mdata.get("_schema") != self._nerdm_schema_id + "/definitions/Resource":
             if self.cfg.get('ensure_nerdm_type_on_add', True):
                 raise NERDError("Not a NERDm Resource Record; wrong schema id: "+
                                 str(mdata.get("_schema")))
@@ -2333,26 +2336,21 @@ class BagBuilder(PreservationSystem):
         if not self._bag:
             self.ensure_bagdir()
         nerdresf = self._bag.nerd_file_for("")
-        podf = self._bag.pod_file()
-        if not os.path.exists(podf):
-            raise BagProfileError("Missing POD metadata file; is this bag complete?")
         if not os.path.exists(nerdresf):
-            raise BagProfileError("Missing POD metadata file; is this bag complete?")
+            raise BagProfileError("Missing NERDm metadata file; is this bag complete?")
         try:
-            mf = nerdresf
             nerdm = self._bag.nerd_metadata_for("", merge_annots)
-            mf = podf
-            podm = self._bag.read_pod(mf)
-        except OSError as ex:
-            raise BagItException("failed to read data from file, " +
-                                 mf + ": " + str(ex), cause=ex)
+        except NERDError as ex:
+            raise BagItException("failed to read data from file, " + nerdresf + ": " + str(ex), cause=ex)
+        if 'title' not in nerdm:
+            raise BagProfileError("Dataset title not specified ("+self.bag.name+"); is this bag complete?")
 
         try:
             with open(os.path.join(self.bagdir, "about.txt"), 'w', encoding='utf-8') as fd:
                 print("This data package contain NIST Public Data\n", file=fd)
 
                 # title
-                print(textwrap.fill(podm['title'], 79), file=fd)
+                print(textwrap.fill(nerdm['title'], 79), file=fd)
 
                 # authors, if available
                 if 'authors' in nerdm:
@@ -2421,9 +2419,9 @@ class BagBuilder(PreservationSystem):
                     fd.write("\n")
 
                 # description
-                if podm.get('description'):
-                    print( textwrap.fill(podm['description']),
-                           file=fd )
+                if nerdm.get('description'):
+                    for para in nerdm['description']:
+                        print( textwrap.fill(para, 79), file=fd )
                     fd.write("\n")
 
                 # landing page

@@ -2,9 +2,11 @@
 Provide functionality for the Public Data Repository
 """
 import os
+from pathlib import Path
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 from .constants import *
+from ..base import SystemInfoMixin, config
 
 try:
     from .version import __version__
@@ -24,58 +26,17 @@ def _get_platform_profile_name():
 
 platform_profile = _get_platform_profile_name()
 
-class SystemInfoMixin(object, metaclass=ABCMeta):
-    """
-    a mixin for getting information about the current system that a class is 
-    a part of.  
-    """
-
-    @property
-    def system_name(self):
-        return ""
-
-    @property
-    def system_abbrev(self):
-        return ""
-
-    @property
-    def subsystem_name(self):
-        return ""
-
-    @property
-    def subsystem_abbrev(self):
-        return ""
-
-    @abstractproperty
-    def system_version(self):
-        return __version__
-
 _PDRSYSNAME = "Public Data Repository"
 _PDRSYSABBREV = "PDR"
-_PDRSUBSYSNAME = _PDRSYSNAME
-_PDRSUBSYSABBREV = _PDRSYSABBREV
 
 class PDRSystem(SystemInfoMixin):
     """
-    a mixin providing static information about the PDR system.  
-
-    In addition to providing system information, one can determine if a class 
-    instance--namely, an Exception--is part of a particular system by calling 
-    `isinstance(inst, PDRSystem)`.
+    A SystemInfoMixin representing the overall PDR system.
     """
+    def __init__(self, subsysname="", subsysabbrev=""):
+        super(PDRSystem, self).__init__(_PDRSYSNAME, _PDRSYSABBREV, subsysname, subsysabbrev, __version__)
 
-    @property 
-    def system_version(self):
-        return __version__
-
-    @property
-    def system_name(self): return _PDRSYSNAME
-    @property
-    def system_abbrev(self): return _PDRSYSABBREV
-    @property
-    def subsystem_name(self): return _PDRSUBSYSNAME
-    @property
-    def subsystem_abbrev(self): return _PDRSUBSYSABBREV
+system = PDRSystem()
     
 def find_jq_lib(config=None):
     """
@@ -103,24 +64,23 @@ def find_jq_lib(config=None):
         # this is normally an installation directory (where lib/jq is our
         # directory) but we also allow it to be the source directory
         assert_exists(os.environ['OAR_HOME'], "env var OAR_HOME ")
-        basedir = os.environ['OAR_HOME']
-        candidates = [os.path.join(basedir, 'lib', 'jq'),
-                      os.path.join(basedir, 'jq')]
+        basedir = Path(os.environ['OAR_HOME'])
+        candidates = [basedir / 'lib' / 'jq',
+                      basedir / 'jq']
     else:
         # guess some locations based on the location of the executing code.
         # The code might be coming from an installation, build, or source
         # directory.
-        import nistoar
-        basedir = os.path.dirname(os.path.dirname(os.path.dirname(
-                                            os.path.abspath(nistoar.__file__))))
-        candidates = [os.path.join(basedir, 'jq')]
-        basedir = os.path.dirname(os.path.dirname(basedir))
-        candidates.append(os.path.join(basedir, 'jq'))
-        candidates.append(os.path.join(basedir, 'metadata', 'jq'))
+        import nistoar.jq
+        basedir = Path(nistoar.jq.__file__).parents[3]
+        candidates = [basedir / 'jq']
+        basedir = basedir.parents[1]
+        candidates.append(basedir / 'jq')
+        candidates.append(basedir / 'metadata' / 'jq')
         
     for dir in candidates:
-        if os.path.exists(dir):
-            return dir
+        if dir.exists():
+            return str(dir)
         
     return None
 
@@ -153,25 +113,23 @@ def find_merge_etc(config=None):
         # this is normally an installation directory (where lib/jq is our
         # directory) but we also allow it to be the source directory
         assert_exists(os.environ['OAR_HOME'], "env var OAR_HOME ")
-        basedir = os.environ['OAR_HOME']
-        candidates = [os.path.join(basedir, 'etc', 'merge')]
+        basedir = Path(os.environ['OAR_HOME'])
+        candidates = [basedir / 'etc' / 'merge']
 
     else:
         # guess some locations based on the location of the executing code.
         # The code might be coming from an installation, build, or source
         # directory.
-        import nistoar
-        basedir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-                                            os.path.abspath(nistoar.__file__)))))
-        candidates = [os.path.join(basedir, 'etc', 'merge')]
-        candidates.append(os.path.join(basedir, 'metadata', 'etc', 'merge'))
-        basedir = os.path.dirname(basedir)
-        candidates.append(os.path.join(basedir, 'metadata', 'etc', 'merge'))
-        candidates.append(os.path.join(basedir, 'etc', 'merge'))
+        import nistoar.nerdm.merge
+        basedir = Path(nistoar.nerdm.merge.__file__).parents[3]
+        candidates = [basedir / 'etc' / 'merge']
+        candidates.append(basedir / 'metadata' / 'etc' / 'merge')
+        basedir = basedir.parents[1]
+        candidates.append(basedir / 'etc' / 'merge')
 
     for dir in candidates:
-        if os.path.exists(dir):
-            return dir
+        if dir.exists():
+            return str(dir)
         
     return None
 
@@ -199,22 +157,36 @@ def find_etc_dir(config=None):
         # this is might be the install base or the source base directory;
         # either way, etc, is a subdirectory.
         assert_exists(os.environ['OAR_HOME'], "env var OAR_HOME ")
-        basedir = os.environ['OAR_HOME']
-        candidates = [os.path.join(basedir, 'etc')]
+        basedir = Path(os.environ['OAR_HOME'])
+        candidates = [basedir / 'etc']
 
     else:
         # guess some locations based on the location of the executing code.
         # The code might be coming from an installation, build, or source
         # directory.
-        import nistoar
-        basedir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-                                            os.path.abspath(nistoar.__file__)))))
-        candidates = [os.path.join(basedir, 'etc'),
-                      os.path.join(os.path.dirname(basedir), 'etc')]
-    
+        candidates = []
+
+        # assume library has been installed; library is rooted at {root}/lib/python,
+        basedir = Path(__file__).parents[4]
+
+        # and the etc dir is {root}/etc
+        candidates.append(basedir / 'etc')
+
+        # assume library has been built within the source code directory at {root}/python/build/lib*
+        basedir = Path(__file__).parents[5]
+
+        # then the schema would be under {root}/etc
+        candidates.append(basedir / 'etc')
+
+        # assume library being used from its source code location
+        basedir = Path(__file__).parents[3]
+
+        # and is under {root}/metadata/model
+        candidates.append(basedir / 'etc')
+
     for dir in candidates:
-        if os.path.exists(dir):
-            return dir
+        if dir.exists():
+            return str(dir)
         
     return None
 
@@ -248,49 +220,37 @@ def find_schema_dir(config=None):
         # this is normally an installation directory (where etc/schemas is our
         # directory) but we also allow it to be the source directory
         assert_exists(os.environ['OAR_HOME'], "env var OAR_HOME ")
-        basedir = os.environ['OAR_HOME']
-        candidates = [os.path.join(basedir, 'etc', 'schemas')]
+        basedir = Path(os.environ['OAR_HOME'])
+        candidates = [basedir / 'etc' / 'schemas']
 
     else:
         # guess some locations based on the location of the executing code.
         # The code might be coming from an installation, build, or source
         # directory.
-        import nistoar
+        import nistoar.nerdm
         candidates = []
 
         # assume library has been installed; library is rooted at {root}/lib/python,
-        basedir = os.path.dirname(                       # {root}
-                  os.path.dirname(                       # lib
-                  os.path.dirname(                       # python
-                  os.path.dirname(                       # nistoar
-                  os.path.abspath(nistoar.__file__)))))  # __init__.py
+        basedir = Path(nistoar.nerdm.__file__).parents[4]
 
         # and the schema dir is {root}/etc/schemas o
-        candidates.append(os.path.join(basedir, 'etc', 'schemas'))
+        candidates.append(basedir / 'etc' / 'schemas')
 
         # assume library has been built within the source code directory at {root}/python/build/lib*
-        basedir = os.path.dirname(                       # {root}
-                  os.path.dirname(                       # python
-                  os.path.dirname(                       # build
-                  os.path.dirname(                       # lib.*
-                  os.path.dirname(                       # nistoar
-                  os.path.abspath(nistoar.__file__)))))) # __init__.py
+        basedir = Path(nistoar.nerdm.__file__).parents[5]
 
-        # then the schema would be under {root}/metadata/model
-        candidates.append(os.path.join(basedir, 'metadata', 'model'))
+        # then the schema would be under {root}/model
+        candidates.append(basedir / 'model')
 
         # assume library being used from its source code location
-        basedir = os.path.dirname(                      # {root}
-                  os.path.dirname(                      # python
-                  os.path.dirname(                      # nistoar
-                  os.path.abspath(nistoar.__file__))))  # __init__.py
+        basedir = Path(nistoar.nerdm.__file__).parents[3]
 
         # and is under {root}/metadata/model
-        candidates.append(os.path.join(basedir, 'metadata', 'model'))
+        candidates.append(basedir / 'model')
 
     for dir in candidates:
-        if os.path.exists(dir):
-            return dir
+        if dir.exists():
+            return str(dir)
         
     return None
 

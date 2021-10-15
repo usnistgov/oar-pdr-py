@@ -2,35 +2,35 @@ import os, pdb
 import warnings as warn
 import unittest as test
 
+from nistoar.base import SystemInfoMixin
 import nistoar.pdr as pdr
 
-class MySystemInfo(pdr.SystemInfoMixin):
-    @property
-    def system_version(self):
-        return super(MySystemInfo, self).system_version
+class MySystemInfo(SystemInfoMixin):
+    def __init__(self):
+        super(MySystemInfo, self).__init__("My System", "mine", "subsys", "sub", "dev")
 
 class TestSystemInfo(test.TestCase):
 
     def test_version(self):
         si = MySystemInfo()
-        self.assertNotEqual(si.system_version, "dev")
+        self.assertEqual(si.system_version, "dev")
         self.assertGreater(len(si.system_version), 1)
 
     def test_sysname(self):
         si = MySystemInfo()
-        self.assertEqual(si.system_name, "")
+        self.assertEqual(si.system_name, "My System")
 
     def test_subsysname(self):
         si = MySystemInfo()
-        self.assertEqual(si.subsystem_name, "")
+        self.assertEqual(si.subsystem_name, "subsys")
 
     def test_sysabbrev(self):
         si = MySystemInfo()
-        self.assertEqual(si.system_abbrev, "")
+        self.assertEqual(si.system_abbrev, "mine")
 
     def test_subsysabbrev(self):
         si = MySystemInfo()
-        self.assertEqual(si.subsystem_abbrev, "")
+        self.assertEqual(si.subsystem_abbrev, "sub")
 
 class TestPDRSystem(test.TestCase):
 
@@ -45,7 +45,7 @@ class TestPDRSystem(test.TestCase):
 
     def test_subsysname(self):
         si = pdr.PDRSystem()
-        self.assertEqual(si.subsystem_name, "Public Data Repository")
+        self.assertEqual(si.subsystem_name, "")
 
     def test_sysabbrev(self):
         si = pdr.PDRSystem()
@@ -53,7 +53,7 @@ class TestPDRSystem(test.TestCase):
 
     def test_subsysabbrev(self):
         si = pdr.PDRSystem()
-        self.assertEqual(si.subsystem_abbrev, "PDR")
+        self.assertEqual(si.subsystem_abbrev, "")
 
 
 

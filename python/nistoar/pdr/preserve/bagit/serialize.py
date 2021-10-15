@@ -7,7 +7,7 @@ import logging, os, zipfile, re
 
 from .exceptions import BagSerializationError
 from ...exceptions import StateException
-from .. import sys as _sys
+from .. import system as pressys
 
 def _exec(cmd, dir, log):
     log.debug("expecting bag in dir: %s", dir)
@@ -79,7 +79,7 @@ def zip_serialize(bagdir, destdir, log, destfile=None):
         message = zip_error.get(str(ex.returncode))
         if not message:
             message = "Bag serialization failure using zip (consult log)"
-        raise BagSerializationError(message, name, ex, sys=_sys)
+        raise BagSerializationError(message, name, ex)
 
     return destfile
 
@@ -114,7 +114,7 @@ def zip_deserialize(bagfile, destdir, log):
         message = zip_error.get(str(ex.returncode))
         if not message:
             message = "Bag deserialzation failure using zip (consult log)"
-        raise BagSerializationError(message, os.path.basename(bagfile), ex, sys=_sys)
+        raise BagSerializationError(message, os.path.basename(bagfile), ex)
 
     return outbag
 
@@ -171,7 +171,7 @@ def zip7_serialize(bagdir, destdir, log, destfile=None):
             msg = "7z could not read one or more files"
         else:
             msg = "Bag serialization failure using 7z (consult log)"
-        raise BagSerializationError(msg, name, ex, sys=_sys)
+        raise BagSerializationError(msg, name, ex)
 
     return destfile
 
@@ -206,7 +206,7 @@ def zip7_deserialize(bagfile, destdir, log):
         message = zip_error.get(str(ex.returncode))
         if not message:
             message = "Bag deserialzation failure using zip (consult log)"
-        raise BagSerializationError(message, os.path.basename(bagfile), ex, sys=_sys)
+        raise BagSerializationError(message, os.path.basename(bagfile), ex)
 
     return outbag
 
@@ -223,6 +223,7 @@ class Serializer(object):
         if typefunc:
             self._map.update(typefunc)
         self.log = log
+        self._sys = pressys.get_global_system() or pressys
 
     def setLog(self, log):
         self.log = log
@@ -260,10 +261,7 @@ class Serializer(object):
             raise BagSerializationError("Serialization format not supported: "+
                                         str(format))
         if not log:
-            if self.log:
-                log = self.log
-            else:
-                log = logging.getLogger(_sys.system_abbrev).getChild(_sys.subsystem_abbrev)
+            log = self.log or self._sys.getSysLogger()
 
         return self._map[format][0](bagdir, destdir, log)
 
@@ -284,10 +282,7 @@ class Serializer(object):
             raise BagSerializationError("Serialization format not supported: "+
                                         str(format))
         if not log:
-            if self.log:
-                log = self.log
-            else:
-                log = logging.getLogger(_sys.system_abbrev).getChild(_sys.subsystem_abbrev)
+            log = self.log or self._sys.getSysLogger()
 
         return self._map[format][1](bagfile, destdir, log)
 

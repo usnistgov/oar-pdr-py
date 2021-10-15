@@ -9,7 +9,7 @@ from collections import OrderedDict, Mapping
 from zipfile import ZipFile
 from time import mktime
 
-from .base import sys as _sys
+from .base import system
 from .. import (ConfigurationException, StateException, CorruptedBagError, NERDError)
 from . import utils as bagutils
 from ...describe import rmm
@@ -17,8 +17,6 @@ from ... import distrib
 from ...exceptions import IDNotFound
 from ... import utils
 from ...preserve.bagit import NISTBag, BagBuilder
-
-deflog = logging.getLogger(_sys.system_abbrev).getChild(_sys.subsystem_abbrev)
 
 class HeadBagCacher(object):
     """
@@ -214,10 +212,11 @@ class UpdatePrepper(object):
             raise StateException("UpdatePrepper: not a directory: "+self.mdcache)
 
         if not log:
+            _sys = system.get_global_system() or system
             nm = self.aipid
             if len(nm) > 12:
                 nm = "..."+nm[8:]
-            log = deflog.getChild(nm)
+            log = _sys.getSysLogger().getChild(nm)
         self.log = log
 
     def cache_headbag(self):

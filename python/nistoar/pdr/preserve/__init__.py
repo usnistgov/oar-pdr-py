@@ -22,8 +22,6 @@ This package is organized into subpackages
 * :mod:`service` -- the primary interface creating a 
   preseravation package (AIP).  It includes the 
   :class:`~service.PreservationService` and a web service front-end.
-* :mod:`bagger` -- modules that understand how to turn SIPs of different types 
-  into an AIP.
 * :mod:`bagit` -- modules for creating and examining bags that conform to the 
   NIST BagIt Profile.  
 * :mod:`validate` -- modules for validating that a bag is compliant with the 
@@ -31,28 +29,20 @@ This package is organized into subpackages
 """
 from ..exceptions import *
 from ... import pdr as _pdr
-from .. import PDRSystem
+# from .. import system as pdrsys
 from ..utils import read_nerd, read_pod, write_json, read_json
 
-_PRESSYSNAME = _pdr._PDRSYSNAME
-_PRESSYSABBREV = _pdr._PDRSYSABBREV
 _PRESSUBSYSNAME = "Preservation"
-_PRESSUBSYSABBREV = "Preserv"
+_PRESSUBSYSABBREV = "Preserve"
 
-class PreservationSystem(PDRSystem):
+class PreservationSystem(_pdr.PDRSystem):
     """
-    a mixin providing static information about the Preservation system
+    a SystemInfoMixin providing static information about the Preservation system
     """
-    @property
-    def system_name(self): return _PRESSYSNAME
-    @property
-    def system_abbrev(self): return _PRESSYSABBREV
-    @property
-    def subsystem_name(self): return _PRESSUBSYSNAME
-    @property
-    def subsystem_abbrev(self): return _PRESSUBSYSABBREV
+    def __init__(self):
+        super(PreservationSystem, self).__init__(_PRESSUBSYSNAME, _PRESSUBSYSABBREV)
 
-sys = PreservationSystem()
+system = PreservationSystem()
 
 class PreservationException(PDRException):
     """
@@ -63,13 +53,13 @@ class PreservationException(PDRException):
         """
         create an exception, optionally listing things that went wrong
 
-        :param msg     str:  a general message describing the failure
-        :param errors list:  a list of specific error messages indicating 
+        :param     str msg:  a general message describing the failure
+        :param list errors:  a list of specific error messages indicating 
                                multiple errors that occurred.
-        :param cause Exception:  an underlying cause in the form of an 
+        :param Exception cause:  an underlying cause in the form of an 
                              Exception instance.
         """
-        super(PreservationException, self).__init__(msg, cause, sys=sys)
+        super(PreservationException, self).__init__(msg, cause, sys=system)
         self.errors = []
         if errors:
             self.errors.extend(errors)

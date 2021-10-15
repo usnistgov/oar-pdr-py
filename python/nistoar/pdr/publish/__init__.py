@@ -7,28 +7,20 @@ of an unserialized BagIt bag that conforms to the NIST Preservation Bag Profile;
 publishing model does not require this.  
 """
 from ..exceptions import *
+from ..preserve import CorruptedBagError
 from ... import pdr as _pdr
-from .. import PDRSystem
 
-_PRESSYSNAME = _pdr._PDRSYSNAME
-_PRESSYSABBREV = _pdr._PDRSYSABBREV
-_PRESSUBSYSNAME = "Publishing"
-_PRESSUBSYSABBREV = "Pub"
+_PUBSUBSYSNAME = "Publishing"
+_PUBSUBSYSABBREV = "Pub"
 
-class PublishSystem(PDRSystem):
+class PublishSystem(_pdr.PDRSystem):
     """
-    a mixin providing static information about the publishing system
+    a SystemInfoMixin providing static information about the Preservation system
     """
-    @property
-    def system_name(self): return _PRESSYSNAME
-    @property
-    def system_abbrev(self): return _PRESSYSABBREV
-    @property
-    def subsystem_name(self): return _PRESSUBSYSNAME
-    @property
-    def subsystem_abbrev(self): return _PRESSUBSYSABBREV
+    def __init__(self):
+        super(PublishSystem, self).__init__(_PUBSUBSYSNAME, _PUBSUBSYSABBREV)
 
-sys = PublishSystem()
+system = PublishSystem()
 
 class PublishException(PDRException):
     """
@@ -39,100 +31,105 @@ class PublishException(PDRException):
         """
         create the exception.
 
-        :param msg    str:  a specific warning message
-        :param cause Exception:  a caught but handled Exception that is the 
-                            cause of the warning
-        :param sys SystemInfo:  a SystemInfo instance that can provide 
-                            information as to the cause of the 
+        :param str   msg:  A message to override the default.
+        :param Exception cause:  a caught exception that represents the underlying cause of the problem.  
+        :param SystemInfoMixin sys: a SystemInfoMixin instance for the system under which the exception 
+                           occurred
         """
-        if not sys or not isinstance(sys, SystemInfoMixin):
-            sys = PublishSystem()
+        if not msg and not cause:
+            msg = "Unknown publishing error"
+        if not sys:
+            sys = pdrsys.get_global_system() or system
+        super(PublishException, self).__init__(msg, cause, sys)
 
-        if not msg:
-            if cause:
-                msg = str(cause)
-            else:
-                msg = "Unknown {0} System Error".format(sys.subsystem_abbrev)
-        Exception.__init__(self, msg, cause, sys)
-
-class PublishingStateException(PDRException):
+class PublishingStateException(PublishException):
     """
     An exception indicating that a publishing process (or specifically, an SIP) is in an
     illegal or unexpected state, preventing an operation.
     """
-    def __init__(self, msg=None, cause=None, sys=None):
+    def __init__(self, msg=None, cause=None):
         """
         create the exception.
 
-        :param msg    str:  a specific warning message
-        :param cause Exception:  a caught but handled Exception that is the 
-                            cause of the warning
-        :param sys SystemInfo:  a SystemInfo instance that can provide 
-                            information as to the cause of the 
+        :param str   msg:  A message to override the default.
+        :param Exception cause:  a caught exception that represents the underlying cause of the problem.  
         """
-        if not sys or not isinstance(sys, SystemInfoMixin):
-            sys = PublishSystem()
-
         if not msg:
             if cause:
                 msg = "Publishing state error: " + str(cause)
             else:
-                msg = "Unknown {0} System State Error".format(sys.subsystem_abbrev)
-        Exception.__init__(self, msg, cause, sys)
+                msg = "Unknown Publishing System state error"
+        super(PublishingStateException, self).__init__(msg, cause)
 
-class SIPDirectoryError(PublishException):
+class BadSIPInputError(PublishException):
     """
-    a class indicating a problem with the given directory containing 
-    the submission data.
+    An exception indicating that a publishing client provided illegal or incompatable input as 
+    part of an SIP or SIP creation.
     """
-    def __init__(self, dir=None, problem=None, cause=None, msg=None, sys=None):
+    def __init__(self, msg=None, cause=None):
         """
-        initial the exception.  By default the exception message will
-        be formatted by combining the directory name and the problem statement.
-        This can be overridden by providing a verbatim message via the msg
-        parameter.
+        create the exception.
 
-        If no arguments are provided, it is assumed that the problem is that 
-        an SIP directory was not provided.
-
-        :param dir  str:   the directory giving the problem
-        :param problem str:   a statement of what the problem is; this should not
-                           include the name of the directroy.
-        :param cause Exception:  a caught exception that represents the 
-                           underlying cause of the problem.  
-        :param msg  str:   a fully formatted to string to use as the exception
-                           message instead of one formed by combining the 
-                           directory name and its problem.
-        :param sys SystemInfo:  a SystemInfo instance that can provide 
-                        information as to the cause of the 
+        :param str   msg:  A message to override the default.
+        :param Exception cause:  a caught exception that represents the underlying cause of the problem.  
         """
-        self.dir = dir
-        if not problem:
-            if cause:
-                problem = str(cause)
-            elif not dir:
-                problem = "SIP directory not provided"
         if not msg:
-            if dir:
-                msg = "Problem with SIP directory, {0}: {1}".format(dir, problem)
+            msg = "Bad SIP input"
+            if cause:
+                msg += ": " + str(cause)
+        super(BadSIPInputError, self).__init__(msg, cause)
+
+class SIPStateException(PublishingStateException):
+    """
+    An exception indicating that an SIP is in an illegal or unexpected state, preventing an operation.
+    """
+    def __init__(self, sipid, msg=None, cause=None):
+        """
+        create the exception.
+
+        :param str sipid:  The ID for the SIP in the bad state
+        :param str   msg:  A message to override the default.
+        :param Exception cause:  a caught exception that represents the underlying cause of the problem.  
+        """
+        self.sipid = sipid
+        if not msg:
+            msg = "State error with SIP=" + sipid
+            if cause:
+                msg += ": " + str(cause)
             else:
-                msg = problem
-        super(SIPDirectoryError, self).__init__(msg, cause, sys)
-        self.problem = problem
-                    
-class SIPDirectoryNotFound(SIPDirectoryError):
+                msg = "Unknown " + msg
+        super(SIPStateException, self).__init__(msg, cause)
+
+class SIPConflictError(SIPStateException):
     """
-    An exception indicating the SIPDirectory does not exist
+    An exception indicating that although the SIP appears to be in a legal state, that state is not 
+    compatible with a requested operation.
     """
-    def __init__(self, dir=None, cause=None, msg=None, sys=None):
+    def __init__(self, sipid, msg, cause=None):
         """
-        :param dir  str:   the directory giving the problem
-        :param cause Exception:  a caught exception that represents the 
-                           underlying cause of the problem.  
-        :param msg  str:   A message to override the default.
+        create the exception.
+
+        :param str sipid:  The ID for the SIP in the bad state
+        :param str   msg:  A message describing the conflict
+        :param Exception cause:  a caught exception that represents the underlying cause of the problem.  
         """
-        prob = "directory not found"
-        super(SIPDirectoryNotFound, self).__init__(dir, prob, cause, msg, sys)
+        super(SIPStateException, self).__init__(sipid, msg, cause)
+    
+class SIPNotFoundError(SIPStateException):
+    """
+    An exception indicating the SIP cannot be found in the scope of current processing.  
+    """
+    def __init__(self, sipid, msg=None, cause=None):
+        """
+        create the exception.
 
-
-
+        :param str sipid:  The ID for the SIP in the bad state
+        :param str   msg:  A message to override the default.
+        :param Exception cause:  a caught exception that represents the underlying cause of the problem.  
+        """
+        if not msg:
+            msg = "SIP not found: " + sipid
+            if cause:
+                msg += "({0})".format(str(cause))
+        super(SIPNotFoundError, self).__init__(sipid, msg, cause)
+    

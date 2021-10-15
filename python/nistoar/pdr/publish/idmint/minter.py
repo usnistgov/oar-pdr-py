@@ -1,7 +1,7 @@
 """
 Module providing minters for use with the PDR
 """
-import os, logging, re
+import os, re
 from collections import Mapping
 from copy import deepcopy
 from abc import abstractmethod
@@ -12,9 +12,6 @@ from .registry import IDRegistry, PDRIDRegistry
 from nistoar.id.minter import IDMinter, NoidMinter
 from nistoar.pdr.constants import ARK_PFX_PAT, ARK_NAAN
 from nistoar.pdr.exceptions import StateException
-
-from nistoar.pdr.publish import sys as _sys
-syslog = logging.getLogger().getChild(_sys.system_abbrev).getChild(_sys.subsystem_abbrev)
 
 ARK_PFX_RE = re.compile(ARK_PFX_PAT)
 LOCAL_KEY_START_PAT = "[a-zA-Z0-9]"   # allowed characters to appear after the shoulder and -
