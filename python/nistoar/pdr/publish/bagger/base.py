@@ -4,15 +4,15 @@ infrastructure.  At the center is the SIPBagger class that serves as an
 abstract base for subclasses that understand different input sources.
 """
 import os, json, filelock
-from collections import OrderedDict
+from collections import OrderedDict, Mapping
 from abc import ABCMeta, abstractmethod, abstractproperty
+from copy import deepcopy
 
-from .. import PublishSystem, sys
-from .. import (SIPDirectoryError, PDRException, NERDError, PODError,
-                PreservationStateError)
-from ..utils import read_nerd, read_pod, read_json, write_json
+from .. import PublishSystem, system
+from .. import (PublishException, PublishingStateException, StateException)
+from ...utils import read_nerd, read_pod, read_json, write_json
 from ...preserve.bagit.builder import checksum_of
-from ...config import merge_config
+from ....base.config import merge_config
 
 def moddate_of(filepath):
     """
@@ -20,7 +20,7 @@ def moddate_of(filepath):
     """
     return os.stat(filepath).st_mtime
 
-class SIPBagger(PreservationSystem, metaclass=ABCMeta):
+class SIPBagger(PublishSystem, metaclass=ABCMeta):
     """
     This class will prepare an SIP organized in a particular form 
     by re-organizing its contents into a working bag.  Subclasses adapt 
@@ -49,33 +49,32 @@ class SIPBagger(PreservationSystem, metaclass=ABCMeta):
 
     def __init__(self, outdir, config):
         """
-        initialize the class by setting the input SIP directory and the 
+        initialize the class by setting its configuration and the 
         output working directory where the root bag directory can be created.  
         """
+        super(SIPBagger, self).__init__()
         self.bagparent = outdir
         self.cfg = config
         self.lock = None
+        self.isrevision = False
 
     @abstractproperty
     def bagdir(self):
         """
         The path to the output bag directory.
         """
-        raise NotImplemented
+        raise NotImplementedError()
 
     def ensure_bag_parent_dir(self):
+        """
+        Ensure that the directory where the bag is/will be located exists.
+
+        This implementation requires that this directory already exist, but a sub-class can override 
+        this method to create the directory under certain circumstances.  
+        """
         if not os.path.exists(self.bagparent):
-            if self.cfg.get('relative_to_indir'):
-                try:
-                    os.makedirs(self.bagparent)
-                except OSError as e:
-                    bagparent = self.bagparent[len(self.sipdir):]
-                    raise SIPDirectoryError("unable to create working bag ("+
-                                            bagparent + ") under SIP "+
-                                            "dir: " + str(e), cause=e)
-            else:
-                raise PublishingStateError("Bag Workspace dir does not exist: " +
-                                           self.bagparent)
+            raise PublishingStateError("Bag Workspace dir does not exist: " + self.bagparent)
+                                       
 
     @abstractmethod
     def ensure_preparation(self, nodata=False):
@@ -86,7 +85,7 @@ class SIPBagger(PreservationSystem, metaclass=ABCMeta):
         :param nodata bool: if True, do not copy (or link) data files to the
                             output directory.
         """
-        raise NotImplemented
+        raise NotImplementedError()
 
     def ensure_filelock(self):
         """
@@ -117,6 +116,34 @@ class SIPBagger(PreservationSystem, metaclass=ABCMeta):
 
         else:
             self.ensure_preparation(nodata)
+
+    def finalize(self, who=None, lock=True):
+        """
+        Based on the current state of the bag, finalize its contents to a complete state according to 
+        the conventions of this bagger implementation.  After a successful call, the bag should be in 
+        a preservable state.
+        :param who:         an actor identifier object, indicating who is requesting this action.  This 
+                            will get recorded in the history data.  If None, an internal administrative 
+                            identity will be assumed.  This identity may affect the identifier assigned.
+        :param lock bool:   if True (default), acquire a lock before executing
+                            the preparation.
+        """
+        if lock:
+            self.ensure_filelock()
+            with self.lock:
+                self.ensure_finalize()
+
+        else:
+            self.ensure_finalize()
+
+    @abstractmethod
+    def ensure_finalize(self):
+        """
+        Based on the current state of the bag, finalize its contents to a complete state according to 
+        the conventions of this bagger implementation.  After a successful call, the bag should be in 
+        a preservable state.
+        """
+        raise NotImplementedError()
 
     def baggermd_file_for(self, destpath):
         """
@@ -176,4 +203,121 @@ class SIPBagger(PreservationSystem, metaclass=ABCMeta):
         # update the values of orig with the values in updates
         # this uses the same algorithm as used to merge config data
         return merge_config(updates, orig)
+
+    @abstractmethod
+    def delete(self):
+        """
+        delete the working bag from store; this sets the bagger to a virgin state.
+        """
+        raise NotImplementedError()
+    
+
+class SIPBaggerFactory(PublishSystem, metaclass=ABCMeta):
+    """
+    a factory class for instantiating SIPBaggers.  The factory can be implemented to provide baggers that 
+    support one bagging convention/type or multiple ones; the supports() method reveals if a particular 
+    convention is supported.
+    """
+    def __init__(self, config=None):
+        """
+        initialize the factory.  This version saves the configuration (if provided) but does not specify
+        what configuration is expected.
+        """
+        self.cfg = config
+
+    @abstractmethod
+    def supports(self, siptype: str) -> bool:
+        """
+        return True if this factory can instantiate an SIPBagger that supports the given convention 
+        or False, otherwise.  
+        :rtype: bool
+        """
+        return False
+
+    @abstractmethod
+    def create(self, sipid, siptype: str, config: Mapping=None) -> SIPBagger:
+        """
+        create a new instantiation of an SIPBagger that can process an SIP of the given type.  If config
+        is provided, it may get merged in some way with the configuration set at construction time before
+        being applied to the bagger.
+
+        :param          sipid:  the ID for the SIP to create a bagger for; this is usually a str, 
+                                subclasses may support more complicated ID types.
+        :param str    siptype:  the name given to the SIP convention supported by the SIP reference by sipid
+        :param Mapping config:  bagger configuration parameters that should override the default
+        """
+        raise NotImplementedError()
+
+class BaseSIPBaggerFactory(SIPBaggerFactory):
+    """
+    This is a base implementation of the SIPBaggerFactory that adds the following assumptions beyond 
+    SIPBaggerFactory:  (1) the configuration follows the multi-SIP configuration schema (described below), 
+    (2) SIP identifiers are strings, and (3) that all SIPBagger implementations support the same constructor 
+    signature.
+
+    Configuration Schema:
+    """
+
+    def __init__(self, config=None, workdir=None):
+        """
+        initialize the factory.  
+
+        Subclasses should override this constructor to configure the specific SIP types this factory 
+        will provide baggers for.  
+
+        :param Mapping config:  the factory's configuration from which it will derive the default 
+                                configuration for the SIPBaggers produced.
+        :param str    workdir:  the default base working directory for the output baggers; this overrides
+                                the 'working_dir' value provided in the given config, but a 'working_dir'
+                                value provided to the create() method will override this one.  This 
+                                directory must exist.
+        """
+        if workdir:
+            if not os.path.isdir(workdir):
+                raise StateException("Requested working directory does not exist (as a directory): " +
+                                     workdir)
+            config = deepcopy(config)
+            config['working_dir'] = workdir
+        super(BaseSIPBaggerFactory, self).__init__(config)
+
+        self._bgrcls = {}
+
+    def supports(self, siptype: str) -> bool:
+        """
+        return True if this factory can instantiate an SIPBagger that supports the given convention 
+        or False, otherwise.  
+        :rtype: bool
+        """
+        return siptype in self._bgrcls
+
+    def create(self, sipid: str, siptype: str, config: Mapping=None) -> SIPBagger:
+        """
+        create a new instantiation of an SIPBagger that can process an SIP of the given type.  If provided,
+        config will be merged with the default configuration provided by this factory, overriding the 
+        defaults.  In particular, this factory will first derive a bagger configuration for the bagger from 
+        its factory configuration; next, it will update the configuration parameters with values provided 
+        by the given config parameter.  
+
+        :param str      sipid:  the ID for the SIP to create a bagger for; this is usually a str, 
+                                subclasses may support more complicated ID types.
+        :param str    siptype:  the name given to the SIP convention supported by the SIP reference 
+                                by sipid
+        :param Mapping config:  bagger configuration parameters that should override the default
+        """
+        if not self.supports(siptype):
+            raise PublishException("Factory does not support this SIP type: "+siptype, sys=self)
+        outcfg = merge_config(self.derive_config(siptype), config)
+
+        cls = None
+        try:
+            cls = self._bgrcls[siptype]
+        except KeyError as ex:
+            raise PublishException("No SIPBagger class specified for siptype="+siptype, sys=self)
+
+        return cls(sipid, outcfg)
+
+    
+        
+
+
 
