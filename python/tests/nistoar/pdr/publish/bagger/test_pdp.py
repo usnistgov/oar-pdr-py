@@ -303,7 +303,31 @@ class TestPDPBagger(test.TestCase):
         self.bgr.finalize()
         self.assertTrue(os.path.exists(os.path.join(self.bgr.bagdir, "bag-info.txt")))
         
+    def test_describe(self):
+        bagdir = self.bagparent / 'pdp1:goob'
+        self.assertTrue(not bagdir.exists())
+        self.set_bagger_for("pdp1:goob")
+        self.bgr.prepare()
+        self.assertTrue(bagdir.exists())
+
+        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        del nerd['components'][2]
+        self.bgr.set_res_nerdm(nerd, None, True)  # saves components, too
+
+        saved = self.bgr.describe('')
+        self.assertIsNotNone(saved)
+        self.assertEqual(saved.get('version'), '1.0.0')
+        self.assertEqual(saved.get('@id'), 'ark:/88888/pdp1-0017sm')
+        self.assertEqual(len(saved['components']), 6)
         
+        md = self.bgr.describe("pdr:f/1491_optSortSph20160701.m")
+        self.assertIsNotNone(md)
+        self.assertEqual(md.get('filepath'), "1491_optSortSph20160701.m")
+        self.assertEqual(md.get('@id'), "pdr:f/1491_optSortSph20160701.m")
+
+        md = self.bgr.describe("pdr:v")
+        self.assertIsNotNone(md)
+        self.assertTrue(md.get("@id", "").endswith("pdr:v"))
         
                          
 if __name__ == '__main__':

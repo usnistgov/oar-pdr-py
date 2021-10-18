@@ -242,6 +242,21 @@ class NERDmBasedBagger(SIPBagger):
         """
         raise NotImplementedError()
 
+    def describe(self, relid: str = '', who: PubAgent = None) -> Mapping:
+        """
+        return a NERDm description for the part of the dataset pointed to by the given identifier
+        relative to the dataset's base identifier.
+        :param str relid:  the relative identifier for the part of interest.  If an empty string
+                           (default), the full NERDm record will be returned.
+        :param who:        an actor identifier object, indicating who is requesting the data.  This 
+                           request may trigger the restaging of previously published data, in which 
+                           case who triggered it will get recorded.  If None, an internal administrative 
+                           identity will be assumed.  
+        """
+        if not self.bagdir or not os.path.exists(self.bagdir):
+            self.prepare(False, who)
+        return self.bag.describe(relid)
+
     def set_res_nerdm(self, nerdm: Mapping, who, savefilemd: bool=True, lock: bool=True) -> None:
         """
         set the resource metadata (which may optionally include file component metadata) for the SIP.  
@@ -812,10 +827,10 @@ class PDPBagger(NERDmBasedBagger):
         """
         self.ensure_preparation(True, who)
         try:
-            self.record_history(Action(Action.COMMNENT, '', who, "Finalized SIP bag for publishing"))
+            self.record_history(Action(Action.COMMENT, '', who, "Finalized SIP bag for publishing"))
             self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
         except Exception:
-            self.record_history(Action(Action.COMMNENT, '', who, "Failed to complete finalization request"))
+            self.record_history(Action(Action.COMMENT, '', who, "Failed to complete finalization request"))
 
     def record_history(self, action: Action):
         """

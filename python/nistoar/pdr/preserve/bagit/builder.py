@@ -81,7 +81,7 @@ class BagBuilder(PreservationSystem):
     compliant with the NIST Bag Profile.  
 
     One key feature is that the updates are recorded via log 
-    messages in a log file inside the bag ("preserv.log").  A word of warning
+    messages in a log file inside the bag ("publish.log").  A word of warning
     regarding this feature:  if two BagBuilder instances updating different 
     bags have an internal logger with the same name, the internal log files 
     will likely collect log messages that do not belong to it.  Be default, 

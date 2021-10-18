@@ -182,7 +182,24 @@ class TestNISTBag(test.TestCase):
 
         self.assertTrue(self.bag.has_component('@id:#doi:10.18434/T4SW26'))
         self.assertTrue(not self.bag.has_component('@id:10.18434/T4SW26'))
-        
+
+    def test_describe(self):
+        data = self.bag.describe('')
+        self.assertIn("ediid", data)
+        self.assertIn("components", data)
+        self.assertNotIn("inventory", data)
+        self.assertEqual(len(data['components']), 5)
+
+        data = self.bag.describe("cmps/trial3/trial3a.json")
+        self.assertEqual(data.get('filepath'), "trial3/trial3a.json")
+        self.assertEqual(data.get('@id'), "cmps/trial3/trial3a.json")
+        data = self.bag.describe("pdr:f/trial1.json")
+        self.assertEqual(data.get('filepath'), "trial1.json")
+        self.assertNotEqual(data.get('@id'), "pdr:f/trial1.json")
+
+        data = self.bag.describe("pdr:v")
+        self.assertTrue(data.get("@id", "").endswith("pdr:v"))
+
         
     def test_nerdm_record(self):
         data = self.bag.nerdm_record()
