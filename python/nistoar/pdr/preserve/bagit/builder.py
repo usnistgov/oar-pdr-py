@@ -106,7 +106,7 @@ class BagBuilder(PreservationSystem):
     
     This class can take a configuration dictionary on construction; the 
     following properties are supported:
-    :prop log_filename str ("preserv.log"):  the name to give to the logfile 
+    :prop log_filename str ("publish.log"):  the name to give to the logfile 
                               to embed into the output bag
     :prop bag_log_format str:  a format string used to format the embedded
                               log file.
@@ -196,7 +196,7 @@ class BagBuilder(PreservationSystem):
 
         self._id = None   # set below
         self._ediid = None
-        self._logname = self.cfg.get('log_filename', 'preserv.log')
+        self._logname = self.cfg.get('log_filename', 'publish.log')
         self._log_handlers = {}
         self._mimetypes = None
         self._distbase = self.cfg.get('distrib_service_baseurl', DISTSERV)
@@ -785,7 +785,7 @@ class BagBuilder(PreservationSystem):
 
         return comps[-1]
 
-    def remove_component(self, destpath, trimcolls=False):
+    def remove_component(self, destpath, trimcolls=False, message=None):
         """
         remove a data file, subcollection, or other component along with all 
         its associated metadata from the bag.  The component is either identified
@@ -802,6 +802,11 @@ class BagBuilder(PreservationSystem):
                                it should be prefixed with "@id:"
         :parm trimcolls bool:  If True, remove any ancestor subcollections that
                                become empty as a result of the removal.
+        :param  str message:  message to record in the bag's log when committing
+                              this definition.  A value of None (default) causes 
+                              a default message to be recorded.  To suppress a 
+                              message, provide an empty string.  The message is not 
+                              recorded if nothing was removed (i.e. False was returned).
         :return bool:  True if anything was found and removed.  
         """
         if destpath.startswith("@id:cmps/"):
@@ -812,13 +817,14 @@ class BagBuilder(PreservationSystem):
         self.ensure_bag_structure()
 
         if destpath.startswith("@id:"):
-            return self._remove_nonfile_component(destpath)
+            return self._remove_nonfile_component(destpath, message)
         else:
-            return self._remove_file_component(destpath, trimcolls)
+            return self._remove_file_component(destpath, trimcolls, message)
 
-    def _remove_file_component(self, destpath, trimcolls=False):
+    def _remove_file_component(self, destpath, trimcolls=False, message=None):
         # this removes subcollection components as well
         removed = False
+        reqdest = destpath
 
         # First look for metadata
         target = os.path.join(self.bag.metadata_dir, destpath)
@@ -839,21 +845,27 @@ class BagBuilder(PreservationSystem):
             removed = True
             rmtree(target)
 
+        defmsg = "Removed component: "+reqdest
         if destpath and trimcolls:
             destpath = os.path.dirname(destpath)
 
             # is this collection empty?
             if destpath and len(self.bag.subcoll_children(destpath)) == 0:
-                if self.remove_component(destpath, trimcolls):
+                defmsg += "; cleaned empty parents collections"
+                if self.remove_component(destpath, trimcolls, ''):
                     removed = True
 
         if not removed:
             self.log.warning("Data component requested for removal does not exist in bag: %s",
                              destpath)
+        elif message != '':
+            if not message:
+                message = defmsg
+            self.record(message)
 
         return removed
 
-    def _remove_nonfile_component(self, compid):
+    def _remove_nonfile_component(self, compid, message=None):
         if compid.startswith("@id:"):
             compid = compid[len("@id:"):]
         rmd, comps, found = self._fetch_nonfile_comp(compid)
@@ -889,7 +901,8 @@ class BagBuilder(PreservationSystem):
                               this definition.  A value of None (default) causes 
                               a default message to be recorded.  To suppress a 
                               message, provide an empty string. 
-        :return dict:  the metadata for the component
+        :return:  the metadata for the component
+        :rtype:   Mapping
         """
         if destpath is None:
             raise ValueError("replace_metadata_for: destpath cannont be None")
@@ -2460,7 +2473,7 @@ class BagBuilder(PreservationSystem):
 
     def record(self, msg, *args, **kwargs):
         """
-        record a message in the bag's preservation log indicating a relevent 
+        record a message in the bag's publishing log indicating a relevent 
         change made to this bag.
         """
         self.log.log(NORM, msg, *args, **kwargs)

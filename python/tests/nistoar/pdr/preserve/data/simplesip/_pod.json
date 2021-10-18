@@ -9,6 +9,7 @@
         "hasEmail": "mailto:zachary.levine@nist.gov"
     },
     "description": "Software to predict the optical sorting of particles in a standing-wave laser interference field",
+    "doi": "https://doi.org/10.18434/T4SW26",
     "distribution": [
         {
             "description": "First trial of experiment",

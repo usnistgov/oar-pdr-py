@@ -2,12 +2,13 @@
 This module provides a base implementations of the SIPBagger interface to support PDR's Programmatic Data 
 Publishing (PDP) API.  In this framework, SIP inputs are primarily in the form of NERDm metadata.
 """
-import os, re, logging
+import os, re, logging, json
 from collections import OrderedDict, Mapping
 from abc import abstractmethod, abstractproperty
 from copy import deepcopy
 from urllib.parse import urlparse
-import yaml
+
+import yaml, jsonpatch
 
 from .. import BadSIPInputError, PublishingStateException
 from ...constants import ARK_PFX_PAT
@@ -19,6 +20,7 @@ from ... import def_etc_dir
 from .base import SIPBagger
 from .prepupd import UpdatePrepService
 from ..idmint import PDPMinter
+from ..prov import Action, PubAgent, dump_to_history
 
 SIPEXT_RE = re.compile(core_schema_base + r'sip/(v[^/]+)#/definitions/\w+Submission')
 ARK_PFX_RE = re.compile(ARK_PFX_PAT)
@@ -86,6 +88,7 @@ class NERDmBasedBagger(SIPBagger):
             self._nerdmcore_re = re.compile(core_schema_base + r'(' + 
                                             self.cfg['required_core_nerdm_version'] + r')#')
 
+        self._histfile = None
 
     @property
     def sipid(self):
@@ -116,7 +119,7 @@ class NERDmBasedBagger(SIPBagger):
         """
         return self.bagbldr.bag
 
-    def ensure_preparation(self, nodata: bool=False) -> None:
+    def ensure_preparation(self, nodata: bool=False, who=None) -> None:
         """
         create and update the output working bag directory to ensure it is 
         a re-organized version of the SIP, ready for updates.
@@ -126,7 +129,7 @@ class NERDmBasedBagger(SIPBagger):
         """
         if not self._id:
             self._id = self._id_for(self.sipid, True)
-        self.ensure_base_bag()
+        self.ensure_base_bag(who)
 
     @abstractmethod
     def _id_for(self, sipid, mint=False):
@@ -149,7 +152,7 @@ class NERDmBasedBagger(SIPBagger):
         """
         raise NotImplementedError()
 
-    def ensure_base_bag(self) -> None:
+    def ensure_base_bag(self, who=None) -> None:
         """
         Establish an initial working bag.  If a working bag already exists, it 
         will be used as is.  Otherwise, this method will check to see if a 
@@ -187,6 +190,12 @@ class NERDmBasedBagger(SIPBagger):
                 self._add_provider_md(locked_md)
                 self.bagbldr.update_annotations_for('', lockedmd,
                                                     message="locking convention metadata as annotations")
+
+                # add a history record
+                self.record_history(
+                    Action(Action.COMMENT, '', who,
+                           "Initialized update based on version " + nerdm.get('version', '1.0'))
+                )
 
         if not os.path.exists(self.bagdir):
             self.bagbldr.ensure_bag_structure()
@@ -263,11 +272,11 @@ class NERDmBasedBagger(SIPBagger):
                             will get recorded in the history data.  If None, an internal administrative 
                             identity will be assumed.  This identity may affect the identifier assigned.
         :param bool savecompmd:  if True (default), any DataFile or Subcollection metadata included will 
-                                 be saved as well
+                                 be saved as well, replacing all previously set components.
         """
         nerdm = self._check_res_schema_id(nerdm)   # creates a deep copy of the record
 
-        self.ensure_preparation(True)
+        self.ensure_preparation(True, who)
 
         # modify the input: remove properties that cannot be set, add others
         handsoff = "@id @context publisher issued firstIssued revised annotated language " + \
@@ -283,14 +292,40 @@ class NERDmBasedBagger(SIPBagger):
             nerdm['components'] = []
 
         # set up history record (using who)
-        # hist = None
+        hist = self._putcreate_history_action("#m", who, "Set resource metadata")
 
-        self.bagbldr.add_res_nerd(nerdm, False)
-        # self.bagbldr.record_history(hist)
-        if savecompmd and components:
-            for cmp in components:
-                self._set_comp_nerdm(cmp, who, False)
+        try:
+            old = self.bagbldr.bag.nerd_metadata_for('', True)   # for history record
 
+            self.bagbldr.add_res_nerd(nerdm, False)
+
+            new = self.bagbldr.bag.nerd_metadata_for('', True)   # for history record
+            hist.add_subaction(self._putcreate_history_action("#m", who, "Set resource-level metadata",
+                                                              old, new))
+
+            if savecompmd and components:
+                # clear out any previously saved components
+                oldcmps = self.bagbldr.bag.subcoll_children('')
+                if oldcmps:
+                    for cmp in oldcmps:
+                        self.bagbldr.remove_component(cmp)
+                    hist.add_subaction(Action(Action.DELETE, "pdr:f", who,
+                                              "Cleared previously added components"))
+
+                for cmp in components:
+                    self._set_comp_nerdm(cmp, who, hist, False)
+            else:
+                hist = hist.subactions[0]
+
+        except Exception:
+            self.log.warning("Bag left in possible incomplete state due to error")
+            self.record_history(hist)
+            hist = self._history_comment("#m", who, "Failed to complete %s action" % hist.type)
+            raise
+
+        finally:
+            # record history record
+            self.record_history(hist)
 
     def _check_res_schema_id(self, nerdm):
         if self._nerdmcore_re:
@@ -361,10 +396,10 @@ class NERDmBasedBagger(SIPBagger):
         else:
             self._set_comp_nerdm(nerdm, who)
 
-    def _set_comp_nerdm(self, nerdm: Mapping, who, tolatest=True) -> None:
+    def _set_comp_nerdm(self, nerdm: Mapping, who, hist=None, tolatest=True) -> None:
         nerdm = self._check_input_comp(nerdm, tolatest)   # copies nerdm
 
-        self.ensure_preparation(True)
+        self.ensure_preparation(True, who)
 
         # modify the input: remove properties that are not needed or allowed, add others
         remove = "_schema @context"
@@ -379,6 +414,8 @@ class NERDmBasedBagger(SIPBagger):
 
         # validate?
 
+        old = self.bagbldr.bag.describe(nerdm['@id'])  # for history record
+        
         if 'filepath' in nerdm:
             if not self.bagbldr.bag.has_component(nerdm['filepath']):
                 self.bagbldr.register_data_file(nerdm['filepath'], comptype="DataFile")
@@ -386,6 +423,13 @@ class NERDmBasedBagger(SIPBagger):
         else:
             # add to non-file list of components
             self.bagbldr.update_metadata_for("@id:"+nerdm['@id'], nerdm)
+
+        act = self._putcreate_history_action('/'+nerdm['@id'].lstrip('/'), who, "Set component metadata",
+                                             old, self.bagbldr.bag.describe(nerdm['@id']))
+        if hist:
+            hist.add_subaction(act)
+        else:
+            self.record_history(act)
 
     def _check_legal_url(self, url):
         u = urlparse(url)
@@ -760,12 +804,50 @@ class PDPBagger(NERDmBasedBagger):
         pubmd.update(self.cfg.get(mdk, {}))
         resmd.update(pubmd)
 
-    def ensure_finalize(self, lock=True):
+    def ensure_finalize(self, who=None, lock=True):
         """
         Based on the current state of the bag, finalize its contents to a complete state according to 
         the conventions of this bagger implementation.  After a successful call, the bag should be in 
         a preservable state.
         """
-        self.ensure_preparation(True)
-        self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
+        self.ensure_preparation(True, who)
+        try:
+            self.record_history(Action(Action.COMMNENT, '', who, "Finalized SIP bag for publishing"))
+            self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
+        except Exception:
+            self.record_history(Action(Action.COMMNENT, '', who, "Failed to complete finalization request"))
+
+    def record_history(self, action: Action):
+        """
+        record the given action into the output bag's history log
+        """
+        if not self.bagdir or not os.path.exists(self.bagdir):
+            self.ensure_preparation(True, action.agent)
+        if not self._histfile:
+            self._histfile = os.path.join(self.bagdir, self.cfg.get('history_filename', 'publish.history'))
+
+        with open(self._histfile, 'a') as fd:
+            dump_to_history(action, fd)
+
+    def _putcreate_history_action(self, relid, who, message, old=None, new=None):
+        id = self.id + relid
+        act = Action.PATCH
+        obj = None
+        if new is None:
+            act = Action.PUT
+        if old is None:
+            if not relid.startswith('#') and not self.bagbldr.bag.has_component("@id:"+relid):
+                act = Action.CREATE
+        elif new:
+            obj = self._jsondiff(old, new)
+
+        return Action(act, id, who, message, obj)
+            
+    def _history_comment(self, subj, who, message):
+        return Action(Action.COMMENT, subj, who, message)
+
+    def _jsondiff(self, old, new):
+        return {"jsonpatch": jsonpatch.make_patch(old, new)}
+
+
 

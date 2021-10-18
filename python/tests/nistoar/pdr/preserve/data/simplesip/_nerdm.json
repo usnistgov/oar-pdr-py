@@ -2,10 +2,10 @@
     "@context": "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld",
     "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.4#",
     "_extensionSchemas": [
-        "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.4#/definitions/PublishedDataResource"
+        "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.4#/definitions/PublicDataResource"
     ],
     "@type": [
-        "nrdp:PublishedDataResource"
+        "nrdp:PublicDataResource"
     ],
     "@id": "ark:/88434/pdr02p1s",
     "doi": "doi:10.18434/T4SW26",

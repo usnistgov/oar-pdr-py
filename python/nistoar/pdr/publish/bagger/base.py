@@ -77,13 +77,16 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
                                        
 
     @abstractmethod
-    def ensure_preparation(self, nodata=False):
+    def ensure_preparation(self, nodata=False, who=None):
         """
         create and update the output working bag directory to ensure it is 
         a re-organized version of the SIP, ready for annotation.
 
         :param nodata bool: if True, do not copy (or link) data files to the
                             output directory.
+        :param who:         an actor identifier object, indicating who is requesting this action.  This 
+                            will get recorded in the history data.  If None, an internal administrative 
+                            identity will be assumed.  This identity may affect the identifier assigned.
         """
         raise NotImplementedError()
 
@@ -98,7 +101,7 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
             self.ensure_bag_parent_dir()
             self.lock = filelock.FileLock(lockfile)
 
-    def prepare(self, nodata=False, lock=True):
+    def prepare(self, nodata=False, who=None, lock=True):
         """
         initialize the output working bag directory by calling 
         ensure_preparation().  This operation is wrapped in the acquisition
@@ -106,16 +109,19 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
 
         :param nodata bool: if True, do not copy (or link) data files to the
                             output directory.
+        :param who:         an actor identifier object, indicating who is requesting this action.  This 
+                            will get recorded in the history data.  If None, an internal administrative 
+                            identity will be assumed.  This identity may affect the identifier assigned.
         :param lock bool:   if True (default), acquire a lock before executing
                             the preparation.
         """
         if lock:
             self.ensure_filelock()
             with self.lock:
-                self.ensure_preparation(nodata)
+                self.ensure_preparation(nodata, who)
 
         else:
-            self.ensure_preparation(nodata)
+            self.ensure_preparation(nodata, who)
 
     def finalize(self, who=None, lock=True):
         """
@@ -131,17 +137,20 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
         if lock:
             self.ensure_filelock()
             with self.lock:
-                self.ensure_finalize()
+                self.ensure_finalize(who)
 
         else:
-            self.ensure_finalize()
+            self.ensure_finalize(who)
 
     @abstractmethod
-    def ensure_finalize(self):
+    def ensure_finalize(self, who=None):
         """
         Based on the current state of the bag, finalize its contents to a complete state according to 
         the conventions of this bagger implementation.  After a successful call, the bag should be in 
         a preservable state.
+        :param who:         an actor identifier object, indicating who is requesting this action.  This 
+                            will get recorded in the history data.  If None, an internal administrative 
+                            identity will be assumed.  This identity may affect the identifier assigned.
         """
         raise NotImplementedError()
 

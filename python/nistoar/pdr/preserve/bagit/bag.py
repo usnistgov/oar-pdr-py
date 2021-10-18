@@ -295,6 +295,48 @@ class NISTBag(PreservationSystem):
         
         return out
 
+    def describe(self, relid):
+        """
+        return the NERDm metadata for an identifiable part of this bag.  Note that the metadata returned
+        will always have the annotations merged in.
+        :param str relid:  the identifier for the part relative to the base identifer.  The base 
+                           identifier is that which is recorded in the "@id" property of the 
+                           resource-level metadata.  An empty string indicates the full resource metadata
+                           is desired.  Just get the resource-level metadata is returned if relid equals
+                           "pdr:r".
+        :return:  the requested NERDm metadata or None if the identifier cannot be resolved
+        """
+        relid = relid.lstrip('/')
+        if not relid:
+            # everything
+            return self.nerdm_record(True)
+
+        if relid == "pdr:r":
+            # resource-level metadata only
+            return self.nerd_metadata_for('', True)
+
+        if relid == "pdr:v":
+            md = self.nerd_metadata_for('', True)
+            return md.get('releaseHistory', {"@id": "pdr:v"})
+
+        if relid.startswith("cmps/") or relid.startswith("pdr:f/"):
+            # file-like component
+            relid = relid[5:].lstrip('/')
+            try: 
+                return self.nerd_metadata_for(relid, True)
+            except ComponentNotFound:
+                return None
+
+        # non-file component requested
+        md = self.nerd_metadata_for('', True)
+        cmps = md.get('components', [])
+        cmps = [c for c in cmps if c.get('@id') == relid]
+        if (len(cmps) > 0):
+            # there should only be one
+            return cmps[-1]
+
+        return None
+
     @classmethod
     def update_inventory_in(cls, resmd):
         """
