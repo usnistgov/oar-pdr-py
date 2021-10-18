@@ -1,6 +1,7 @@
 import os, sys, subprocess, pdb, unittest
-from distutils.core import setup
-from distutils.command.build import build as _build
+from setuptools import setup, find_namespace_packages
+from setuptools.command.build_py import build_py as _build
+from setuptools.command.install import install as _install
 
 CLASSIFIERS = [
     'Operating System :: POSIX',
@@ -76,41 +77,43 @@ def find_oar_metadata(submoddir='metadata'):
         raise RuntimeError(msg.format(out))
     return out
 
-def build_oar_metadata(pkgdir, buildlib, buildscrp):
+def install_oar_metadata(pkgdir, installlib, installscrp):
     pydir = os.path.join(pkgdir, "python")
-    cmd = "python setup.py build --build-lib={0} --build-scripts={1}" \
-        .format(os.path.abspath(buildlib), os.path.abspath(buildscrp)).split()
+    cmd = "python setup.py install --install-purelib={0} --install-scripts={1} --old-and-unmanageable" \
+        .format(os.path.abspath(installlib), os.path.abspath(installscrp)).split()
     if sys.executable:
         cmd[0] = sys.executable
     ex = subprocess.call(cmd, cwd=pydir)
     if ex != 0:
-        raise RuntimeError("metadata submodule build failed; exit="+str(ex)+
+        raise RuntimeError("metadata submodule install failed; exit="+str(ex)+
                            ";\ndir="+pydir+";\ncmd="+" ".join(cmd))
 
 class build(_build):
 
     def run(self):
         write_version_mod(get_version())
-        oarmdpkg = find_oar_metadata()
-        build_oar_metadata(oarmdpkg, self.build_lib, self.build_scripts)
+#        oarmdpkg = find_oar_metadata()
+#         build_oar_metadata(oarmdpkg, self.build_lib, self.build_scripts)
         _build.run(self)
 
-setup(name='nistoar',
-      version='0.1',
+class install(_install):
+
+    def run(self):
+        oarmdpkg = find_oar_metadata()
+        install_oar_metadata(oarmdpkg, self.install_purelib, self.install_scripts)
+        _install.run(self)
+
+setup(name='nistoar.pdr',
+      version=get_version(),
       description="nistoar.pdr: python support for the NIST Public Data Repository",
       author="Ray Plante",
       author_email="raymond.plante@nist.gov",
       url='https://github.com/usnistgov/oar-pdr-py',
       scripts=[ ],
-      packages=[
-          'nistoar.pdr', 'nistoar.pdr.preserve', 'nistoar.pdr.preserve.bagit', 
-          'nistoar.pdr.preserve.bagit.validate', 'nistoar.pdr.preserve.bagit.tools',
-          'nistoar.pdr.describe', 'nistoar.pdr.distrib', 'nistoar.pdr.publish',
-          'nistoar.pdr.publish.bagger', 'nistoar.pdr.notify',
-          'nistoar.testing'
-      ],
+      packages=find_namespace_packages(include=['nistoar.*'], exclude=['nistoar.*.data']),
       package_data={'nistoar.pdr': [ 'data/*' ]},
-      cmdclass={'build': build},
-      classifiers=CLASSIFIERS
+      cmdclass={'build_py': build, 'install': install},
+      classifiers=CLASSIFIERS,
+      zip_safe=False
 )
 
