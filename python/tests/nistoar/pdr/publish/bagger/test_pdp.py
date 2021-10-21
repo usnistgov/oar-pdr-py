@@ -1,8 +1,8 @@
-# These unit tests test the nistoar.pdr.preserv.bagger.midas3 module.  These tests
+# These unit tests test the nistoar.pdr.publish.bagger.pdp module.  These tests
 # do not include support for updating previously published datasets (via use of 
 # the UpdatePrepService class).  Because testing support for updates require 
 # simulated RMM and distribution services to be running, they have been 
-# seperated out into test_midas3_update.py.
+# seperated out into test_pdp_update.py.
 #
 import os, sys, pdb, shutil, logging, json, time, re
 from pathlib import Path

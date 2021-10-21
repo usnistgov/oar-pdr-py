@@ -2,6 +2,23 @@
 This bagger submodule provides functions for preparing an update to a previously
 preserved collection.  This includes a service client for retrieving previous
 head bags from cache or long-term storage.  
+
+The key class of this module is the :py:class:`UpdatePrepper`.  When a request comes into
+the publishing system to process a particular SIP, the system needs to determine if the
+SIP represents an update to a previously published dataset.  The :py:class:`UpdatePrepper`
+does this on behalf of the :py:class:`~nistoar.pdr.publish.bagger.SIPBagger` processing the 
+SIP.  Using the :py:class:`HeadBagCacher` class, it will look for a previously published head bag
+for the corresponding AIP-ID (using the PDR preservation bag service); if one is found it is
+restored as the bagger's working bag. If one is not found, it checks for a previously published 
+NERDm record with the corresponding PDR-ID (using the PDR metadata service) and creates a 
+starter bag from that.   
+
+(A "head bag" is the preserved file that contains all of the latest metadata, logs and supplementary 
+data from a published dataset.)
+
+An :py:class:`UpdatePrepper` instance is configured to work for a particular bagger processing a 
+particular SIP.  Thus, the :py:class:`UpdatePrepService` is used as a factory creating properly 
+configured preppers, given the PDR-ID and AIP-ID corresponding to the SIP.  
 """
 import os, shutil, json, logging, re
 from abc import ABCMeta, abstractmethod, abstractproperty
@@ -20,7 +37,8 @@ from ...preserve.bagit import NISTBag, BagBuilder
 
 class HeadBagCacher(object):
     """
-    a helper class that manages serialized head bags in a local cache.
+    a helper class that manages serialized head bags in a local cache.  It uses the PDR's 
+    distribution service to pull in previously published head bags into a local cache.  
     """
     def __init__(self, distrib_service, cachedir, infodir=None):
         """
@@ -186,9 +204,10 @@ class UpdatePrepService(object):
 
 class UpdatePrepper(object):
     """
-    a class that restores the latest head bag of a previously preserved dataset
-    to disk and prepares it for access and possible update by the PDR publishing 
-    system.  
+    a class that prepares a working bag for a bagger by restoring the latest head 
+    bag of a previously preserved dataset to disk and preparing it for access and 
+    possible update.  An instance is set to prepare for a particular SIP whose PDR-ID
+    and AIP ID are known and is created via an :py:class:`UpdatePrepService`.  
     """
 
     def __init__(self, pdrid, aipid, config, headcacher, pubmdclient, storedir=None,

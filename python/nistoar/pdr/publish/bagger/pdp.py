@@ -257,7 +257,8 @@ class NERDmBasedBagger(SIPBagger):
             self.prepare(False, who)
         return self.bag.describe(relid)
 
-    def set_res_nerdm(self, nerdm: Mapping, who, savefilemd: bool=True, lock: bool=True) -> None:
+    def set_res_nerdm(self, nerdm: Mapping, who: PubAgent = None, savefilemd: bool=True,
+                      lock: bool=True) -> None:
         """
         set the resource metadata (which may optionally include file component metadata) for the SIP.  
         The input metadata should be as complete as is appropriate for the type of SIP being processed.  
@@ -277,7 +278,7 @@ class NERDmBasedBagger(SIPBagger):
         else:
             self._set_res_nerdm(nerdm, who, savefilemd)
 
-    def _set_res_nerdm(self, nerdm: Mapping, who, savecompmd: bool=True) -> None:
+    def _set_res_nerdm(self, nerdm: Mapping, who: PubAgent=None, savecompmd: bool=True) -> None:
         """
         set the resource metadata (which may optionally include file component metadata) for the SIP.  
         The input metadata should be as complete as is appropriate for the type of SIP being processed.  
@@ -388,7 +389,7 @@ class NERDmBasedBagger(SIPBagger):
         if 'contactPoint' in resmd:
             resmd['contactPoint']['@type'] = "vcard:Contact"
 
-    def _set_provider_res_modifications(self, resmd):
+    def _set_provider_res_modifications(self, resmd: Mapping):
         """
         modify the given resource NERDm metadata provided by the client with changes 
         appropriate for the provider context.  The provider is normally determined by the 
@@ -397,7 +398,7 @@ class NERDmBasedBagger(SIPBagger):
         """
         return
 
-    def set_comp_nerdm(self, nerdm: Mapping, who, lock: bool=True) -> None:
+    def set_comp_nerdm(self, nerdm: Mapping, who: PubAgent=None, lock: bool=True) -> None:
         """
         set the metadata for a component of the resource.  If the component represents a file or 
         a subcollection, it must contain a 'filepath' property.  
@@ -411,7 +412,7 @@ class NERDmBasedBagger(SIPBagger):
         else:
             self._set_comp_nerdm(nerdm, who)
 
-    def _set_comp_nerdm(self, nerdm: Mapping, who, hist=None, tolatest=True) -> None:
+    def _set_comp_nerdm(self, nerdm: Mapping, who: PubAgent=None, hist=None, tolatest=True) -> None:
         nerdm = self._check_input_comp(nerdm, tolatest)   # copies nerdm
 
         self.ensure_preparation(True, who)
