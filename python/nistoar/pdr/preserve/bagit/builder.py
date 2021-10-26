@@ -1003,7 +1003,7 @@ class BagBuilder(PreservationSystem):
                         break
         except Exception as ex:
             raise NERDError("Trouble interpreting existing JSON metadata " +
-                            "for id="+compid+": "+str(ex))
+                            "for id="+compid+": "+str(ex), cause=ex)
         return (comps, found)
 
     def _fetch_nonfile_comp(self, compid, comptype=None):
@@ -1585,8 +1585,8 @@ class BagBuilder(PreservationSystem):
         if "components" in mdata:
             components = mdata['components']
             if not isinstance(components, list):
-                raise NERDTypeError("list", str(type(mdata['components'])),
-                                    'components')
+                raise NERDTypeError("list", type(mdata['components']), 'components')
+                                    
             for i in range(len(components)-1, -1, -1):
                 tps = components[i].get('@type',[])
                 comptype = None
