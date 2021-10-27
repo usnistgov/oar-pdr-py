@@ -479,7 +479,7 @@ class UpdatePrepper(object):
 
         nerd = utils.read_nerd(nerdfile)
         if not '@id' in nerd:
-            raise NERDError("Missing @id from NERD rec, "+nerdfile)
+            raise NERDError("Missing @id from NERD rec, "+nerdfile, src=nerdfile)
 
         # update the schema version to the latest supported version
         # (this assumes forward compatibility).
