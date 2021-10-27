@@ -114,7 +114,7 @@ class LockedFile(object):
         created.  
         """
         if self._fo:
-            raise StateException(self._fname+": file is already open")
+            raise StateException(str(self._fname)+": file is already open")
         if mode:
             self.mode = mode
             
@@ -168,10 +168,10 @@ def read_nerd(nerdfile):
     try:
         return read_json(nerdfile)
     except ValueError as ex:
-        raise NERDError("Unable to parse NERD file, " + nerdfile + ": "+str(ex),
+        raise NERDError("Unable to parse NERD file, " + str(nerdfile) + ": "+str(ex),
                        cause=ex, src=nerdfile)
     except IOError as ex:
-        raise NERDError("Unable to read NERD file, " + nerdfile + ": "+str(ex),
+        raise NERDError("Unable to read NERD file, " + str(nerdfile) + ": "+str(ex),
                         cause=ex, src=nerdfile)
 
 def read_pod(podfile):
@@ -183,10 +183,10 @@ def read_pod(podfile):
     try:
         return read_json(podfile)
     except ValueError as ex:
-        raise PODError("Unable to parse POD file, " + podfile + ": "+str(ex),
+        raise PODError("Unable to parse POD file, " + str(podfile) + ": "+str(ex),
                        cause=ex, src=podfile)
     except IOError as ex:
-        raise PODError("Unable to read POD file, " + podfile + ": "+str(ex),
+        raise PODError("Unable to read POD file, " + str(podfile) + ": "+str(ex),
                        cause=ex, src=podfile)
 
 def read_json(jsonfile, nolock=False):
