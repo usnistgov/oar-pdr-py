@@ -8,8 +8,9 @@ from .service import NotificationService, TargetManager
 from .email import Mailer
 from .archive import Archiver
 from .base import ChannelService, Notice
-from ..config import load_from_file
+from ...pdr import config
 from ..exceptions import ConfigurationException
+from .. import platform_profile
 
 log = logging.getLogger("Notify").getChild("cli")
 
@@ -94,6 +95,9 @@ def main(progname, args):
         except EnvironmentError as ex:
             raise Failure("problem reading config file, {0}: {1}"
                           .format(opts.cfgfile, ex.strerror))
+
+    if not opts.platform:
+        opts.platform = platform_profile
 
     # build a configuration from command-line arguments (if present); the aim
     # is to build a target called 'ops' that will send an email alert
@@ -189,7 +193,7 @@ def read_config(filepath):
     :except IOError:  if a failure occurs while opening or reading the file
     """
     try:
-        return load_from_file(filepath)
+        return config.load_from_file(filepath)
     except (ValueError, yaml.reader.ReaderError, yaml.parser.ParserError) as ex:
         raise Failure("Config parsing error: "+str(ex), 3, ex)
 
@@ -208,8 +212,7 @@ def build_ops_config(opts):
         raise Failure("One or more recipients required via --to argument " +
                       "for email notifications", 1)
     if not opts.mailserver and not opts.stdout:
-        log.warn("unable to define 'email' channel without --mailserver "+
-                 "argument")
+        log.warning("unable to define 'email' channel without --mailserver argument")
 
     if opts.mailserver:
         echan = { "name": "email", "type": "email" }

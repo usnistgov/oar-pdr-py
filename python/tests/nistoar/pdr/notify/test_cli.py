@@ -40,6 +40,7 @@ def tearDownModule():
     if loghdlr:
         if rootlog:
             rootlog.removeHandler(loghdlr)
+        loghdlr.close()
         loghdlr = None
     rmtmpdir()
 

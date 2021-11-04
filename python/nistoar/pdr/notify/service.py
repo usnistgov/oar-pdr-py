@@ -5,19 +5,20 @@ import logging, os, importlib
 from copy import copy as copyobj
 
 from .base import NotificationTarget, ChannelService, Notice
-from .email import Mailer, EmailTarget
+from .email import Mailer, FakeMailer, EmailTarget
 from .archive import Archiver, ArchiveTarget
 from ..exceptions import ConfigurationException
 
 log = logging.getLogger("Notify")
 
 _channel_cls = {
-    "email":   Mailer,
-    "archive": Archiver
+    "email":     Mailer,
+    "fakeemail": FakeMailer,
+    "archive":   Archiver
 }
 _target_cls = {
-    "email":   EmailTarget,
-    "archive": ArchiveTarget
+    "email":     EmailTarget,
+    "archive":   ArchiveTarget
 }
 
 class TargetManager(object):
@@ -95,7 +96,7 @@ class TargetManager(object):
                              "ChannelService: "+fqclsname)
 
         if name in self._channelcls:
-            log.warn("Overriding channel class referred to as "+name)
+            log.warning("Overriding channel class referred to as "+name)
         self._channelcls[name] = channelcls
         return channelcls
 
@@ -152,7 +153,7 @@ class TargetManager(object):
                              "NotificationTarget: "+fqclsname)
 
         if name in self._targetcls:
-            log.warn("Overriding target class referred to as "+name)
+            log.warning("Overriding target class referred to as "+name)
         self._targetcls[name] = targetcls
         return targetcls
             
@@ -192,8 +193,7 @@ class TargetManager(object):
         
         channel = self._channelcls[tp](config)
         if name in self._channels:
-            log.warn("Multiple channels defined with name='"+name+
-                     "'; overriding")
+            log.warning("Multiple channels defined with name='"+name+"'; overriding")
         self._channels[name] = channel
         return channel
 
@@ -251,8 +251,7 @@ class TargetManager(object):
 
         target = self._targetcls[tp](self._channels[channel], config)
         if name in self._targets:
-            log.warn("Multiple targets defined with name='"+name+
-                     "'; overriding")
+            log.warning("Multiple targets defined with name='"+name+"'; overriding")
         self._targets[name] = target
         return target
 
@@ -312,15 +311,15 @@ class NotificationService(object):
         if channel_configs is None:
             channel_configs = []
         channel_cfgs = config.get('channels', []) + channel_configs
-        if len(channel_cfgs) == 0:
-            log.warn("No notification channels configured")
+        if len(channel_cfgs) == 0 and len(self._targetmgr.channel_names) == 0:
+            log.warning("No notification channels configured")
 
         for cfg in channel_cfgs:
             self._targetmgr.define_channel(cfg)
 
         target_cfgs = config.get('targets', [])
-        if len(target_cfgs) == 0:
-            log.warn("No notification targets configured")
+        if len(target_cfgs) == 0 and len(self._targetmgr.targets) == 0:
+            log.warning("No notification targets configured")
 
         for cfg in target_cfgs:
             self._targetmgr.define_target(cfg)
@@ -348,8 +347,8 @@ class NotificationService(object):
                     # warn about undefined targets
                     notdefined = [t for t in targets if t not in self._targetmgr]
                     if notdefined:
-                        log.warn("%s alert subscriber target(s) not defined: %s",
-                                 alert['type'], ", ".join(notdefined))
+                        log.warning("%s alert subscriber target(s) not defined: %s",
+                                    alert['type'], ", ".join(notdefined))
                     targets = [t for t in targets if t in self._targetmgr]
                     
                     self._subscribers[alert['type']] |= set(targets)
