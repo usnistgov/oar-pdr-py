@@ -57,7 +57,7 @@ class Unacceptable(Exception):
     """
     pass
             
-Format = namedtuple("Format", ["name", "default_ctype"])
+Format = namedtuple("Format", ["name", "ctype"])
 
 class FormatSupport(object):
     """
@@ -106,6 +106,8 @@ class FormatSupport(object):
         if asdefault or not self._deffmt:
             self._deffmt = format
 
+    _wildc_ct_re = re.compile(r'^(\w+)/\*$')
+
     def match(self, fmtreq: str) -> Format:
         """
         return the Format object that best matches the given content type or format name
@@ -114,7 +116,28 @@ class FormatSupport(object):
         :return:  the supported Format associated with the given format identifier, or None if the 
                   name or MIME-type is not registered as supported.  
         """
-        return self._lu.get(fmtreq)
+        exact = self._lu.get(fmtreq)
+        if exact or '*' not in fmtreq:
+            return exact
+
+        if fmtreq == '*/*' or fmtreq == '*':
+            return self.default_format()
+
+        m = self._wildc_ct_re.match(fmtreq)
+        if m:
+            # requested format looks like "XXX/*"
+            mimestart = m.group(1) + '/'
+            if self.default_format().ctype.startswith(mimestart):
+                # the requested format matches our default content type; pick it
+                return self.default_format()
+
+            # crap shoot a match
+            mts = [c for c in self._lu.keys() if c.startswith(mimestart)]
+            if mts:
+                return self._lu.get(mts[0])
+
+        return None
+        
 
     def default_format(self) -> Format:
         """
@@ -155,7 +178,7 @@ class FormatSupport(object):
                 if not fmt:
                     continue
                 if not is_content_type(label):
-                    label = fmt.default_ctype
+                    label = fmt.ctype
 
                 if accepts and label not in accepts:
                     unacceptable.append(label)
@@ -450,11 +473,11 @@ class Ready(Handler):
             format = self._fmtsup.default_format()
 
         if format.name == XHTMLSupport.FMT_HTML:
-            return self.get_ready_html(format.default_ctype, ashead)
+            return self.get_ready_html(format.ctype, ashead)
 
         if format.name == TextSupport.FMT_TEXT:
             msg = "Resolver service is ready"
-            return self.send_ok("Ready", msg, contenttype=format.default_ctype, ashead=ashead)
+            return self.send_ok("Ready", msg, contenttype=format.ctype, ashead=ashead)
 
         self.send_error(400, "Unsupported format requested")
 

@@ -28,7 +28,7 @@ class TestFunctions(test.TestCase):
     def test_Format(self):
         fmt = handler.Format("goob", "goob/gurn")
         self.assertEqual(fmt.name, "goob")
-        self.assertEqual(fmt.default_ctype, "goob/gurn")
+        self.assertEqual(fmt.ctype, "goob/gurn")
         self.assertEqual(fmt, handler.Format("goob", "goob/gurn"))
 
 class TestFormatSupport(test.TestCase):
@@ -66,6 +66,9 @@ class TestFormatSupport(test.TestCase):
         handler.TextSupport.add_support(self.sprtd)
         self.assertEqual(self.sprtd.match("text"), text)
         self.assertEqual(self.sprtd.match("text/plain"), text)
+
+        self.assertEqual(self.sprtd.match("*/*"), html)
+        self.assertEqual(self.sprtd.match("text/*"), html)
 
     def test_default_format(self):
         self.assertEqual(self.sprtd.default_format(), handler.Format("html", "text/html"))
