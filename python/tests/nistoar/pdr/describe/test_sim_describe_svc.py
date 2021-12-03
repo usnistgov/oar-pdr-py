@@ -417,7 +417,96 @@ class TestSimRMMHandler(test.TestCase):
         self.assertEqual(data['ResultCount'], 1)
         self.assertEqual(len(data['ResultData']), 1)
         
-        
+    def test_search(self):
+        req = {
+            'REQUEST_METHOD': "GET",
+            'PATH_INFO': "/records",
+            'QUERY_STRING': "accessLevel=public"
+        }
+        self.hdlr = self.gethandler(req)
+        body = self.hdlr.handle()
+        self.assertEqual(self.resp[0], "200 Identifier exists")
+        data = json.loads("\n".join([ln.decode() for ln in body]))
+        self.assertEqual(data['ResultCount'], 6)
+        self.assertEqual(len(data['ResultData']), 6)
+
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': "GET",
+            'PATH_INFO': "/records",
+            'QUERY_STRING': "accessLevel=public&accessLevel=private"
+        }
+        self.hdlr = self.gethandler(req)
+        body = self.hdlr.handle()
+        self.assertEqual(self.resp[0], "200 Identifier exists")
+        data = json.loads("\n".join([ln.decode() for ln in body]))
+        self.assertEqual(data['ResultCount'], 6)
+        self.assertEqual(len(data['ResultData']), 6)
+
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': "GET",
+            'PATH_INFO': "/records",
+            'QUERY_STRING': "accessLevel=private"
+        }
+        self.hdlr = self.gethandler(req)
+        body = self.hdlr.handle()
+        self.assertEqual(self.resp[0], "200 Identifier exists")
+        data = json.loads("\n".join([ln.decode() for ln in body]))
+        self.assertEqual(data['ResultCount'], 0)
+        self.assertEqual(len(data['ResultData']), 0)
+
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': "GET",
+            'PATH_INFO': "/records",
+            'QUERY_STRING': "goob=private"
+        }
+        self.hdlr = self.gethandler(req)
+        body = self.hdlr.handle()
+        self.assertEqual(self.resp[0], "200 Identifier exists")
+        data = json.loads("\n".join([ln.decode() for ln in body]))
+        self.assertEqual(data['ResultCount'], 0)
+        self.assertEqual(len(data['ResultData']), 0)
+
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': "GET",
+            'PATH_INFO': "/records",
+            'QUERY_STRING': "ediid=ark:/88434/mds003r0x6&ediid=19A9D7193F868BDDE0531A57068151D2431"
+        }
+        self.hdlr = self.gethandler(req)
+        body = self.hdlr.handle()
+        self.assertEqual(self.resp[0], "200 Identifier exists")
+        data = json.loads("\n".join([ln.decode() for ln in body]))
+        self.assertEqual(data['ResultCount'], 1)
+        self.assertEqual(len(data['ResultData']), 1)
+
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': "GET",
+            'PATH_INFO': "/records",
+            'QUERY_STRING': "ediid=ark:/88434/mds2-2110&ediid=19A9D7193F868BDDE0531A57068151D2431"
+        }
+        self.hdlr = self.gethandler(req)
+        body = self.hdlr.handle()
+        self.assertEqual(self.resp[0], "200 Identifier exists")
+        data = json.loads("\n".join([ln.decode() for ln in body]))
+        self.assertEqual(data['ResultCount'], 2)
+        self.assertEqual(len(data['ResultData']), 2)
+
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': "GET",
+            'PATH_INFO': "/records",
+            'QUERY_STRING': "ediid=19A9D7193F868BDDE0531A57068151D2431"
+        }
+        self.hdlr = self.gethandler(req)
+        body = self.hdlr.handle()
+        self.assertEqual(self.resp[0], "200 Identifier exists")
+        data = json.loads("\n".join([ln.decode() for ln in body]))
+        self.assertEqual(data['ResultCount'], 1)
+        self.assertEqual(len(data['ResultData']), 1)
 
 class TestSimService(test.TestCase):
 

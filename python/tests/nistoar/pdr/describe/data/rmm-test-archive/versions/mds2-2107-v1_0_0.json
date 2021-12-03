@@ -1,0 +1,67 @@
+{
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
+    "@context": [
+        "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld",
+        {
+            "@base": "ark:/88434/mds2-2107"
+        }
+    ],
+    "@type": [
+        "nrdp:PublicDataResource"
+    ],
+    "_extensionSchemas": [
+        "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/PublicDataResource"
+    ],
+    "@id": "ark:/88434/mds2-2107/pdr:v/1.0.0",
+    "doi": "doi:10.18434/M32107",
+    "title": "TEST RECORD, PLEASE IGNORE",
+    "contactPoint": {
+        "fn": "Christopher Davis",
+        "hasEmail": "mailto:christopher.davis@nist.gov"
+    },
+    "modified": "2019-08-18 00:00:00",
+    "ediid": "ark:/88434/mds2-2107",
+    "landingPage": "https://data.nist.gov/od/id/mds2-2107/pdr:v/1.0.0",
+    "description": [
+        "TEST RECORD, PLEASE IGNORE"
+    ],
+    "keyword": [
+        "test",
+        "record",
+        "please",
+        "ignore"
+    ],
+    "theme": [
+        "Buildings and Construction:Building codes and standards",
+        "Buildings and Construction:Building materials"
+    ],
+    "topic": [],
+    "accessLevel": "public",
+    "license": "https://www.nist.gov/open/license",
+    "components": [
+        {
+            "accessURL": "https://doi.org/10.18434/M32107",
+            "title": "DOI Access for TEST RECORD, PLEASE IGNORE",
+            "@type": [
+                "nrd:Hidden",
+                "dcat:Distribution"
+            ],
+            "@id": "#doi:10.18434/M32107"
+        }
+    ],
+    "publisher": {
+        "name": "National Institute of Standards and Technology",
+        "@type": "org:Organization"
+    },
+    "language": [
+        "en"
+    ],
+    "bureauCode": [
+        "006:55"
+    ],
+    "programCode": [
+        "006:052"
+    ],
+    "references": [],
+    "version": "1.0.0"
+}

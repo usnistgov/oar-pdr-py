@@ -1,0 +1,87 @@
+{
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
+    "@context": [
+        "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld",
+        {
+            "@base": "ark:/88434/mds2-2110"
+        }
+    ],
+    "@type": [
+        "nrdp:PublicDataResource"
+    ],
+    "_extensionSchemas": [
+        "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/PublicDataResource"
+    ],
+    "@id": "ark:/88434/mds2-2110",
+    "doi": "doi:10.18434/M32110",
+    "title": "TEST RECORD, PLEASE IGNORE TITLE CHANGE AGAIN AND ONCE MORE",
+    "contactPoint": {
+        "fn": "Christopher Davis",
+        "hasEmail": "mailto:christopher.davis@nist.gov"
+    },
+    "modified": "2019-08-14 00:00:00",
+    "ediid": "ark:/88434/mds2-2110",
+    "landingPage": "https://data.nist.gov/od/id/mds2-2110",
+    "description": [
+        "test"
+    ],
+    "keyword": [
+        "test"
+    ],
+    "theme": [
+        "Buildings and Construction:Building damage and repair",
+        "Buildings and Construction:Air conditioning and heating equipment"
+    ],
+    "topic": [],
+    "accessLevel": "public",
+    "license": "https://www.nist.gov/open/license",
+    "components": [
+        {
+            "accessURL": "https://doi.org/10.18434/M32110",
+            "title": "DOI Access for TEST RECORD, PLEASE IGNORE TITLE CHANGE",
+            "@type": [
+                "nrd:Hidden",
+                "dcat:Distribution"
+            ],
+            "@id": "#doi:10.18434/M32110"
+        }
+    ],
+    "publisher": {
+        "name": "National Institute of Standards and Technology",
+        "@type": "org:Organization"
+    },
+    "language": [
+        "en"
+    ],
+    "bureauCode": [
+        "006:55"
+    ],
+    "programCode": [
+        "006:052"
+    ],
+    "references": [],
+    "version": "1.0.1",
+    "issued": "2019-08-18",
+    "releaseHistory": {
+        "@id": "ark:/88434/mds2-2110/pdr:v",
+        "@type": [
+            "nrdr:ReleaseHistory"
+        ],
+        "hasRelease": [
+            {
+                "version": "1.0.0",
+                "issued": "2019-08-14 00:00:00",
+                "@id": "ark:/88434/mds2-2110",
+                "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2110/pdr:v/1.0.0",
+                "description": "initial release"
+            },
+            {
+                "version": "1.0.1",
+                "issued": "2019-08-14 00:00:00",
+                "@id": "ark:/88434/mds2-2110",
+                "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2110/pdr:v/1.0.1",
+                "description": "metadata update"
+            }
+        ]
+    }
+}

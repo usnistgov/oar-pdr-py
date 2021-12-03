@@ -68,29 +68,34 @@ class TestMetadataClient(test.TestCase):
         self.baseurl = baseurl
         self.cli = rmm.MetadataClient(self.baseurl)
 
-    def test_urls(self):
-        id = "pdr02d4t"
-        self.assertEqual(self.cli._url_for_pdr_id(id),
-                         self.baseurl + "records?@id=" +id)
-
-        self.assertEqual(self.cli._url_for_ediid(id),
-                         self.baseurl + "records/" +id)
-
     def test_describe_ark(self):
-        data = self.cli.describe("ark:/88434/pdr02d4t")
-        self.assertEqual(data['ediid'], 'ABCDEFG')
+        data = self.cli.describe("ark:/88434/mds003r0x6")
+        self.assertEqual(data['@id'], 'ark:/88434/mds003r0x6')
+        self.assertEqual(data['ediid'], '1E0F15DAAEFB84E4E0531A5706813DD8436')
+
+        data = self.cli.describe("ark:/88434/mds2-2110")
+        self.assertEqual(data['@id'], 'ark:/88434/mds2-2110')
+        self.assertEqual(data['ediid'], 'ark:/88434/mds2-2110')
 
     def test_describe_pdr(self):
-        data = self.cli.describe("ABCDEFG")
-        self.assertEqual(data['@id'], 'ark:/88434/pdr02d4t')
+        data = self.cli.describe("1E0F15DAAEFB84E4E0531A5706813DD8436")
+        self.assertEqual(data['@id'], 'ark:/88434/mds003r0x6')
+        self.assertEqual(data['ediid'], '1E0F15DAAEFB84E4E0531A5706813DD8436')
+
+        with self.assertRaises(rmm.IDNotFound):
+            data = self.cli.describe("mds2-2110")
 
     def test_search(self):
         data = self.cli.search()
-        self.assertEqual(len(data), 2)
+        self.assertEqual(len(data), 6)
 
-        ids = [d['@id'] for d in data if '@id' in d]
-        self.assertIn("ark:/88434/pdr02d4t", ids)
-        self.assertIn("ark:/88434/edi00hw91c", ids)
+        ids = [d['ediid'] for d in data if 'ediid' in d]
+        self.assertIn("ark:/88434/mds2-2106", ids)
+        self.assertIn("ark:/88434/mds2-2107", ids)
+        self.assertIn("ark:/88434/mds2-2110", ids)
+        self.assertIn("1E651A532AFD8816E0531A570681A662439", ids)
+        self.assertIn("19A9D7193F868BDDE0531A57068151D2431", ids)
+        self.assertIn("1E0F15DAAEFB84E4E0531A5706813DD8436", ids)
         
 
         

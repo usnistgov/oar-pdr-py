@@ -1,0 +1,44 @@
+{
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
+    "_extensionSchemas": [
+        "https://data.nist.gov/od/dm/nerdm-schema/rls/v0.2"
+    ],
+    "@type": [
+        "nrdr:ReleaseCollection",
+        "dcat:Catalog"
+    ],
+    "@id": "ark:/88434/mds2-2107/pdr:v",
+    "ediid": "ark:/88434/mds2-2107",
+    "title": "TEST RECORD, PLEASE IGNORE",
+    "description": [
+        "TEST RECORD, PLEASE IGNORE"
+    ],
+    "keyword": [
+        "test",
+        "record",
+        "please",
+        "ignore"
+    ],
+    "publisher": {
+        "name": "National Institute of Standards and Technology",
+        "@type": "org:Organization"
+    },
+    "contactPoint": {
+        "fn": "Christopher Davis",
+        "hasEmail": "mailto:christopher.davis@nist.gov"
+    },
+    "theme": [
+        "Buildings and Construction:Building codes and standards",
+        "Buildings and Construction:Building materials"
+    ],
+    "version": "1.0.0",
+    "hasRelease": [
+        {
+            "@id": "ark:/88434/mds2-2107/pdr:v/1.0.0",
+            "version": "1.0.0",
+            "issued": "2019-08-18 00:00:00",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2107/pdr:v/1.0.0",
+            "description": "initial release"
+        }
+    ]
+}

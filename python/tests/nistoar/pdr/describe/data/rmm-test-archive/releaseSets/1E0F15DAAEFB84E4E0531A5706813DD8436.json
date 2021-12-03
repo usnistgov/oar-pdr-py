@@ -1,0 +1,48 @@
+{
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
+    "_extensionSchemas": [
+        "https://data.nist.gov/od/dm/nerdm-schema/rls/v0.2"
+    ],
+    "@type": [
+        "nrdr:ReleaseCollection",
+        "dcat:Catalog"
+    ],
+    "@id": "ark:/88434/mds003r0x6/pdr:v",
+    "ediid": "1E0F15DAAEFB84E4E0531A5706813DD8436",
+    "title": "National Vulnerability Database",
+    "description": [
+        "Security automation reference data is currently housed within the NVD. The NVD is the U.S. Government repository of security automation data based on security automation specifications. This data provides a standards-based foundation for the automation of software asset, vulnerability, and security configuration management; security measurement; and compliance activities. This data supports security automation efforts based on the Security Content Automation Protocols (SCAP). The NVD includes databases of security configuration checklists for the NCP, listings of publicly known software flaws, product names, and impact metrics. A formal validation program tests the ability of vendor products to use some forms of security automation data based on a product's conformance in support of specific enterprise capabilities."
+    ],
+    "keyword": [
+        "CVE",
+        "CVSS",
+        "SCAP",
+        "800-53",
+        "Vulnerability",
+        "NVD",
+        "Checklists"
+    ],
+    "publisher": {
+        "name": "National Institute of Standards and Technology",
+        "@type": "org:Organization"
+    },
+    "contactPoint": {
+        "fn": "Harold Booth",
+        "hasEmail": "mailto:harold.booth@nist.gov"
+    },
+    "theme": [
+        "Configuration & vulnerability management",
+        "Cybersecurity",
+        "Information Technology"
+    ],
+    "version": "1.0.0",
+    "hasRelease": [
+        {
+            "@id": "ark:/88434/mds003r0x6/pdr:v/1.0.0",
+            "version": "1.0.0",
+            "issued": "2015-08-24",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds003r0x6/pdr:v/1.0.0",
+            "description": "initial release"
+        }
+    ]
+}

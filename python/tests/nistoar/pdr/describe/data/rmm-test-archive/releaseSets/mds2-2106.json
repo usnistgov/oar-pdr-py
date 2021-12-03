@@ -1,0 +1,89 @@
+{
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
+    "_extensionSchemas": [
+        "https://data.nist.gov/od/dm/nerdm-schema/rls/v0.2"
+    ],
+    "@type": [
+        "nrdr:ReleaseCollection",
+        "dcat:Catalog"
+    ],
+    "@id": "ark:/88434/mds2-2106/pdr:v",
+    "ediid": "ark:/88434/mds2-2106",
+    "title": "Data from: Collaborative Guarded-Hot-Plate Tests between the National Institute of Standards and Technology and the National Physical Laboratory",
+    "description": [
+        "A bilateral study to compare guarded-hot-plate measurements at extended temperatures between laboratories at the National Institute of Standards and Technology (NIST) and the National Physical Laboratory (NPL) is presented.  Measurements were conducted in accordance with standardized test methods (ISO 8302 or ASTM C177) over a temperature range from 20 \u00b0C to 160 \u00b0C (293 K to 433 K).  Following a blind round-robin format, specimens of non-woven fibrous glass mat, approximately 22 mm thick and having a nominal bulk density of 200 kg/m3, were prepared and studied.  Results of the study show that the thermal conductivity measurements agree over the temperature range of interest to within \u00b11.0 %, or less. See also related \"Data from: Collaborative Guarded-Hot-Plate Tests between the Laboratoire national de m\u00e9trologie et d'essais and the National Institute of Standards and Technology,\" accessible at https://doi.org/10.18434/T4XK5G"
+    ],
+    "keyword": [
+        "bilateral",
+        "comparison",
+        "fibrous glass mat",
+        "guarded hot plate",
+        "industrial insulation",
+        "interlaboratory",
+        "thermal conductivity"
+    ],
+    "publisher": {
+        "name": "National Institute of Standards and Technology",
+        "@type": "org:Organization"
+    },
+    "contactPoint": {
+        "fn": "John L. Pagliaro",
+        "hasEmail": "mailto:john.pagliaro@nist.gov"
+    },
+    "theme": [
+        "Buildings and Construction: Building materials",
+        "Materials: Materials characterization"
+    ],
+    "version": "1.6.0",
+    "hasRelease": [
+        {
+            "version": "1.0.0",
+            "issued": "2019-08-12 00:00:00",
+            "@id": "ark:/88434/mds2-2106",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.0.0",
+            "description": "initial release"
+        },
+        {
+            "version": "1.1.0",
+            "issued": "2019-08-12 00:00:00",
+            "@id": "ark:/88434/mds2-2106",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.1.0",
+            "description": "data update"
+        },
+        {
+            "version": "1.2.0",
+            "issued": "2019-08-12 00:00:00",
+            "@id": "ark:/88434/mds2-2106",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.2.0",
+            "description": "data update"
+        },
+        {
+            "version": "1.3.0",
+            "issued": "2019-08-12 00:00:00",
+            "@id": "ark:/88434/mds2-2106",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.3.0",
+            "description": "data update"
+        },
+        {
+            "version": "1.4.0",
+            "issued": "2019-08-12 00:00:00",
+            "@id": "ark:/88434/mds2-2106",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.4.0",
+            "description": "data update"
+        },
+        {
+            "version": "1.5.0",
+            "issued": "2019-08-12 00:00:00",
+            "@id": "ark:/88434/mds2-2106",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.5.0",
+            "description": "data update"
+        },
+        {
+            "version": "1.6.0",
+            "issued": "2019-08-12",
+            "@id": "ark:/88434/mds2-2106",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.6.0",
+            "description": "data update"
+        }
+    ]
+}

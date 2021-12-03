@@ -1,0 +1,47 @@
+{
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
+    "_extensionSchemas": [
+        "https://data.nist.gov/od/dm/nerdm-schema/rls/v0.2"
+    ],
+    "@type": [
+        "nrdr:ReleaseCollection",
+        "dcat:Catalog"
+    ],
+    "@id": "ark:/88434/mds00qdrz9/pdr:v",
+    "ediid": "19A9D7193F868BDDE0531A57068151D2431",
+    "title": "NIST Center for Neutron Research raw data archive",
+    "description": [
+        "Neutron scattering data from NCNR's thermal and cold neutron scattering instruments."
+    ],
+    "keyword": [
+        "neutron research",
+        "neutron scattering",
+        "neutron diffraction",
+        "neutron reflectometry",
+        "small-angle neutron scattering",
+        "neutron interferometry",
+        "neutron spin-echo",
+        "polarized neutrons"
+    ],
+    "publisher": {
+        "name": "National Institute of Standards and Technology",
+        "@type": "org:Organization"
+    },
+    "contactPoint": {
+        "fn": "Przemyslaw Klosowski",
+        "hasEmail": "mailto:przemek.klosowski@nist.gov"
+    },
+    "theme": [
+        "Neutron Research"
+    ],
+    "version": "1.0.0",
+    "hasRelease": [
+        {
+            "@id": "ark:/88434/mds00qdrz9/pdr:v/1.0.0",
+            "version": "1.0.0",
+            "issued": "2015-06-29",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds00qdrz9/pdr:v/1.0.0",
+            "description": "initial release"
+        }
+    ]
+}

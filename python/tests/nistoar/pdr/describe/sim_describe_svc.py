@@ -200,7 +200,27 @@ class SimRMMHandler(object):
             try:
                 data = self.arch.get_rec(coll, id)
                 if not data:
-                    return self.send_error(404, id + " does not exist in " + coll)
+                    if len(aipids) == 1:
+                        return self.send_error(404, id + " does not exist in " + coll)
+                    continue
+
+                if any([k != '@id' for k in params.keys()]):
+                    # search criteria present; do a simple test
+                    keep = True
+                    for prop in params:
+                        if prop not in data:
+                            keep = False
+                            break
+                        keep = False
+                        for val in params[prop]:
+                            if data[prop] == val:
+                                keep = True
+                                break
+                        if not keep:
+                            break
+                    if not keep:
+                        continue
+                
                 data["_id"] ={"timestamp":1521220572,"machineIdentifier":3325465}
                 out["ResultData"].append(data)
                 out["ResultCount"] += 1

@@ -1,0 +1,219 @@
+{
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
+    "@context": [
+        "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld",
+        {
+            "@base": "ark:/88434/mds2-2106"
+        }
+    ],
+    "@type": [
+        "nrdp:PublicDataResource"
+    ],
+    "_extensionSchemas": [
+        "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/PublicDataResource"
+    ],
+    "@id": "ark:/88434/mds2-2106/pdr:v/1.1.0",
+    "title": "Data from: Collaborative Guarded-Hot-Plate Tests between the National Institute of Standards and Technology and the National Physical Laboratory",
+    "contactPoint": {
+        "fn": "Robert R. Zarr",
+        "hasEmail": "mailto:robert.zarr@nist.gov"
+    },
+    "modified": "2019-08-12 00:00:00",
+    "ediid": "ark:/88434/mds2-2106",
+    "landingPage": null,
+    "description": [
+        "A bilateral study to compare guarded-hot-plate measurements at extended temperatures between laboratories at the National Institute of Standards and Technology (NIST) and the National Physical Laboratory (NPL) is presented.  Measurements were conducted in accordance with standardized test methods (ISO 8302 or ASTM C177) over a temperature range from 20 \u00b0C to 160 \u00b0C (293 K to 433 K).  Following a blind round-robin format, specimens of non-woven fibrous glass mat, approximately 22 mm thick and having a nominal bulk density of 200 kg/m3, were prepared and studied.  Results of the study show that the thermal conductivity measurements agree over the temperature range of interest to within \u00b11.0 %, or less."
+    ],
+    "keyword": [
+        "bilateral",
+        "comparison",
+        "fibrous glass mat",
+        "guarded hot plate",
+        "industrial insulation",
+        "interlaboratory",
+        "thermal conductivity"
+    ],
+    "theme": [
+        "Buildings and Construction:Building materials",
+        "Materials:Materials characterization"
+    ],
+    "topic": [],
+    "accessLevel": "public",
+    "license": "https://www.nist.gov/open/license",
+    "publisher": {
+        "name": "National Institute of Standards and Technology",
+        "@type": "org:Organization"
+    },
+    "language": [
+        "en"
+    ],
+    "bureauCode": [
+        "006:55"
+    ],
+    "programCode": [
+        "006:045"
+    ],
+    "doi": "doi:10.18434/M32106",
+    "components": [
+        {
+            "accessURL": "https://doi.org/10.18434/M32106",
+            "title": "DOI Access for Data from: Collaborative Guarded-Hot-Plate Tests between the National Institute of Standards and Technology and the National Physical Laboratory",
+            "@type": [
+                "nrd:Hidden",
+                "dcat:Distribution"
+            ],
+            "@id": "#doi:10.18434/M32106"
+        },
+        {
+            "@id": "cmps/NIST_NPL_InterlabData2019.csv.sha256",
+            "@type": [
+                "nrdp:ChecksumFile",
+                "nrdp:DownloadableFile",
+                "dcat:Distribution"
+            ],
+            "filepath": "NIST_NPL_InterlabData2019.csv.sha256",
+            "downloadURL": "https://data.nist.gov/od/ds/ark:/88434/mds2-2106/_v/1.1.0/NIST_NPL_InterlabData2019.csv.sha256",
+            "algorithm": {
+                "tag": "sha256",
+                "@type": "Thing"
+            },
+            "describes": "cmps/NIST_NPL_InterlabData2019.csv",
+            "description": "SHA-256 checksum value for NIST_NPL_InterlabData2019.csv",
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/ChecksumFile"
+            ],
+            "mediaType": "application/octet-stream",
+            "title": "SHA256 File for NIST/NPL Interlaboratory Guarded-Hot-Plate Data",
+            "size": 64,
+            "checksum": {
+                "hash": "7819de5f2716864b6b7cfe756fdac176439712805f713c3751d360176c303554",
+                "algorithm": {
+                    "tag": "sha256",
+                    "@type": "Thing"
+                }
+            },
+            "valid": true
+        },
+        {
+            "@id": "cmps/Readme.txt",
+            "@type": [
+                "nrdp:DataFile",
+                "nrdp:DownloadableFile",
+                "dcat:Distribution"
+            ],
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/DataFile"
+            ],
+            "filepath": "Readme.txt",
+            "downloadURL": "https://data.nist.gov/od/ds/ark:/88434/mds2-2106/_v/1.1.0/Readme.txt",
+            "mediaType": "text/plain",
+            "description": "Data dictionary for intercomparison data from guarded-hot-plate laboratories at the National Institute of Standards and Technology and at the National Physical Laboratory",
+            "title": "Data Dictionary for NIST/NPL Interlaboratory Comparison",
+            "size": 1666,
+            "checksum": {
+                "hash": "bcdf748936c17d3a62ca81d3fb3b31acce0c32b4a34e529dc3326ed047ae392c",
+                "algorithm": {
+                    "tag": "sha256",
+                    "@type": "Thing"
+                }
+            }
+        },
+        {
+            "@id": "cmps/Readme.txt.sha256",
+            "@type": [
+                "nrdp:ChecksumFile",
+                "nrdp:DownloadableFile",
+                "dcat:Distribution"
+            ],
+            "filepath": "Readme.txt.sha256",
+            "downloadURL": "https://data.nist.gov/od/ds/ark:/88434/mds2-2106/_v/1.1.0/Readme.txt.sha256",
+            "algorithm": {
+                "tag": "sha256",
+                "@type": "Thing"
+            },
+            "describes": "cmps/Readme.txt",
+            "description": "SHA-256 checksum value for Readme.txt",
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/ChecksumFile"
+            ],
+            "mediaType": "application/octet-stream",
+            "title": "SHA256 File for Data Dictionary for NIST/NPL Interlaboratory Comparison",
+            "size": 64,
+            "checksum": {
+                "hash": "568c759c5d4fa8e61c0e475fda937d7122fe4474daf4a6b03066849485f56a22",
+                "algorithm": {
+                    "tag": "sha256",
+                    "@type": "Thing"
+                }
+            },
+            "valid": true
+        },
+        {
+            "@id": "cmps/NIST_NPL_InterlabData2019.csv",
+            "@type": [
+                "nrdp:DataFile",
+                "nrdp:DownloadableFile",
+                "dcat:Distribution"
+            ],
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/DataFile"
+            ],
+            "filepath": "NIST_NPL_InterlabData2019.csv",
+            "downloadURL": "https://data.nist.gov/od/ds/ark:/88434/mds2-2106/_v/1.1.0/NIST_NPL_InterlabData2019.csv",
+            "mediaType": "application/octet-stream",
+            "format": {
+                "description": "comma-separated values file"
+            },
+            "description": "A description of the guarded-hot-plate data is in the meta-data file Readme.txt.",
+            "title": "NIST/NPL Interlaboratory Guarded-Hot-Plate Data",
+            "size": 2222,
+            "checksum": {
+                "hash": "38e4b8f90b81c3e894f666f50471a03788d1a2e61c74dbedef3f3c8fddd50308",
+                "algorithm": {
+                    "tag": "sha256",
+                    "@type": "Thing"
+                }
+            }
+        }
+    ],
+    "references": [
+        {
+            "@type": [
+                "npg:Article"
+            ],
+            "@id": "#ref:10.6028/NIST.TN.2059",
+            "refType": "IsCitedBy",
+            "location": "https://doi.org/10.6028/NIST.TN.2059",
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/bib/v0.6#/definitions/DCiteReference"
+            ],
+            "title": "NIST-NPL bilateral comparison of guarded-hot-plate laboratories from 20 \u00b0C to 160 \u00b0C",
+            "issued": "2020-01",
+            "citation": "Zarr, R. R., Wu, J., & Liu, H.-K. (2020). NIST-NPL bilateral comparison of guarded-hot-plate laboratories from 20 \u00c2\u00b0C to 160 \u00c2\u00b0C. doi:10.6028/nist.tn.2059\n"
+        }
+    ],
+    "version": "1.1.0",
+    "issued": "2019-12-31",
+    "releaseHistory": {
+        "@id": "ark:/88434/mds2-2106/pdr:v",
+        "@type": [
+            "nrdr:ReleaseHistory"
+        ],
+        "hasRelease": [
+            {
+                "version": "1.0.0",
+                "issued": "2019-08-12 00:00:00",
+                "@id": "ark:/88434/mds2-2106",
+                "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106",
+                "description": "initial release"
+            },
+            {
+                "version": "1.1.0",
+                "issued": "2019-08-12 00:00:00",
+                "@id": "ark:/88434/mds2-2106",
+                "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106",
+                "description": "data update"
+            }
+        ]
+    }
+}

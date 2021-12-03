@@ -1,0 +1,102 @@
+{
+    "landingPage": "https://www.ncnr.nist.gov/pub/ncnrdata/",
+    "bureauCode": [
+        "006:55"
+    ],
+    "modified": "2015-06-29",
+    "@id": "ark:/88434/mds00qdrz9",
+    "keyword": [
+        "neutron research",
+        "neutron scattering",
+        "neutron diffraction",
+        "neutron reflectometry",
+        "small-angle neutron scattering",
+        "neutron interferometry",
+        "neutron spin-echo",
+        "polarized neutrons"
+    ],
+    "inventory": [
+        {
+            "childCount": 0,
+            "byType": [
+                {
+                    "forType": "dcat:Distribution",
+                    "childCount": 0,
+                    "descCount": 1
+                },
+                {
+                    "forType": "nrdp:DataFile",
+                    "childCount": 0,
+                    "descCount": 1
+                }
+            ],
+            "descCount": 1,
+            "childCollections": [],
+            "forCollection": ""
+        }
+    ],
+    "contactPoint": {
+        "fn": "Przemyslaw Klosowski",
+        "hasEmail": "mailto:przemek.klosowski@nist.gov"
+    },
+    "@context": [
+        "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld",
+        {
+            "@base": "ark:/88434/mds00qdrz9"
+        }
+    ],
+    "@type": [
+        "nrdp:PublicDataResource"
+    ],
+    "description": [
+        "Neutron scattering data from NCNR's thermal and cold neutron scattering instruments."
+    ],
+    "_extensionSchemas": [
+        "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/PublicDataResource"
+    ],
+    "dataHierarchy": [],
+    "language": [
+        "en"
+    ],
+    "programCode": [
+        "006:045"
+    ],
+    "components": [
+        {
+            "filepath": "",
+            "@type": [
+                "nrdp:DataFile",
+                "dcat:Distribution"
+            ],
+            "accessURL": "http://ncnr.nist.gov/pub/ncnrdata/",
+            "downloadURL": "ftp://ftp.ncnr.nist.gov/pub/ncnrdata/",
+            "mediaType": "text/csv",
+            "@id": "cmps/",
+            "title": "NIST Center for Neutron Research Raw Data",
+            "description": "Raw data from the NIST Center for Neutron Research.",
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/DataFile"
+            ]
+        }
+    ],
+    "license": "https://www.nist.gov/open/license",
+    "topic": [
+        {
+            "tag": "Neutron Research",
+            "scheme": "https://www.nist.gov/od/dm/nist-themes/v1.0",
+            "@type": "Concept"
+        }
+    ],
+    "theme": [
+        "Neutron Research"
+    ],
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
+    "ediid": "19A9D7193F868BDDE0531A57068151D2431",
+    "title": "NIST Center for Neutron Research raw data archive",
+    "publisher": {
+        "name": "National Institute of Standards and Technology",
+        "@type": "org:Organization"
+    },
+    "accessLevel": "public",
+    "version": "1.0.0"
+}

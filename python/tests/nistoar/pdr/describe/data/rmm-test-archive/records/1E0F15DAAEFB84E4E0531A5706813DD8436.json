@@ -1,0 +1,108 @@
+{
+    "landingPage": "https://nvd.nist.gov/",
+    "bureauCode": [
+        "006:55"
+    ],
+    "modified": "2015-08-24",
+    "@id": "ark:/88434/mds003r0x6",
+    "keyword": [
+        "CVE",
+        "CVSS",
+        "SCAP",
+        "800-53",
+        "Vulnerability",
+        "NVD",
+        "Checklists"
+    ],
+    "contactPoint": {
+        "fn": "Harold Booth",
+        "hasEmail": "mailto:harold.booth@nist.gov"
+    },
+    "@context": [
+        "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld",
+        {
+            "@base": "ark:/88434/mds003r0x6"
+        }
+    ],
+    "@type": [
+        "nrdp:PublicDataResource"
+    ],
+    "description": [
+        "Security automation reference data is currently housed within the NVD. The NVD is the U.S. Government repository of security automation data based on security automation specifications. This data provides a standards-based foundation for the automation of software asset, vulnerability, and security configuration management; security measurement; and compliance activities. This data supports security automation efforts based on the Security Content Automation Protocols (SCAP). The NVD includes databases of security configuration checklists for the NCP, listings of publicly known software flaws, product names, and impact metrics. A formal validation program tests the ability of vendor products to use some forms of security automation data based on a product's conformance in support of specific enterprise capabilities."
+    ],
+    "inventory": [
+        {
+            "childCount": 1,
+            "byType": [
+                {
+                    "forType": "dcat:Distribution",
+                    "childCount": 1,
+                    "descCount": 1
+                },
+                {
+                    "forType": "nrdp:AccessPage",
+                    "childCount": 1,
+                    "descCount": 1
+                }
+            ],
+            "descCount": 1,
+            "childCollections": [],
+            "forCollection": ""
+        }
+    ],
+    "_extensionSchemas": [
+        "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/PublicDataResource"
+    ],
+    "language": [
+        "en"
+    ],
+    "programCode": [
+        "006:045"
+    ],
+    "components": [
+        {
+            "@id": "#",
+            "mediaType": "text/xml",
+            "@type": [
+                "nrdp:AccessPage",
+                "dcat:Distribution"
+            ],
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/AccessPage"
+            ],
+            "accessURL": "https://nvd.nist.gov"
+        }
+    ],
+    "license": "https://www.nist.gov/open/license",
+    "topic": [
+        {
+            "tag": "Information Technology: Cybersecurity: Configuration and vulnerability management",
+            "scheme": "https://www.nist.gov/od/dm/nist-themes/v1.0",
+            "@type": "Concept"
+        },
+        {
+            "tag": "Information Technology: Cybersecurity",
+            "scheme": "https://www.nist.gov/od/dm/nist-themes/v1.0",
+            "@type": "Concept"
+        },
+        {
+            "tag": "Information Technology",
+            "scheme": "https://www.nist.gov/od/dm/nist-themes/v1.0",
+            "@type": "Concept"
+        }
+    ],
+    "theme": [
+        "Configuration & vulnerability management",
+        "Cybersecurity",
+        "Information Technology"
+    ],
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
+    "accessLevel": "public",
+    "title": "National Vulnerability Database",
+    "publisher": {
+        "name": "National Institute of Standards and Technology",
+        "@type": "org:Organization"
+    },
+    "ediid": "1E0F15DAAEFB84E4E0531A5706813DD8436",
+    "version": "1.0.0"
+}
