@@ -1,10 +1,11 @@
-import json, os, cgi, sys, re, hashlib, traceback as tb
+import json, os, sys, re, hashlib, traceback as tb
+from urllib.parse import parse_qs
 from collections import OrderedDict
 from io import TextIOWrapper
 from wsgiref.headers import Headers
 
 testdir = os.path.dirname(os.path.abspath(__file__))
-def_archdir = os.path.join(testdir, 'data')
+def_archdir = os.path.join(testdir, 'data', 'rmm-test-archive')
 
 try:
     import uwsgi
@@ -16,28 +17,68 @@ except ImportError:
     uwsgi=uwsgi_mod()
 
 class SimArchive(object):
+    pfxre = re.compile("^ark:/\d+/")
+    
     def __init__(self, archdir):
         self.dir = archdir
-        self.lu = {}
-        self.loadlu()
-    def loadlu(self):
-        for rec in [f for f in os.listdir(self.dir) if f.endswith(".json")]:
+        self.loadall()
+
+    def loadlu(self, colldir):
+        lu = {}
+        for rec in [f for f in os.listdir(os.path.join(self.dir, colldir)) if f.endswith(".json")]:
             try:
-                with open(os.path.join(self.dir,rec)) as fd:
+                with open(os.path.join(self.dir,colldir,rec)) as fd:
                     data = json.load(fd, object_pairs_hook=OrderedDict)
-                if "ediid" in data:
-                    ediid = data["ediid"]
-                    self.lu[ediid] = rec[:-1*len(".json")]
-                    ediid = re.sub(r'^ark:/\d+/', '', ediid)
-                    self.lu[ediid] = rec[:-1*len(".json")]
+                if "@id" in data:
+                    pdrid = data["@id"]
+                    lu[pdrid] = rec[:-1*len(".json")]
 
             except:
                 pass
-    def ediid_to_id(self, ediid):
-        return self.lu.get(ediid)
 
-    def ids(self):
-        return [f[:-5] for f in os.listdir(self.dir) if f.endswith(".json")]
+        return lu
+
+    def loadall(self):
+        self.records = self.loadlu("records")
+        self.versions = self.loadlu("versions")
+        self.releaseSets = self.loadlu("releaseSets")
+
+    def add_rec(self, coll, data):
+        if coll not in "records versions releaseSets".split():
+            raise ValueError("Unsupported collection: "+coll)
+
+        aipid = self.pfxre.sub('', data.get('ediid', data.get('@id', ''))).rstrip('/')
+        if aipid.endswith("/pdr:v"):
+            aipid = aipid[:-1*len("/pdr:v")]
+        aipid = re.sub('/pdr:v/', '-v', aipid)
+            
+        if not aipid or '/' in aipid:
+            raise ValueError("Missing or bad identifier data in NERDm record: "+str(aipid))
+        with open(os.path.join(self.dir, coll, aipid+".json"), 'w') as fd:
+            json.dump(data, fd, indent=2)
+        getattr(self, coll)[data.get('@id', data.get('ediid',''))] = aipid
+
+    def get_rec(self, coll, id):
+        dataf = None
+        aipid = id
+        if id.startswith('ark:'):
+            aipid = getattr(self, coll).get(id)
+        if aipid:
+            dataf = os.path.join(self.dir, coll, aipid+'.json')
+        if not dataf or not os.path.isfile(dataf):
+            return None
+        with open(dataf) as fd:
+            return json.load(fd, object_pairs_hook=OrderedDict)
+        
+    def pdrid2aipid(self, coll, ediid):
+        if coll not in "records versions releaseSets".split():
+            raise ValueError("Bad collection name: " + coll)
+        return getattr(self, coll).get(ediid)
+
+    def aipids(self, coll="records"):
+        if coll not in "records versions releaseSets".split():
+            raise ValueError("Bad collection name: " + coll)
+        return [f[:-5] for f in os.listdir(os.path.join(self.dir, coll)) if f.endswith(".json")]
 
 class SimRMM(object):
     def __init__(self, recdir):
@@ -45,14 +86,14 @@ class SimRMM(object):
 
     def handle_request(self, env, start_resp):
         handler = SimRMMHandler(self.archive, env, start_resp)
-        return handler.handle(env, start_resp)
+        return handler.handle()
 
     def __call__(self, env, start_resp):
         return self.handle_request(env, start_resp)
 
 class SimRMMHandler(object):
 
-    def __init__(self, archive, wsgienv, start_resp):
+    def __init__(self, archive, wsgienv, start_resp, chatty=True):
         self.arch = archive
         self._env = wsgienv
         self._start = start_resp
@@ -60,6 +101,7 @@ class SimRMMHandler(object):
         self._hdr = Headers([])
         self._code = 0
         self._msg = "unknown status"
+        self._chatty = chatty
 
     def send_error(self, code, message):
         status = "{0} {1}".format(str(code), message)
@@ -80,11 +122,11 @@ class SimRMMHandler(object):
         status = "{0} {1}".format(str(self._code), self._msg)
         self._start(status, list(self._hdr.items()))
 
-    def handle(self, env, start_resp):
+    def handle(self):
         meth_handler = 'do_'+self._meth
 
         path = self._env.get('PATH_INFO', '/')[1:]
-        params = cgi.parse_qs(self._env.get('QUERY_STRING', ''))
+        params = parse_qs(self._env.get('QUERY_STRING', ''))
 
         if hasattr(self, meth_handler):
             return getattr(self, meth_handler)(path, params)
@@ -95,8 +137,18 @@ class SimRMMHandler(object):
     def do_POST(self, path, params=None):
         if path:
             path = path.rstrip('/')
-        if path.startswith("records"):
-            path = path[len("records"):].lstrip('/')
+
+        if self._chatty:
+            print("path="+str(path)+"; params="+str(params))
+        if not path:
+            return self.send_error(200, "Ready")
+
+        parts = path.split('/', 1)
+        coll = parts[0];
+        if coll not in self._collections:
+            return self.send_error(404, "Collection Not Found")
+        path = (len(parts) > 1 and parts[1]) or ''
+            
         id = None
         if len(path.strip()) > 0:
             return self.send_error(405, "POST not allowed on this resource")
@@ -104,9 +156,8 @@ class SimRMMHandler(object):
         try:
             bodyin = self._env['wsgi.input'].read().decode('utf-8')
             nerd = json.loads(bodyin, object_pairs_hook=OrderedDict)
-            id = re.sub(r'^ark:/\d+/', '', nerd['@id'])
-            with open(os.path.join(self.arch.dir, id+".json"), 'w') as fd:
-                json.dump(nerd, fd, indent=2)
+            self.arch.add_rec(coll, nerd)
+
         except ValueError as ex:
             return self.send_error(400, "Unparseable JSON input")
         except TypeError as ex:
@@ -114,45 +165,55 @@ class SimRMMHandler(object):
 
         return self.send_error(201, "Accepted")
 
+    _collections = "records versions releaseSets".split()
     def do_GET(self, path, params=None):
         if path:
             path = path.rstrip('/')
-        if path.startswith("records"):
-            path = path[len("records"):].lstrip('/')
-        ids = []
-        print("path="+str(path)+"; params="+str(params))
+
+        if self._chatty:
+            print("path="+str(path)+"; params="+str(params))
+        if not path:
+            return self.send_error(200, "Ready")
+
+        parts = path.split('/', 1)
+        coll = parts[0];
+        if coll not in self._collections:
+            return self.send_error(404, "Collection Not Found")
+        path = (len(parts) > 1 and parts[1]) or ''
+            
+        aipids = []
         if not path and "@id" in params:
             path = params["@id"]
             path = (len(path) > 0 and path[0]) or ''
         if path:
-            if path.startswith("ark:/88434/"):
-                ids = [path[len("ark:/88434/"):]]
+            if path.startswith("ark:/"):
+                aipids = [self.arch.pdrid2aipid(coll, path)]
+                if not aipids[0]:
+                    return self.send_error(404, path + " does not exist in " + coll)
             else:
-                self.arch.loadlu()
-                ids = [self.arch.ediid_to_id(path)]
+                aipids = [path]
         else:
-            ids = self.arch.ids()
+            aipids = self.arch.aipids(coll)
 
         out = { "ResultCount": 0, "PageSize": 0, "ResultData": [] }
-        for id in ids:
-            mdfile = os.path.join(self.arch.dir, id+".json")
-            if os.path.exists(mdfile):
-                try:
-                    with open(mdfile) as fd:
-                        data = json.load(fd, object_pairs_hook=OrderedDict)
-                    data["_id"] ={"timestamp":1521220572,"machineIdentifier":3325465}
-                    out["ResultData"].append(data)
-                    out["ResultCount"] += 1
-                    out["PageSize"] += 1
+        for id in aipids:
+            try:
+                data = self.arch.get_rec(coll, id)
+                if not data:
+                    return self.send_error(404, id + " does not exist in " + coll)
+                data["_id"] ={"timestamp":1521220572,"machineIdentifier":3325465}
+                out["ResultData"].append(data)
+                out["ResultCount"] += 1
+                out["PageSize"] += 1
 
-                except Exception as ex:
-                    print(str(ex))
-                    if len(ids) == 1:
-                        return self.send_error(500, "Internal error")
+            except Exception as ex:
+                print(str(ex))
+                if len(aipids) == 1:
+                    return self.send_error(500, "Internal error")
 
-        if len(ids) == 1:
+        if len(aipids) == 1:
             if len(out["ResultData"]) == 0:
-                return self.send_error(404, id + " does not exist")
+                return self.send_error(404, aipids[0] + " does not exist in "+coll)
             elif path and (not params or not params['@id']):
                 out = out["ResultData"][0]
             
@@ -161,8 +222,8 @@ class SimRMMHandler(object):
         self.end_headers()
         out = json.dumps(out, indent=2) + "\n"
         return [ out.encode() ]
-            
-            
+
+
 archdir = uwsgi.opt.get("archive_dir", def_archdir)
 try:
     archdir = archdir.decode()
