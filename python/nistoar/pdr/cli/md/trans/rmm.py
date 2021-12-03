@@ -8,6 +8,7 @@ from nistoar.nerdm.convert import rmm
 from nistoar.nerdm import utils as nerdmutils
 from nistoar.pdr.distrib import DistribServerError, DistribResourceNotFound
 from nistoar.pdr.constants import ARK_PFX_PAT
+from nistoar.pdr import config as cfgmod
 from ._comm import define_comm_trans_opts, process_svcep_args, define_comm_md_opts
 from ._comm import _get_record_for_cmd, _write_record_for_cmd, PDRCommandFailure
 
@@ -145,8 +146,9 @@ def _write_split_files(rec, rootdir, args, cmd, config, log):
                     cmd, "%s: file already exists with unexpected content (won't overwrite)")
             if part != "version" and 'version' in oldrec and \
                nerdmutils.cmp_versions(oldrec['version'], rec[part].get('version', '1.0.0')) > 0:
-                log.info("%s: existing %s record has a newer/equal version value: won't overwrite",
-                         basen, part)
+                log.log(cfgmod.NORMAL,
+                        "%s: existing %s record has a newer/equal version value: won't overwrite",
+                        basen, part)
                 continue
 
         # write the file
