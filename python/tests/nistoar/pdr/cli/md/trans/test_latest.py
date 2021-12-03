@@ -1,10 +1,10 @@
-import os, sys, logging, argparse, pdb, imp, time, json, shutil, tempfile
+import os, sys, logging, argparse, pdb, time, json, shutil, tempfile
 import unittest as test
 
 from nistoar.pdr import cli
 from nistoar.pdr.cli.md.trans import latest
 from nistoar.pdr.exceptions import PDRException, ConfigurationException
-import nistoar.pdr.config as cfgmod
+from nistoar.pdr import config as cfgmod
 from nistoar.pdr.describe import RMMServerError, IDNotFound
 from nistoar.pdr.distrib import DistribServerError, DistribResourceNotFound
 from nistoar.pdr.utils import read_nerd

@@ -65,6 +65,6 @@ def execute(args, config=None, log=None):
     _write_record_for_cmd(nerdm, args, cmd, config, log)
 
 def _process_args(args, config, cmd, log):
-    if args.filesrc or not (args.aipsrc or args.mdsrc) and args.version:
+    if (args.filesrc or not (args.aipsrc or args.mdsrc)) and args.version:
         log.warning("-V/--version argument ignored when reading from file or stdin")
     process_svcep_args(args, config, cmd, log)
