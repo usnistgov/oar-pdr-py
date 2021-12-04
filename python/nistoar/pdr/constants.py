@@ -16,13 +16,20 @@ ARK_NAAN = NIST_ARK_NAAN
 ARK_PFX_PAT = r"ark:/(\d+)/"
 
 # pattern for recognizing PDR ARK identifiers
-ARK_ID_PAT = ARK_PFX_PAT + r"(\w[\w\-]*)(/([^\/\#\?]+))?([#\?](.*)?)?"
+ARK_ID_PAT = ARK_PFX_PAT + r"(\w[\w\-]*)((/([^\/\#\?]+))*)([#\?](.*)?)?"
+ARK_ID_NAAN_GRP = 1
+ARK_ID_DS_GRP = 2
+ARK_ID_PATH_GRP = 3
+ARK_ID_PART_GRP = 6
 
 # the ARK ID extension used for ReleaseCollection resources
 RELHIST_EXTENSION = "/pdr:v"
 
 # the pattern for the ARK ID extension indicating a version of a resource
 VERSION_EXTENSION_PAT = RELHIST_EXTENSION + "/(\d+(.\d+)*)"
+
+# the ARK ID extension used for file/directory-like components
+FILECMP_EXTENSION = "/pdr:f"
 
 def to_version_ext(version):
     """

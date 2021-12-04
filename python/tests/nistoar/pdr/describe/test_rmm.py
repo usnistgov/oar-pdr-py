@@ -77,13 +77,66 @@ class TestMetadataClient(test.TestCase):
         self.assertEqual(data['@id'], 'ark:/88434/mds2-2110')
         self.assertEqual(data['ediid'], 'ark:/88434/mds2-2110')
 
-    def test_describe_pdr(self):
+    def test_describe_ark_version(self):
+        data = self.cli.describe("ark:/88434/mds00sxbvh", "1.0.4")
+        self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.4')
+        self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
+        self.assertEqual(data['version'], '1.0.4')
+
+        data = self.cli.describe("ark:/88434/mds00sxbvh", "1.0.1")
+        self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.1')
+        self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
+        self.assertEqual(data['version'], '1.0.1')
+
+        data = self.cli.describe("ark:/88434/mds00sxbvh/pdr:v/1.0.4")
+        self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.4')
+        self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
+        self.assertEqual(data['version'], '1.0.4')
+
+        data = self.cli.describe("ark:/88434/mds00sxbvh/pdr:v/1.0.1")
+        self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.1')
+        self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
+        self.assertEqual(data['version'], '1.0.1')
+
+        with self.assertRaises(rmm.IDNotFound):
+            data = self.cli.describe("ark:/88434/mds00sxbvh", "1.0.8")
+        with self.assertRaises(rmm.IDNotFound):
+            data = self.cli.describe("ark:/88434/mds00sxbvh/pdr:v/1.0.8", "1.0.1")
+
+    def test_describe_ediid(self):
         data = self.cli.describe("1E0F15DAAEFB84E4E0531A5706813DD8436")
         self.assertEqual(data['@id'], 'ark:/88434/mds003r0x6')
         self.assertEqual(data['ediid'], '1E0F15DAAEFB84E4E0531A5706813DD8436')
 
         with self.assertRaises(rmm.IDNotFound):
             data = self.cli.describe("mds2-2110")
+
+    def test_describe_ediid_version(self):
+        data = self.cli.describe("1E651A532AFD8816E0531A570681A662439", "1.0.4")
+        self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.4')
+        self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
+        self.assertEqual(data['version'], '1.0.4')
+
+        data = self.cli.describe("1E651A532AFD8816E0531A570681A662439", "1.0.1")
+        self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.1')
+        self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
+        self.assertEqual(data['version'], '1.0.1')
+
+        with self.assertRaises(rmm.IDNotFound):
+            data = self.cli.describe("1E651A532AFD8816E0531A570681A662439", "1.0.8")
+
+    def test_describe_releases(self):
+        data = self.cli.describe("ark:/88434/mds2-2110/pdr:v")
+        self.assertEqual(data['@id'], 'ark:/88434/mds2-2110/pdr:v')
+        self.assertEqual(data['ediid'], 'ark:/88434/mds2-2110')
+        self.assertEqual(data['version'], '1.0.1')
+        self.assertEqual(len(data['hasRelease']), 2)
+
+        data = self.cli.describe("ark:/88434/mds00sxbvh/pdr:v")
+        self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v')
+        self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
+        self.assertEqual(data['version'], '1.0.4')
+        self.assertEqual(len(data['hasRelease']), 5)
 
     def test_search(self):
         data = self.cli.search()

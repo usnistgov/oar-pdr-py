@@ -508,6 +508,39 @@ class TestSimRMMHandler(test.TestCase):
         self.assertEqual(data['ResultCount'], 1)
         self.assertEqual(len(data['ResultData']), 1)
 
+    def test_version_search(self):
+        req = {
+            'REQUEST_METHOD': "GET",
+            'PATH_INFO': "/versions",
+            'QUERY_STRING': "ediid=ark:/88434/mds2-2106&version=1.4.0"
+        }
+        self.hdlr = self.gethandler(req)
+        body = self.hdlr.handle()
+        self.assertEqual(self.resp[0], "200 Identifier exists")
+        data = json.loads("\n".join([ln.decode() for ln in body]))
+        self.assertEqual(data['ResultCount'], 1)
+        self.assertEqual(len(data['ResultData']), 1)
+        self.assertEqual(data['ResultData'][0]['ediid'], "ark:/88434/mds2-2106")
+        self.assertEqual(data['ResultData'][0]['@id'], "ark:/88434/mds2-2106/pdr:v/1.4.0")
+        self.assertEqual(data['ResultData'][0]['version'], "1.4.0")
+
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': "GET",
+            'PATH_INFO': "/versions",
+            'QUERY_STRING': "ediid=1E651A532AFD8816E0531A570681A662439&version=1.0.4"
+        }
+        self.hdlr = self.gethandler(req)
+        body = self.hdlr.handle()
+        self.assertEqual(self.resp[0], "200 Identifier exists")
+        data = json.loads("\n".join([ln.decode() for ln in body]))
+        self.assertEqual(data['ResultCount'], 1)
+        self.assertEqual(len(data['ResultData']), 1)
+        self.assertEqual(data['ResultData'][0]['ediid'], "1E651A532AFD8816E0531A570681A662439")
+        self.assertEqual(data['ResultData'][0]['@id'], "ark:/88434/mds00sxbvh/pdr:v/1.0.4")
+        self.assertEqual(data['ResultData'][0]['version'], "1.0.4")
+
+
 class TestSimService(test.TestCase):
 
     @classmethod
