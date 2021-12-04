@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 import yaml, jsonpatch
 
 from .. import BadSIPInputError, PublishingStateException
-from ...constants import ARK_PFX_PAT
+from ... import constants as const
 from ....nerdm.constants import CORE_SCHEMA_URI, PUB_SCHEMA_URI, EXP_SCHEMA_URI, core_schema_base
 from ....nerdm import utils as nerdutils
 from ....nerdm.convert.latest import update_to_latest_schema
@@ -23,7 +23,11 @@ from ..idmint import PDPMinter
 from ..prov import Action, PubAgent, dump_to_history
 
 SIPEXT_RE = re.compile(core_schema_base + r'sip/(v[^/]+)#/definitions/\w+Submission')
-ARK_PFX_RE = re.compile(ARK_PFX_PAT)
+ARK_PFX_RE = re.compile(const.ARK_PFX_PAT)
+VER_DELIM = const.RELHIST_EXTENSION.lstrip('/')
+FILE_DELIM = const.FILECMP_EXTENSION.lstrip('/')
+LINK_DELIM = const.LINKCMP_EXTENSION.lstrip('/')
+AGG_DELIM = const.AGGCMP_EXTENSION.lstrip('/')
 
 def _insert_before_val(vals, inval, beforeval):
     try:
@@ -325,7 +329,7 @@ class NERDmBasedBagger(SIPBagger):
                 if oldcmps:
                     for cmp in oldcmps:
                         self.bagbldr.remove_component(cmp)
-                    hist.add_subaction(Action(Action.DELETE, "pdr:f", who,
+                    hist.add_subaction(Action(Action.DELETE, FILE_DELIM, who,
                                               "Cleared previously added components"))
 
                 for cmp in components:
@@ -605,10 +609,10 @@ class NERDmBasedBagger(SIPBagger):
                 cmpmd['@id'] = cmpmd['@id'][len(self.id):]
         else: 
             if nerdutils.is_any_type(cmpmd, ["DataFile", "ChecksumFile", "Subcollection"]):
-                cmpmd['@id'] = "pdr:f" + '/' + cmpmd['filepath']
+                cmpmd['@id'] = FILE_DELIM + '/' + cmpmd['filepath']
 
             elif nerdutils.is_type(cmpmd, "AccessPage"):
-                cmpmd['@id'] = "pdr:see" + '/'
+                cmpmd['@id'] = LINK_DELIM + '/'
                 url = urlparse(cmpmd['accessURL'])
                 if url.netlog == 'doi.org':
                     cmpmd['@id'] += "doi:"
@@ -620,7 +624,7 @@ class NERDmBasedBagger(SIPBagger):
                     cmpmd['@id'] += url.path
 
             elif nerdutils.is_type(cmpmd, "IncludedResource"):
-                cmpmd['@id'] = "pdr:agg" + '/'
+                cmpmd['@id'] = AGG_DELIM + '/'
                 url = urlparse(cmpmd['proxyFor'])
                 if url.netloc == 'doi.org':
                     cmpmd['@id'] += "doi:"

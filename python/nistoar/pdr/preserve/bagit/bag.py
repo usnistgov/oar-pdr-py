@@ -7,10 +7,15 @@ from collections import OrderedDict
 
 from .. import PreservationSystem, read_nerd, read_pod
 from .. import NERDError, PODError, StateException
+from ... import constants as const
 from .exceptions import BadBagRequest, ComponentNotFound, BagFormatError
 from ... import def_jq_libdir, def_merge_etcdir
 from ....nerdm.merge import MergerFactory, Merger
 from ....nerdm.convert import ComponentCounter, HierarchyBuilder
+
+VER_DELIM = const.RELHIST_EXTENSION.lstrip('/')
+FILE_DELIM = const.FILECMP_EXTENSION.lstrip('/')
+RES_DELIM = const.RESONLY_EXTENSION.lstrip('/')
 
 POD_FILENAME = "pod.json"
 NERDMD_FILENAME = "nerdm.json"
@@ -210,12 +215,18 @@ class NISTBag(PreservationSystem):
                                (i.e. what appears as its "@id" property).  
         :rtype: bool
         """
+        fileidpfx = "@id:"+FILE_DELIM+"/"
+        oldcmppfx = "@id:cmps/"
+        
         if not filepath:
             raise ValueError("has_component: empty or null filepath given")
-        if filepath.startswith("@id:pdr:f/"):
-            filepath = filepath[len("@id:pdr:f/"):]
-        elif filepath.startswith("@id:cmps/"):
-            filepath = filepath[len("@id:cmps/"):]
+
+        if filepath.startswith(fileidpfx):        # "@id:pdr:f/"
+            filepath = filepath[len(fileidpfx):]
+
+        elif filepath.startswith(oldcmppfx):      # "@id:cmps/"
+            filepath = filepath[len(oldcmppfx):]
+
         if filepath.startswith("@id:"):
             # non-file component
             filepath = filepath[4:]
@@ -311,15 +322,15 @@ class NISTBag(PreservationSystem):
             # everything
             return self.nerdm_record(True)
 
-        if relid == "pdr:r":
+        if relid == RES_DELIM:              # "pdr:r"
             # resource-level metadata only
             return self.nerd_metadata_for('', True)
 
-        if relid == "pdr:v":
+        if relid == VER_DELIM:              # "pdr:v"
             md = self.nerd_metadata_for('', True)
             return md.get('releaseHistory', {"@id": "pdr:v"})
 
-        if relid.startswith("cmps/") or relid.startswith("pdr:f/"):
+        if relid.startswith("cmps/") or relid.startswith(FILE_DELIM+"/"):   # "pdr:f/"
             # file-like component
             relid = relid[5:].lstrip('/')
             try: 

@@ -31,6 +31,16 @@ VERSION_EXTENSION_PAT = RELHIST_EXTENSION + "/(\d+(.\d+)*)"
 # the ARK ID extension used for file/directory-like components
 FILECMP_EXTENSION = "/pdr:f"
 
+# the ARK ID extension used for components that are links to other sites
+LINKCMP_EXTENSION = "/pdr:see"
+
+# the ARK ID extension used for components that is its own resource
+# (making the enclosing resource an aggregation)
+AGGCMP_EXTENSION = "/pdr:agg"
+
+# the ARK ID extension use to retrieve resource-level-only metadata
+RESONLY_EXTENSION = "/pdr:r"
+
 def to_version_ext(version):
     """
     return a string that can be appended to a normal PDR resource to convert it to a 
