@@ -150,9 +150,72 @@ class TestMetadataClient(test.TestCase):
         self.assertIn("19A9D7193F868BDDE0531A57068151D2431", ids)
         self.assertIn("1E0F15DAAEFB84E4E0531A5706813DD8436", ids)
         
-
+    def test_describe_file_component(self):
+        data = self.cli.describe("ark:/88434/mds2-2106/cmps/NIST_NPL_InterlabData2019.csv")
+        self.assertEqual(data['@id'], 'ark:/88434/mds2-2106/cmps/NIST_NPL_InterlabData2019.csv')
+        self.assertEqual(data['version'], '1.6.0')
+        self.assertIn('@context', data)
+        self.assertNotIn('components', data)
+        self.assertNotIn('releaseHistory', data)
+        self.assertNotIn('versionHistory', data)
         
+        data = self.cli.describe("ark:/88434/mds2-2106/pdr:f/NIST_NPL_InterlabData2019.csv")
+        self.assertEqual(data['@id'], 'ark:/88434/mds2-2106/cmps/NIST_NPL_InterlabData2019.csv')
+        self.assertEqual(data['version'], '1.6.0')
+        self.assertIn('@context', data)
+        self.assertNotIn('components', data)
+        self.assertNotIn('releaseHistory', data)
+        self.assertNotIn('versionHistory', data)
+        
+        data = self.cli.describe("ark:/88434/mds2-2106/pdr:v/1.4.0/pdr:f/NIST_NPL_InterlabData2019.csv")
+        self.assertEqual(data['@id'], 'ark:/88434/mds2-2106/pdr:v/1.4.0/cmps/NIST_NPL_InterlabData2019.csv')
+        self.assertEqual(data['version'], '1.4.0')
+        self.assertIn('@context', data)
+        self.assertNotIn('components', data)
+        self.assertNotIn('releaseHistory', data)
+        self.assertNotIn('versionHistory', data)
+        
+        data = self.cli.describe("ark:/88434/mds2-2106/pdr:v/1.4.0/cmps/NIST_NPL_InterlabData2019.csv")
+        self.assertEqual(data['@id'], 'ark:/88434/mds2-2106/pdr:v/1.4.0/cmps/NIST_NPL_InterlabData2019.csv')
+        self.assertEqual(data['version'], '1.4.0')
+        self.assertIn('@context', data)
+        self.assertNotIn('components', data)
+        self.assertNotIn('releaseHistory', data)
+        self.assertNotIn('versionHistory', data)
 
+    def test_describe_part_component(self):
+        data = self.cli.describe("ark:/88434/mds2-2106#doi:10.18434/M32106")
+        self.assertNotIn('components', data)
+        self.assertNotIn('releaseHistory', data)
+        self.assertNotIn('versionHistory', data)
+        self.assertEqual(data['@id'], "ark:/88434/mds2-2106#doi:10.18434/M32106")
+        self.assertEqual(data['version'], '1.6.0')
+        self.assertIn('@context', data)
+
+        data = self.cli.describe("ark:/88434/mds00sxbvh#srd/nist-special-database-18")
+        self.assertNotIn('components', data)
+        self.assertNotIn('releaseHistory', data)
+        self.assertNotIn('versionHistory', data)
+        self.assertEqual(data['@id'], "ark:/88434/mds00sxbvh#srd/nist-special-database-18")
+        self.assertEqual(data['version'], '1.0.4')
+        self.assertIn('@context', data)
+        
+        data = self.cli.describe("ark:/88434/mds2-2106/pdr:v/1.3.0#doi:10.18434/M32106")
+        self.assertNotIn('components', data)
+        self.assertNotIn('releaseHistory', data)
+        self.assertNotIn('versionHistory', data)
+        self.assertEqual(data['@id'], "ark:/88434/mds2-2106/pdr:v/1.3.0#doi:10.18434/M32106")
+        self.assertEqual(data['version'], '1.3.0')
+        self.assertIn('@context', data)
+
+        data = self.cli.describe("ark:/88434/mds00sxbvh/pdr:v/1.0.3#srd/nist-special-database-18")
+        self.assertNotIn('components', data)
+        self.assertNotIn('releaseHistory', data)
+        self.assertNotIn('versionHistory', data)
+        self.assertEqual(data['@id'], "ark:/88434/mds00sxbvh/pdr:v/1.0.3#srd/nist-special-database-18")
+        self.assertEqual(data['version'], '1.0.3')
+        self.assertIn('@context', data)
+        
 
 if __name__ == '__main__':
     test.main()

@@ -9,9 +9,14 @@ from collections.abc import Mapping
 import requests
 
 from ..exceptions import PDRServiceException, PDRServerError, IDNotFound, StateException
-from ..constants import ARK_ID_PAT, ARK_ID_PATH_GRP, ARK_ID_PART_GRP, RELHIST_EXTENSION, FILECMP_EXTENSION
+from .. import constants as const
 
-_ark_id_re = re.compile(ARK_ID_PAT)
+_ark_id_re = re.compile(const.ARK_ID_PAT)
+VER_DELIM  = const.RELHIST_EXTENSION
+FILE_DELIM = const.FILECMP_EXTENSION
+LINK_DELIM = const.LINKCMP_EXTENSION
+AGG_DELIM  = const.AGGCMP_EXTENSION
+OLD_COMP_DELIM = "/cmps"
 
 class MetadataClient(object):
     """
@@ -20,12 +25,6 @@ class MetadataClient(object):
     COLL_LATEST   = "records"
     COLL_VERSIONS = "versions"
     COLL_RELEASES = "releaseSets"
-
-    VER_DELIM  = RELHIST_EXTENSION
-    COMP_DELIM = FILECMP_EXTENSION
-    OLD_COMP_DELIM = "/cmps"
-
-    _cmp_delim_re = re.compile(r"/(" + FILECMP_EXTENSION.lstrip('/') + r"pdr:f|cmps)(/(.*))?$")
 
     def __init__(self, baseurl: str):
         self.baseurl = baseurl
@@ -48,9 +47,9 @@ class MetadataClient(object):
         :raises IDNotFound:  if the identifier is unknown
         """
         find = id.rstrip('/')  # trailing slash treated as superfluous
-        if find.endswith(self.COMP_DELIM):
-            # for now, treat an ID ending in "/pdr:c" equivalently to a dataset id
-            find = find[:-1*len(self.COMP_DELIM)]
+        if find.endswith(FILE_DELIM):
+            # for now, treat an ID ending in "/pdr:f" equivalently to a dataset id
+            find = find[:-1*len(FILE_DELIM)]
 
         if not find.startswith("ark:"):
             # it's an EDI-ID
@@ -61,21 +60,23 @@ class MetadataClient(object):
             # don't bother if it's not a compliant ARK ID
             raise IDNotFound(id)
 
-        if idm.group(ARK_ID_PATH_GRP) == self.VER_DELIM:
+        if not idm.group(const.ARK_ID_PATH_GRP) and not idm.group(const.ARK_ID_PART_GRP):
+            # it appears to be simply a dataset ID (there's nothing past the dataset part)
+            if version:
+                return self._describe_version(find + VER_DELIM +'/'+ version)
+            return self._describe_latest_ds(find, id)
+
+        if idm.group(const.ARK_ID_PATH_GRP) == VER_DELIM:
+            # ends with "/pdr:v" 
             return self._describe_releases(find, id)
 
-        if self.COMP_DELIM+'/' in idm.group(ARK_ID_PATH_GRP):
-            return self._describe_component(find, version, id)
+        if not idm.group(const.ARK_ID_PART_GRP) and idm.group(const.ARK_ID_PATH_GRP).startswith(VER_DELIM+'/'):
+            fields = idm.group(const.ARK_ID_PATH_GRP).split('/', 3)
+            if len(fields) < 4:
+                # we want a version of a dataset
+                return self._describe_version(find, id)
 
-        if idm.group(ARK_ID_PATH_GRP).startswith(self.VER_DELIM+'/'):
-            return self._describe_version(find, id)
-
-        # it appears to be simply a dataset ID
-        if version:
-            find += self.VER_DELIM + '/' + version
-            return self._describe_version(find, id)
-
-        return self._describe_latest_ds(find, id)
+        return self._describe_component(idm, version, id)
 
     def _describe_ediid(self, ediid, version, reqid=None):
         if not reqid:
@@ -108,16 +109,17 @@ class MetadataClient(object):
         relid = out.get('@id')
         if not relid:
             relid = id
-        relid += self.VER_DELIM
+        relid += VER_DELIM
         try:
             relset = self._describe_releases(relid)
             if 'hasRelease' in relset:
-                out['releaseHistory'] = OrderedDict([
-                    ("@id", relset['@id']),
-                    ("@type", "nrdr:ReleaseHistory"),
-                    ("label", "Release History"),
-                    ("hasRelease", relset['hasRelease'])
-                ])
+                if not 'releaseHistory' in out:
+                    out['releaseHistory'] = OrderedDict([
+                        ("@id", relset['@id']),
+                        ("@type", "nrdr:ReleaseHistory"),
+                        ("label", "Release History")
+                    ])
+                out['releaseHistory']['hasRelease'] = relset['hasRelease']
                 if 'versionHistory' in out:
                     del out['versionHistory']
                     
@@ -138,19 +140,22 @@ class MetadataClient(object):
         if not reqid:
             reqid = idm.group()
 
-        dsid = idm.group()[:idm.start(ARK_ID_PATH_GRP)]
-        cmpid = idm.group()[idm.start(ARK_ID_PATH_GRP):]
+        dsid = idm.group()[:idm.start(const.ARK_ID_PATH_GRP)]
+        cmpid = idm.group()[idm.start(const.ARK_ID_PATH_GRP):]
 
         dsmd = None
-        if cmpid.startswith(self.VER_DELIM+'/'):
-            parts = cmpid.split('/', 3)
-            if len(parts) > 3 and parts[1] == self.VER_DELIM:
-                dsid += self.VER_DELIM + '/' + parts[2]
-                cmpid = '/' + parts[3]
+        if idm.group(const.ARK_ID_PATH_GRP).startswith(VER_DELIM+'/'):
+            parts = idm.group(const.ARK_ID_PATH_GRP).split('/', 3)
+            if len(parts) > 2 and parts[1] == VER_DELIM.lstrip('/'):
+                dsid += VER_DELIM + '/' + parts[2]
+                cmpid = idm.group(const.ARK_ID_PART_GRP) or ''
+                if len(parts) > 3:
+                    cmpid = '/' + parts[3] + cmpid
                 dsmd = self._describe_version(dsid)
         elif version:
-            dsid += self.VER_DELIM + '/' + version
+            dsid += VER_DELIM + '/' + version
             dsmd = self._describe_version(dsid)
+
         if not dsmd:
             dsmd = self._describe_latest_ds(dsid)
 
@@ -161,10 +166,10 @@ class MetadataClient(object):
         # try some alternatives (support old file component delimiter)
         if len(cmpmd) == 0:
             find = None
-            if cmpid.startswith(self.COMP_DELIM+'/'):
-                find = "cmps" + cmpid[len(self.COMP_DELIM):]
+            if cmpid.startswith(FILE_DELIM+'/'):
+                find = "cmps" + cmpid[len(FILE_DELIM):]
             elif cmpid.startswith('/cmps/'):
-                find = self.COMP_DELIM + cmpid[len('/cmps'):]
+                find = FILE_DELIM + cmpid[len('/cmps'):]
                 find = find.lstrip('/')
             if find:
                 cmpmd = [c for c in dsmd.get('components',[]) if c.get('@id') == find]
@@ -172,6 +177,14 @@ class MetadataClient(object):
         if len(cmpmd) == 0:
             raise IDNotFound(reqid)
 
+        # tweak the meta-metadata on its way out the door
+        if cmpmd[0]['@id'][0] != '/' and cmpmd[0]['@id'][0] != '#':
+            dsid += '/'
+        cmpmd[0]['@id'] = dsid + cmpmd[0]['@id']
+        if '@context' in dsmd:
+            cmpmd[0]['@context'] = dsmd['@context']
+        if 'version' in dsmd and 'version' not in cmpmd[0]:
+            cmpmd[0]['version'] = dsmd['version']
         return cmpmd[0]
             
     def _get(self, url, reqid):
