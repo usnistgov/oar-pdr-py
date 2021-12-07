@@ -106,10 +106,10 @@ class MetadataClient(object):
         out = self._get(url, reqid)
 
         # inject the latest version history into this record
-        relid = out.get('@id')
-        if not relid:
-            relid = id
-        relid += VER_DELIM
+        idm = _ark_id_re.match(id)
+        if not idm:
+            raise StateException("id=id seems suddenly invalid!")
+        relid = id[:idm.end(const.ARK_ID_DS_GRP)] + VER_DELIM
         try:
             relset = self._describe_releases(relid)
             if 'hasRelease' in relset:
@@ -178,6 +178,7 @@ class MetadataClient(object):
             raise IDNotFound(reqid)
 
         # tweak the meta-metadata on its way out the door
+        cmpmd[0]['isPartOf'] = dsid
         if cmpmd[0]['@id'][0] != '/' and cmpmd[0]['@id'][0] != '#':
             dsid += '/'
         cmpmd[0]['@id'] = dsid + cmpmd[0]['@id']

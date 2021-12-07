@@ -16,6 +16,22 @@ class TestFunctions(test.TestCase):
         self.assertFalse(handler.is_content_type("text"))
         self.assertFalse(handler.is_content_type("datacite"))
 
+    def test_match_accept(self):
+        self.assertEqual(handler.match_accept("text/plain", "text/plain"), "text/plain")
+        self.assertEqual(handler.match_accept("text/*", "text/plain"), "text/plain")
+        self.assertEqual(handler.match_accept("text/plain", "text/*"), "text/plain")
+        self.assertEqual(handler.match_accept("text/*", "text/*"), "text/*")
+        self.assertIsNone(handler.match_accept("text/plain", "text/json"))
+
+    def test_acceptable(self):
+        self.assertEqual(handler.acceptable("text/plain", ["application/json", "text/plain", "text/*"]),
+                         "text/plain")
+        self.assertEqual(handler.acceptable("text/*", ["application/json","text/plain","text/*","text/json"]),
+                         "text/plain")
+        self.assertEqual(handler.acceptable("text/*", ["application/json","text/*","text/json","text/plain"]),
+                         "text/*")
+        self.assertIsNone(handler.acceptable("app/html", ["application/json","text/*","text/json"]))
+
     def test_order_accepts(self):
         ordrd = handler.order_accepts("text/html, application/xml;q=0.9, application/xhtml+xml, */*;q=0.8")
         self.assertEqual(ordrd, "text/html application/xhtml+xml application/xml */*".split())
@@ -47,19 +63,20 @@ class TestFormatSupport(test.TestCase):
 
         self.sprtd.support(goob, ["goober/gurn", "application/gurn"])
         self.assertEqual(self.sprtd.match("goob"), goob)
-        self.assertEqual(self.sprtd.match("goober/gurn"), goob)
-        self.assertEqual(self.sprtd.match("application/gurn"), goob)
+        self.assertEqual(self.sprtd.match("goober/gurn"), handler.Format("goob", "goober/gurn"))
+        self.assertEqual(self.sprtd.match("application/gurn"), handler.Format("goob", "application/gurn"))
 
         with self.assertRaises(ValueError):
             self.sprtd.support(handler.Format("bill", "people/firstname"), ["goober/gurn"], False, True)
 
     def test_match(self):
-        html = handler.Format("html", "text/html")
-        self.assertEqual(self.sprtd.match("html"), html)
-        self.assertEqual(self.sprtd.match("application/html"), html)
-        self.assertEqual(self.sprtd.match("text/html"), html)
-        self.assertEqual(self.sprtd.match("application/xhtml"), html)
-        self.assertEqual(self.sprtd.match("application/xhtml+xml"), html)
+        def html(ct="text/html"):
+            return handler.Format("html", ct)
+        self.assertEqual(self.sprtd.match("html"), html())
+        self.assertEqual(self.sprtd.match("application/html"), html("application/html"))
+        self.assertEqual(self.sprtd.match("text/html"), html("text/html"))
+        self.assertEqual(self.sprtd.match("application/xhtml"), html("application/xhtml"))
+        self.assertEqual(self.sprtd.match("application/xhtml+xml"), html("application/xhtml+xml"))
         self.assertIsNone(self.sprtd.match("text"))
 
         text = handler.Format("text", "text/plain")
@@ -67,8 +84,8 @@ class TestFormatSupport(test.TestCase):
         self.assertEqual(self.sprtd.match("text"), text)
         self.assertEqual(self.sprtd.match("text/plain"), text)
 
-        self.assertEqual(self.sprtd.match("*/*"), html)
-        self.assertEqual(self.sprtd.match("text/*"), html)
+        self.assertEqual(self.sprtd.match("*/*"), html())
+        self.assertEqual(self.sprtd.match("text/*"), html())
 
     def test_default_format(self):
         self.assertEqual(self.sprtd.default_format(), handler.Format("html", "text/html"))

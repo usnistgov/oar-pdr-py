@@ -14,6 +14,33 @@ def is_content_type(label):
     """
     return '/' in label
 
+def match_accept(ctype, acceptable):
+    """
+    return the most specific content type of the two inputs if the two match each other, taking in 
+    account wildcards, or None if the two do not match.  The returned content type will end in "/*" 
+    if both input values end in "/*".
+    """
+    if ctype == acceptable or (acceptable.endswith('/*') and ctype.startswith(acceptable[:-1])):
+        return ctype
+    if ctype.endswith('/*') and acceptable.startswith(ctype[:-1]):
+        return acceptable
+    return None
+
+def acceptable(ctype, acceptable):
+    """
+    return the first match of a given content type value to a list of acceptable content types
+    """
+    if len(acceptable) == 0:
+        return ctype
+    if ctype in ['*', '*/*']:
+        return acceptable[0]
+    for ct in acceptable:
+        m = match_accept(ctype, ct)
+        if m:
+            return m
+
+    return None
+
 def order_accepts(accepts):
     """
     order the given accept values according to their q-value.  
@@ -70,6 +97,7 @@ class FormatSupport(object):
         create an instance with no formats registered as supported
         """
         self._lu = {}
+        self._ctps = {}
         self._deffmt = None
 
     def support(self, format: Format, cts=[], asdefault=False, raiseonconflict=False):
@@ -102,6 +130,8 @@ class FormatSupport(object):
         for ct in cts:
             self._lu[ct] = format
         self._lu[format.name] = format
+        self._ctps[format.name] = set(cts)
+        self._ctps[format.name].add(format.ctype)
 
         if asdefault or not self._deffmt:
             self._deffmt = format
@@ -116,10 +146,6 @@ class FormatSupport(object):
         :return:  the supported Format associated with the given format identifier, or None if the 
                   name or MIME-type is not registered as supported.  
         """
-        exact = self._lu.get(fmtreq)
-        if exact or '*' not in fmtreq:
-            return exact
-
         if fmtreq == '*/*' or fmtreq == '*':
             return self.default_format()
 
@@ -135,6 +161,11 @@ class FormatSupport(object):
             mts = [c for c in self._lu.keys() if c.startswith(mimestart)]
             if mts:
                 return self._lu.get(mts[0])
+        else:
+            fmt = self._lu.get(fmtreq)
+            if fmt and is_content_type(fmtreq):
+                fmt = Format(fmt.name, fmtreq)
+            return fmt
 
         return None
         
@@ -171,19 +202,35 @@ class FormatSupport(object):
                                    exception is raised if none of the content types in `accepts` are 
                                    supported.  
         """
+        
         if formats:
             unacceptable = []
             for label in formats:
                 fmt = self.match(label)
                 if not fmt:
+                    # no match
                     continue
-                if not is_content_type(label):
-                    label = fmt.ctype
 
-                if accepts and label not in accepts:
-                    unacceptable.append(label)
+                if not accepts or '*' in accepts or '*/*' in accepts:
+                    # anything is acceptable
+                    return fmt
+
+                if is_content_type(label):
+                    # requested format is in form of T/S (a MIME-type)
+                    mct = acceptable(label, accepts)
+                    if mct:
+                        if mct.endswith('/*') and match_accept(mct, fmt.ctype):
+                            return fmt
+                        return Format(fmt.name, mct)
                 else:
-                    return Format(fmt.name, label)
+                    # client asked for a format via its logical name; match the acceptable content types
+                    # with all those associated with the format
+                    for ct in accepts:
+                        mct = acceptable(ct, self._ctps.get(fmt.name, []))
+                        if mct and not mct.endswith('/*'):
+                            return Format(fmt.name, mct)
+
+                unacceptable.append(label)
 
             if unacceptable:
                 raise Unacceptable("format parameter is inconsistent with Accept header")
@@ -193,7 +240,7 @@ class FormatSupport(object):
             for label in accepts:
                 fmt = self.match(label)
                 if fmt:
-                    if is_content_type(label):
+                    if is_content_type(label) and not label.endswith('/*'):
                        fmt = Format(fmt.name, label)
                     return fmt
 
@@ -410,8 +457,6 @@ class Handler(object):
         elif self._meth == "HEAD":
             return self.do_GET(self._path, ashead=True)
         else:
-            if self._reqrec:
-                self._reqrec.record()
             return self.send_error(405, self._meth + " not supported on this resource")
 
     def ordered_formats(self):

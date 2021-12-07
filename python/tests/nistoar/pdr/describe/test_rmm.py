@@ -82,21 +82,25 @@ class TestMetadataClient(test.TestCase):
         self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.4')
         self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
         self.assertEqual(data['version'], '1.0.4')
+        self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 5)
 
         data = self.cli.describe("ark:/88434/mds00sxbvh", "1.0.1")
         self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.1')
         self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
         self.assertEqual(data['version'], '1.0.1')
+        self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 5)
 
         data = self.cli.describe("ark:/88434/mds00sxbvh/pdr:v/1.0.4")
         self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.4')
         self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
         self.assertEqual(data['version'], '1.0.4')
+        self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 5)
 
         data = self.cli.describe("ark:/88434/mds00sxbvh/pdr:v/1.0.1")
         self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.1')
         self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
         self.assertEqual(data['version'], '1.0.1')
+        self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 5)
 
         with self.assertRaises(rmm.IDNotFound):
             data = self.cli.describe("ark:/88434/mds00sxbvh", "1.0.8")
@@ -190,6 +194,7 @@ class TestMetadataClient(test.TestCase):
         self.assertNotIn('versionHistory', data)
         self.assertEqual(data['@id'], "ark:/88434/mds2-2106#doi:10.18434/M32106")
         self.assertEqual(data['version'], '1.6.0')
+        self.assertEqual(data['isPartOf'], 'ark:/88434/mds2-2106')
         self.assertIn('@context', data)
 
         data = self.cli.describe("ark:/88434/mds00sxbvh#srd/nist-special-database-18")
@@ -198,6 +203,7 @@ class TestMetadataClient(test.TestCase):
         self.assertNotIn('versionHistory', data)
         self.assertEqual(data['@id'], "ark:/88434/mds00sxbvh#srd/nist-special-database-18")
         self.assertEqual(data['version'], '1.0.4')
+        self.assertEqual(data['isPartOf'], 'ark:/88434/mds00sxbvh')
         self.assertIn('@context', data)
         
         data = self.cli.describe("ark:/88434/mds2-2106/pdr:v/1.3.0#doi:10.18434/M32106")
@@ -206,6 +212,7 @@ class TestMetadataClient(test.TestCase):
         self.assertNotIn('versionHistory', data)
         self.assertEqual(data['@id'], "ark:/88434/mds2-2106/pdr:v/1.3.0#doi:10.18434/M32106")
         self.assertEqual(data['version'], '1.3.0')
+        self.assertEqual(data['isPartOf'], 'ark:/88434/mds2-2106/pdr:v/1.3.0')
         self.assertIn('@context', data)
 
         data = self.cli.describe("ark:/88434/mds00sxbvh/pdr:v/1.0.3#srd/nist-special-database-18")
@@ -214,6 +221,7 @@ class TestMetadataClient(test.TestCase):
         self.assertNotIn('versionHistory', data)
         self.assertEqual(data['@id'], "ark:/88434/mds00sxbvh/pdr:v/1.0.3#srd/nist-special-database-18")
         self.assertEqual(data['version'], '1.0.3')
+        self.assertEqual(data['isPartOf'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.3')
         self.assertIn('@context', data)
         
 

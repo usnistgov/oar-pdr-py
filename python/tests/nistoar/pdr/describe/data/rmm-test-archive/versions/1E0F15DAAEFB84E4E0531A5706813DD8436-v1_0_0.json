@@ -61,7 +61,7 @@
     ],
     "components": [
         {
-            "@id": "#",
+            "@id": "pdr:see/nvd.nist.gov",
             "mediaType": "text/xml",
             "@type": [
                 "nrdp:AccessPage",
