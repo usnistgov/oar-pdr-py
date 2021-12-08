@@ -84,6 +84,9 @@ class TestPDRIDHandler(test.TestCase):
     def gethandler(self, path, req):
         return PDRIDHandler(path, req, self.start, rootlog, self.cfg)
 
+    def tostr(self, resplist):
+        return [e.decode() for e in resplist]
+
     def test_post(self):
         req = {
             'REQUEST_METHOD': "POST",
@@ -91,7 +94,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "application/json"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "405 ")
         
@@ -102,7 +105,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "application/json"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -123,7 +126,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/json, */*;q=0.8"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -141,7 +144,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': "format=nerdm&format=dcat"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -160,7 +163,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/json"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -179,7 +182,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/*"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -196,7 +199,7 @@ class TestPDRIDHandler(test.TestCase):
             'PATH_INFO': "ark:/88434/mds2-2106"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -220,7 +223,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/html"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0].strip(), "406 Not Acceptable")
         
@@ -231,7 +234,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/html"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "307 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -244,7 +247,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "application/xhtml+xml"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "307 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -257,7 +260,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': "format=html&format=nerdm&format=dcat"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "307 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -271,7 +274,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "307 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -284,7 +287,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "307 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -298,7 +301,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/json"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0].strip(), "406 Not Acceptable")
         
@@ -309,7 +312,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/plain"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         hd = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -327,7 +330,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/plain"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         hd = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -344,7 +347,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': "format=text&format=html"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         hd = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -361,7 +364,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': "format=text/plain"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         hd = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -378,7 +381,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': "format=datacite"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
         self.assertEqual(self.resp[0][:4], "400 ")
 
         self.resp = []
@@ -388,7 +391,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/csv"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
         self.assertEqual(self.resp[0][:4], "406 ")
 
     def test_get_releaseset(self):
@@ -397,7 +400,7 @@ class TestPDRIDHandler(test.TestCase):
             'PATH_INFO': "ark:/88434/mds2-2106/pdr:v/"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -419,7 +422,7 @@ class TestPDRIDHandler(test.TestCase):
             'PATH_INFO': "ark:/88434/mds2-2106/pdr:v/1.6.0"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -439,7 +442,7 @@ class TestPDRIDHandler(test.TestCase):
             'PATH_INFO': "ark:/88434/mds2-2106/pdr:v/1.3.0"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -461,7 +464,7 @@ class TestPDRIDHandler(test.TestCase):
             'PATH_INFO': "mds2-2106/pdr:v/1.3.0"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -484,7 +487,7 @@ class TestPDRIDHandler(test.TestCase):
             'PATH_INFO': "1E0F15DAAEFB84E4E0531A5706813DD8436"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -504,7 +507,7 @@ class TestPDRIDHandler(test.TestCase):
             'PATH_INFO': "1E0F15DAAEFB84E4E0531A5706813DD8436"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -523,7 +526,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': 'format=nerdm'
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -547,7 +550,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': "format=native"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "302 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -559,7 +562,7 @@ class TestPDRIDHandler(test.TestCase):
             'PATH_INFO': "ark:/88434/mds003r0x6/pdr:see/nvd.nist.gov"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "302 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -572,7 +575,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/xml"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "302 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -585,7 +588,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': 'format=nerdm'
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -609,7 +612,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': "format=native"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "302 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -623,7 +626,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': 'format=nerdm'
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -647,7 +650,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': "format=native"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "302 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -659,7 +662,7 @@ class TestPDRIDHandler(test.TestCase):
             'PATH_INFO': "ark:/88434/mds2-2106/pdr:f/Readme.txt",
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "302 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -672,7 +675,7 @@ class TestPDRIDHandler(test.TestCase):
             'HTTP_ACCEPT': "text/plain"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "302 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
@@ -685,7 +688,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': 'format=nerdm'
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "200 ")
         ct = [h for h in self.resp if h.startswith("Content-Type:")]
@@ -710,7 +713,7 @@ class TestPDRIDHandler(test.TestCase):
             'QUERY_STRING': "format=native"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
-        body = hdlr.handle()
+        body = self.tostr( hdlr.handle() )
 
         self.assertEqual(self.resp[0][:4], "302 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]

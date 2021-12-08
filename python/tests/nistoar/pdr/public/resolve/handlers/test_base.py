@@ -181,6 +181,9 @@ class TestReady(test.TestCase):
         for head in headers:
             self.resp.append("{0}: {1}".format(head[0], head[1]))
 
+    def tostr(self, resplist):
+        return [e.decode() for e in resplist]
+
     def setUp(self):
         self.hdlr = None
         self.resp = []
@@ -276,17 +279,17 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.send_ok()
+        body = self.tostr( self.hdlr.send_ok() )
         self.assertEqual(body, [])
         self.assertEqual(self.resp[0], "200 OK")
         self.resp = []
 
-        body = self.hdlr.send_ok("PERFECT", "It's all good.")
+        body = self.tostr( self.hdlr.send_ok("It's all good.", message="PERFECT") )
         self.assertEqual(body, ["It's all good."])
         self.assertEqual(self.resp[0], "200 PERFECT")
         self.resp = []
 
-        body = self.hdlr.send_ok("Got it", '"It is all good."', 201, "text/json")
+        body = self.tostr( self.hdlr.send_ok('"It is all good."', "text/json", "Got it", 201) )
         self.assertEqual(body, ['"It is all good."'])
         self.assertEqual(self.resp[0], "201 Got it")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
@@ -302,7 +305,7 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.send_ok("Got it", '"It is all good."', 201, "text/json", ashead=True)
+        body = self.tostr( self.hdlr.send_ok('"It is all good."', "text/json", "Got it", 201, ashead=True) )
         self.assertEqual(body, [])
         self.assertEqual(self.resp[0], "201 Got it")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
@@ -318,17 +321,17 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.send_error(200, "OK")
+        body = self.tostr( self.hdlr.send_error(200, "OK") )
         self.assertEqual(body, [])
         self.assertEqual(self.resp[0], "200 OK")
         self.resp = []
 
-        body = self.hdlr.send_error(400, "Icky input")
+        body = self.tostr( self.hdlr.send_error(400, "Icky input") )
         self.assertEqual(body, [])
         self.assertEqual(self.resp[0], "400 Icky input")
         self.resp = []
 
-        body = self.hdlr.send_error(499, "Got it", '"It is all good."', "text/json")
+        body = self.tostr( self.hdlr.send_error(499, "Got it", '"It is all good."', "text/json") )
         self.assertEqual(body, ['"It is all good."'])
         self.assertEqual(self.resp[0], "499 Got it")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
@@ -344,7 +347,7 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.handle()
+        body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
                          "Content-Type: text/html")
@@ -359,7 +362,7 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.handle()
+        body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
                          "Content-Type: text/plain")
@@ -374,7 +377,7 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.handle()
+        body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
                          "Content-Type: text/plain")
@@ -391,7 +394,7 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.handle()
+        body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
                          "Content-Type: text/plain")
@@ -407,7 +410,7 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.handle()
+        body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
                          "Content-Type: text/plain")
@@ -424,7 +427,7 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.handle()
+        body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "406 Not Acceptable")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
                          "Content-Type: text/plain")
@@ -438,7 +441,7 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.handle()
+        body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
                          "Content-Type: application/xhtml")
@@ -454,7 +457,7 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.handle()
+        body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
                          "Content-Type: text/html")
@@ -471,7 +474,7 @@ class TestReady(test.TestCase):
         }
         self.hdlr = self.gethandler('', req)
 
-        body = self.hdlr.handle()
+        body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "406 Not Acceptable")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
                          "Content-Type: text/plain")

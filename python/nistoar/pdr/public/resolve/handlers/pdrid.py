@@ -3,7 +3,8 @@ Handlers for resolving PDR resource identifiers
 """
 import sys, re, json
 
-from .base import Handler, Format, FormatSupport, XHTMLSupport, TextSupport, Unacceptable, UnsupportedFormat
+from .base import (Handler, Format, FormatSupport, XHTMLSupport, TextSupport,
+                   Unacceptable, UnsupportedFormat, Ready)
 from nistoar.pdr import constants as const
 from nistoar.pdr.exceptions import ConfigurationException, IDNotFound, StateException
 from nistoar.pdr.describe import MetadataClient
@@ -42,6 +43,8 @@ class PDRIDHandler(Handler):
                             :type format: str or Format
         """
         path = path.lstrip('/')
+        if not path:
+            return Ready('', self._env, self._start).handle()
 
         idm = self.ark_id_re.match(path)     # match allowed ARK identifiers (ark:/NNNNN/dsid/...)
         if idm:

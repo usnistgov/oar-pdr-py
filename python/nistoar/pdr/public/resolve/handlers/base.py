@@ -308,7 +308,7 @@ class Handler(object):
 
         self._meth = self._env.get('REQUEST_METHOD', 'GET')
 
-    def send_error(self, code, message, content=None, contenttype=None, ashead=None):
+    def send_error(self, code, message, content=None, contenttype=None, ashead=None, encoding='utf-8'):
         """
         respond to the client with an error of a given code and reason
 
@@ -321,46 +321,24 @@ class Handler(object):
                                 is sent as the message that accompanies the code in the HTTP 
                                 response header
         :param content:         Content to return as the body.  
-                                :type content: str or byte
+                                :type content: str or byte or a list of either
         :param str contenttype: the MIME type to associate with the returned content.
         :param bool ashead:     True if this is being sent as if in response to a HEAD request; if so,
                                 the size and type of the content will be included in the headers, but 
                                 the actual content will be withheld.  If not provided, it will be set 
                                 to True if the originally requested method is "HEAD"; otherwise it is 
                                 False
+        :param str encoding:    The encoding required to turn the content--when given as str--into bytes.
+                                The default is 'utf-8'.  
         """
-        if ashead is None:
-            ashead = self._meth.upper() == "HEAD"
-        status = "{0} {1}".format(str(code), message)
+        return self._send(code, message, content, contenttype, ashead, encoding)
 
-        if content is not None:
-            if not contenttype:
-                contenttype = "text/plain"
-                content = str(content)
-            if not isinstance(content, list):
-                # content should otherwise be raw bytes
-                content = [content]
-        else:
-            content = []
-
-        hdrs = []
-        if contenttype:
-            hdrs = Headers([])
-            hdrs.add_header("Content-Type", contenttype)
-            hdrs = hdrs.items()
-        if len(content) > 0:
-            hdrs.append(("Content-Length", str(reduce(lambda x, t: x+len(t), content, 0))))
-
-        self._start(status, hdrs, sys.exc_info())
-
-        return (not ashead and content) or []
-
-    def send_ok(self, message="OK", content=None, code=200, contenttype=None, ashead=None):
+    def send_ok(self, content=None, contenttype=None, message="OK", code=200, ashead=None, encoding='utf-8'):
         """
         respond to the client a response of success.  
 
         This method is meant to be called by a method handler (or an override of :py:meth:`handle`) 
-        and is provided as a short-cut for simple successful responses instead of calling 
+        and is provided as a short-cut for small, simple successful responses instead of calling 
         :py:meth:`set_response` and :py:meth:`end_headers` directly.  
 
         :param str message:     the briefly-stated reason to give for the error; this text
@@ -377,20 +355,28 @@ class Handler(object):
                                 the actual content will be withheld.  If not provided, it will be set 
                                 to True if the originally requested method is "HEAD"; otherwise it is 
                                 False
+        :param str encoding:    The encoding required to turn the content--when given as str--into bytes.
+                                The default is 'utf-8'.  
         """
+        return self._send(code, message, content, contenttype, ashead, encoding)
+
+    def _send(self, code, message, content, contenttype, ashead, encoding):
         if ashead is None:
             ashead = self._meth.upper() == "HEAD"
         status = "{0} {1}".format(str(code), message)
 
-        if content is not None:
-            if not contenttype:
-                contenttype = "text/plain"
-                content = str(content)
+        if content:
             if not isinstance(content, list):
-                # content should otherwise be raw bytes
-                content = [content]
-        else:
+                content = [ content ]
+            badtype = [type(c) for c in content if not isinstance(c, (str, bytes))]
+            if badtype:
+                raise TypeError("send_*: non-str/bytes found in content")
+            if not contenttype:
+                contenttype = (isinstance(content[0], str) and "text/plain") or "application/octet-stream"
+        elif content is None:
             content = []
+        # convert to bytes
+        content = [(isinstance(c, str) and c.encode(encoding)) or c for c in content]
 
         hdrs = []
         if contenttype:
@@ -522,7 +508,7 @@ class Ready(Handler):
 
         if format.name == TextSupport.FMT_TEXT:
             msg = "Resolver service is ready"
-            return self.send_ok("Ready", msg, contenttype=format.ctype, ashead=ashead)
+            return self.send_ok(msg, format.ctype, "Ready", ashead=ashead)
 
         self.send_error(400, "Unsupported format requested")
 
@@ -545,5 +531,5 @@ class Ready(Handler):
   </body>
 </html>
 """      
-        return self.send_ok("Ready", out, contenttype=contenttype, ashead=ashead)
+        return self.send_ok(out, contenttype, "Ready", ashead=ashead)
         
