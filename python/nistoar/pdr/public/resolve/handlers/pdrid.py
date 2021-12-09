@@ -49,9 +49,9 @@ class PDRIDHandler(Handler):
         idm = self.ark_id_re.match(path)     # match allowed ARK identifiers (ark:/NNNNN/dsid/...)
         if idm:
             if not idm.group(const.ARK_ID_DS_GRP):
-                return send_error(403, "Missing dataset ID")
+                return self.send_error(403, "Missing dataset ID")
             if not self.cfg.get('ignore_naan', False) and idm.group(const.ARK_ID_NAAN_GRP) != self._naan:
-                return send_error(404, "Unrecognized ID NAAN")
+                return self.send_error(404, "Unrecognized ID NAAN")
             dsid = path[:idm.end(const.ARK_ID_DS_GRP)]               # base ARK ID 
             path = path[idm.end(const.ARK_ID_DS_GRP):].lstrip('/')   # the rest of the path
 
@@ -283,8 +283,8 @@ class PDRIDHandler(Handler):
             # this is an included resource; does the client want nerdm format?
             if reqformats and (reqformat[0] == "nerdm" or reqformat[0] == "application/json"):
                 # looks like it
-                return send_ok(content=json.dumps(cmpmd, indent=2),
-                               contenttype="application/json", ashead=ashead)
+                return self.send_ok(content=json.dumps(cmpmd, indent=2),
+                                    contenttype="application/json", ashead=ashead)
             
             # otherwise, redirect to it if possible
             if cmpmd.get('@id'):
