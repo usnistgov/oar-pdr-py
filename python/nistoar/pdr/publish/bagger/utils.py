@@ -85,7 +85,7 @@ def parse_bag_name(bagname, nistprof=None):
                        version, multibag profile version, multibag sequence 
                        number, and serialization extension.  If the name does 
                        not contain a version or serialization extension, the 
-                       second or fourth element, respectively, will be an 
+                       second or fifth element, respectively, will be an 
                        empty string.  The extension field will not include a 
                        leading dot.  
     :raises ValueError:  if the input name does not follow a recognized 
