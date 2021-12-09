@@ -218,7 +218,7 @@ class TestAIPHandler(test.TestCase):
 
         self.assertEqual(self.resp[0][:4], "307 ")
         hdr = [h for h in self.resp if h.startswith("Location: ")]
-        self.assertEqual(hdr[0], "Location: " + baseurl + "_aip/pdr2210.1_0.mbag0_3-1.zip")
+        self.assertEqual(hdr[0], "Location: " + baseurl + "_aip/pdr2210.1_0.mbag0_3-1.zip/_info")
 
         self.resp = []
         req = {
@@ -362,10 +362,16 @@ class TestAIPHandler(test.TestCase):
         hdlr = self.gethandler(req['PATH_INFO'], req)
         body = self.tostr( hdlr.handle() )
 
-        self.assertEqual(self.resp[0][:4], "307 ")
-        hdr = [h for h in self.resp if h.startswith("Location: ")]
-        self.assertEqual(hdr[0], "Location: " + data['downloadURL'])
+        self.assertEqual(self.resp[0][:4], "200 ")
+        ct = [h for h in self.resp if h.startswith("Content-Type:")]
+        self.assertEqual(len(ct), 1)
+        self.assertEqual(ct[0].strip(), "Content-Type: application/json")
+        ct = [h for h in self.resp if h.startswith("Content-Length:")]
+        self.assertEqual(len(ct), 1)
 
+        data = json.loads("\n".join(body))
+        self.assertEqual(data.get('name'), "pdr2210.2.mbag0_3-2.zip")
+        self.assertIn('downloadURL', data)
 
     def test_resolve_aip_head(self):
         req = {
@@ -411,10 +417,19 @@ class TestAIPHandler(test.TestCase):
         hdlr = self.gethandler(req['PATH_INFO'], req)
         body = self.tostr( hdlr.handle() )
 
-        self.assertEqual(self.resp[0][:4], "307 ")
-        hdr = [h for h in self.resp if h.startswith("Location: ")]
-        self.assertEqual(hdr[0], "Location: " + data['downloadURL'])
+        self.assertEqual(self.resp[0][:4], "200 ")
+        ct = [h for h in self.resp if h.startswith("Content-Type:")]
+        self.assertEqual(len(ct), 1)
+        self.assertEqual(ct[0].strip(), "Content-Type: application/json")
+        ct = [h for h in self.resp if h.startswith("Content-Length:")]
+        self.assertEqual(len(ct), 1)
 
+        data = json.loads("\n".join(body))
+        self.assertEqual(data['aipid'], "pdr2210")
+        self.assertEqual(data['name'], "pdr2210.3_1_3.mbag0_3-5.zip")
+        self.assertEqual(data['sinceVersion'], "3.1.3")
+        self.assertIn('downloadURL', data)
+        
         self.resp = []
         req = {
             'REQUEST_METHOD': "GET",
@@ -469,10 +484,19 @@ class TestAIPHandler(test.TestCase):
         hdlr = self.gethandler(req['PATH_INFO'], req)
         body = self.tostr( hdlr.handle() )
 
-        self.assertEqual(self.resp[0][:4], "307 ")
-        hdr = [h for h in self.resp if h.startswith("Location: ")]
-        self.assertEqual(hdr[0], "Location: " + data['downloadURL'])
+        self.assertEqual(self.resp[0][:4], "200 ")
+        ct = [h for h in self.resp if h.startswith("Content-Type:")]
+        self.assertEqual(len(ct), 1)
+        self.assertEqual(ct[0].strip(), "Content-Type: application/json")
+        ct = [h for h in self.resp if h.startswith("Content-Length:")]
+        self.assertEqual(len(ct), 1)
 
+        data = json.loads("\n".join(body))
+        self.assertEqual(data['aipid'], "pdr2210")
+        self.assertEqual(data['name'], "pdr2210.1_0.mbag0_3-1.zip")
+        self.assertEqual(data['sinceVersion'], "1.0")
+        self.assertIn('downloadURL', data)
+        
         self.resp = []
         req = {
             'REQUEST_METHOD': "GET",

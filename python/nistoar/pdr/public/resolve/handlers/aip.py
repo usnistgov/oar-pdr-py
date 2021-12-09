@@ -156,11 +156,13 @@ class AIPHandler(Handler):
                             format will be determined from the client's request.
                             :type format: str or Format
         """
+        default2native = True
         bag = bagutils.BagName(aipbag)
         if not bag.serialization:
             # resolve the bag name into an available serialized bag name
             try:
                 aipbag = self._find_serialized_bag(bag.aipid, aipbag)
+                default2native = False
             except distrib.DistribResourceNotFound as ex:
                 return self.send_error(404, "AIP Not Found")
             except distrib.DistribServerError as ex:
@@ -176,7 +178,7 @@ class AIPHandler(Handler):
         supp_fmts.support(Format("json", "application/json"), ["text/json", "application/json"])
 
         nct = self._nativects.get(os.path.splitext(aipbag)[1].lstrip('.'))
-        supp_fmts.support(Format("native", nct), [nct], True)
+        supp_fmts.support(Format("native", nct), [nct], default2native)
 
         if not isinstance(format, Format):
             reqformats = self._determine_request_formats(format)
@@ -259,7 +261,7 @@ class AIPHandler(Handler):
         supp_fmts.support(Format("json", "application/json"), ["text/json", "application/json"], True)
         if dist:
             nct = self._nativects.get(os.path.splitext(dist.get('name',''))[1].lstrip('.'))
-            supp_fmts.support(Format("native", nct), [nct], True)
+            supp_fmts.support(Format("native", nct), [nct])
 
         if not isinstance(format, Format):
             reqformats = self._determine_request_formats(format)
@@ -327,7 +329,7 @@ class AIPHandler(Handler):
         supp_fmts = TextSupport()
         supp_fmts.support(Format("json", "application/json"), ["text/json", "application/json"], True)
         nct = self._nativects.get(os.path.splitext(head.get('name',''))[1].lstrip('.'))
-        supp_fmts.support(Format("native", nct), [nct], True)
+        supp_fmts.support(Format("native", nct), [nct])
         
         if not isinstance(format, Format):
             reqformats = self._determine_request_formats(format)
