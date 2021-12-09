@@ -13,6 +13,7 @@ except ImportError:
 
 testdir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 def_archdir = os.path.join(testdir, 'data')
+def_baseurl = "http://localhost/"
     
 bagvnmre = re.compile("^(\w+)\.(\d+\w*)\.mbag(\d+_\d+)-(\\d+)\.(\w+)$")
 bagnmre = re.compile("^(\w+)\.mbag(\d+_\d+)-(\\d+)\.(\w+)$")
@@ -119,8 +120,7 @@ class SimArchive(object):
                 'sinceVersion': version, 'contentType': "application/zip",
                 'multibagProfileVersion': mbprof_of(filename),
                 'multibagSequence': seq_of(filename), "serialization": "zip",
-                'checksum': { 'hash': info[1], 'algorithm': 'sha256'} }
-                
+                'checksum': { 'hash': info[1], 'algorithm': 'sha256'}}
 
     def list_for_version(self, aid, vers=None):
         if aid not in self._aips:
@@ -154,11 +154,13 @@ class SimArchive(object):
         
 
 class SimDistrib(object):
-    def __init__(self, archdir):
+    def __init__(self, archdir, baseurl='/'):
         self.archive = SimArchive(archdir)
+        self.baseurl = baseurl
         
     def handle_request(self, env, start_resp):
-        handler = SimDistribHandler(self.archive, env, start_resp)
+        env['SIM_BASEURL'] = self.baseurl
+        handler = SimDistribHandler(self.archive, env, start_resp, )
         return handler.handle(env, start_resp)
 
     def __call__(self, env, start_resp):
@@ -276,7 +278,10 @@ class SimDistribHandler(object):
         
         elif path == "_aip":
             try:
-                out = json.dumps(self.arch.list_bags(aid)) + '\n'
+                out = self.arch.list_bags(aid)
+                for b in out:
+                    b['downloadURL'] = self._env.get('SIM_BASEURL','/')+"_aip/"+b['name']
+                out = json.dumps(out) + '\n'
             except Exception as ex:
                 return self.send_error(500, "Internal error")
 
@@ -292,6 +297,7 @@ class SimDistribHandler(object):
             try:
                 out = self.arch.head_for(aid)
                 if out:
+                    out['downloadURL'] = self._env['SIM_BASEURL']+"_aip/"+out['name']
                     out = json.dumps(out) + '\n'
             except Exception as ex:
                 print("Failed to create JSON output for head bag, aid={0}: {2}"
@@ -364,6 +370,7 @@ class SimDistribHandler(object):
             try:
                 out = self.arch.head_for(aid, vers)
                 if out:
+                    out['downloadURL'] = self._env['SIM_BASEURL']+"_aip/"+out['name']
                     out = json.dumps(out) + '\n'
             except Exception as ex:
                 print("Failed create JSON output for aid={0} vers={1}: {2}"
@@ -394,8 +401,9 @@ class SimDistribHandler(object):
         
             
 archdir = uwsgi.opt.get("archive_dir", def_archdir)
+baseurl = uwsgi.opt.get("baseurl", def_baseurl)
 try:
     archdir = archdir.decode()
 except (UnicodeDecodeError, AttributeError):
     pass
-application = SimDistrib(archdir)
+application = SimDistrib(archdir, baseurl)

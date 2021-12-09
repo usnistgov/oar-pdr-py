@@ -241,7 +241,8 @@ class TestSimService(test.TestCase):
                           "serialization": "zip",
                           'checksum': {'algorithm':"sha256",
     'hash': '9e70295bd074a121d720e2721ab405d7003e46086912cd92f012748c8cc3d6ad'},
-                          'multibagSequence' : 1, "multibagProfileVersion" :"0.3"
+                          'multibagSequence' : 1, "multibagProfileVersion" :"0.3",
+                          'downloadURL': "http://localhost/_aip/pdr1010.mbag0_3-1.zip"
                       })
 
         resp = requests.get(baseurl+"/pdr2210/_aip")
