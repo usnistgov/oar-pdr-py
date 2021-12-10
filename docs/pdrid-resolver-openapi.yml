@@ -1,0 +1,433 @@
+openapi: 3.0.0
+info:
+  title: PDR Resource Identifier Resolver Service
+  description: |
+     This endpoint resolves ARK-based identifiers assigned by the PDR to resources (datasets, software, collections, etc.) published in the repository.  It can return views in a variety of formats, including JSON-encoded metadata (including as NERDM, the PDR\'s internal metadata format), HTML views (such as landing pages), or data files stored in the repository.  It also provides limited resolution of EDI identifiers. 
+
+     Note that this service sometimes delivers its output by redirecting to another URL; thus, to receive
+     the requested view of a resource, one should follow all redirects.  
+
+    All endpoints support multiple formats for the returned information.  The format can be selected
+    either via a `format` query parameter or via content negotiation (i.e. the `Accept` request header).
+    The value given via the format parameter is a pre-defined format name which can at least include
+    \"json\" or \"text\".  Where an identifier refers to a downloadable file, the format name, \"native\"
+    can be specified.  If the `Accept` header is used in addition to `format`, the two must be
+    consistent or a 406 error will be returned.  
+  version: "1.0"
+  contact:
+    name: PDR Support
+    email: datasupport@nist.gov
+    url: https://data.nist.gov/sdp/#/contactus
+
+servers:
+  - url: /od
+#  - url: https://data.nist.gov/od
+
+tags:
+  - name: Resource Identifiers
+    description: "Resolve PDR Resource idenifiers"
+
+components:
+  parameters:
+    dsid:
+      in: path
+      name: dsid
+      required: true
+      description: the ARK (or reduced) identifier for the resource of interest.  Note that an EDI-ID will not be resolved through this endpoint.
+      schema:
+        type: string
+      examples: 
+        "a PDR ARK ID":
+          value: "ark:/88434/mds2-2106"
+        "a reduced PDR ID":
+          value: mds2-2106
+    version:
+      in: path
+      name: version
+      required: true
+      description: the desired version of the of the resource (in the form of _N.N.N_).
+      schema:
+        type: string
+      examples:
+        "1.0.0":
+          value: "1.0.0"
+          description: the first release
+    filepath:
+      in: path
+      name: filepath
+      required: true
+      description: the path to a file or subcollection within the resource
+      schema:
+        type: string
+      examples:
+        "README.md":
+          value: "README.md"
+          description: a top-level file
+        "results/data.csv":
+          value: "results/data.csv"
+          description: a file within a subcollection
+    nerdmformat:
+      in: query
+      name: format
+      required: false
+      description: the desired format of the view to return.  The value is can be one of the example format names below or a MIME-type name.  If not provided, the format is determined by the `Accept` request header and content-negotiation rules.  When an `Accept` is not specified, the default is `nerdm`.
+      schema:
+        type: string
+      examples:
+        "nerdm":
+          value: "nerdm"
+          description: JSON format compliant with the NERDm schema
+        "text":
+          value: "text"
+          description: A plain text rendering of the description
+    nativeformat:
+      in: query
+      name: format
+      required: false
+      description: the desired format of the view to return.  The value is can be one of the example format names below or a MIME-type name.  If not provided, the format is determined by the `Accept` request header and content-negotiation rules.  When an `Accept` is not specified, the default is `nerdm`.
+      schema:
+        type: string
+      examples:
+        "native":
+          value: "native"
+          description: the actual file being refered to (default)
+        "json":
+          value: "json"
+          description: JSON format (see schema in responses below)
+        "text":
+          value: "text"
+          description: A plain text rendering of the description
+    htmlformat:
+      in: query
+      name: format
+      required: false
+      description: the desired format of the view to return.  The value is can be one of the example format names below or a MIME-type name.  If not provided, the format is determined by the `Accept` request header and content-negotiation rules.  When an `Accept` is not specified, the default is `nerdm`.
+      schema:
+        type: string
+      examples:
+        "html":
+          value: "html"
+        "nerdm":
+          value: "nerdm"
+          description: JSON format compliant with the NERDm schema
+        "text":
+          value: "text"
+          description: A plain text rendering of the description
+  
+paths:
+  "/id":
+    get:
+      tags: 
+        - Resource Identifiers
+      summary: return a health status for the resolver service
+      description: When this service is operating properly, this will always return 200.  
+      responses: 
+        '200':
+          description: the service is available.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Resolver service is ready
+            text/html: {}
+            application/xhtml: {}
+  "/id/{dsid}":
+    get:
+      tags: 
+        - Resource Identifiers
+      summary: return a view of a dataset or other resource
+      description:  
+        return a view of a repository resource given its ARK ID or, alternatively, its EDI ID or just the local (or _reduced_) part of the ARK ID.  The local part refers to the URI path field following the "ark:/NNNNN/" prefix.
+      parameters:
+        - in: path
+          name: dsid
+          required: true
+          description: an identifier refering to a dataset in the PDR
+          schema:
+            type: string
+          examples: 
+            "a PDR ARK ID":
+              value: "ark:/88434/mds2-2106"
+            "a reduced PDR ID":
+              value: mds2-2106
+            "an EDI ID":
+              value: 1E0F15DAAEFB84E4E0531A5706813DD8436
+        - in: query
+          name: format
+          required: false
+          description: the desired format of the view to return.  The value is can be one of the example format names below or a MIME-type name.  If not provided, the format is determined by the `Accept` request header and content-negotiation rules.  When an `Accept` is not specified, the default is `nerdm`.
+          schema:
+            type: string
+          examples:
+            "html":
+              value: "html"
+            "nerdm":
+              value: "nerdm"
+              description: JSON format compliant with the NERDm schema
+            "text":
+              value: "text"
+              description: A plain text summary of the resource
+            
+      responses:
+        '200':
+          description: the identifier was recognized and a view was returned.
+          content:
+            "text/html":
+              schema:
+                type: string
+                description:  the PDR-generated landing page for the resource
+            "application/json":
+              schema:
+                type: string
+                description: a description of the resource in NERDm JSON format; the object will be a NERDm `Resourse` type.  
+            "text/plain":
+              schema:
+                type: string
+                description: a plain text summary of the resource.
+        '404':
+          description: the resource identifier was not found in the repository.
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/id/{dsid}/pdr:f":
+    get:
+      tags: 
+        - Resource Identifiers
+      summary: "return a list of the file and subcollection components of a resource"
+      description: This returns a JSON list of NERDm Component objects of type DataFile and Subcollection that are part of a resource.  This will be an empty list if there are no such components with the idenfied resource.
+      parameters:
+        - $ref: "#/components/parameters/dsid"
+        - $ref: "#/components/parameters/nerdmformat"
+      responses:
+        '200':
+          description: the identifier was recognized and a list was returned.
+          content:
+            "application/json":
+              schema:
+                type: string
+                description: a description of the resource in NERDm JSON format; the object will be a NERDm `Resourse` type.  
+            "text/plain":
+              schema:
+                type: string
+                description: a plain text summary of the resource.
+        '404':
+          description: the resource identifier was not found in the repository.
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/id/{dsid}/pdr:f/{filepath}":
+    get:
+      tags: 
+        - Resource Identifiers
+      summary: "return a view of a file or subcollection component of a resource"
+      description: This returns a JSON list of NERDm Component objects of type DataFile and Subcollection.  This will be an empty list if there are no such components with the idenfied resource.
+      parameters:
+        - $ref: "#/components/parameters/dsid"
+        - $ref: "#/components/parameters/filepath"
+        - $ref: "#/components/parameters/nerdmformat"
+      responses:
+        '200':
+          description: the identifier and version were found and a view was returned.
+          content:
+            "application/json":
+              schema:
+                type: string
+                description: a description of the resource in NERDm JSON format; the object will be a NERDm `Resourse` type.  
+            "text/plain":
+              schema:
+                type: string
+                description: a plain text summary of the resource.
+            "*/*":
+              schema:
+                type: string
+                format: binary
+                description: the actual data file content; the content type set in the response will be appropriate for the type of data file
+        '404':
+          description: the resource identifier was not found in the repository.
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/id/{dsid}/pdr:see":
+    get:
+      tags: 
+        - Resource Identifiers
+      summary: "return a list of the Access Page components of a resource"
+      description: This returns a JSON list of NERDm Component objects of type AccessPage.  This will be an empty list if there are no such components with the idenfied resource.
+      parameters:
+        - $ref: "#/components/parameters/dsid"
+        - $ref: "#/components/parameters/nerdmformat"
+      responses:
+        '200':
+          description: the identifier and version were found and a view was returned.
+          content:
+            "application/json":
+              schema:
+                type: string
+                description: a description of the resource in NERDm JSON format; the object will be a NERDm `Resourse` type.  
+            "text/plain":
+              schema:
+                type: string
+                description: a plain text summary of the resource.
+        '404':
+          description: the resource identifier was not found in the repository.
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/id/{dsid}/pdr:v":
+    get:
+      tags: 
+        - Resource Identifiers
+      summary: "return a description of a resource's release history."
+      description: return a NERDm `ReleaseCollection` object describing the release history of the resource.  Links are included for accessing the different versions.
+      parameters:
+        - $ref: "#/components/parameters/dsid"
+        - $ref: "#/components/parameters/nerdmformat"
+      responses:
+        '200':
+          description: the identifier was recognized and a view was returned.
+          content:
+            "application/json":
+              schema:
+                type: string
+                description: a description of the resource in NERDm JSON format; the object will be a NERDm `Resourse` type.  
+            "text/plain":
+              schema:
+                type: string
+                description: a plain text summary of the resource.
+        '404':
+          description: the resource identifier was not found in the repository.
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/id/{dsid}/pdr:v/{version}":
+    get:
+      tags: 
+        - Resource Identifiers
+      summary: "return a view of a specific version of a resource"
+      description: return a view of a given version of a repository resource given its ARK ID (or the reduced version of it).
+      parameters:
+        - $ref: "#/components/parameters/dsid"
+        - $ref: "#/components/parameters/version"
+        - $ref: "#/components/parameters/htmlformat"
+            
+      responses:
+        '200':
+          description: the identifier and version were found and a view was returned.
+          content:
+            "text/html":
+              schema:
+                type: string
+                description:  the PDR-generated landing page for the resource
+            "application/json":
+              schema:
+                type: string
+                description: a description of the resource in NERDm JSON format; the object will be a NERDm `Resourse` type.  
+            "text/plain":
+              schema:
+                type: string
+                description: a plain text summary of the resource.
+        '404':
+          description: the resource identifier was not found in the repository.
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/id/{dsid}/pdr:v/{version}/pdr:f":
+    get:
+      tags: 
+        - Resource Identifiers
+      summary: "return a list of the file and subcollection components of a particular version of a resource"
+      description: This returns a JSON list of NERDm Component objects of type DataFile and Subcollection that are part of a particular version of a resource.  This will be an empty list if there are no such components with the idenfied resource.
+      parameters:
+        - $ref: "#/components/parameters/dsid"
+        - $ref: "#/components/parameters/version"
+        - $ref: "#/components/parameters/nerdmformat"
+      responses:
+        '200':
+          description: the identifier was recognized and a list was returned.
+          content:
+            "application/json":
+              schema:
+                type: string
+                description: a description of the resource in NERDm JSON format; the object will be a NERDm `Resourse` type.  
+            "text/plain":
+              schema:
+                type: string
+                description: a plain text summary of the resource.
+        '404':
+          description: the resource identifier was not found in the repository.
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/id/{dsid}/pdr:v/{version}/pdr:f/{filepath}":
+    get:
+      tags: 
+        - Resource Identifiers
+      summary: "return a view of a file or subcollection component of a resource"
+      description: This returns a JSON list of NERDm Component objects of type DataFile and Subcollection.  This will be an empty list if there are no such components with the idenfied resource.
+      parameters:
+        - $ref: "#/components/parameters/dsid"
+        - $ref: "#/components/parameters/version"
+        - $ref: "#/components/parameters/filepath"
+        - $ref: "#/components/parameters/nerdmformat"
+      responses:
+        '200':
+          description: the identifier and version were found and a view was returned.
+          content:
+            "application/json":
+              schema:
+                type: string
+                description: a description of the resource in NERDm JSON format; the object will be a NERDm `Resourse` type.  
+            "text/plain":
+              schema:
+                type: string
+                description: a plain text summary of the resource.
+        '404':
+          description: the resource identifier was not found in the repository.
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/id/{dsid}/pdr:v/{version}/pdr:see":
+    get:
+      tags: 
+        - Resource Identifiers
+      summary: "return a list of the Access Page components of a resource"
+      description: This returns a JSON list of NERDm Component objects of type AccessPage.  This will be an empty list if there are no such components with the idenfied resource.
+      parameters:
+        - $ref: "#/components/parameters/dsid"
+        - $ref: "#/components/parameters/version"
+        - $ref: "#/components/parameters/nerdmformat"
+      responses:
+        '200':
+          description: the identifier and version were found and a view was returned.
+          content:
+            "application/json":
+              schema:
+                type: string
+                description: a description of the resource in NERDm JSON format; the object will be a NERDm `Resourse` type.  
+            "text/plain":
+              schema:
+                type: string
+                description: a plain text summary of the resource.
+        '404':
+          description: the resource identifier was not found in the repository.
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+

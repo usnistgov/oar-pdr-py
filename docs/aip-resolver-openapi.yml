@@ -1,0 +1,497 @@
+openapi: 3.0.0
+info:
+  title: PDR AIP Identifier Resolver Service
+  description: |
+    This endpoint resolves public PDR Archive Information Package (AIP) names and identifers.  It allows
+    one to discover the downloadable AIP files necessary to reconstitute any version of a resource published
+    in the PDR.
+
+    Note that this service sometimes delivers its output by redirecting to another URL; thus, to receive
+    the requested view of a resource, one should follow all redirects.
+
+    A PDR AIP consists of a set of files which are serialized forms of collections conformant with BagIt
+    packaging standard and the NIST Multibag Bag Profile.  The bag files are given structured names that
+    start with the identifer of the AIP to which it belongs and includes a sequence number.  The bag with
+    the highest sequence number is always the so-called _head bag_ for the latest version of the AIP; from
+    its contents, one can determine which of the other bags contain data that is part of that version.
+    Other bags in the set may represent head bags for previous versions of the AIP.  This service allows
+    one to discover what bags are available, what versions, and which bags contribute to which version.
+    (Note that a bag can often contribute content for multiple versions.)
+
+    All endpoints support multiple formats for the returned information.  The format can be selected
+    either via a `format` query parameter or via content negotiation (i.e. the `Accept` request header).
+    The value given via the format parameter is a pre-defined format name which can at least include
+    \"json\" or \"text\".  Where an identifier refers to a downloadable file, the format name, \"native\"
+    can be specified.  If the `Accept` header is used in addition to `format`, the two must be
+    consistent or a 406 error will be returned.  
+    
+    For almost all endpoints, the default format returned when no format is specified via the `format`
+    parameter or via content-negotiation is \"json\" (`application/json`).  The one exception is for
+    `/aip/{aipbagfile}` where the default is \"native\".  
+  version: "1.0"
+  contact:
+    name: PDR Support
+    email: datasupport@nist.gov
+    url: https://data.nist.gov/sdp/#/contactus
+
+servers:
+  - url: /od
+#  - url: https://data.nist.gov/od
+
+tags:
+  - name: AIP Identifiers
+    description: "Resolve public PDR Archive Information Package (AIP) names and identifers."
+
+components:
+  parameters:
+    version:
+      in: path
+      name: version
+      required: true
+      description: the desired version of the of the resource (in the form of _N.N.N_).
+      schema:
+        type: string
+      examples:
+        "1.0.0":
+          value: "1.0.0"
+          description: the first release
+    aipid:
+      in: path
+      name: aipid
+      required: true
+      description: an identifier for a PDR Archive Information Package, corresponding to a publish resource in the repository.  Values are simple unique strings with no URI prefix and reflect the preservation channel used when creating the AIP.
+      schema:
+        type: string
+      examples:
+        "mds2-2106":
+          value: "mds2-2106"
+          description: "This form of AIP ID corresponds to the local part of a PDR Resource identifier"
+        "1E0F15DAAEFB84E4E0531A5706813DD8436":
+          value: "1E0F15DAAEFB84E4E0531A5706813DD8436"
+          description: "This form is used on early deposits into the PDR"
+
+    jsonformat:
+      in: query
+      name: format
+      required: false
+      description: the desired format of the view to return.  The value is can be one of the example format names below or a MIME-type name.  If not provided, the format is determined by the `Accept` request header and content-negotiation rules.  When an `Accept` is not specified, the default is `nerdm`.
+      schema:
+        type: string
+      examples:
+        "json":
+          value: "json"
+          description: JSON format (see schema in responses below)
+        "text":
+          value: "text"
+          description: A plain text rendering of the description
+    nativeformat:
+      in: query
+      name: format
+      required: false
+      description: the desired format of the view to return.  The value is can be one of the example format names below or a MIME-type name.  If not provided, the format is determined by the `Accept` request header and content-negotiation rules.  When an `Accept` is not specified, the default is `nerdm`.
+      schema:
+        type: string
+      examples:
+        "native":
+          value: "native"
+          description: the actual file being refered to (default)
+        "json":
+          value: "json"
+          description: JSON format (see schema in responses below)
+        "text":
+          value: "text"
+          description: A plain text rendering of the description
+
+  schemas:
+    aipbagdesc:
+      type: object
+      properties:
+        aipid:
+          type: string
+          title: the AIP identifier being described
+        name:
+          type: string
+          title: the name of the serialized version of the bag
+        sinceVersion:
+          type: string
+          title: the version of this AIP that this bag was created for
+        multibagSequence:
+          type: number
+          title: the sequence number applied to this bag
+        serialization:
+          type: string
+          title: the name of the serialization format applied (e.g. "zip", "7z", etc.)
+        downloadURL:
+          type: string
+          title: the URL for retrieving the serialized
+        contentType:
+          type: string
+          title: 'the content type that will be set when the downloadURL is accessed or when `format` is set to "native"'
+        contentLength:
+          type: string
+          title: the size of the serialized bag in bytes
+        checksum:
+          type: object
+          title: a checksum hash that can be used to confirm an uncorrupted delivery of the file.
+          properties:
+            algorithm:
+              type: string
+              title: 'the algorithm used to generate the hash (e.g. "sha256")'
+            hash:
+              type: string
+              title: "the checksum's hash value"
+  
+paths:
+  "/aip":
+    get:
+      tags:
+        - AIP Identifiers
+      summary: return a health status for the resolver service
+      description: When this service is operating properly, this will always return 200.  
+      responses: 
+        '200':
+          description: the service is available.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Resolver service is ready
+            text/html: {}
+            application/xhtml: {}
+  "/aip/{aipid}":
+    get:
+      tags:
+        - AIP Identifiers
+      summary: return a description of an AIP
+      description:  return a JSON-encoded description of an AIP.  This can be used to discover the available versions and the head bag.  (Appending `/pdr:d` returns a full list of descriptions of the bags that are part of this AIP.)
+      parameters:
+        - $ref: "#/components/parameters/aipid"
+        - $ref: "#/components/parameters/jsonformat"
+      responses:
+        '200':
+          description: The identifier was recognized and a description of the AIP was returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  aipid:
+                    type: string
+                    title: the AIP identifier being described
+                  versions:
+                    type: array
+                    items: { type: string }
+                    title: the versions of this AIP that are available
+                  maxMultibagSequence:
+                    type: number
+                    title: the last sequence number applied AIP bag files
+                  headBag:
+                    type: object
+                    title: a description of the head bag for the latest version of the dataset
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: No AIP with the given identifier was found
+  "/aip/{aipbag}":
+    get:
+      tags:
+        - AIP Identifiers
+      summary: return a description of an AIP bag
+      description:  "By default, this endpoint will return a JSON description of an AIP bag identified by its bag name (as listed inside a head bag file); this name does _not_ include a serialization extension.  With the `format=native` parameter or an `Accept: application/zip`, the serialized bag will be downloaded"
+      parameters:
+        - in: path
+          name: aipbag
+          required: true
+          description: "the name AIP bag's name or full file name"
+          schema: { type: string }
+          examples:
+            "mds2-2106.1_0_0.mbag0_4-1":
+              value: "mds2-2106.1_0_0.mbag0_4-1"
+              description: a bag name
+        - $ref: "#/components/parameters/nativeformat"
+      responses:
+        '200':
+          description: The identifier was recognized and a description of the AIP was returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/aipbagdesc"
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: No AIP bag with the given name was found
+
+  "/aip/{aipbagfile}":
+    get:
+      tags:
+        - AIP Identifiers
+      summary: return an AIP bag file (or a description of if)
+      description:  By default, this endpoint will download the named AIP bag file.  With the `format` parameter or content-negotiation, a description of the bag can be returned instead. 
+      parameters:
+        - in: path
+          name: aipbagfile
+          required: true
+          description: "the full file name of a serialized bag."
+          schema: { type: string }
+          examples:
+            "mds2-2106.1_0_0.mbag0_4-1.zip":
+              value: "mds2-2106.1_0_0.mbag0_4-1.zip"
+              description: a bag file name, including the serialization extension
+        - $ref: "#/components/parameters/nativeformat"
+      responses:
+        '200':
+          description: The identifier was recognized and a description of the AIP was returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  aipid:
+                    type: string
+                    title: the AIP identifier being described
+                  versions:
+                    type: array
+                    items: { type: string }
+                    title: the versions of this AIP that are available
+                  maxMultibagSequence:
+                    type: number
+                    title: the last sequence number applied AIP bag files
+                  headBag:
+                    type: object
+                    title: a description of the head bag for the latest version of the dataset
+            application/zip:
+              schema:
+                type: string
+                format: binary
+                title: the default format
+        '404':
+          description: No AIP bag file with the given name was found
+
+  "/aip/{aipid}/pdr:h":
+    get:
+      tags:
+        - AIP Identifiers
+      summary: return the head bag for the latest version of an AIP
+      description:  "By default, a JSON-encoded description of the head bag for a latest version of the AIP; however, the serialized head bag file itself is returned by format request (either via a `format=native` query parameter or requesting `application/zip` via content-negotiation)."
+      parameters:
+        - $ref: "#/components/parameters/aipid"
+        - $ref: "#/components/parameters/nativeformat"
+      responses:
+        '200':
+          description: The identifier was recognized and the head bag (or a description of it) was returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/aipbagdesc"
+            text/plain:
+              schema:
+                type: string
+            "*/*":
+              schema:
+                type: string
+                format: binary
+                description: the serialized bag file content; the content type set in the response will be appropriate for the serialization used.
+        '404':
+          description: the given AIP ID was not found
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/aip/{aipid}/pdr:d":
+    get:
+      tags:
+        - AIP Identifiers
+      summary: return a listing of all the bags that are part of the specified AIP
+      description:  "This returns a JSON-format list of descriptions of all the bags that are part of the specified AIP"
+      parameters:
+        - $ref: "#/components/parameters/aipid"
+        - $ref: "#/components/parameters/jsonformat"
+      responses:
+        '200':
+          description: The identifier was recognized and the head bag (or a description of it) was returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/aipbagdesc" }
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: the given AIP ID was not found
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/aip/{aipid}/pdr:d/{bag}":
+    get:
+      tags:
+        - AIP Identifiers
+      summary: return a description of a bag from a given AIP or the bag itself
+      description:  "By default, a JSON-encoded description of the head bag for a latest version of the AIP; however, the serialized head bag file itself is returned by format request (either via a `format=native` query parameter or requesting `application/zip` via content-negotiation). "
+      parameters:
+        - $ref: "#/components/parameters/aipid"
+        - in: path
+          name: bag
+          required: true
+          description: 'the bag to access, given either as a sequence number (an non-negative integer) or a bag name (with or without its serialization extesion, e.g. ".zip")'
+          schema:
+            anyOf:
+              - type: number
+              - type: string
+        - $ref: "#/components/parameters/nativeformat"
+      responses:
+        '200':
+          description: The identifier was recognized and the bag description (or the bag file itself) was returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/aipbagdesc"
+            text/plain:
+              schema:
+                type: string
+            "*/*":
+              schema:
+                type: string
+                format: binary
+                description: the serialized bag file content; the content type set in the response will be appropriate for the serialization used.
+        '404':
+          description: the given AIP ID was not found
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/aip/{aipid}/pdr:v":
+    get:
+      tags:
+        - AIP Identifiers
+      summary: return a list of versions available for the specified AIP
+      description:  "This returns a JSON-format list of version strings indicating the versions that are available for the specified AIP"
+      parameters:
+        - $ref: "#/components/parameters/aipid"
+        - $ref: "#/components/parameters/jsonformat"
+      responses:
+        '200':
+          description: The identifier was recognized and the head bag (or a description of it) was returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: the given AIP ID was not found
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+
+  "/aip/{aipid}/pdr:v/{version}":
+    get:
+      tags:
+        - AIP Identifiers
+      summary: return a description of a particular version of an AIP
+      description:  "This returns a JSON-format description of a particular version of an AIP"
+      parameters:
+        - $ref: "#/components/parameters/aipid"
+        - $ref: "#/components/parameters/version"
+        - $ref: "#/components/parameters/jsonformat"
+      responses:
+        '200':
+          description: The identifier was recognized, the version is available, and a description was returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  aipid:
+                    type: string
+                    title: the AIP identifier being described
+                  version:
+                    type: string
+                    title: the version of this AIP being described
+                  maxMultibagSequence:
+                    type: number
+                    title: the last sequence number applied to the associated AIP bag files
+                  headBag:
+                    type: object
+                    title: a description of the head bag for this version of the dataset
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: an AIP with both the given ID and version was not found
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/aip/{aipid}/pdr:v/{version}/pdr:h":
+    get:
+      tags:
+        - AIP Identifiers
+      summary: return the head bag for a particular version of an AIP
+      description:  "By default, a JSON-encoded description of the head bag for a specified version of the AIP; however, the serialized head bag file itself is returned by format request (via either a `format=native` query parameter or requesting `application/zip` via content-negotiation)."
+      parameters:
+        - $ref: "#/components/parameters/aipid"
+        - $ref: "#/components/parameters/version"
+        - $ref: "#/components/parameters/nativeformat"
+      responses:
+        '200':
+          description: The identifier was recognized and the head bag (or a description of it) was returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/aipbagdesc"
+            text/plain:
+              schema:
+                type: string
+            "*/*":
+              schema:
+                type: string
+                format: binary
+                description: the serialized bag file content; the content type set in the response will be appropriate for the serialization used.
+        '404':
+          description: an AIP with both the given ID and version was not found
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
+  "/aip/{aipid}/pdr:v/{version}/pdr:d":
+    get:
+      tags:
+        - AIP Identifiers
+      summary: return a list of bags that are part of a particular version of an AIP.
+      description:  "This returns a JSON-format list of bag descriptions that provide content for a specifed version of the AIP.  The endpoint can be used to download all of the files that make up that version by following the `downloadURL` values in the description."
+      parameters:
+        - $ref: "#/components/parameters/aipid"
+        - $ref: "#/components/parameters/version"
+        - $ref: "#/components/parameters/jsonformat"
+      responses:
+        '200':
+          description: The identifier was recognized and the head bag (or a description of it) was returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/aipbagdesc" }
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: an AIP with both the given ID and version was not found
+        '400':
+          description: the format parameter specified an unsupported or unrecognized output format
+        '406': 
+          description: no supportable formats associated with the MIME-types given in the `Accept` parameter, _or_ none of those MIME-types were consistent with the format requested via the `format` parameter.
+
