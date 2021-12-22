@@ -2,11 +2,11 @@
 Support for the multibag BagIt profile.  In particular, this module can split 
 a single bag into multiple output multbags for preservation.  
 """
-
 import os, logging, re, json, shutil
 from functools import cmp_to_key
 
 import multibag
+from multibag.restore import restore_bag
 
 from .. import ConfigurationException, StateException, AIPValidationError
 from ... import utils
@@ -396,9 +396,6 @@ class _OARNamer(object):
     def __next__(self):
         self.sn += 1
         return self.base + str(self.sn)
-
-    def __next__(self):
-        return self.__next__()
 
 
     
