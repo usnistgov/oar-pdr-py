@@ -23,7 +23,7 @@ class AIPHandler(Handler):
     to handle endpoints under "/aip/"; however, the path passed is expected to be relative to this base.
     """
 
-    def __init__(self, path, wsgienv, start_resp, log=None, config={}):
+    def __init__(self, path, wsgienv, start_resp, config={}, log=None):
         super(AIPHandler, self).__init__(path, wsgienv, start_resp, config)
         self._dsep = self.cfg.get('locations', {}).get('distributionService')
         if not self._dsep:

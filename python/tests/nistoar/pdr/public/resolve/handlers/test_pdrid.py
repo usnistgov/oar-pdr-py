@@ -82,7 +82,7 @@ class TestPDRIDHandler(test.TestCase):
             self.resp.append("{0}: {1}".format(head[0], head[1]))
 
     def gethandler(self, path, req):
-        return PDRIDHandler(path, req, self.start, rootlog, self.cfg)
+        return PDRIDHandler(path, req, self.start, self.cfg, rootlog)
 
     def tostr(self, resplist):
         return [e.decode() for e in resplist]

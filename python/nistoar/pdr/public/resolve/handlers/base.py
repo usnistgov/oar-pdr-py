@@ -472,7 +472,7 @@ class Ready(Handler):
     a default handler for handling unsupported paths or proof-of-life responses
     """
 
-    def __init__(self, path, wsgienv, start_resp, config={}):
+    def __init__(self, path, wsgienv, start_resp, config={}, log=None):
         """
         instantiate the handler
         """
@@ -484,7 +484,7 @@ class Ready(Handler):
     def do_GET(self, path, ashead=False, format=None):
         path = path.lstrip('/')
         if path:
-            return send_error(404, "Not found")
+            return self.send_error(404, "Not found")
 
         if isinstance(format, str):
             format = self._fmtsup.match(format)

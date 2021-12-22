@@ -26,7 +26,7 @@ class PDRIDHandler(Handler):
     ver_path_delim_re = re.compile(VER_DELIM + r'(/+|$)')
     filepath_delim_re = re.compile(FILE_DELIM+ r'(/+|$)')
 
-    def __init__(self, path, wsgienv, start_resp, log=None, config={}):
+    def __init__(self, path, wsgienv, start_resp, config={}, log=None):
         super(PDRIDHandler, self).__init__(path, wsgienv, start_resp, config)
         self._naan = str(self.cfg.get('naan', ark_naan))
         self.log = log
