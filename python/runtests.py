@@ -119,6 +119,9 @@ def print_test_cases(suites):
 if __name__ == '__main__':
     _setlibs()
 
+    os.environ.setdefault('OAR_TEST_INCLUDE', '')
+    os.environ['OAR_TEST_INCLUDE'] += " noreload"
+
     suites = []
 
     withins = sys.argv[1:]

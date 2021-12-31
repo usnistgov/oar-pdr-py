@@ -152,6 +152,7 @@ class TestBagDistribClient(test.TestCase):
                           'contentLength': 375, 'sinceVersion': '1',
                           'contentType': "application/zip",
                           "serialization": "zip",
+                          "downloadURL": "http://localhost/_aip/pdr1010.mbag0_3-2.zip",
                           'checksum': {'algorithm':"sha256",
      'hash': 'c35f2b8ec2a4b462c77c6c60548f9a61dc1c043ddb4ba11b388312240c1c78e0'},
                           'multibagSequence' : 2, "multibagProfileVersion" :"0.3"
