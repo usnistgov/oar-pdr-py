@@ -15,6 +15,20 @@ CLASSIFIERS = [
     'Topic :: Scientific/Engineering'
 ]
 
+SCRIPTS = [
+    'pdr.py', 'pdrhealthcheck.py',
+    'resolver-uwsgi.py'
+]
+
+TESTSCRIPTS = [
+#    'test_resolver.py'
+]
+
+def find_scripts():
+    return ['../scripts/'+f       for f in SCRIPTS] + \
+           ['../scripts/tests/'+f for f in os.listdir("../scripts/tests")
+                                  if f.startswith("test_") and not f.endswith("~")]
+
 def set_version():
     try:
         pkgdir = os.environ.get('PACKAGE_DIR', '..')
@@ -109,7 +123,7 @@ setup(name='nistoar.pdr',
       author="Ray Plante",
       author_email="raymond.plante@nist.gov",
       url='https://github.com/usnistgov/oar-pdr-py',
-      scripts=[ ],
+      scripts=find_scripts(),
       packages=find_namespace_packages(include=['nistoar.*'], exclude=['nistoar.*.data']),
       package_data={'nistoar.pdr': [ 'data/*' ]},
       cmdclass={'build_py': build, 'install': install},
