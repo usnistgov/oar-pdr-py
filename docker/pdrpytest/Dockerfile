@@ -21,7 +21,7 @@ RUN pip install --upgrade pip setuptools
 RUN pip install funcsigs 'bagit>=1.6.3,<2.0' 'fs>=2.0.21' mako
 
 # install multibag from source
-RUN multibag_ver=0.2 && \
+RUN multibag_ver=0.3 && \
     curl -L -o multibag-py.zip \
     https://github.com/usnistgov/multibag-py/archive/$multibag_ver.zip && \
     unzip -oq multibag-py.zip && \
