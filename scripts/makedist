@@ -1,6 +1,6 @@
 #! /bin/bash
 #
-# makedist.python:  build the package's python-based distributions
+# makedist:  build the package's python-based distributions
 #
 # This script is designed to run without any arguments: this will build
 # all of the python distributions.  Restricting the build to specific
@@ -10,7 +10,7 @@
 # There is currently only one python distribution: pdr-publish
 #
 # SYNOPSIS
-#    makedist.python [OPTIONS] [DISTNAME ...]
+#    makedist [OPTIONS] [DISTNAME ...]
 #
 # OPTIONS
 #    -l, --list               list the names of the supported distributions and
@@ -53,7 +53,7 @@ VERSION=
 
 # Update this list with the names of the individual component names
 # 
-DISTNAMES=(pdr-publish)
+DISTNAMES=(pdr-py)
 
 # handle command line options
 while [ "$1" != "" ]; do 
@@ -96,7 +96,7 @@ while [ "$1" != "" ]; do
         echo "$prog: unsupported option:" $1
         false
         ;;
-    pdr-publish)
+    pdr-py)
         # assuming just one distribution
         true
         ;;
