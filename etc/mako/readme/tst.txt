@@ -1,0 +1,17 @@
+<%def name="maptree(tree, prefix)">
+% if isinstance(tree, dict):
+  % for key in tree:
+${prefix}${key}
+<%self.maptree tree="${tree[key]}" prefix="${prefix+'  '}">
+ (leaf)
+</%self.maptree>
+  % endfor
+% else:
+${prefix}${str(tree)}${caller.body()}
+% endif
+</%def>
+
+Tree:
+<%self.maptree tree="${{a=1, b={c=2}}}" prefix="">
+ (Leaf)
+</%self.maptree>
