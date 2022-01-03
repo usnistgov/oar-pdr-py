@@ -1,0 +1,24 @@
+#! /bin/bash
+#
+# makedist.docker -- make all components from this repo via the docker containers
+#                    defined in the docker directory.
+#
+# Usage: makedist.docker [--dist-dir=DIR] [python|DISTNAME ...]
+#
+# where:
+#   --dist-dir=DIR     write component distributions to the given directory
+#                      (instead of the default directory, dist)
+#   python             build only the python-based distributions
+#   DISTNAME           build only the named distributions; DISTNAME can be
+#                      pdr-lps or pdr-publish
+#
+prog=`basename $0`
+execdir=`dirname $0`
+[ "$execdir" = "" -o "$execdir" = "." ] && execdir=$PWD
+export CODEDIR=`(cd $execdir/.. > /dev/null 2>&1; pwd)`
+export DOCKERDIR=$CODEDIR/docker
+
+$DOCKERDIR/dockbuild.sh
+# Run the main makedist in the dockerdir
+echo "Run makedist for oar-pdr-py"
+exec $DOCKERDIR/run.sh build "$@"
