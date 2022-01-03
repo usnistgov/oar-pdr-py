@@ -23,5 +23,5 @@ jobs:
           cd docker && bash ./dockbuild.sh
 
       - name: Build & Run Python Tests via Docker
-        run: scripts/testall python
+        run: scripts/testall.docker
 

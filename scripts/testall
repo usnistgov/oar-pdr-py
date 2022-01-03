@@ -2,6 +2,15 @@
 #
 # testall:  run all package tests
 #
+# Usage: testall [ CATEGORY ... ]
+#
+# where CATEGORY is one of
+#   pyunit      run the python unit tests
+#   services    run the services integration tests
+#
+# For each supported CATEGORY, there must be a script with a name of the form
+# scripts/testall.CATEGORY.  
+#
 set -e
 prog=`basename $0`
 execdir=`dirname $0`

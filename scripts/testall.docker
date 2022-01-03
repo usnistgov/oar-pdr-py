@@ -1,0 +1,24 @@
+#! /bin/bash
+#
+# testall.docker -- execute all tests available in this repo via the docker 
+#                   containers defined in the docker directory.
+#
+# Usage: testall.docker [python]
+#
+# where:
+#   python             run only the python-based tests
+#
+prog=`basename $0`
+execdir=`dirname $0`
+[ "$execdir" = "" -o "$execdir" = "." ] && execdir=$PWD
+export CODEDIR=`(cd $execdir/.. > /dev/null 2>&1; pwd)`
+export DOCKERDIR=$CODEDIR/docker
+
+echo '##################################'
+echo '#'
+echo '# Running tests via docker'
+echo '#'
+echo '##################################'
+echo '(Assuming docker containers have been built)'
+
+exec $DOCKERDIR/testall "$@"
