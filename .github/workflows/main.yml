@@ -26,3 +26,10 @@ jobs:
       - name: Build & Run Python Tests via Docker
         run: scripts/testall.docker python
 
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: test-artifacts
+          path: python/build/test-artifacts/
+
