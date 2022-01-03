@@ -13,6 +13,7 @@ port = 9091
 baseurl = "http://localhost:{0}/".format(port)
 
 def startService(authmeth=None):
+    adir = artifactdir(__name__)
     tdir = tmpdir()
     srvport = port
     if authmeth == 'header':
@@ -22,7 +23,7 @@ def startService(authmeth=None):
     wpy = "python/tests/nistoar/pdr/describe/sim_describe_svc.py"
     cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
           "--wsgi-file {2} --pidfile {3}"
-    cmd = cmd.format(os.path.join(tdir,"simsrv.log"), srvport,
+    cmd = cmd.format(os.path.join(adir,"simsrv.log"), srvport,
                      os.path.join(basedir, wpy), pidfile)
     os.system(cmd)
     time.sleep(0.5)
@@ -45,7 +46,7 @@ def setUpModule():
     global rootlog
     ensure_tmpdir()
     rootlog = logging.getLogger()
-    loghdlr = logging.FileHandler(os.path.join(tmpdir(),"test_simsrv.log"))
+    loghdlr = logging.FileHandler(os.path.join(artifactdir(__name__),"test_simsrv.log"))
     loghdlr.setLevel(logging.DEBUG)
     rootlog.addHandler(loghdlr)
     startService()
