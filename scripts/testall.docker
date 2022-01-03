@@ -21,4 +21,4 @@ echo '#'
 echo '##################################'
 echo '(Assuming docker containers have been built)'
 
-exec $DOCKERDIR/testall "$@"
+exec $DOCKERDIR/run.sh test "$@"
