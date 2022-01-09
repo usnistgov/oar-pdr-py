@@ -17,7 +17,7 @@
 
 %>NIST ${resource_type_label(nrd['@type'])}:
 ${textwrap.fill(title, 80)}
-Version ${version}
+Version ${nrd.get('version','1.0')}
 % if nrd.get('doi'):
 DOI: ${re.sub(r'^doi:','https://doi.org/', doi)}
 % elif nrd.get('landingPage'):
