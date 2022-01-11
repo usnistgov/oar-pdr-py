@@ -140,7 +140,14 @@ class PDRIDHandler(Handler):
             if not baseurl.endswith('/'):
                 baseurl += '/'
 
-            self.add_header("Location", baseurl+dsid)
+            redirect = baseurl+dsid
+            redirect = redirect.rstrip('/')
+            if version:
+                if not redirect.endswith(VER_DELIM):
+                    redirect += '/'+VER_DELIM
+                redirect += '/'+version
+
+            self.add_header("Location", redirect)
             self.set_response(307, "Temporary Redirect")
             self.end_headers()
             return []

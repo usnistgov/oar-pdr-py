@@ -481,6 +481,19 @@ class TestPDRIDHandler(test.TestCase):
         self.assertEqual(len(data.get('releaseHistory', {}).get('hasRelease', [])), 7)
         self.assertIn('components', data)
 
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': "GET",
+            'PATH_INFO': "ark:/88434/mds2-2106/pdr:v/1.3.0",
+            'HTTP_ACCEPT': "text/html"
+        }
+        hdlr = self.gethandler(req['PATH_INFO'], req)
+        body = self.tostr( hdlr.handle() )
+
+        self.assertEqual(self.resp[0][:4], "307 ")
+        hdr = [h for h in self.resp if h.startswith("Location: ")]
+        self.assertEqual(hdr[0], "Location: https://data.nist.gov/pdr/od/id/ark:/88434/mds2-2106/pdr:v/1.3.0")
+
 
     def test_resolve_ediid(self):
         req = {
