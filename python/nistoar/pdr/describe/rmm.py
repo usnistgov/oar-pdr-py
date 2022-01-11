@@ -96,7 +96,14 @@ class MetadataClient(object):
             reqid = id
 
         url = "%s%s?@id=%s" % (self.baseurl, self.COLL_RELEASES, id)
-        return self._get(url, reqid)
+        out = self._get(url, reqid)
+        if 'releasesets data' in out:
+            if len(out['releasesets data']) == 0:
+                raise IDNotFound(reqid or id)
+            out = out['releasesets data'][0]
+            if '_id' in out:
+                del out['_id']
+        return out
 
     def _describe_version(self, id, reqid=None):
         if not reqid:
@@ -191,13 +198,21 @@ class MetadataClient(object):
     def _get(self, url, reqid):
         out = self._retrieve(url, reqid)
 
-        if "ResultData" in out:
-            out = out["ResultData"]
+        if "PageSize" in out:
+            # output is wrapped in RMM search envelope; unwrap it
+            datakey = [k for k in out.keys() if k.lower().endswith('data')]
+            if len(datakey) == 0:
+                out = []
+            else:
+                out = out[datakey[0]]
             if len(out) == 0:
                 raise IDNotFound(id)
             out = out[0]
+
         if "_id" in out:
+            # remove this RMM artifact
             del out['_id']
+
         return out
 
     def _retrieve(self, url, id):
