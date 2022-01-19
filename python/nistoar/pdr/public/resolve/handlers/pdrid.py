@@ -153,9 +153,9 @@ class PDRIDHandler(Handler):
             return []
 
         elif format.name == "nerdm" or format.name == "text":
-            baseurl = self.cfg.get("locations", {}).get("metadataService")
+            baseurl = self.cfg.get("APIs", {}).get("mdSearch")
             if not baseurl:
-                raise ConfigurationException("Missing required configuration: locations.metadataService")
+                raise ConfigurationException("Missing required configuration: APIs.mdSearch")
             try:
                 nerdm = MetadataClient(baseurl).describe(dsid, version)
             except IDNotFound as ex:
@@ -230,9 +230,9 @@ class PDRIDHandler(Handler):
             format = supp_fmts.default_format()
 
         if format.name == "nerdm":   # FUTURE: or format.name == "text":
-            baseurl = self.cfg.get("locations", {}).get("metadataService")
+            baseurl = self.cfg.get("APIs", {}).get("mdSearch")
             if not baseurl:
-                raise ConfigurationException("Missing required configuration: locations.metadataService")
+                raise ConfigurationException("Missing required configuration: APIs.mdSearch")
             try:
                 nerdm = MetadataClient(baseurl).describe(dsid + const.RELHIST_EXTENSION)
             except IDNotFound as ex:
@@ -261,9 +261,9 @@ class PDRIDHandler(Handler):
         """
         cmpid = '/'.join([dsid, path])
         
-        baseurl = self.cfg.get("locations", {}).get("metadataService")
+        baseurl = self.cfg.get("APIs", {}).get("mdSearch")
         if not baseurl:
-            raise ConfigurationException("Missing required configuration: locations.metadataService")
+            raise ConfigurationException("Missing required configuration: APIs.mdSearch")
         try:
             cmpmd = MetadataClient(baseurl).describe(cmpid, version)
         except IDNotFound as ex:
