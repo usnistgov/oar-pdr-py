@@ -68,9 +68,11 @@ class TestPDRIDHandler(test.TestCase):
         self.cfg = {
             "locations": {
                 "landingPageService": "https://data.nist.gov/pdr/od/id/",
-                "metadataService":    baseurl,
                 "resolverService":    "https://data.nist.gov/od/id/"
-            }
+            },
+            "APIs": {
+                "mdSearch":    baseurl
+            }                
         }
         self.resp = []
 
