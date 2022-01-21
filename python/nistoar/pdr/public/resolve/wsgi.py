@@ -39,6 +39,10 @@ class ResolverApp(object):
             cfg['id'].setdefault('locations', cfg['locations'])
             cfg['aip'].setdefault('locations', cfg['locations'])
             cfg['ready'].setdefault('locations', cfg['locations'])
+        if 'APIs' in cfg:
+            cfg['id'].setdefault('APIs', cfg['APIs'])
+            cfg['aip'].setdefault('APIs', cfg['APIs'])
+            cfg['ready'].setdefault('APIs', cfg['APIs'])
 
         self.handlers = {
             "id":  (PDRIDHandler, cfg.get('id', {})),
