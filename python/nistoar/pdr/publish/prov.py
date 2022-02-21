@@ -1,5 +1,10 @@
 """
 module defining classes that help track publishing provenance.
+
+The publishing provenance for an SIP going through the publishing process is modeled as a series of 
+actions taken on the SIP data; each is captured as an :py:class:`Action`.  Actions are initiated by 
+an agent, represented by a :py:class:`PubAgent` instance.  Actions are applied to a _subject_, which 
+is either the SIP data as a whole or some portion of it; the subject is identified via an identifier.  
 """
 import time, datetime, json
 from typing import List, Iterable
@@ -437,7 +442,7 @@ def load_from_history(histfp) -> List[Action]:
             out.append(Action.from_dict(json.loads(current)))
             current = ""
     if current != "":
-        raise ValueError("Last line contains in complete record: "+current)
+        raise ValueError("Last line contains incomplete record: "+current)
     return out
 
 
