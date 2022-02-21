@@ -291,7 +291,7 @@ class Action(object):
         """
         out = self._simple_parts_to_dict()
         if self.object:
-            self['object'] = self._object_to_dict()
+            out['object'] = self._object_to_dict()
         if self._subacts:
             subacts = []
             for act in self._subacts:
@@ -314,11 +314,11 @@ class Action(object):
         return out
 
     def _object_to_dict(self):
-        if isinstance(self.object, jsonpatch.JsonPatch):
+        if isinstance(self.object, JsonPatch):
             return json.loads(self.object.to_string())
         if hasattr(self.object, 'to_dict'):
             return self.object.to_dict()
-        return str(self.object)
+        return self.object
 
     def _serialize_subactions(self, indent=4) -> str:
         acts = []
@@ -377,9 +377,10 @@ class _ActionJSONEncoder(json.JSONEncoder):
             if action.object:
                 out += ', "object": ' + self.encode(action.object)
             if action._subacts:
-                out += ', "subactions": [\n%s%s\n]}' % (
-                    "\n".join([self.encode(sa) for sa in action._subacts]), sp
+                out += ', "subactions": [\n%s%s\n]' % (
+                    ",\n".join([self.encode(sa) for sa in action._subacts]), sp
                 )
+            out += '}'
             self.__spind -= self._stp
         return out
 
@@ -401,7 +402,7 @@ class _ActionJSONEncoder(json.JSONEncoder):
     def _encode_dict(self, d):
         if self.__indent:
             return self.encode(d)
-        return "{%s}" % ", ".join(['"%s": %s"' % (k, self.encode(v)) for k,v in d.items()])
+        return "{%s}" % ", ".join(['"%s": %s' % (k, self.encode(v)) for k,v in d.items()])
 
     def encode(self, o):
         if isinstance(o, Action):
