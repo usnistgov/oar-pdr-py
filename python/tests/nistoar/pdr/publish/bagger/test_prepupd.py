@@ -174,7 +174,7 @@ class TestUpdatePrepService(test.TestCase):
         self.headcache = self.tf.mkdir("headcache")
         self.config = {
             "headbag_cache": self.headcache,
-            "dist_service": {
+            "distrib_service": {
                 "service_endpoint": "http://dummy/ds"
             },
             "metadata_service": {
@@ -326,11 +326,11 @@ class TestUpdatePrepper(test.TestCase):
         bag = NISTBag(root)
         mdata = bag.nerdm_record(True)
         self.assertEqual(mdata['version'], "1.0+ (in edit)")
-        self.assertIn('versionHistory', mdata)
-        self.assertEqual(len(mdata['versionHistory']), 1)
-        self.assertEqual(mdata['versionHistory'][0]['version'], "1.0")
-        self.assertEqual(mdata['versionHistory'][0]['@id'], mdata["@id"])
-        self.assertIn('issued', mdata['versionHistory'][0])
+        self.assertIn('releaseHistory', mdata)
+        self.assertEqual(len(mdata['releaseHistory']['hasRelease']), 1)
+        self.assertEqual(mdata['releaseHistory']['hasRelease'][0]['version'], "1.0")
+        self.assertEqual(mdata['releaseHistory']['hasRelease'][0]['@id'], mdata["@id"]+"/pdr:v/1.0")
+        self.assertIn('issued', mdata['releaseHistory']['hasRelease'][0])
 
         depinfof = os.path.join(bag.dir, "multibag", "deprecated-info.txt")
         self.assertTrue(os.path.isfile(depinfof))

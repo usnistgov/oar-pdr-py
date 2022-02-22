@@ -20,7 +20,7 @@ def startService(authmeth=None):
 
     wpy = "python/tests/nistoar/pdr/distrib/sim_distrib_srv.py"
     assert os.path.exists(wpy)
-    cmd = "uwsgi --daemonize {0} --plugin python --http-socket :{1} " \
+    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
           "--wsgi-file {2} --pidfile {3}"
     cmd = cmd.format(os.path.join(tdir,"simsrv.log"), srvport,
                      os.path.join(basedir, wpy), pidfile)

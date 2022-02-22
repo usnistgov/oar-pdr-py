@@ -34,6 +34,7 @@ from ... import distrib
 from ...exceptions import IDNotFound
 from ... import utils
 from ...preserve.bagit import NISTBag, BagBuilder
+from ....nerdm.convert import latest as nerdm_latest
 
 class HeadBagCacher(object):
     """
@@ -168,6 +169,10 @@ class UpdatePrepService(object):
                                retrieve head bags (if not in the cache or available in store_dir).
     :param Mapping metadata_service:  configuration for the metadata retrieval service (RMM), used to 
                                retrieve NERDm records.
+    :param bool prep_metadata_as_annots:  a flag controlling how previously published metadata that 
+                               is updated in preparation for updating a publicaiton; if True, the 
+                               updated metadata is saved as annotations; if False (default), they 
+                               are stored with the main metadata.
     """
     def __init__(self, config: Mapping):
         self.cfg = config
@@ -220,6 +225,7 @@ class UpdatePrepper(object):
         """
         self.pdrid = pdrid
         self.aipid = aipid
+        self.cfg = config
         self.cacher = headcacher
         self.storedir = storedir
         self.version = version
@@ -441,7 +447,7 @@ class UpdatePrepper(object):
         # update the metadata to the latest NERDm schema version
         # (this assumes forward compatibility).
         bag = NISTBag(mdbag)
-        nerdm = bagutils.update_nerdm_schema(bag.nerdm_record())
+        nerdm = nerdm_latest.update_to_latest_schema(bag.nerdm_record(), False)
         if not nerdm.get('@id'):
             raise StateException("Bag {0}: missing @id"
                                  .format(os.path.basename(mdbag)))
@@ -449,12 +455,12 @@ class UpdatePrepper(object):
                          nerdm.get('@id'), logger=self.log)
         try:
             bag.add_res_nerd(nerdm, savefilemd=True)
+
+            # finally set the version to a value appropriate for an update in progress
+            self.update_version_for_edit(bag)
+
         finally:
             bag.disconnect_logfile() # disconnect internal log file
-
-        # finally set the version to a value appropriate for an update in
-        # progress
-        self.update_version_for_edit(mdbag)
 
     def create_from_nerdm(self, nerdfile, mdbag):
         """
@@ -489,11 +495,12 @@ class UpdatePrepper(object):
                           nerd['@id'], logger=self.log)
         try:
             bldr.add_res_nerd(nerd, savefilemd=True)
+
+            # update the version appropriate for edit mode
+            self.update_version_for_edit(bldr)
+
         finally:
             bldr.disconnect_logfile() # disconnect internal log file
-
-        # update the version appropriate for edit mode
-        self.update_version_for_edit(bldr.bagdir)
 
     def latest_version(self, source="repo"):
         """
@@ -561,41 +568,45 @@ class UpdatePrepper(object):
         
         
 
-    def update_version_for_edit(self, bagdir):
+    def update_version_for_edit(self, bagbldr):
         """
         update the version metadatum to something appropriate for edit mode.
         This will get updated according to policy as needed later.
+
+        :param BagBuilder bagbldr:  the updatable bag to update as a BagBuilder instance
         """
-        bag = NISTBag(bagdir)
-        mdata = bag.nerd_metadata_for('', merge_annots=True)
+        mdata = bagbldr.bag.nerd_metadata_for('', merge_annots=True)
         oldvers = mdata.get('version', "1.0.0")
-        verhist = mdata.get('versionHistory', [])
         edit_vers = self.make_edit_version(oldvers)
         self.log.debug('Setting edit version to "%s"', edit_vers)
 
-        annotf = bag.annotations_file_for('')
-        if os.path.exists(annotf):
-            adata = utils.read_nerd(annotf)
-        else:
-            adata = OrderedDict()
-        adata['version'] = edit_vers
+        updmd = OrderedDict([('version', edit_vers)])
 
+        # make sure we have a releaseHistory property
+        relhist = mdata.get('releaseHistory', {})
+        if not relhist:
+            relhist = nerdm_latest.NERDm2Latest().create_release_history(mdata)
+            updmd['releaseHistory'] = relhist
+        if 'hasRelease' not in relhist:
+            relhist['hasRelease'] = []
+
+        # if there isn't a release history entry for this last-published version, add one
         if oldvers != edit_vers and ('issued' in mdata or 'modified' in mdata) \
-           and not any([h['version'] == oldvers] for h in verhist):
+           and not any([h['version'] == oldvers] for h in relhist['hasRelease']):
+            # we're missing an entry
             issued = ('modified' in mdata and mdata['modified']) or \
                      mdata['issued']
-            verhist.append(OrderedDict([
-                ('version', oldvers),
-                ('issued', issued),
-                ('@id', mdata['@id']),
-                ('location', 'https://data.nist.gov/od/id/'+mdata['@id'])
-            ]))
-            if oldvers == "1.0.0" or oldvers == "1.0" or oldvers == "1":
-                verhist[-1]['description'] = 'initial release'
-            adata['versionHistory'] = verhist
-        
-        utils.write_json(adata, annotf)
-        
+            thisrelease = nerdm_latest.NERDm2Latest().create_release_ref(mdata, oldver)
+            relhist['hasRelease'].append(thisrelease)
+            updmd['releaseHistory'] = relhist
+
+        msg = "updating version while prepping for publication update"
+        if self.cfg.get('prep_metadata_as_annots', False):
+            bagbldr.update_annotations_for('', updmd, message=msg)
+        else:
+            # default behavior
+            bagbldr.update_metadata_for('', updmd, message=msg)
+            
     def make_edit_version(self, prev_vers):
         return prev_vers + "+ (in edit)"
         
