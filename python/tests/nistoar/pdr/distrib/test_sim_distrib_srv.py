@@ -1,4 +1,4 @@
-import os, pdb, requests, logging, time, json
+import os, pdb, requests, logging, time, json, sys
 import unittest as test
 from copy import deepcopy
 
@@ -10,11 +10,19 @@ datadir = os.path.join(testdir, 'data')
 basedir = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.dirname(testdir)))))
 
-import imp
+def import_file(path, name=None):
+    if not name:
+        name = os.path.splitext(os.path.basename(path))[0]
+    import importlib.util as imputil
+    spec = imputil.spec_from_file_location(name, path)
+    out = imputil.module_from_spec(spec)
+    sys.modules["sim_distrib_srv"] = out
+    spec.loader.exec_module(out)
+    return out
+
+import importlib
 simsrvrsrc = os.path.join(testdir, "sim_distrib_srv.py")
-with open(simsrvrsrc, 'r') as fd:
-    dstrb = imp.load_module("sim_distrib_srv", fd, simsrvrsrc,
-                            (".py", 'r', imp.PY_SOURCE))
+dstrb = import_file(simsrvrsrc)
 
 port = 9091
 baseurl = "http://localhost:{0}/".format(port)
@@ -95,7 +103,7 @@ class TestArchive(test.TestCase):
         self.assertIn("pdr1010", self.arch._aips)
         self.assertIn("pdr2210", self.arch._aips)
         self.assertIn("1491", self.arch._aips)
-        self.assertEqual(len(self.arch._aips), 3)
+        self.assertEqual(len(self.arch._aips), 4)
                 
         self.assertIn("1", self.arch._aips['pdr1010'])
         self.assertEqual(len(self.arch._aips['pdr1010']), 1)
@@ -129,7 +137,7 @@ class TestArchive(test.TestCase):
         
 
     def test_aipids(self):
-        self.assertEqual(self.arch.aipids, ['1491', 'pdr1010', 'pdr2210'])
+        self.assertEqual(self.arch.aipids, ['1491', 'mds2-7223', 'pdr1010', 'pdr2210'])
 
     def test_versions_for(self):
         self.assertEqual(self.arch.versions_for('pdr1010'), ['1'])
@@ -154,6 +162,8 @@ class TestArchive(test.TestCase):
      'hash': '9e70295bd074a121d720e2721ab405d7003e46086912cd92f012748c8cc3d6ad'},
                           'multibagSequence' : 1, "multibagProfileVersion" :"0.3"
                        })
+        self.assertEqual([f['name'] for f in self.arch.list_bags('mds2-7223')],
+                         ["mds2-7223.1_0_0.mbag0_4-0.zip", "mds2-7223.1_1_0.mbag0_4-1.zip"])
 
     def test_list_for_version(self):
         self.assertEqual([f['name'] for f in
@@ -211,7 +221,7 @@ class TestSimService(test.TestCase):
         resp = requests.get(baseurl)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.reason, "AIP Identifiers")
-        self.assertEqual(resp.json(), ["1491", "pdr1010", "pdr2210"])
+        self.assertEqual(resp.json(), ["1491", "mds2-7223", "pdr1010", "pdr2210"])
 
     def test_list_all(self):
         resp = requests.get(baseurl+"/pdr1010")

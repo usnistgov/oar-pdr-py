@@ -83,7 +83,7 @@ class NERDmBasedBagger(SIPBagger):
         self.bagbldr = BagBuilder(self.bagparent, nm, self.cfg.get('bag_builder', {}), logger=self.log)
         self.prepsvc = prepsvc
         if not self.prepsvc and not os.path.exists(self.bagdir) and 'repo_access' in self.cfg:
-            self.log.warn("Bagger operating without an UpdatePrepService!")
+            self.log.warning("Bagger operating without an UpdatePrepService!")
             # raise ValueError("NERDmBasedBagger: requires a UpdatePrepService instance for new bag")
 
         self.prepared = False
@@ -123,17 +123,23 @@ class NERDmBasedBagger(SIPBagger):
         """
         return self.bagbldr.bag
 
-    def ensure_preparation(self, nodata: bool=False, who=None) -> None:
+    def ensure_preparation(self, nodata: bool=False, who: PubAgent=None, _action: Action=None) -> None:
         """
         create and update the output working bag directory to ensure it is 
         a re-organized version of the SIP, ready for updates.
 
         :param nodata bool: if True, do not copy (or link) data files to the output directory.  
                             In this implementation, this parameter is ignored
+        :param PubAgent who: an actor identifier object, indicating who is requesting this action.  This 
+                             will get recorded in the history data.  If None, an internal administrative 
+                             identity will be assumed.  This identity may affect the identifier assigned.
+        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+                             that should be recorded within this function should be added as a subaction
+                             of this given one rather than recorded directly as a stand-alone action.
         """
         if not self._id:
             self._id = self._id_for(self.sipid, True)
-        self.ensure_base_bag(who)
+        self.ensure_base_bag(who, _action)
 
     @abstractmethod
     def _id_for(self, sipid, mint=False):
@@ -156,7 +162,7 @@ class NERDmBasedBagger(SIPBagger):
         """
         raise NotImplementedError()
 
-    def ensure_base_bag(self, who=None) -> None:
+    def ensure_base_bag(self, who=None, _action: Action=None) -> None:
         """
         Establish an initial working bag.  If a working bag already exists, it 
         will be used as is.  Otherwise, this method will check to see if a 
@@ -165,6 +171,13 @@ class NERDmBasedBagger(SIPBagger):
         create the initial bag.  If not, it is assumed that this is a new 
         SIP that has never been submitted before; a new bag directory will be 
         created and identifiers will be assigned to it.  
+
+        :param PubAgent who: an actor identifier object, indicating who is requesting this action.  This 
+                             will get recorded in the history data.  If None, an internal administrative 
+                             identity will be assumed.  This identity may affect the identifier assigned.
+        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+                             that should be recorded within this function should be added as a subaction
+                             of this given one rather than recorded directly as a stand-alone action.
         """
         if os.path.exists(self.bagdir):
             self.bagbldr.ensure_bagdir()  # sets builders bag instance
@@ -182,33 +195,39 @@ class NERDmBasedBagger(SIPBagger):
 
                 # lock some metadata by saving them as annotations
                 self.bagbldr.ensure_bagdir()
-                annotf = self.bagbldr.annotations_file_for('')
+                annotf = self.bagbldr.bag.annotations_file_for('')
                 if os.path.exists(annotf):
                     os.remove(annotf)
                 nerdm = self.bagbldr.bag.nerd_metadata_for('', False)
-                locked_md = OrderedDict([("pdr:sipid", self.sipid)])
-                for prop in "pdr:aipid firstIssued bureauCode, programeCode".split():
+                locked_md = OrderedDict([("@id", self.id), ("pdr:sipid", self.sipid)])
+                for prop in "pdr:aipid firstIssued bureauCode programeCode".split():
                     if prop in nerdm:
-                        locked_md = nerdm[prop]
+                        locked_md[prop] = nerdm[prop]
+                if not 'pdr:aipid' in locked_md:
+                    locked_md['pdr:aipid'] = self._aipid_for(self.id)
                 self._add_publisher_md(locked_md)
                 self._add_provider_md(locked_md)
-                self.bagbldr.update_annotations_for('', lockedmd,
+                self.bagbldr.update_annotations_for('', locked_md,
                                                     message="locking convention metadata as annotations")
 
                 # add a history record
-                self.record_history(
-                    Action(Action.COMMENT, '', who,
-                           "Initialized update based on version " + nerdm.get('version', '1.0'))
-                )
+                act = Action(Action.COMMENT, self.id, who, "Initialized update based on version " +
+                             re.sub(r'\++( [\(\)\w]+)*$', '', nerdm.get('version', '1.0')))
+                             
+                if _action:
+                    _action.add_subaction(act)
+                else:
+                    self.record_history(act)
 
         if not os.path.exists(self.bagdir):
             self.bagbldr.ensure_bag_structure()
             self.bagbldr.assign_id(self.id)
 
             # set some minimal metadata
+            version = "1.0.0"
             minimal_md = OrderedDict([
                 ("@id", self.id),
-                ("version", "1.0.0"),
+                ("version", version),
                 ("pdr:sipid", self.sipid),
                 ("pdr:aipid", self._aipid_for(self.id))
             ])
@@ -219,6 +238,14 @@ class NERDmBasedBagger(SIPBagger):
             del minimal_md['version']
             self.bagbldr.update_annotations_for('', minimal_md,
                                                 message="locking convention metadata as annoations")
+
+            # add a history record
+            act = Action(Action.CREATE, self.id, who,
+                         "Initialized new submission as version "+version)
+            if _action:
+                _action.add_subaction(act)
+            else:
+                self.record_history(act)
 
         else:
             self.bagbldr.ensure_bagdir()  # sets bag object, connects internal log file
@@ -246,23 +273,26 @@ class NERDmBasedBagger(SIPBagger):
         """
         raise NotImplementedError()
 
-    def describe(self, relid: str = '', who: PubAgent = None) -> Mapping:
+    def describe(self, relid: str = '', who: PubAgent = None, _action: Action=None) -> Mapping:
         """
         return a NERDm description for the part of the dataset pointed to by the given identifier
         relative to the dataset's base identifier.
         :param str relid:  the relative identifier for the part of interest.  If an empty string
                            (default), the full NERDm record will be returned.
-        :param who:        an actor identifier object, indicating who is requesting the data.  This 
+        :param PubAgent who: an actor identifier object, indicating who is requesting the data.  This 
                            request may trigger the restaging of previously published data, in which 
                            case who triggered it will get recorded.  If None, an internal administrative 
                            identity will be assumed.  
+        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+                             that should be recorded within this function should be added as a subaction
+                             of this given one rather than recorded directly as a stand-alone action.
         """
         if not self.bagdir or not os.path.exists(self.bagdir):
-            self.prepare(False, who)
+            self.prepare(False, who, _action=_action)
         return self.bag.describe(relid)
 
     def set_res_nerdm(self, nerdm: Mapping, who: PubAgent = None, savefilemd: bool=True,
-                      lock: bool=True) -> None:
+                      lock: bool=True, _action: Action=None) -> None:
         """
         set the resource metadata (which may optionally include file component metadata) for the SIP.  
         The input metadata should be as complete as is appropriate for the type of SIP being processed.  
@@ -273,16 +303,20 @@ class NERDmBasedBagger(SIPBagger):
                             identity will be assumed.  This identity may affect the identifier assigned.
         :param bool savefilemd:  if True (default), any DataFile or Subcollection metadata included will 
                                  be saved as well
+        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+                             that should be recorded within this function should be added as a subaction
+                             of this given one rather than recorded directly as a stand-alone action.
         """
         if lock:
             self.ensure_filelock()
             with self.lock:
-                self._set_res_nerdm(nerdm, who, savefilemd)
+                self._set_res_nerdm(nerdm, who, savefilemd, _action)
 
         else:
-            self._set_res_nerdm(nerdm, who, savefilemd)
+            self._set_res_nerdm(nerdm, who, savefilemd, _action)
 
-    def _set_res_nerdm(self, nerdm: Mapping, who: PubAgent=None, savecompmd: bool=True) -> None:
+    def _set_res_nerdm(self, nerdm: Mapping, who: PubAgent=None, savecompmd: bool=True,
+                       _action: Action=None) -> None:
         """
         set the resource metadata (which may optionally include file component metadata) for the SIP.  
         The input metadata should be as complete as is appropriate for the type of SIP being processed.  
@@ -293,10 +327,16 @@ class NERDmBasedBagger(SIPBagger):
                             identity will be assumed.  This identity may affect the identifier assigned.
         :param bool savecompmd:  if True (default), any DataFile or Subcollection metadata included will 
                                  be saved as well, replacing all previously set components.
+        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+                             that should be recorded within this function should be added as a subaction
+                             of this given one rather than recorded directly as a stand-alone action.
         """
         nerdm = self._check_res_schema_id(nerdm)   # creates a deep copy of the record
 
-        self.ensure_preparation(True, who)
+        hist = Action(Action.PUT, self.id, who, "Set resource metadata")
+        if _action:
+            _action.add_subaction(hist)
+        self.ensure_preparation(True, who, hist)
 
         # modify the input: remove properties that cannot be set, add others
         handsoff = "@id @context publisher issued firstIssued revised annotated language " + \
@@ -312,7 +352,10 @@ class NERDmBasedBagger(SIPBagger):
             nerdm['components'] = []
 
         # set up history record (using who)
-        hist = self._putcreate_history_action("#m", who, "Set resource metadata")
+        what = "Setting resource metadata"
+        if savecompmd and components:
+            what += " with components"
+        hist.add_subaction(self._history_comment("#m", who, what))
 
         try:
             old = self.bagbldr.bag.nerd_metadata_for('', True)   # for history record
@@ -345,7 +388,10 @@ class NERDmBasedBagger(SIPBagger):
 
         finally:
             # record history record
-            self.record_history(hist)
+            if _action:
+                _action.add_subaction(hist)
+            else:
+                self.record_history(hist)
 
     def _check_res_schema_id(self, nerdm):
         if self._nerdmcore_re:
@@ -402,7 +448,8 @@ class NERDmBasedBagger(SIPBagger):
         """
         return
 
-    def set_comp_nerdm(self, nerdm: Mapping, who: PubAgent=None, lock: bool=True) -> None:
+    def set_comp_nerdm(self, nerdm: Mapping, who: PubAgent=None, lock: bool=True,
+                       _action: Action=None) -> None:
         """
         set the metadata for a component of the resource.  If the component represents a file or 
         a subcollection, it must contain a 'filepath' property.  
@@ -411,15 +458,20 @@ class NERDmBasedBagger(SIPBagger):
         if lock:
             self.ensure_filelock()
             with self.lock:
-                self._set_comp_nerdm(nerdm, who)
+                self._set_comp_nerdm(nerdm, who, _action=_action)
 
         else:
-            self._set_comp_nerdm(nerdm, who)
+            self._set_comp_nerdm(nerdm, who, _action=_action)
 
-    def _set_comp_nerdm(self, nerdm: Mapping, who: PubAgent=None, hist=None, tolatest=True) -> None:
+    def _set_comp_nerdm(self, nerdm: Mapping, who: PubAgent=None, _action=None, tolatest=True) -> None:
         nerdm = self._check_input_comp(nerdm, tolatest)   # copies nerdm
 
-        self.ensure_preparation(True, who)
+        hist = Action(Action.PUT, self.id, who, "Set some component metadata")
+        self.ensure_preparation(True, who, hist)
+        if hist.subactions_count() == 0:
+            hist = None
+        elif _action:
+            _action.add_subaction(hist)
 
         # modify the input: remove properties that are not needed or allowed, add others
         remove = "_schema @context"
@@ -448,6 +500,8 @@ class NERDmBasedBagger(SIPBagger):
                                              old, self.bagbldr.bag.describe(nerdm['@id']))
         if hist:
             hist.add_subaction(act)
+        elif _action:
+            _action.add_subaction(act)
         else:
             self.record_history(act)
 
@@ -760,6 +814,8 @@ class PDPBagger(NERDmBasedBagger):
         This implementation assumes PDR IDs take the form of ARK identifiers and the local part
         is used as the AIP ID
         """
+        if not pdrid:
+            raise PublishingStateException("Unable to determine AIP-ID: PDI-ID is not set yet")
         if not ARK_PFX_RE.match(pdrid):
             raise PublishingStateException("Unexpected PDR ID form: "+pdrid)
         return ARK_PFX_RE.sub('', pdrid).replace('/', ' ')
@@ -824,18 +880,26 @@ class PDPBagger(NERDmBasedBagger):
         pubmd.update(self.cfg.get(mdk, {}))
         resmd.update(pubmd)
 
-    def ensure_finalize(self, who=None, lock=True):
+    def ensure_finalize(self, who=None, lock=True, _action: Action=None):
         """
         Based on the current state of the bag, finalize its contents to a complete state according to 
         the conventions of this bagger implementation.  After a successful call, the bag should be in 
         a preservable state.
         """
-        self.ensure_preparation(True, who)
+        self.ensure_preparation(True, who, _action)
+        act = Action(Action.COMMENT, self.id, who, "Finalized SIP bag for publishing")
         try:
-            self.record_history(Action(Action.COMMENT, '', who, "Finalized SIP bag for publishing"))
             self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
         except Exception:
-            self.record_history(Action(Action.COMMENT, '', who, "Failed to complete finalization request"))
+            self.log.warning("Failed to complete finalization")
+            self.record_history(act)
+            act = Action(Action.COMMENT, self.id, who, "Failed to complete finalization request")
+        finally:
+            if _action:
+                _action.add_subaction(act)
+            else:
+                self.record_history(act)
+            
 
     def record_history(self, action: Action):
         """

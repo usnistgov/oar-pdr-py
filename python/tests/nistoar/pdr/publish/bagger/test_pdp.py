@@ -23,6 +23,7 @@ from nistoar.pdr.preserve import AIPValidationError
 from nistoar.pdr.publish import idmint as minter
 from nistoar.pdr.publish import BadSIPInputError
 from nistoar.nerdm import constants as consts
+from nistoar.pdr.publish import prov
 
 # datadir = nistoar/preserve/data
 datadir = Path(__file__).parents[2] / 'preserve' / 'data'
@@ -63,6 +64,7 @@ def to_dict(odict):
                     out[prop][i] = to_dict(out[prop][i])
     return out
 
+tstag = prov.PubAgent("test", prov.PubAgent.AUTO, "tester")
 
 class TestPDPBagger(test.TestCase):
 
@@ -291,17 +293,22 @@ class TestPDPBagger(test.TestCase):
         bagdir = self.bagparent / 'pdp1:goob'
         self.assertTrue(not bagdir.exists())
         self.set_bagger_for("pdp1:goob")
-        self.bgr.prepare()
+        self.bgr.prepare(who=tstag)
         self.assertTrue(bagdir.exists())
 
         nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
         del nerd['components'][2]
-        self.bgr.set_res_nerdm(nerd, None, True)  # saves components, too
+        self.bgr.set_res_nerdm(nerd, tstag, True)  # saves components, too
         saved = self.bgr.bag.nerdm_record('', True)
         
         self.assertTrue(not os.path.exists(os.path.join(self.bgr.bagdir, "bag-info.txt")))
-        self.bgr.finalize()
+        self.bgr.finalize(who=tstag)
         self.assertTrue(os.path.exists(os.path.join(self.bgr.bagdir, "bag-info.txt")))
+        self.assertTrue(os.path.exists(os.path.join(self.bgr.bagdir, "publish.history")))
+
+        with open(os.path.join(self.bgr.bagdir, "publish.history")) as fd:
+            history = prov.load_from_history(fd)
+        self.assertTrue(all([a.agent for a in history]))
         
     def test_describe(self):
         bagdir = self.bagparent / 'pdp1:goob'

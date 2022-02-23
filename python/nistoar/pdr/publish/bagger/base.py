@@ -13,6 +13,7 @@ from .. import (PublishException, PublishingStateException, StateException)
 from ...utils import read_nerd, read_pod, read_json, write_json
 from ...preserve.bagit.builder import checksum_of
 from ....base.config import merge_config
+from ..prov import PubAgent, Action
 
 def moddate_of(filepath):
     """
@@ -77,16 +78,19 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
                                        
 
     @abstractmethod
-    def ensure_preparation(self, nodata=False, who=None):
+    def ensure_preparation(self, nodata: bool=False, who: PubAgent=None, _action: Action=None) -> None:
         """
         create and update the output working bag directory to ensure it is 
         a re-organized version of the SIP, ready for annotation.
 
-        :param nodata bool: if True, do not copy (or link) data files to the
-                            output directory.
-        :param who:         an actor identifier object, indicating who is requesting this action.  This 
-                            will get recorded in the history data.  If None, an internal administrative 
-                            identity will be assumed.  This identity may affect the identifier assigned.
+        :param bool nodata:  if True, do not copy (or link) data files to the
+                             output directory.
+        :param PubAgent who: an actor identifier object, indicating who is requesting this action.  This 
+                             will get recorded in the history data.  If None, an internal administrative 
+                             identity will be assumed.  This identity may affect the identifier assigned.
+        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+                             that should be recorded within this function should be added as a subaction
+                             of this given one rather than recorded directly as a stand-alone action.
         """
         raise NotImplementedError()
 
@@ -101,7 +105,7 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
             self.ensure_bag_parent_dir()
             self.lock = filelock.FileLock(lockfile)
 
-    def prepare(self, nodata=False, who=None, lock=True):
+    def prepare(self, nodata=False, who=None, lock=True, _action: Action=None):
         """
         initialize the output working bag directory by calling 
         ensure_preparation().  This operation is wrapped in the acquisition
@@ -118,39 +122,45 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
         if lock:
             self.ensure_filelock()
             with self.lock:
-                self.ensure_preparation(nodata, who)
+                self.ensure_preparation(nodata, who, _action)
 
         else:
-            self.ensure_preparation(nodata, who)
+            self.ensure_preparation(nodata, who, _action)
 
-    def finalize(self, who=None, lock=True):
+    def finalize(self, who: PubAgent=None, lock=True, _action: Action=None):
         """
         Based on the current state of the bag, finalize its contents to a complete state according to 
         the conventions of this bagger implementation.  After a successful call, the bag should be in 
         a preservable state.
-        :param who:         an actor identifier object, indicating who is requesting this action.  This 
-                            will get recorded in the history data.  If None, an internal administrative 
-                            identity will be assumed.  This identity may affect the identifier assigned.
-        :param lock bool:   if True (default), acquire a lock before executing
-                            the preparation.
+        :param PubAgent who: an actor identifier object, indicating who is requesting this action.  This 
+                             will get recorded in the history data.  If None, an internal administrative 
+                             identity will be assumed.  This identity may affect the identifier assigned.
+        :param bool lock:    if True (default), acquire a lock before executing
+                             the preparation.
+        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+                             that should be recorded within this function should be added as a subaction
+                             of this given one rather than recorded directly as a stand-alone action.
         """
         if lock:
             self.ensure_filelock()
             with self.lock:
-                self.ensure_finalize(who)
+                self.ensure_finalize(who, _action)
 
         else:
-            self.ensure_finalize(who)
+            self.ensure_finalize(who, _action)
 
     @abstractmethod
-    def ensure_finalize(self, who=None):
+    def ensure_finalize(self, who: PubAgent=None, _action: Action=None):
         """
         Based on the current state of the bag, finalize its contents to a complete state according to 
         the conventions of this bagger implementation.  After a successful call, the bag should be in 
         a preservable state.
-        :param who:         an actor identifier object, indicating who is requesting this action.  This 
-                            will get recorded in the history data.  If None, an internal administrative 
-                            identity will be assumed.  This identity may affect the identifier assigned.
+        :param PubAgent who:  an actor identifier object, indicating who is requesting this action.  This 
+                              will get recorded in the history data.  If None, an internal administrative 
+                              identity will be assumed.  This identity may affect the identifier assigned.
+        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+                             that should be recorded within this function should be added as a subaction
+                             of this given one rather than recorded directly as a stand-alone action.
         """
         raise NotImplementedError()
 

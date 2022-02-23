@@ -34,8 +34,10 @@ class PubAgent(object):
     @property
     def group(self) -> str:
         """
-        the name of a group of users that have a common set of permisisons to make changes.  This 
-        value is used to determine if the agent is authorized to make a particular change.
+        the name of the permission group whose permissions are invoked in the context of this agent.
+        A permission group is a group of users that have a common set of permisisons to make changes.  
+        This value can used to determine if the agent is authorized to make a particular change, or 
+        record the group whose permissions allowed a certain action.  
         """
         return self._group
 

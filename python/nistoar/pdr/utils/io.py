@@ -202,7 +202,7 @@ def read_json(jsonfile, nolock=False):
     :raise ValueError:  if JSON format errors are detected.
     """
     with LockedFile(jsonfile) as fd:
-        blab(log, "Acquired shared lock for reading: "+jsonfile)
+        blab(log, "Acquired shared lock for reading: "+str(jsonfile))
         out = json.load(fd, object_pairs_hook=OrderedDict)
     blab(log, "released SH")
     return out
@@ -221,7 +221,7 @@ def write_json(jsdata, destfile, indent=4, nolock=False):
     """
     try:
         with LockedFile(destfile, 'a') as fd:
-            blab(log, "Acquired exclusive lock for writing: "+destfile)
+            blab(log, "Acquired exclusive lock for writing: "+str(destfile))
             fd.truncate(0)
             json.dump(jsdata, fd, indent=indent, separators=(',', ': '))
         blab(log, "released EX")

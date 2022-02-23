@@ -15,8 +15,8 @@ testdir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 def_archdir = os.path.join(testdir, 'data')
 def_baseurl = "http://localhost/"
     
-bagvnmre = re.compile("^(\w+)\.(\d+\w*)\.mbag(\d+_\d+)-(\\d+)\.(\w+)$")
-bagnmre = re.compile("^(\w+)\.mbag(\d+_\d+)-(\\d+)\.(\w+)$")
+bagvnmre = re.compile("^([\w\-]+)\.(\d+\w*)\.mbag(\d+_\d+)-(\\d+)\.(\w+)$")
+bagnmre = re.compile("^([\w\-]+)\.mbag(\d+_\d+)-(\\d+)\.(\w+)$")
 
 def checksum_of(filepath):
     """

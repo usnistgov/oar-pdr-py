@@ -18,7 +18,7 @@ class RESTServiceClient(object):
         """
         initialized the service to the given base URL
         """
-        self.base = baseurl
+        self.base = baseurl.rstrip('/')
 
     def get_json(self, relurl):
         """
