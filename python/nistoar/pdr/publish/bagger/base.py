@@ -254,16 +254,17 @@ class SIPBaggerFactory(PublishSystem, metaclass=ABCMeta):
         return False
 
     @abstractmethod
-    def create(self, sipid, siptype: str, config: Mapping=None) -> SIPBagger:
+    def create(self, sipid, siptype: str, config: Mapping=None, minter=None) -> SIPBagger:
         """
         create a new instantiation of an SIPBagger that can process an SIP of the given type.  If config
         is provided, it may get merged in some way with the configuration set at construction time before
         being applied to the bagger.
 
-        :param          sipid:  the ID for the SIP to create a bagger for; this is usually a str, 
-                                subclasses may support more complicated ID types.
-        :param str    siptype:  the name given to the SIP convention supported by the SIP reference by sipid
-        :param Mapping config:  bagger configuration parameters that should override the default
+        :param           sipid:  the ID for the SIP to create a bagger for; this is usually a str, 
+                                 subclasses may support more complicated ID types.
+        :param str     siptype:  the name given to the SIP convention supported by the SIP reference by sipid
+        :param Mapping  config:  bagger configuration parameters that should override the default
+        :param IDMinter minter:  an IDMinter instance that should be used to mint a new PDR-ID
         """
         raise NotImplementedError()
 
@@ -309,7 +310,7 @@ class BaseSIPBaggerFactory(SIPBaggerFactory):
         """
         return siptype in self._bgrcls
 
-    def create(self, sipid: str, siptype: str, config: Mapping=None) -> SIPBagger:
+    def create(self, sipid: str, siptype: str, config: Mapping=None, minter=None) -> SIPBagger:
         """
         create a new instantiation of an SIPBagger that can process an SIP of the given type.  If provided,
         config will be merged with the default configuration provided by this factory, overriding the 
@@ -317,11 +318,14 @@ class BaseSIPBaggerFactory(SIPBaggerFactory):
         its factory configuration; next, it will update the configuration parameters with values provided 
         by the given config parameter.  
 
-        :param str      sipid:  the ID for the SIP to create a bagger for; this is usually a str, 
-                                subclasses may support more complicated ID types.
-        :param str    siptype:  the name given to the SIP convention supported by the SIP reference 
-                                by sipid
-        :param Mapping config:  bagger configuration parameters that should override the default
+        :param str       sipid:  the ID for the SIP to create a bagger for; this is usually a str, 
+                                 subclasses may support more complicated ID types.
+        :param str     siptype:  the name given to the SIP convention supported by the SIP reference 
+                                 by sipid
+        :param Mapping  config:  bagger configuration parameters that should override the default
+        :param IDMinter minter:  an IDMinter instance that should be used to mint a new PDR-ID; if a 
+                                 registered SIPBagger class's constructor does not accept a minter 
+                                 argument, the constructor will be called without one.  
         """
         if not self.supports(siptype):
             raise PublishException("Factory does not support this SIP type: "+siptype, sys=self)
@@ -333,7 +337,13 @@ class BaseSIPBaggerFactory(SIPBaggerFactory):
         except KeyError as ex:
             raise PublishException("No SIPBagger class specified for siptype="+siptype, sys=self)
 
-        return cls(sipid, outcfg)
+        try:
+            return cls(sipid, outcfg, minter=minter)
+        except TypeError as ex:
+            if "unexpected keyword argument 'minter'" in str(ex):
+                return cls(sipid, outcfg)
+            raise
+
 
     
         

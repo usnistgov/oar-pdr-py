@@ -82,7 +82,7 @@ class NERDmBasedBagger(SIPBagger):
         nm = sipid.replace('/', '_')
         self.bagbldr = BagBuilder(self.bagparent, nm, self.cfg.get('bag_builder', {}), logger=self.log)
         self.prepsvc = prepsvc
-        if not self.prepsvc and not os.path.exists(self.bagdir) and 'repo_access' in self.cfg:
+        if not self.prepsvc and not os.path.exists(self.bagdir):
             self.log.warning("Bagger operating without an UpdatePrepService!")
             # raise ValueError("NERDmBasedBagger: requires a UpdatePrepService instance for new bag")
 

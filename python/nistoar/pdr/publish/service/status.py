@@ -14,16 +14,21 @@ AWAITING   = "awaiting"      # SIP requires an update before it can be published
 PENDING    = "pending"       # SIP has been created/updated but not yet published
 PROCESSING = "processing"    # The SIP contents are being processed; further actions are not possible
                              #  until processing completes.
+FINALIZED  = "finalized"     # The SIP has been finalized and is ready to be published; additional
+                             #  actions other than to publish may change the state to PENDING or AWAITING.
 PUBLISHED  = "published"     # SIP was successfully published
-FAILED     = "failed"        # an attempt to publish was made but failed due to an unexpected state
+FAILED     = "failed"        # an attempt to publish (or finalize) was made but failed due to an
+                             #  unexpected state or condition; SIP must be updated (or rebuilt from
+                             #  scratch) before it can be published 
 
-states = [ NOT_FOUND, AWAITING, PENDING, PROCESSING, PUBLISHED, FAILED ]
+states = [ NOT_FOUND, AWAITING, PENDING, PROCESSING, FINALIZED, PUBLISHED, FAILED ]
 
 user_message = {
     NOT_FOUND:   "Submission not found or available",
     AWAITING:    "Submission is awaiting further update before being ready to publish",
     PENDING:     "Submission is available to be published",
     PROCESSING:  "Submission is being processed (please stand by)",
+    FINALIZED:   "Submission is ready to be published",
     PUBLISHED:   "Submission was successfully published",
     FAILED:      "Submission cannot be published due to previous error"
 }
@@ -200,7 +205,7 @@ class SIPStatus(object):
                 ('user', OrderedDict([
                     ('id', ''),
                     ('state', NOT_FOUND),
-                    ('siptype', '')
+                    ('siptype', ''),
                     ('message', user_message[NOT_FOUND]),
                 ])),
                 ('history', [])
@@ -237,7 +242,7 @@ class SIPStatus(object):
         """
         the SIP's status state.  
 
-        :return str:  one of NOT_FOUND, AWAITING, PENDING, PROCESSING, PUBLISHED, FAILED
+        :return str:  one of NOT_FOUND, AWAITING, PENDING, PROCESSING, FINALIZED, PUBLISHED, FAILED
         """
         return self._data['user']['state']
 
@@ -295,14 +300,15 @@ class SIPStatus(object):
         if cache:
             self.cache()
 
-    def remember(self, cache=True):
+    def remember(self, message=None, reset=False):
         """
         Save the current status information as part of its history and then 
         reset that status to PENDING,
 
-        :param message str:  an optional message for display to the end user
+        :param str message:  an optional message for display to the end user
                              explaining this state.  If not provided, a default
                              explanation is set. 
+        :param bool reset:   if True, reset the current state to PENDING; False is default.
         """
         if 'update_time' not in self._data['user']:
             # save the current status only if it was previously cached to disk
@@ -315,8 +321,9 @@ class SIPStatus(object):
         else:
             self._data['history'] = [ oldstatus ]
 
-        if cache:
-            self.update(PENDING, message)
+        state = self.state
+        if reset or message:
+            self.update(state, message)
 
     def revert(self):
         """
