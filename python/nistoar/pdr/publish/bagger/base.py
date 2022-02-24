@@ -242,6 +242,7 @@ class SIPBaggerFactory(PublishSystem, metaclass=ABCMeta):
         initialize the factory.  This version saves the configuration (if provided) but does not specify
         what configuration is expected.
         """
+        PublishSystem.__init__(self)
         self.cfg = config
 
     @abstractmethod

@@ -1,18 +1,20 @@
 """
 Base classes for implementing the publishing process according to a particular convention.
 """
-import re
+import re, logging
 from abc import ABCMeta, abstractmethod, abstractproperty
 from collections import Mapping
-from .prov import PubAgent
+from ..prov import PubAgent
 from .. import PublishSystem, PublishingStateException, ConfigurationException
-from ...nerdm.constants import core_schema_base as NERDM_SCHEMA_BASE, CORE_SCHEMA_URI
-from ...nerdm import validate
+from ....nerdm.constants import core_schema_base as NERDM_SCHEMA_BASE, CORE_SCHEMA_URI
+from ....nerdm import validate
+from .. import PublishSystem
+from .... import pdr
 
 RESOURCE_SCHEMA_TYPE = "#/definitions/Resource"
 COMPONENT_SCHEMA_TYPE = "#/definitions/Component"
 
-class PublishingService(PublishSytem, metaclass=ABCMeta):
+class PublishingService(PublishSystem, metaclass=ABCMeta):
     """
     the base class for all publishing services.  This interface models an SIP as a resource that:
       * is identified uniquely within the PDR system via an SIP identifier
@@ -38,6 +40,7 @@ class PublishingService(PublishSytem, metaclass=ABCMeta):
         :param Logger baselog:  the Logger to derive this instance's Logger from; this constructor will 
                                 call getChild() on this log to instantiate its Logger.
         """
+        PublishSystem.__init__(self)
         if not config:
             config = {}
         if not isinstance(config, Mapping):
@@ -100,11 +103,12 @@ class PublishingService(PublishSytem, metaclass=ABCMeta):
     @abstractmethod
     def finalize(self, sipid):
         """
-        process all SIP input to get it ready for publication.  This may take a while, during which the 
-        SIP should be in the PROCESSING state.  Upon successful completion, the state should be set to 
-        FINALIZED.  If an error caused by the collected SIP input occurs, the state should be set to 
-        FAILED to indicate that the client must provide updated input to fix the problem and make the 
-        SIP publishable.  
+        process all SIP input to get it ready for publication.  This may cause the SIP metadata to be 
+        updated, which will subsequently effect what is returned by :py:method:`describe`.  This may 
+        take a while, during which the SIP should be in the PROCESSING state.  Upon successful completion, 
+        the state should be set to FINALIZED.  If an error caused by the collected SIP input occurs, the 
+        state should be set to FAILED to indicate that the client must provide updated input to fix the 
+        problem and make the SIP publishable.  
 
         :param str sipid:  the identifier for the SIP of interest
         :raises SIPNotFoundError:   if the SIP is in the NOT_FOUND state

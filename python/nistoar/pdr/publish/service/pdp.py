@@ -6,13 +6,14 @@ as the Archive Information Package (AIP).  This includes those supporting Submis
 import os
 from copy import deepcopy
 from collections.abc import Mapping
+from abc import abstractmethod, abstractproperty
 
-from .... import pdr
-from .base import PubState, SimpleNerdmPublishingService
+from ....pdr import config as cfgmod
+from .base import SimpleNerdmPublishingService
 from .. import (PublishingStateException, SIPConflictError, SIPNotFoundError, BadSIPInputError,
                 ConfigurationException)
-from ..bagger.base import SIPBaggerFactory
-from ...pdr import config as cfgmod
+from ..bagger.base import SIPBagger, SIPBaggerFactory
+from ..prov import PubAgent
 
 class BagBasedPublishingService(SimpleNerdmPublishingService):
     """
@@ -40,7 +41,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
     """
 
     def __init__(self, config: Mapping, convention: str, workdir: str=None, bagdir: str=None, 
-                 statusdir: str=None, ingestdvc: str=None):
+                 statusdir: str=None, ingestsvc: str=None):
         """
         initialize the service.
 
@@ -57,7 +58,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                                 (over-riding what's specified in config)
         :param IngestService ingestsvc: the ingest service to use to publish the resulting AIP
         """
-        super(BagBasedPublishingService, self).__init__(config, convention)
+        super(BagBasedPublishingService, self).__init__(convention, config)
 
         if not workdir:
             workdir = self.cfg.get("working_dir")
@@ -104,6 +105,15 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         return out
 
+    def status_of(self, sipid):
+        """
+        return the current status  of the SIP with the given identifier
+        :param str sipid:  the identifier for the SIP of interest
+        :return: an object describing the current status of the idenfied SIP
+        :rtype: SIPStatus
+        """
+        return SIPStatus(sipid, {"": self.statusdir}, self.convention)
+
     @abstractmethod
     def _get_id_shoulder(who, sipid: str, create: bool):
         """
@@ -140,6 +150,10 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
     @abstractmethod
     def _create_bagger(self, shoulder, sipid, minter=None):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _create_ingest_service(self):
         raise NotImplementedError()
 
     def accept_resource_metadata(self, nerdm: Mapping, who: PubAgent=None, sipid: str=None, create: bool=None):
@@ -353,6 +367,43 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         return True
 
+    def finalize(self, sipid: str, who: PubAgent=None):
+        """
+        process all SIP input to get it ready for publication.  The SIP metadata will be updated 
+        accordingly (which will affect what is returned from :py:method:`describe`).  
+        In this convention, finalization is expected to be quick and therefore can be handled 
+        synchronously.  Upon successful completion, the state will be set to FINALIZED.  If an 
+        error caused by the collected SIP input occurs, the state will be set to FAILED to 
+        indicate that the client must provide updated input to fix the problem and make the 
+        SIP publishable.  
+
+        :param str sipid:  the identifier for the SIP of interest
+        :raises SIPNotFoundError:   if the SIP is in the NOT_FOUND state
+        :raises SIPStateException:  if the SIP is not in the PENDING or FINALIZED state
+        """
+        sts = self.status_of(sipid)
+        if sts.state == status.NOT_FOUND:
+            raise SIPNotFoundError(sipid)
+        if sts.state != status.PENDING:
+            raise SIPConflictError(sipid, "SIP {0} is not ready for finalizing: {1}"
+                                          .format(sipid, sts.message))
+        if sts.siptype != sts.convention:
+            raise SIPConflictError(sipid, "SIP {0} is being handled by a different convention: {1}"
+                                          .format(sipid, sts.message))
+        if sts.state == status.FINALIZED:
+            self.log.info("SIP %s is already finalized (skipping)", sipid)
+            return
+
+        bagger = self._get_bagger_for(sipid, who)
+        try:
+            bagger.finalize(who)
+            sts.update(status.FINALIZED)
+        except Exception as ex:
+            self.log.error("Failed to publish SIP {0}: {1}".format(sipid, str(ex)))
+            sts.update(status.FAILED, sysdata={'errors': [str(ex)]})
+            raise ex
+
+
     def publish(self, sipid: str, who: PubAgent=None):
         """
         submit the SIP for ingest and preservation into the PDR archive.  The SIP needs to be in 
@@ -378,11 +429,10 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             raise SIPConflictError(sipid, "SIP {0} is being handled by a different convention: {1}"
                                           .format(sipid, sts.message))
 
-        bagger = self._get_bagger_for(sipid, who)
         sts.update(status.PROCESSING)
         try:
-            bagger.finalize()
-            self.ingester.ingest(sipid)
+            self.finalize(sipid, who)
+            self.ingester.ingest(sipid, who)
             sts.update(status.PUBLISHED)
         except Exception as ex:
             self.log.error("Failed to publish SIP {0}: {1}".format(sipid, str(ex)))
@@ -563,7 +613,7 @@ class PDPublishingService(BagBasedPublishingService):
 
     
     def __init__(self, config: Mapping, convention: str, working_dir: str=None, bagdir: str=None, 
-                 statusdir: str=None, idregdir: str=None, ingestdvc: IngestService=None):
+                 status_dir: str=None, idregdir: str=None, ingestsvc=None):    # : IngestService
         """
         initialize the service.
 
@@ -582,8 +632,9 @@ class PDPublishingService(BagBasedPublishingService):
                                 (over-riding what's specified in config)
         :param IngestService ingestsvc: the ingest service to use to publish the resulting AIP
         """
-        super(PDPublishingService, self).__init__(config, convention, workdir, bagdir, statusdir, ingestsvc)
-        self.idregdir = self._resolve_dir('id_registry_dir', idregdir, workdir, 'idregs')
+        super(PDPublishingService, self).__init__(config, convention, working_dir, bagdir,
+                                                  status_dir, ingestsvc)
+        self.idregdir = self._resolve_dir('id_registry_dir', idregdir, self.workdir, 'idregs')
         self._minters = {}
 
     def _get_id_shoulder(who, sipid: str, create: bool):
@@ -655,6 +706,9 @@ class PDPublishingService(BagBasedPublishingService):
         nerdm['pdr:sipid'] = sipid
 
         return sipid
+
+    def _create_ingest_service(self, ):
+        return None
 
     def _create_bagger(self, shoulder: str, sipid: str, minter=None):
 

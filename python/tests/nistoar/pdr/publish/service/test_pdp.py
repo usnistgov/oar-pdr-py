@@ -10,6 +10,7 @@ from nistoar.testing import *
 from nistoar.pdr import utils
 from nistoar.pdr.preserve.bagit import NISTBag
 from nistoar.pdr.publish.bagger import utils as bagutils
+import nistoar.pdr.preserve.bagit.builder as bldr
 import nistoar.pdr.exceptions as exceptions
 from nistoar.pdr.publish import prov
 
@@ -100,7 +101,7 @@ class TestPDPublishingService(test.TestCase):
                         "naan": "88434",
                         "sequence_start": 1
                     }
-                }
+                },
                 "pdp0": {
                     "allowed_clients": [ "default" ],
                     "bagger": bgrcfg,
@@ -111,15 +112,23 @@ class TestPDPublishingService(test.TestCase):
                 }
             }
         }
-        self.mntrcfg = {
-            "id_shoulder": 'pdp1',
-            "naan": "88888",
-            "store_dir":  self.mintdir,
-            "sequence_start": 17
-        }
-        self.minter = minter.PDP0Minter(self.mntrcfg)
+        self.pubsvc = pdp.PDPublishingService(self.cfg, 'pdp0')
 
     def tearDown(self):
         self.tf.clean()
 
-    
+    def test_ctor(self):
+        self.assertEqual(self.pubsvc.workdir, self.workdir)
+        self.assertEqual(self.pubsvc.idregdir, os.path.join(self.workdir, "idregs"))
+        self.assertEqual(self.pubsvc.bagparent, str(self.bagparent))
+        self.assertEqual(self.pubsvc.statusdir, os.path.join(self.workdir, "status"))
+        self.assertEqual(self.pubsvc.statusdir, os.path.join(self.workdir, "status"))
+        self.assertEqual(self.pubsvc.convention, "pdp0")
+
+        
+        
+                         
+if __name__ == '__main__':
+    test.main()
+        
+        
