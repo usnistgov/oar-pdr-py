@@ -36,8 +36,6 @@
         "phoneNumber": "1-301-975-5678"
     },
     "modified": "2016-07-01",
-    "doi": "10.18434/T4SW26",
-    "@id": "ark:/88434/mds00hw91v",
     "ediid": "3A1EE2F169DD3B8CE0531A570681DB5D1491",
     "landingPage": "https://www.nist.gov/nvl/project-index-optical-method-sorting-nanoparticles-size",
     "description": [
@@ -58,7 +56,7 @@
             "refType": "IsReferencedBy",
             "location": "https://doi.org/10.1364/OE.24.014100",
             "_extensionSchemas": [
-                "https://data.nist.gov/od/dm/nerdm-schema/v0.4#/definitions/DCiteDocumentReference"
+                "https://data.nist.gov/od/dm/nerdm-schema/bib/v0.4#/definitions/DCiteReference"
             ]
         }
     ],
@@ -99,7 +97,7 @@
             "description": "Software to predict the optical sorting of particles in a standing-wave laser interference field",
             "format": "Digital Object Identifier, a persistent identifier",
             "@type": [
-                "nrd:Hidden",
+                "nrd:AccessPage",
                 "dcat:Distribution"
             ]
         },

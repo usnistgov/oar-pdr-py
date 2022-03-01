@@ -668,9 +668,9 @@ class NERDmBasedBagger(SIPBagger):
             elif nerdutils.is_type(cmpmd, "AccessPage"):
                 cmpmd['@id'] = LINK_DELIM + '/'
                 url = urlparse(cmpmd['accessURL'])
-                if url.netlog == 'doi.org':
+                if url.netloc == 'doi.org':
                     cmpmd['@id'] += "doi:"
-                elif url.netlog == 'handle.net':
+                elif url.netloc == 'handle.net':
                     cmpmd['@id'] += "hdl:"
                 else:
                     cmpmd['@id'] += netloc 

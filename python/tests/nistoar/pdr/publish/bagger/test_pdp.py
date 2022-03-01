@@ -215,6 +215,10 @@ class TestPDPBagger(test.TestCase):
         nerd['accessLevel'] = "private"
         pubshr = nerd['publisher']
 
+        # add in a Hidden component for next test
+        accURLcomp = [c for c in nerd['components'] if "nrd:AccessPage" in c['@type']]
+        accURLcomp[0]['@type'][0] = "nrd:Hidden"
+
         with self.assertRaises(BadSIPInputError):
             # because record include Hidden component
             self.bgr.set_res_nerdm(nerd, None, True)

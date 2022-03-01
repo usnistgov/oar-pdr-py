@@ -15,4 +15,5 @@ The :py:module:`prepupd` submodule provides helper classes that assist baggers
 with processing updates to previously published datasets by initializing a working 
 bag based on the last previously published one.  
 """
-
+from .base import SIPBagger, SIPBaggerFactory
+from .pdp import PDPBagger

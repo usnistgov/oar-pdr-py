@@ -72,7 +72,7 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(self.bag.bagdir, os.path.join(self.tf.root, "testbag"))
         self.assertTrue(self.bag.log)
         self.assertFalse(self.bag._log_handlers)
-        self.assertEqual(self.bag.logname, "preserv.log")
+        self.assertEqual(self.bag.logname, "publish.log")
         self.assertIsNone(self.bag.id)
         self.assertIsNone(self.bag.bag)
         self.assertIsNone(self.bag.ediid)
@@ -113,9 +113,9 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(self.bag.bagdir, os.path.join(self.tf.root, "testbag"))
         self.assertTrue(self.bag.log)
         self.assertTrue(self.bag.logfile_is_connected())
-        self.assertEqual(self.bag.logname, "preserv.log")
+        self.assertEqual(self.bag.logname, "publish.log")
         self.assertTrue(os.path.exists(os.path.join(self.bag.bagdir,
-                                                    "preserv.log")))
+                                                    "publish.log")))
         self.assertIsNone(self.bag.id)
         self.assertIsNotNone(self.bag.bag)
         self.assertEqual(self.bag.bag.dir, self.bag.bagdir)
@@ -131,7 +131,7 @@ class TestBuilder2(test.TestCase):
         self.assertTrue(self.bag.log)
         self.assertFalse(self.bag.logfile_is_connected())
         self.assertFalse(self.bag._log_handlers)
-        self.assertEqual(self.bag.logname, "preserv.log")
+        self.assertEqual(self.bag.logname, "publish.log")
         self.assertTrue(not os.path.exists(self.bag.bagdir))
         self.assertEqual(self.bag.id, "ark:/88434/edi00hw91c")
         self.assertIsNone(self.bag.bag)
@@ -216,7 +216,7 @@ class TestBuilder2(test.TestCase):
         self.assertTrue(not self.bag.logfile_is_connected())
         self.bag.record("i did it!")
         
-        with open(os.path.join(self.bag.bagdir, "preserv.log")) as fd:
+        with open(os.path.join(self.bag.bagdir, "publish.log")) as fd:
             lines = [l for l in fd]
         self.assertNotIn("i did it!", lines[-1])
 
@@ -224,7 +224,7 @@ class TestBuilder2(test.TestCase):
         self.bag.record("i did it!")
         self.assertTrue(self.bag.logfile_is_connected())
 
-        with open(os.path.join(self.bag.bagdir, "preserv.log")) as fd:
+        with open(os.path.join(self.bag.bagdir, "publish.log")) as fd:
             lines = [l for l in fd]
         self.assertIn("i did it!", lines[-1])
 
@@ -242,7 +242,7 @@ class TestBuilder2(test.TestCase):
         self.assertIsNone(self.bag.id)
         self.assertIsNone(self.bag.ediid)
         self.assertTrue(self.bag.logfile_is_connected())
-        self.assertTrue(os.path.exists(os.path.join(self.bag.bagdir,"preserv.log")))
+        self.assertTrue(os.path.exists(os.path.join(self.bag.bagdir,"publish.log")))
 
     def test_ensure_bag_structure(self):
         self.assertTrue(not os.path.exists(self.bag.bagdir))
@@ -487,7 +487,7 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(md['@type'][0], "nrdp:DataFile")
         self.assertEqual(md['filepath'], "readme.txt")
 
-        with open(os.path.join(self.bag.bagdir, "preserv.log")) as fd:
+        with open(os.path.join(self.bag.bagdir, "publish.log")) as fd:
             lines = [l for l in fd]
         self.assertIn("i did it!", lines[-1])
         
@@ -501,7 +501,7 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(md['@type'][0], "nrdp:Subcollection")
         self.assertEqual(md['filepath'], "trial")
         
-        with open(os.path.join(self.bag.bagdir, "preserv.log")) as fd:
+        with open(os.path.join(self.bag.bagdir, "publish.log")) as fd:
             lines = [l for l in fd]
         self.assertIn("new", lines[-1])
 

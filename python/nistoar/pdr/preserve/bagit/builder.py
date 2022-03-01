@@ -367,11 +367,12 @@ class BagBuilder(PreservationSystem):
         """
         remove the underlying bag from disk and return this builder to a virgin state
         """
-        self.disconnect_logfile()
-        try:
-            shutil.rmtree(self.bagdir)
-        finally:
-            self._bag = None
+        if os.path.exists(self.bagdir):
+            self.disconnect_logfile()
+            try:
+                shutil.rmtree(self.bagdir)
+            finally:
+                self._bag = None
 
 
     @property
@@ -2405,9 +2406,7 @@ class BagBuilder(PreservationSystem):
 
                 # identifier(s)
                 if nerdm.get('doi'):
-                    print("Identifier: doi:{0} ({1})".format(nerdm['doi'],
-                                                             nerdm['@id']),
-                          file=fd)
+                    print("Identifier: {0} ({1})".format(nerdm['doi'], nerdm['@id']), file=fd)
                 else:
                     print("Identifier: {0}".format(nerdm['@id']), file=fd)
                 fd.write('\n')
@@ -2439,7 +2438,8 @@ class BagBuilder(PreservationSystem):
 
                 # landing page
                 if nerdm.get('doi'):
-                    print("More information:\nhttps://doi.org/" + nerdm.get('doi'), file=fd)
+                    print("More information:\nhttps://doi.org/" +
+                          re.sub(r'^doi:','',nerdm.get('doi')), file=fd)
                 elif nerdm.get('landingPage'):
                     print("More information:\n" + nerdm.get('landingPage'), file=fd)
                 
