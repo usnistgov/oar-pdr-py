@@ -1,0 +1,69 @@
+{
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.2#",
+    "@context": [
+        "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld",
+        {
+            "@base": "ark:/88434/mds2-7223"
+        }
+    ],
+    "@type": [
+        "nrdr:ReleaseCollection",
+        "dcat:Catalog"
+    ],
+    "_extensionSchemas": [
+        "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.2#/definitions/PublicDataResource"
+    ],
+    "@id": "ark:/88434/mds2-7223/pdr:v",
+    "ediid": "ark:/88434/mds2-7223/pdr:v",
+    "version": "1.1.0",
+    "title": "Editable Landing Pages for the PDR",
+    "contactPoint": {
+        "fn": "Raymond Plante",
+        "hasEmail": "mailto:raymond.plante@nist.gov"
+    },
+    "description": [
+        "NIST Researchers publishing data via MIDAS can now edit associated metadata directly on the landing page.  This record enables testing of this feature."
+    ],
+    "keyword": [
+        "data publishing",
+        "testing"
+    ],
+    "theme": [
+        "Fire: Fire detection",
+        "Information Technology: Data and informatics",
+        "Electronics"
+    ],
+    "topic": [
+        {
+            "@type": "Concept",
+            "scheme": "https://data.nist.gov/od/dm/nist-themes/v1.1",
+            "tag": "Fire: Fire detection"
+        },
+        {
+            "@type": "Concept",
+            "scheme": "https://data.nist.gov/od/dm/nist-themes/v1.1",
+            "tag": "Information Technology: Data and informatics"
+        },
+        {
+            "@type": "Concept",
+            "scheme": "https://data.nist.gov/od/dm/nist-themes/v1.1",
+            "tag": "Electronics"
+        }
+    ],
+    "hasRelease": [
+        {
+            "version": "1.0.0",
+            "issued": "2019-08-14 00:00:00",
+            "@id": "ark:/88434/mds2-7223",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds2-7223/pdr:v/1.0.0",
+            "description": "initial release"
+        },
+        {
+            "version": "1.1.0",
+            "issued": "2019-08-14 00:00:00",
+            "@id": "ark:/88434/mds2-7223",
+            "location": "https://data.nist.gov/od/id/ark:/88434/mds2-7223/pdr:v/1.0.1",
+            "description": "metadata update"
+        }
+    ]
+}

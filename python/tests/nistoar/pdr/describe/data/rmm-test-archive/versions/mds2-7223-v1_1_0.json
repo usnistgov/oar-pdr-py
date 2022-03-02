@@ -13,7 +13,7 @@
     "_extensionSchemas": [
         "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.2#/definitions/PublicDataResource"
     ],
-    "@id": "ark:/88434/mds2-7223",
+    "@id": "ark:/88434/mds2-7223/pdr:v/1.1.0",
     "ediid": "ark:/88434/mds2-7223",
     "version": "1.1.0",
     "title": "Editable Landing Pages for the PDR",

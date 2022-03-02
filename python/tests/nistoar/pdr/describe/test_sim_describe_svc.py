@@ -90,7 +90,8 @@ class TestArchive(test.TestCase):
             'ark:/88434/mds00sxbvh': '1E651A532AFD8816E0531A570681A662439',
             "ark:/88434/mds2-2106": "mds2-2106",
             "ark:/88434/mds2-2107": "mds2-2107",
-            "ark:/88434/mds2-2110": "mds2-2110"
+            "ark:/88434/mds2-2110": "mds2-2110",
+            "ark:/88434/mds2-7223": "mds2-7223"
         })
         self.assertEqual(self.arch.releaseSets, {
             'ark:/88434/mds003r0x6/pdr:v': '1E0F15DAAEFB84E4E0531A5706813DD8436',
@@ -98,11 +99,12 @@ class TestArchive(test.TestCase):
             'ark:/88434/mds00sxbvh/pdr:v': '1E651A532AFD8816E0531A570681A662439',
             "ark:/88434/mds2-2106/pdr:v": "mds2-2106",
             "ark:/88434/mds2-2107/pdr:v": "mds2-2107",
-            "ark:/88434/mds2-2110/pdr:v": "mds2-2110"
+            "ark:/88434/mds2-2110/pdr:v": "mds2-2110",
+            "ark:/88434/mds2-7223/pdr:v": "mds2-7223"
         })
         self.assertIn("ark:/88434/mds00sxbvh/pdr:v/1.0.4", self.arch.versions)
         self.assertIn("ark:/88434/mds2-2106/pdr:v/1.2.0",  self.arch.versions)
-        self.assertEqual(len(self.arch.versions), 16)
+        self.assertEqual(len(self.arch.versions), 18)
 
     def test_pdrid2aipid(self):
         self.assertEqual(self.arch.pdrid2aipid("records", "ark:/88434/mds00sxbvh"),
@@ -114,7 +116,7 @@ class TestArchive(test.TestCase):
         
     def test_ids(self):
         ids = self.arch.aipids();
-        self.assertEqual(len(ids), 6)
+        self.assertEqual(len(ids), 7)
         self.assertIn("mds2-2106", ids)
         self.assertIn("mds2-2107", ids)
         self.assertIn("mds2-2110", ids)
@@ -123,7 +125,7 @@ class TestArchive(test.TestCase):
         self.assertIn("1E0F15DAAEFB84E4E0531A5706813DD8436", ids)
 
         ids = self.arch.aipids("releaseSets");
-        self.assertEqual(len(ids), 6)
+        self.assertEqual(len(ids), 7)
         self.assertIn("mds2-2106", ids)
         self.assertIn("mds2-2107", ids)
         self.assertIn("mds2-2110", ids)
@@ -132,7 +134,7 @@ class TestArchive(test.TestCase):
         self.assertIn("1E0F15DAAEFB84E4E0531A5706813DD8436", ids)
 
         ids = self.arch.aipids("versions");
-        self.assertEqual(len(ids), 16)
+        self.assertEqual(len(ids), 18)
         self.assertIn("mds2-2106-v1_2_0", ids)
         self.assertIn("mds2-2107-v1_0_0", ids)
         self.assertIn("mds2-2110-v1_0_1", ids)
@@ -192,8 +194,8 @@ class TestSimRMMHandler(test.TestCase):
         body = self.hdlr.handle()
         self.assertEqual(self.resp[0], "200 Identifier exists")
         data = json.loads("\n".join([ln.decode() for ln in body]))
-        self.assertEqual(data['ResultCount'], 6)
-        self.assertEqual(len(data['ResultData']), 6)
+        self.assertEqual(data['ResultCount'], 7)
+        self.assertEqual(len(data['ResultData']), 7)
         self.assertEqual(data['ResultData'][0]['accessLevel'], "public")
         self.assertTrue(not any(['/pdr:v' in r['@id'] for r in data['ResultData']]))
         
@@ -206,8 +208,8 @@ class TestSimRMMHandler(test.TestCase):
         body = self.hdlr.handle()
         self.assertEqual(self.resp[0], "200 Identifier exists")
         data = json.loads("\n".join([ln.decode() for ln in body]))
-        self.assertEqual(data['ResultCount'], 6)
-        self.assertEqual(len(data['ResultData']), 6)
+        self.assertEqual(data['ResultCount'], 7)
+        self.assertEqual(len(data['ResultData']), 7)
         self.assertIn('hasRelease', data['ResultData'][0])
         self.assertTrue(all(['hasRelease' in r for r in data['ResultData']]))
         self.assertTrue(all([r['@id'].endswith('/pdr:v') for r in data['ResultData']]))
@@ -221,8 +223,8 @@ class TestSimRMMHandler(test.TestCase):
         body = self.hdlr.handle()
         self.assertEqual(self.resp[0], "200 Identifier exists")
         data = json.loads("\n".join([ln.decode() for ln in body]))
-        self.assertEqual(data['ResultCount'], 16)
-        self.assertEqual(len(data['ResultData']), 16)
+        self.assertEqual(data['ResultCount'], 18)
+        self.assertEqual(len(data['ResultData']), 18)
         self.assertEqual(data['ResultData'][0]['accessLevel'], "public")
         self.assertTrue(all(['/pdr:v/1.' in r['@id'] for r in data['ResultData']]))
         
@@ -427,8 +429,8 @@ class TestSimRMMHandler(test.TestCase):
         body = self.hdlr.handle()
         self.assertEqual(self.resp[0], "200 Identifier exists")
         data = json.loads("\n".join([ln.decode() for ln in body]))
-        self.assertEqual(data['ResultCount'], 6)
-        self.assertEqual(len(data['ResultData']), 6)
+        self.assertEqual(data['ResultCount'], 7)
+        self.assertEqual(len(data['ResultData']), 7)
 
         self.resp = []
         req = {
@@ -440,8 +442,8 @@ class TestSimRMMHandler(test.TestCase):
         body = self.hdlr.handle()
         self.assertEqual(self.resp[0], "200 Identifier exists")
         data = json.loads("\n".join([ln.decode() for ln in body]))
-        self.assertEqual(data['ResultCount'], 6)
-        self.assertEqual(len(data['ResultData']), 6)
+        self.assertEqual(data['ResultCount'], 7)
+        self.assertEqual(len(data['ResultData']), 7)
 
         self.resp = []
         req = {
@@ -599,18 +601,19 @@ class TestSimService(test.TestCase):
         ids = [d['@id'] for d in data["ResultData"] if '@id' in d]
 
         # the exact # of results depends on whether test_post_rec runs before or after this test
-        self.assertGreaterEqual(len(data["ResultData"]), 6)
-        self.assertGreaterEqual(data["ResultCount"], 6)
-        self.assertGreaterEqual(data["PageSize"], 6)
-        self.assertLessEqual(len(data["ResultData"]), 7)
-        self.assertLessEqual(data["ResultCount"], 7)
-        self.assertLessEqual(data["PageSize"], 7)
+        self.assertGreaterEqual(len(data["ResultData"]), 7)
+        self.assertGreaterEqual(data["ResultCount"], 7)
+        self.assertGreaterEqual(data["PageSize"], 7)
+        self.assertLessEqual(len(data["ResultData"]), 8)
+        self.assertLessEqual(data["ResultCount"], 8)
+        self.assertLessEqual(data["PageSize"], 8)
 
         self.assertIn("ark:/88434/mds00sxbvh", ids)
         self.assertIn("ark:/88434/mds2-2106", ids)
         self.assertIn("ark:/88434/mds2-2107", ids)
         self.assertIn("ark:/88434/mds2-2110", ids)
-        if len(ids) > 6:
+        self.assertIn("ark:/88434/mds2-7223", ids)
+        if len(ids) > 7:
             self.assertIn("ark:/55121/mds1-1000", ids)
 
 

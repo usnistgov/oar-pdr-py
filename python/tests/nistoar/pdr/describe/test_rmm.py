@@ -144,12 +144,13 @@ class TestMetadataClient(test.TestCase):
 
     def test_search(self):
         data = self.cli.search()
-        self.assertEqual(len(data), 6)
+        self.assertEqual(len(data), 7)
 
         ids = [d['ediid'] for d in data if 'ediid' in d]
         self.assertIn("ark:/88434/mds2-2106", ids)
         self.assertIn("ark:/88434/mds2-2107", ids)
         self.assertIn("ark:/88434/mds2-2110", ids)
+        self.assertIn("ark:/88434/mds2-7223", ids)
         self.assertIn("1E651A532AFD8816E0531A570681A662439", ids)
         self.assertIn("19A9D7193F868BDDE0531A57068151D2431", ids)
         self.assertIn("1E0F15DAAEFB84E4E0531A5706813DD8436", ids)
