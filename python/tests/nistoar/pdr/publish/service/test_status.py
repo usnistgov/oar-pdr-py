@@ -316,7 +316,7 @@ class TestSIPStatus(test.TestCase):
         self.assertEqual(self.status.id, 'ffff')
         self.assertEqual(self.status.state, status.FAILED)
         self.assertEqual(self.status.siptype, 'goob')
-        self.assertEqual(self.status.history, [])
+        self.assertEqual(self.status.data['history'], [])
         
     def test_record_progress(self):
         self.assertEqual(self.status.data['user']['state'], status.NOT_FOUND)

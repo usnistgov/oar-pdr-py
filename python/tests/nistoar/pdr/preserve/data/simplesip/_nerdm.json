@@ -95,10 +95,15 @@
             "mediaType": "application/zip",
             "title": "DOI access for OptSortSph: Sorting Spherical Dielectric Particles in a Standing-Wave Interference Field",
             "description": "Software to predict the optical sorting of particles in a standing-wave laser interference field",
-            "format": "Digital Object Identifier, a persistent identifier",
+            "format": {
+                "description": "Digital Object Identifier, a persistent identifier"
+            },
             "@type": [
                 "nrd:AccessPage",
                 "dcat:Distribution"
+            ],
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.4#/definitions/AccessPage"
             ]
         },
         {

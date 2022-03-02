@@ -458,10 +458,10 @@ class NERDmBasedBagger(SIPBagger):
         if lock:
             self.ensure_filelock()
             with self.lock:
-                self._set_comp_nerdm(nerdm, who, _action=_action)
+                return self._set_comp_nerdm(nerdm, who, _action=_action)
 
         else:
-            self._set_comp_nerdm(nerdm, who, _action=_action)
+            return self._set_comp_nerdm(nerdm, who, _action=_action)
 
     def _set_comp_nerdm(self, nerdm: Mapping, who: PubAgent=None, _action=None, tolatest=True) -> None:
         nerdm = self._check_input_comp(nerdm, tolatest)   # copies nerdm
@@ -504,6 +504,8 @@ class NERDmBasedBagger(SIPBagger):
             _action.add_subaction(act)
         else:
             self.record_history(act)
+
+        return nerdm['@id']
 
     def _check_legal_url(self, url):
         u = urlparse(url)

@@ -11,7 +11,7 @@ from pynoid import __checkdigit as checkdigit
 from .registry import IDRegistry, PDRIDRegistry
 from nistoar.id.minter import IDMinter, NoidMinter
 from nistoar.pdr.constants import ARK_PFX_PAT, ARK_NAAN
-from nistoar.pdr.exceptions import StateException
+from nistoar.pdr.exceptions import StateException, ConfigurationException
 
 ARK_PFX_RE = re.compile(ARK_PFX_PAT)
 LOCAL_KEY_START_PAT = "[a-zA-Z0-9]"   # allowed characters to appear after the shoulder and -
@@ -104,7 +104,7 @@ class PDPMinter(IDMinter):
             while not out:
                 seq = self._seqminter.mint()
                 name = "%s%s%s" % (self.shldr, self.shldrdelim, seq)
-                if 'sipid' not in data:
+                if data.get('sipid') is None:
                     data['sipid'] = name
                 out = "%s/%s%s" % (self.naan, name, self.cfg.get('seqid_flag','s'))
                 out = "ark:/%s%s" % (out, checkdigit(out))
@@ -212,15 +212,15 @@ class PDP0Minter(PDPMinter):
         :raises ValueError:  if the input data contains an 'sipid' value but is not preceded with the 
                              expected prefix.  
         """
-        if not isinstance(data, Mapping) or 'sipid' not in data:
+        if not isinstance(data, Mapping) or not data.get('sipid'):
             return None
 
         # sipid must start with a namespace prefix that matches the shoulder
-        if not re.match(r'^'+self.shldr+':'+LOCAL_KEY_START_PAT, data['sipid']):
-            raise ValueError("ID input data: illegal/unsupported 'sipid' prefix: " + data['sipid'])
+        if not re.match(r'^'+self.shldr+r':'+LOCAL_KEY_START_PAT, str(data['sipid'])):
+            raise ValueError("ID input data: illegal/unsupported 'sipid' prefix: " + str(data['sipid']))
 
         # lop off the namespace prefix
-        locid = re.sub(r'^[^:]*:', '', data['sipid'])
+        locid = re.sub(r'^[^:]*:', '', str(data['sipid']))
         if not locid:
             locid = None
         return locid

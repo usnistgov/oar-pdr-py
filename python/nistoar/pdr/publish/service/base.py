@@ -319,7 +319,7 @@ class SimpleNerdmPublishingService(PublishingService):
         schema = nerdm.get("_schema")
         if not schema:
             schema = CORE_SCHEMA_URI
-        schema = schema.rtrim("#")
+        schema = schema.rstrip("#")
 
         m = re.search(r"^"+NERDM_SCHEMA_BASE+"v(\d+(\.\d+)*)", schema)
         if not m:

@@ -324,7 +324,10 @@ class NISTBag(PreservationSystem):
 
         if relid == RES_DELIM:              # "pdr:r"
             # resource-level metadata only
-            return self.nerd_metadata_for('', True)
+            out = self.nerd_metadata_for('', True)
+            if 'components' in out:
+                del out['components']
+            return out
 
         if relid == VER_DELIM:              # "pdr:v"
             md = self.nerd_metadata_for('', True)

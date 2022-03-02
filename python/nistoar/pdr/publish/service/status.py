@@ -7,7 +7,7 @@ from collections import OrderedDict
 from copy import deepcopy
 
 from ...exceptions import StateException
-from .. import sys as pubsys
+from .. import system as pubsys
 
 NOT_FOUND  = "not found"     # SIP has not been created
 AWAITING   = "awaiting"      # SIP requires an update before it can be published
@@ -171,7 +171,7 @@ class SIPStatus(object):
     access it.  
     """
 
-    def __init__(self, id, config=None, siptype='', sysdata=None, _data=None):
+    def __init__(self, id, config=None, sysdata=None, _data=None):
         """
         open up the status for the given identifier.  Initial data can be 
         provided or, if no cached data exist, it can be initialized with 

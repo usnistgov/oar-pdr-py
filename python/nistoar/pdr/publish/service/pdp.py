@@ -3,17 +3,23 @@ This module provides publishing service implementations based around assembling 
 as the Archive Information Package (AIP).  This includes those supporting Submission Information Package
 (SIP) conventions PDP1 and PDP2.  
 """
-import os
+import os, re, importlib, inspect
 from copy import deepcopy
 from collections.abc import Mapping
 from abc import abstractmethod, abstractproperty
 
+from ... import constants as const
 from ....pdr import config as cfgmod
 from .base import SimpleNerdmPublishingService
 from .. import (PublishingStateException, SIPConflictError, SIPNotFoundError, BadSIPInputError,
-                ConfigurationException)
-from ..bagger.base import SIPBagger, SIPBaggerFactory
+                ConfigurationException, UnauthorizedPublishingRequest)
+from ..bagger import SIPBagger, SIPBaggerFactory, PDPBagger
 from ..prov import PubAgent
+from ..idmint import PDP0Minter
+from . import status
+
+ARK_PFX_RE = re.compile(const.ARK_PFX_PAT)
+ARK_ID_RE = re.compile(const.ARK_ID_PAT)
 
 class BagBasedPublishingService(SimpleNerdmPublishingService):
     """
@@ -112,21 +118,26 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         :return: an object describing the current status of the idenfied SIP
         :rtype: SIPStatus
         """
-        return SIPStatus(sipid, {"": self.statusdir}, self.convention)
+        return status.SIPStatus(sipid, {"cachedir": self.statusdir})
 
     @abstractmethod
-    def _get_id_shoulder(who, sipid: str, create: bool):
+    def _get_id_shoulder(self, who: PubAgent, sipid: str, create: bool):
         """
         determine the ID shoulder to be associated with a service request.  The ID shoulder (the prefix 
         to the local part of our identifiers) serves as a particular account for the client under which 
         this request will operate.  It determines the configuration used by the bagger that will assemble 
         the SIP.  This should raise an UnauthorizedPublishingRequest if client (given by who) is requesting
         a shoulder (as specified by sipid) they are not authorized for.  
+
+        :param PubAgent who:  the user agent making the request
+        :param str    sipid:  the requested SIP ID
+        :param bool  create:  True if the user is requesting the publishing of a new SIP; False if 
+                              requesting an update to a previously published SIP.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def _set_identifiers(nerdm, minter, sipid):
+    def _set_identifiers(self, nerdm, minter, sipid):
         """
         update nerdm with SIP and PDR (and any others, like AIP) identifiers using the minter.
         If sipid is non-None, mint a new one.  The actual sipid is returned 
@@ -134,7 +145,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         raise NotImplementedError()
 
     @abstractmethod
-    def _get_minter(shoulder):
+    def _get_minter(self, shoulder):
         """
         return a minter to be used to mint SIP/PDR identifiers.  This is usually constructed based 
         on configuration data.
@@ -146,7 +157,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             out = self._create_bagger(shoulder, sipid, minter)
             if minter: 
                 self._baggers[sipid] = out
-        return out
+            return out
+        return self._baggers[sipid]
 
     @abstractmethod
     def _create_bagger(self, shoulder, sipid, minter=None):
@@ -156,7 +168,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
     def _create_ingest_service(self):
         raise NotImplementedError()
 
-    def accept_resource_metadata(self, nerdm: Mapping, who: PubAgent=None, sipid: str=None, create: bool=None):
+    def accept_resource_metadata(self, nerdm: Mapping, who: PubAgent=None, sipid: str=None, create:
+                                 bool=None) -> str:
         """
         create or update an SIP for submission.  By default, a new SIP will be created if the input 
         record is does not have an "@id" property, and an identifier is assigned to it; otherwise,
@@ -183,6 +196,9 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                             an update; if the SIP doesn't exist, an error is raised.  If not provided,
                             the intent is determined based on whether an SIP ID is specified (either 
                             via the sipid parameter or the "@id" property in the nerdm object).
+
+        :return: the SIP ID that should be used to send updates for this SIP
+                 :rtype: str
 
         :raises NERDError:  if the input metadata cannot be interpreted as proper NERDm Resource metadata
         :raises PublishingStateException:  if the SIP is not in a correct state to accept the metadata
@@ -230,8 +246,12 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         else:
             sts = self.status_of(sipid)
             if sts.state == status.PROCESSING:
-                raise SIPConflictError("Unable to update SIP {0}: already in process ({1}: {2})"
+                raise SIPConflictError(sipid, "Unable to update SIP {0}: already in process ({1}: {2})"
                                        .format(sipid, sts.siptype, sts.state))
+            if create is False and (sts.state == status.NOT_FOUND or sts.state == status.PUBLISHED):
+                # Caller explicitly says they are expecting this SIP to exist already
+                raise SIPConflictError(sipid, "Unable to update SIP {0}: SIP not established, yet"
+                                       .format(sipid))
 
             bagger = self._get_bagger_for(shoulder, sipid, minter)
             if sts.state == status.NOT_FOUND or sts.state == status.PUBLISHED:
@@ -295,7 +315,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         # validate the input
         if self.cfg.get('validate_nerdm', True):
             # will raise ValidationError if not valid
-            self.validate_comp_nerdm(nerdm)
+            self.validate_comp_nerdm(cmpmd)
 
         shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
         bagger = self._get_bagger_for(shoulder, sipid)
@@ -314,7 +334,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         try:
             bagger.prepare()
-            cmpid = bagger.set_comp_nerd(nerdm, who)
+            cmpid = bagger.set_comp_nerdm(cmpmd, who)
             sts.update(status.PENDING)
 
         except Exception as ex:
@@ -432,7 +452,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         sts.update(status.PROCESSING)
         try:
             self.finalize(sipid, who)
-            self.ingester.ingest(sipid, who)
+            # self.ingester.ingest(sipid, who)
             sts.update(status.PUBLISHED)
         except Exception as ex:
             self.log.error("Failed to publish SIP {0}: {1}".format(sipid, str(ex)))
@@ -444,32 +464,67 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         returns a NERDm description of the entity with the given identifier.  If the identifier 
         points to a resource, A NERDm Resource record is returned.  If it refers to a component
         of an SIP, a Component record is returned.  
+        :param str id:   an identifier identifying the SIP.  This is typically an SIP-ID, but it can 
+                         also be a PDR-ID.
+        :param bool withcomps:  if True, and the ID points to a resource, then the member component
+                         metadata will be included.
         :rtype Mapping:
         """
-        sipid = re.sub(r'/.*$', '', id)
+        reqid = id
+        m = ARK_ID_RE.match(id)
+        if m:
+            # a PDR-ID was provided; convert it to an SIP-ID
+            pdrid = id[:m.end(2)]
+            aipid = m.group(2)
+            shldr = re.sub(r'-.*', '', aipid)
+
+            # look up the SIP-ID
+            shldrcfg = self.cfg.get('shoulders', {}).get(shldr)
+            if not shldrcfg:
+                self.log.warning("Request for unconfigured shoulder: %s", shldr)
+                raise SIPNotFoundError(aipid, "Unrecognized ID shoulder: "+shldr)
+
+            minter = self._get_minter(shldr)
+            idmd = minter.datafor(pdrid)
+            if idmd and idmd.get('sipid'):
+                sipid = idmd.get('sipid')
+            else:
+                sipid = aipid
+            id = sipid + id[m.end(2):]
+        else:
+            sipid = re.sub(r'/.*$', '', id)
+            shldr = re.sub(r'[:\-].*$', '', sipid)
+
         if not sipid:
             msg = "BagBasedPublishingService.describe(): SIP identifier not specied"
             if id:
                 msg += ": " + id
             raise ValueError(msg)
+        sts = self.status_of(sipid)
+        if sts.state == status.NOT_FOUND:
+            raise SIPNotFoundError(sipid)
 
-        shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
-        bagger = self._get_bagger_for(shoulder, sipid)
+        bagger = self._get_bagger_for(shldr, sipid)
 
-        if os.path.exists(bagger.bag):
-            if sipid == id:
+        if os.path.exists(bagger.bagdir):
+            parts = id.split('/', 1)
+            if len(parts) == 1 or not parts[1]:
                 # resource-level requested
                 if withcomps:
                     return bagger.bag.nerdm_record()
-                return bagger.bag.nerd_metadata_for('')
+                return bagger.bag.describe("pdr:r")
+
             else:
                 # component item requested
-                # not implemented yet
-                return {}
+                out = bagger.bag.describe(parts[1])
+                if not out:
+                    # component has not been created yet
+                    out = {}
+                return out
 
         else:
             # this is all we know about it
-            return { "@id": id }
+            return { "@id": id, "pdr:sipid": sipid }
 
 
 class PDPublishingService(BagBasedPublishingService):
@@ -571,7 +626,8 @@ class PDPublishingService(BagBasedPublishingService):
                                    siptype -- the shoulder 
                                    config -- the bagger configuration to use
                                    minter -- an PDPMinter instance to use to mint IDs
-                                 This can point to one of following four types of python entities: 
+                                 The name, therefore, can point to one of following four types of python 
+                                 entities: 
                                  (a) a stand-alone function conforming to the API,
                                  (b) a class whose constructor conforms to the API,
                                  (c) a static or class method of a class that conform to the API, or
@@ -637,7 +693,19 @@ class PDPublishingService(BagBasedPublishingService):
         self.idregdir = self._resolve_dir('id_registry_dir', idregdir, self.workdir, 'idregs')
         self._minters = {}
 
-    def _get_id_shoulder(who, sipid: str, create: bool):
+    def _get_id_shoulder(self, who, sipid: str, create: bool):
+        """
+        determine the ID shoulder to be associated with a service request.  The ID shoulder (the prefix 
+        to the local part of our identifiers) serves as a particular account for the client under which 
+        this request will operate.  It determines the configuration used by the bagger that will assemble 
+        the SIP.  This will raise an UnauthorizedPublishingRequest if client (given by who) is requesting
+        a shoulder (as specified by sipid) they are not authorized for.  
+
+        :param PubAgent who:  the user agent making the request
+        :param str    sipid:  the requested SIP ID
+        :param bool  create:  True if the user is requesting the publishing of a new SIP; False if 
+                              requesting an update to a previously published SIP.
+        """
         # return an ID shoulder to mint an ID under given the permissions configured for the
         # given client (who)
 
@@ -674,36 +742,39 @@ class PDPublishingService(BagBasedPublishingService):
 
         shoulder = self.cfg.get('shoulders', {}).get(out)
         if not shoulder:
-            raise ConfigurationException("No handler configured for SIP shoulder="+out)
-        if who.group not in shoulder.get('allowed_clients', []):
+            self.log.warning("No handler configured for SIP shoulder=%s", out)
+        if not shoulder or who.group not in shoulder.get('allowed_clients', []):
             isdefault = "default " if out == client_ctl.get('default_shoulder') else ""
             raise UnauthorizedPublishingRequest(
-                "Client group, %s', is not permitted to publish to %sSIP shoulder, %s"
+                "Client group '%s' is not permitted to publish to %sSIP shoulder, %s"
                 % (who.group, isdefault, out)
             )
 
         return out
 
-    def _set_identifiers(nerdm, minter, sipid):
+    def _set_identifiers(self, nerdm, minter, sipid):
         data = {'sipid': sipid}
         pdrid = None
         if sipid:
-            matches = self._idmntr.search(data)
-            if matches > 1:
+            matches = minter.search(data)
+            if len(matches) > 1:
                 raise PublishingStateException("Multiple IDs have been registered for sipid="+sipid)
-            elif matches > 0:
+            elif len(matches) > 0:
                 pdrid = matches[0]
 
         if not pdrid:
-            pdrid = self.idmntr.mint(data)
+            pdrid = minter.mint(data)
 
         nerdm['@id'] = pdrid
         if not sipid:
-            clientidflag = self.idmntr.cfg.get('clientid_flag', 'p')
-            sipid = ARK_PFX_RE.sub('', pdrid)
-            if re.search(clientidflag + r'[a-zA-Z0-9]$', sipid):
-                sipid = ':'.join(sipid.split('-', 1))
+            iddata = minter.datafor(pdrid)
+            if iddata.get('sipid'):
+                sipid = iddata.get('sipid')
+            else:
+                sipid = ARK_PFX_RE.sub('', pdrid)
+
         nerdm['pdr:sipid'] = sipid
+        nerdm['pdr:aipid'] = ARK_PFX_RE.sub('', pdrid)
 
         return sipid
 
@@ -725,7 +796,7 @@ class PDPublishingService(BagBasedPublishingService):
             if shldr in loaded:
                 break
             parent = deepcopy(self.cfg.get('shoulders',{}).get(shldr, {}).get('bagger', {}))
-            bgrcfg = merge_config(bgrcfg, parent)
+            bgrcfg = cfgmod.merge_config(bgrcfg, parent)
             loaded.append(shldr)
 
         for prop in "working_dir store_dir repo_access default_bagger_factory".split():
@@ -733,25 +804,28 @@ class PDPublishingService(BagBasedPublishingService):
                 bgrcfg.setdefault(prop, self.cfg[prop])
 
         # determine the bagger factory
-        factory = bgrcfg('factory_function', self.cfg.get('default_bagger_factory'))
-        if not factory:
-            factory = PDPBaggerFactory(self.cfg)
-        if not factory:
-            raise ConfigurationException("No bagger factory function configured for shoulder="+shoulder)
-        if isinstance(factory, str):
+        factoryid = bgrcfg.get('factory_function', self.cfg.get('default_bagger_factory'))
+        if isinstance(factoryid, str):
             # factory names a python symbol that must be loaded
-            if factory.startswith('bagger.'):
-                factory = 'nistoar.pdr.publish.' + factory
+            if factoryid.startswith('bagger.'):
+                factoryid = 'nistoar.pdr.publish.' + factoryid
 
             # load specified factory
-            factory = self._load_factory_function(factory)
+            factory = self._load_factory_function(factoryid)
+
+        else:
+            factory = factoryid
+        if not factory:
+            factory = PDPBaggerFactory(self.cfg).create
+        if not factory:
+            raise ConfigurationException("No bagger factory function configured for shoulder="+shoulder)
 
         # call the factory function
         try:
-            return factory(sipid=sipid, siptype=shoulder, config=bagcfg, minter=minter)
+            return factory(sipid=sipid, siptype=shoulder, config=bgrcfg, minter=minter)
         except TypeError as ex:
             raise ConfigurationException("factory_function: Does not resolve to an API-compliant callable: "+
-                                         factoryid+": "+str(ex))
+                                         str(factoryid)+": "+str(ex))
         
     def _load_factory_function(self, factoryid):
         funcid = ''
@@ -765,7 +839,7 @@ class PDPublishingService(BagBasedPublishingService):
             funcid += '.' + parts[1]
             modid = parts[0]
             try:
-                mod = importlib(modid)
+                mod = importlib.import_module(modid)
                 break
             except ImportError:
                 pass
@@ -786,9 +860,10 @@ class PDPublishingService(BagBasedPublishingService):
             func = getattr(func, parts[0])
             funcid = (len(parts) > 1 and parts[1]) or None
 
-        if inspect.isclass(func) and hasattr(func, 'create'):
-            func = getattr(func, 'create')
-            factorid += ".create"
+        if inspect.isclass(func) and hasattr(func, 'create') and hasattr(getattr(func, 'create'), '__call__'):
+            factory = func(self.cfg)
+            func = getattr(factory, 'create')
+            factoryid += ".create"
         if not hasattr(func, '__call__'):
             raise ConfigurationException("factory_function: Does not resolve to a callable: "+factoryid)
 
@@ -809,9 +884,7 @@ class PDPublishingService(BagBasedPublishingService):
         if 'id_shoulder' not in mntrcfg:
             mntrcfg['id_shoulder'] = shoulder
 
-        if 'id_registry_dir' in self.cfg:
-            mntrcfg.setdefault('store_dir', self.cfg.get('id_registry_dir'))
-        regdir = mntrcfg.get('store_dir', self.idregdir)
+        regdir = mntrcfg.setdefault('store_dir', self.idregdir)
         if not os.path.abspath(regdir):
             regdir = os.path.join(self.workdir, regdir)
             if not os.path.exists(regdir) and os.path.exists(self.workdir):
@@ -834,7 +907,7 @@ class PDPublishingService(BagBasedPublishingService):
                 raise ConfigurationException("factory_function: Doesn't resolve to an API-compliant callable: "
                                              +factoryid+": "+str(ex))
 
-        return PDRIDMinter(mntrcfg, shoulder)
+        return PDP0Minter(mntrcfg, shoulder)
                     
         
 PDP0Service = PDPublishingService

@@ -113,7 +113,7 @@ class SIPConflictError(SIPStateException):
         :param str   msg:  A message describing the conflict
         :param Exception cause:  a caught exception that represents the underlying cause of the problem.  
         """
-        super(SIPStateException, self).__init__(sipid, msg, cause)
+        super(SIPConflictError, self).__init__(sipid, msg, cause)
     
 class SIPNotFoundError(SIPStateException):
     """
@@ -133,3 +133,20 @@ class SIPNotFoundError(SIPStateException):
                 msg += "({0})".format(str(cause))
         super(SIPNotFoundError, self).__init__(sipid, msg, cause)
     
+class UnauthorizedPublishingRequest(BadSIPInputError):
+    """
+    An exception indicating that a client is not authorized to publish a given SIP as 
+    requested 
+    """
+    def __init__(self, msg=None, cause=None):
+        """
+        create the exception.
+
+        :param str   msg:  A message to override the default.
+        :param Exception cause:  a caught exception that represents the underlying cause of the problem.  
+        """
+        if not msg:
+            msg = "Unauthorized publishing request"
+            if cause:
+                msg += ": " + str(cause)
+        super(UnauthorizedPublishingRequest, self).__init__(msg, cause)

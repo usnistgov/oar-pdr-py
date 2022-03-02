@@ -1,0 +1,7 @@
+publisher:
+  "@type":      org:Organization
+  name:         National Institute of Standards and Technology
+license:      https://www.nist.gov/open/license
+language:   [ en ]
+bureauCode: [ "006:55" ]
+programCode: [ "006:045" ]

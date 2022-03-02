@@ -1114,6 +1114,8 @@ class BagBuilder(PreservationSystem):
         if msg:
             self.record(msg)
         comps[found] = self._update_md(comps[found], mdata)
+        if not rmd.get('components'):
+            rmd['components'] = comps
         self._write_resmd(rmd)
 
         return comps[found]
