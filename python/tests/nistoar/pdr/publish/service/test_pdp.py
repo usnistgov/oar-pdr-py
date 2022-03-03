@@ -513,6 +513,29 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(bnerd["pdr:sipid"], "ncnr0:hello")
         self.assertEqual(bnerd['version'], '1.0.0')
 
+    def test_publish(self):
+        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd['version'] = "1.0.0+ (in edit)"
+
+        self.assertEqual(self.pubsvc.status_of("ncnr0:hello").state, status.NOT_FOUND)
+
+        sipid = self.pubsvc.accept_resource_metadata(nerd, ncnrag, sipid="ncnr0:hello", create=True)
+        self.assertEqual(sipid, "ncnr0:hello")
+        bagdir = self.bagparent / sipid
+        self.assertTrue(bagdir.is_dir())
+        bag = NISTBag(bagdir)
+        bnerd = bag.nerdm_record(True)
+        self.assertEqual(bnerd["@id"], "ark:/88434/ncnr0-hellopk")
+        self.assertEqual(bnerd["pdr:sipid"], "ncnr0:hello")
+        self.assertEqual(bnerd["pdr:aipid"], "ncnr0-hellopk")
+        self.assertEqual(bnerd["title"], nerd['title'])
+        self.assertTrue(len(bnerd.get('components',[])) > 0)
+        self.assertEqual(bnerd['version'], "1.0.0+ (in edit)")
+
+        # WARNING: Implmentation is not complete!
+        self.pubsvc.publish(sipid, ncnrag)
+        self.assertEqual(self.pubsvc.status_of(sipid).state, status.PUBLISHED)
+
                          
 if __name__ == '__main__':
     test.main()
