@@ -130,7 +130,6 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(nerd.get('pdr:sipid'), 'pdp1:goob')
         self.assertEqual(nerd.get('pdr:aipid'), 'goober')
         self.assertEqual(nerd.get('programCode'), ["006:045"])
-        self.assertEqual(nerd.get('accessLevel'), "public")
         self.assertIn('publisher', nerd)
 
         self.assertTrue(bagdir.joinpath('metadata','annot.json').is_file())
@@ -138,7 +137,6 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(nerd.get('pdr:sipid'), 'pdp1:goob')
         self.assertEqual(nerd.get('pdr:aipid'), 'goober')
         self.assertEqual(nerd.get('programCode'), ["006:045"])
-        self.assertEqual(nerd.get('accessLevel'), "public")
         self.assertIn('publisher', nerd)
         self.assertNotIn('version', nerd)
 
@@ -195,7 +193,7 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(saved.get('pdr:aipid'), 'pdp1-0017sm')
         self.assertEqual(saved.get('bureauCode'), ["006:55"])
         self.assertEqual(saved.get('programCode'), ["006:045"])
-        self.assertEqual(saved.get('accessLevel'), "public")
+        self.assertEqual(saved.get('accessLevel'), "private")
         self.assertEqual(to_dict(saved.get('publisher')), to_dict(pubshr))
         self.assertIn("OptSortSph", saved['title'])
         self.assertEqual(len(saved['authors']), 2)
@@ -313,6 +311,53 @@ class TestPDPBagger(test.TestCase):
         with open(os.path.join(self.bgr.bagdir, "publish.history")) as fd:
             history = prov.load_from_history(fd)
         self.assertTrue(all([a.agent for a in history]))
+
+    def test_finalize_version(self):
+        bagdir = self.bagparent / 'pdp1:goob'
+        self.assertTrue(not bagdir.exists())
+        self.set_bagger_for("pdp1:goob")
+        self.bgr.prepare(who=tstag)
+        self.assertTrue(bagdir.exists())
+
+        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        del nerd['components'][2]
+        self.bgr.set_res_nerdm(nerd, tstag, True)
+        
+        self.assertEqual(self.bgr.finalize_version(tstag), "1.0.0")
+        bnerd = self.bgr.bag.nerdm_record(True)
+        self.assertEqual(bnerd["version"], "1.0.0")
+
+        nerd['version'] = "1.0.2+ (in edit)"
+        self.bgr.set_res_nerdm(nerd, tstag, True)
+        self.assertEqual(self.bgr.finalize_version(tstag, 2), "1.0.3")
+        bnerd = self.bgr.bag.nerdm_record(True)
+        self.assertEqual(bnerd["version"], "1.0.3")
+
+        nerd['version'] = "1.0.2+ (in edit)"
+        self.bgr.set_res_nerdm(nerd, tstag, True)
+        self.assertEqual(self.bgr.finalize_version(tstag, 1), "1.1.0")
+        bnerd = self.bgr.bag.nerdm_record(True)
+        self.assertEqual(bnerd["version"], "1.1.0")
+
+        nerd['version'] = "1.0.2+ (in edit)"
+        self.bgr.set_res_nerdm(nerd, tstag, True)
+        self.assertEqual(self.bgr.finalize_version(tstag, 0), "2.0.0")
+        bnerd = self.bgr.bag.nerdm_record(True)
+        self.assertEqual(bnerd["version"], "2.0.0")
+
+        nerd['version'] = "1.0.2+ (in edit)"
+        self.bgr.set_res_nerdm(nerd, tstag, True)
+        self.assertEqual(self.bgr.finalize_version(tstag, 3), "1.0.2.1")
+        bnerd = self.bgr.bag.nerdm_record(True)
+        self.assertEqual(bnerd["version"], "1.0.2.1")
+
+        nerd['version'] = "1.0b.2rc3+ (in edit)"
+        self.bgr.set_res_nerdm(nerd, tstag, True)
+        self.assertEqual(self.bgr.finalize_version(tstag, 2), "1.0.3")
+        bnerd = self.bgr.bag.nerdm_record(True)
+        self.assertEqual(bnerd["version"], "1.0.3")
+
+        
         
     def test_describe(self):
         bagdir = self.bagparent / 'pdp1:goob'
@@ -339,6 +384,8 @@ class TestPDPBagger(test.TestCase):
         md = self.bgr.describe("pdr:v")
         self.assertIsNotNone(md)
         self.assertTrue(md.get("@id", "").endswith("pdr:v"))
+
+    
         
                          
 if __name__ == '__main__':

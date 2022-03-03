@@ -404,17 +404,18 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         sts = self.status_of(sipid)
         if sts.state == status.NOT_FOUND:
             raise SIPNotFoundError(sipid)
-        if sts.state != status.PENDING:
-            raise SIPConflictError(sipid, "SIP {0} is not ready for finalizing: {1}"
-                                          .format(sipid, sts.message))
-        if sts.siptype != sts.convention:
-            raise SIPConflictError(sipid, "SIP {0} is being handled by a different convention: {1}"
-                                          .format(sipid, sts.message))
         if sts.state == status.FINALIZED:
             self.log.info("SIP %s is already finalized (skipping)", sipid)
             return
+        if sts.state != status.PENDING:
+            raise SIPConflictError(sipid, "SIP {0} is not ready for finalizing: {1}"
+                                          .format(sipid, sts.message))
+        if sts.siptype != self.convention:
+            raise SIPConflictError(sipid, "SIP {0} is being handled by a different convention: {1}"
+                                          .format(sipid, sts.message))
 
-        bagger = self._get_bagger_for(sipid, who)
+        shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
+        bagger = self._get_bagger_for(shoulder, sipid)
         try:
             bagger.finalize(who)
             sts.update(status.FINALIZED)
@@ -511,7 +512,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             if len(parts) == 1 or not parts[1]:
                 # resource-level requested
                 if withcomps:
-                    return bagger.bag.nerdm_record()
+                    return bagger.bag.nerdm_record(True)
                 return bagger.bag.describe("pdr:r")
 
             else:

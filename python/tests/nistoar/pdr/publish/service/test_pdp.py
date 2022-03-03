@@ -475,8 +475,43 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(self.pubsvc.status_of("ncnr0:hello").state, status.NOT_FOUND)
         bagdir = self.bagparent / sipid
         self.assertFalse(bagdir.exists())
-        
 
+    def test_finalized(self):
+        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd['version'] = "1.0.0+ (in edit)"
+
+        self.assertEqual(self.pubsvc.status_of("ncnr0:hello").state, status.NOT_FOUND)
+
+        sipid = self.pubsvc.accept_resource_metadata(nerd, ncnrag, sipid="ncnr0:hello", create=True)
+        self.assertEqual(sipid, "ncnr0:hello")
+        bagdir = self.bagparent / sipid
+        self.assertTrue(bagdir.is_dir())
+        bag = NISTBag(bagdir)
+        bnerd = bag.nerdm_record(True)
+        self.assertEqual(bnerd["@id"], "ark:/88434/ncnr0-hellopk")
+        self.assertEqual(bnerd["pdr:sipid"], "ncnr0:hello")
+        self.assertEqual(bnerd["pdr:aipid"], "ncnr0-hellopk")
+        self.assertEqual(bnerd["title"], nerd['title'])
+        self.assertTrue(len(bnerd.get('components',[])) > 0)
+        self.assertEqual(bnerd['version'], "1.0.0+ (in edit)")
+
+        self.assertEqual(self.pubsvc.status_of("ncnr0:hello").state, status.PENDING)
+
+        self.pubsvc.finalize(sipid, ncnrag)
+        self.assertEqual(self.pubsvc.status_of("ncnr0:hello").state, status.FINALIZED)
+
+        bnerd = bag.nerdm_record(True)
+        self.assertEqual(bnerd["@id"], "ark:/88434/ncnr0-hellopk")
+        self.assertEqual(bnerd["pdr:sipid"], "ncnr0:hello")
+        self.assertEqual(bnerd['version'], '1.0.0')   # not built from a previous version
+
+        self.pubsvc.finalize(sipid, ncnrag)
+        self.assertEqual(self.pubsvc.status_of("ncnr0:hello").state, status.FINALIZED)
+
+        bnerd = bag.nerdm_record(True)
+        self.assertEqual(bnerd["@id"], "ark:/88434/ncnr0-hellopk")
+        self.assertEqual(bnerd["pdr:sipid"], "ncnr0:hello")
+        self.assertEqual(bnerd['version'], '1.0.0')
 
                          
 if __name__ == '__main__':

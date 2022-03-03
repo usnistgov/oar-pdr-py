@@ -36,6 +36,8 @@ from ... import utils
 from ...preserve.bagit import NISTBag, BagBuilder
 from ....nerdm.convert import latest as nerdm_latest
 
+PENDING_VERSION_SFX = "+ (in edit)"
+
 class HeadBagCacher(object):
     """
     a helper class that manages serialized head bags in a local cache.  It uses the PDR's 
@@ -457,6 +459,9 @@ class UpdatePrepper(object):
 
             bag.add_res_nerd(nerdm, savefilemd=True)
 
+            # keep a copy of the last version of the nerdm record for use by the bagger
+            utils.write_json(nerdm, os.path.join(bag.bagdir, "__old_nerdm.json"))
+
             # finally set the version to a value appropriate for an update in progress
             self.update_version_for_edit(bag)
 
@@ -493,6 +498,9 @@ class UpdatePrepper(object):
         with BagBuilder(parent, bagname, {'validate_id': False}, nerd['@id'], logger=self.log) as bldr:
 
             bldr.add_res_nerd(nerd, savefilemd=True)
+
+            # keep a copy of the last version of the nerdm record for use by the bagger
+            utils.write_json(nerd, os.path.join(bldr.bagdir, "__old_nerdm.json"))
 
             # update the version appropriate for edit mode
             self.update_version_for_edit(bldr)
@@ -603,7 +611,7 @@ class UpdatePrepper(object):
             bagbldr.update_metadata_for('', updmd, message=msg)
             
     def make_edit_version(self, prev_vers):
-        return prev_vers + "+ (in edit)"
+        return prev_vers + PENDING_VERSION_SFX
         
     def update_multibag_info(self, headbag, destbag):
         """

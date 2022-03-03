@@ -14,11 +14,12 @@ from .. import BadSIPInputError, PublishingStateException
 from ... import constants as const
 from ....nerdm.constants import CORE_SCHEMA_URI, PUB_SCHEMA_URI, EXP_SCHEMA_URI, core_schema_base
 from ....nerdm import utils as nerdutils
+from ... import utils as utils
 from ....nerdm.convert.latest import update_to_latest_schema
 from ...preserve.bagit.builder import BagBuilder
 from ... import def_etc_dir
 from .base import SIPBagger
-from .prepupd import UpdatePrepService
+from .prepupd import UpdatePrepService, PENDING_VERSION_SFX
 from ..idmint import PDPMinter
 from ..prov import Action, PubAgent, dump_to_history
 
@@ -289,7 +290,7 @@ class NERDmBasedBagger(SIPBagger):
         """
         if not self.bagdir or not os.path.exists(self.bagdir):
             self.prepare(False, who, _action=_action)
-        return self.bag.describe(relid)
+        return self.bagbldr.bag.describe(relid)
 
     def set_res_nerdm(self, nerdm: Mapping, who: PubAgent = None, savefilemd: bool=True,
                       lock: bool=True, _action: Action=None) -> None:
@@ -380,8 +381,8 @@ class NERDmBasedBagger(SIPBagger):
             else:
                 hist = hist.subactions[0]
 
-        except Exception:
-            self.log.warning("Bag left in possible incomplete state due to error")
+        except Exception as ex:
+            self.log.warning("Bag left in possible incomplete state due to error: %s", str(ex))
             self.record_history(hist)
             hist = self._history_comment("#m", who, "Failed to complete %s action" % hist.type)
             raise
@@ -438,6 +439,9 @@ class NERDmBasedBagger(SIPBagger):
 
         if 'contactPoint' in resmd:
             resmd['contactPoint']['@type'] = "vcard:Contact"
+
+        if not resmd.get('accessLevel'):
+            resmd['accessLevel'] = "public"
 
     def _set_provider_res_modifications(self, resmd: Mapping):
         """
@@ -704,6 +708,149 @@ class NERDmBasedBagger(SIPBagger):
         else:
             self.bagbldr.destroy()
 
+    def finalize_version(self, who: PubAgent, incrfield: int=None, _action=None) -> str:
+        """
+        set the version that this dataset should be published under.  The version property is only 
+        updated if it has not already been set; that is, only if it is marked with a version string 
+        ending in "+ (in edit)".  Otherwise, no changes are made.  Thus, once the version is finalized, 
+        it will not be further updated via subsequent calls to this method.
+
+        If updated, the version is updated by incrementing one of version fields.  Which field should 
+        be incremented is determined by _determine_update_level().  
+
+        :param PubAgent who:   the agent requesting the finalization
+        :param int incrfield:  the position of the version field that should be 
+        """
+        hist = _action
+        if not hist:
+            hist = Action(Action.PATCH, self.id, who, "finalizing version")
+            
+        self.ensure_preparation(True, who, _action)
+        nerd = self.bagbldr.bag.nerd_metadata_for('', True)
+        oldver = nerd.get("version", "")
+        oldnerdfile = os.path.join(self.bagdir, "__old_nerdm.json")
+        oldnerd = None
+        ver = None
+
+        if not oldver:
+            # this shouldn't happen (unless, possibly, it's never been published before)
+            if not os.path.isfile(oldnerdfile):
+                ver = "1.0.0"
+            else:
+                oldnerd = utils.read_nerd(oldnerdfile)
+                oldver = oldnerd.get('version', '1.0.0') + PENDING_VERSION_SFX
+        
+        elif not oldver.endswith(PENDING_VERSION_SFX):
+            self.log.info("version already finalized as v%s", oldver)
+            if _action:
+                _action.add_subaction(self._history_comment('#m', who,
+                                                            "version already finalized as v%s" % oldver))
+            return oldver
+
+        if oldver and oldver.endswith(PENDING_VERSION_SFX):
+            # ends with the pending suffix
+            oldver = oldver[:(-1*len(PENDING_VERSION_SFX))]
+            
+            if incrfield is not None:
+                if not isinstance(incrfield, int):
+                    raise TypeError("finalize_version(): incrfield is not an int: "+type(incrfield))
+                ver = self._increment_version(oldver, incrfield)
+
+            else:
+                # determine how it will be incremented
+                if not oldnerd and os.path.exists(oldnerdfile):
+                    oldnerd = utils.read_nerd(oldnerdfile)
+
+                try:
+                    ver = self._increment_version(oldver, self._determine_update_level(nerd, oldnerd))
+                except SIPStateException as ex:
+                    raise SIPStateException("Don't know how to increment version: "+str(ex))
+
+
+        self.bagbldr.update_metadata_for('', {'version': ver}, message="Setting version to "+ver)
+        hist.add_subaction(Action(Action.PATCH, "#m", who, "Setting version to "+ver))
+        if not _action:
+            self.record_history(hist)
+        return ver
+
+    def _increment_version(self, oldver, lev):
+        if lev < 0:
+            # no change is requested
+            return oldver
+
+        parts = oldver.split('.')
+        v = []
+        for p in parts:
+            # throw away non-integer characters
+            p = re.sub(r'[^\d].*$', '', p)
+            if not p:
+                break
+            try:
+                v.append(int(p))
+            except ValueError:
+                break
+        if not v:
+            raise SIPStateException("Don't know how to increment unsupported version: "+oldver)
+        for i in range(len(v), max(3, lev+1)):
+            v.append(0)
+        
+        v[lev] += 1
+        for i in range(lev+1, len(v)):
+            v[i] = 0
+        return '.'.join([str(i) for i in v])
+        
+
+    @abstractmethod
+    def _determine_update_level(self, newmd: Mapping, oldmd: Mapping=None):
+        """
+        compare the old metadata with an updated version to determine how to increment the version.
+        What's expected to be in the metadata is convention-specific; however, generally these will be 
+        the full old and revised NERDm Resource metadata.  
+        :param Mapping newmd:  The metadata after it was updated
+        :param Mapping oldmd:  The metadata before it was updated.  If not provided, attempt to 
+                                 determine level based solely on the newmd
+        :return:  an integer indicating which level of the version to increment where 0 indicates the
+                  most significant (i.e. left-most) field should be incremented and 2 indicates the 
+                  least significate (of a 3-field version). If the value is higher, the version should 
+                  be expanded to at least that level.  A negative value indicates that version should 
+                  not be changed; however, most conventions are not expected to support this possibilty. 
+        :raise: SIPStateException, if the inputs are insufficient for determining the level
+        """
+        raise NotImplementedError()
+
+    def record_history(self, action: Action):
+        """
+        record the given action into the output bag's history log
+        """
+        if not self.bagdir or not os.path.exists(self.bagdir):
+            self.ensure_preparation(True, action.agent)
+        if not self._histfile:
+            self._histfile = os.path.join(self.bagdir, self.cfg.get('history_filename', 'publish.history'))
+
+        with open(self._histfile, 'a') as fd:
+            dump_to_history(action, fd)
+
+    def _putcreate_history_action(self, relid, who, message, old=None, new=None):
+        id = self.id + relid
+        act = Action.PATCH
+        obj = None
+        if new is None:
+            act = Action.PUT
+        if old is None:
+            if not relid.startswith('#') and not self.bagbldr.bag.has_component("@id:"+relid):
+                act = Action.CREATE
+        elif new:
+            obj = self._jsondiff(old, new)
+
+        return Action(act, id, who, message, obj)
+            
+    def _history_comment(self, subj, who, message):
+        return Action(Action.COMMENT, subj, who, message)
+
+    def _jsondiff(self, old, new):
+        return {"jsonpatch": jsonpatch.make_patch(old, new)}
+
+
 class PDPBagger(NERDmBasedBagger):
     """
     This bagger is a generic implementation of the NERDmBasedSIPBagger for the PDP API.  It implements 
@@ -866,7 +1013,7 @@ class PDPBagger(NERDmBasedBagger):
                     with open(defpubmdfile) as fd:
                         pubmd = yaml.safe_load(fd)
                 elif defpubmdfile.endswith(".json"):
-                    pubmd = read_json(defpubmdfile)
+                    pubmd = utils.read_json(defpubmdfile)
                 else:
                     raise PublishingStateException("Unsupported format for "+defpubmdfile)
             except (OSError, ValueError) as ex:
@@ -888,52 +1035,60 @@ class PDPBagger(NERDmBasedBagger):
         the conventions of this bagger implementation.  After a successful call, the bag should be in 
         a preservable state.
         """
-        self.ensure_preparation(True, who, _action)
+        hist = Action(Action.PATCH, self.id, who, "finalizing bag")
+        if _action:
+            _action.add_subaction(hist)
         act = Action(Action.COMMENT, self.id, who, "Finalized SIP bag for publishing")
+        
+        self.ensure_preparation(True, who, hist)
+
         try:
+            self.finalize_version(who, _action=hist)
             self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
-        except Exception:
-            self.log.warning("Failed to complete finalization")
-            self.record_history(act)
+            hist.add_subaction(act)
+
+        except Exception as ex:
+            self.log.warning("Failed to complete finalization: "+str(ex))
             act = Action(Action.COMMENT, self.id, who, "Failed to complete finalization request")
+            self.record_history(act)
+            raise
+
         finally:
-            if _action:
-                _action.add_subaction(act)
-            else:
-                self.record_history(act)
-            
+            if not _action:
+                self.record_history(hist)
 
-    def record_history(self, action: Action):
+    def _determine_update_level(self, newmd: Mapping, oldmd: Mapping=None):
         """
-        record the given action into the output bag's history log
+        compare the old metadata with an updated version to determine how to increment the version.
+        What's expected to be in the metadata is convention-specific; however, generally these will be 
+        the full old and revised NERDm Resource metadata.  
+        :param Mapping newmd:  The metadata after it was updated
+        :param Mapping oldmd:  The metadata before it was updated.  If not provided, attempt to 
+                                 determine level based solely on the newmd
+        :return:  an integer indicating which level of the version to increment where 0 indicates that 
+                  the most significant (i.e. left-most) field should be incremented and 2 indicates the 
+                  least significate (of a 3-field version). If the value is higher, the version should 
+                  be expanded to at least that level.  A negative value indicates that version should 
+                  not be changed; however, most conventions are not expected to support this possibilty. 
+        :raise: SIPStateException, if the inputs are insufficient for determining the level
         """
-        if not self.bagdir or not os.path.exists(self.bagdir):
-            self.ensure_preparation(True, action.agent)
-        if not self._histfile:
-            self._histfile = os.path.join(self.bagdir, self.cfg.get('history_filename', 'publish.history'))
+        if not oldmd:
+            # not built from a previous version
+            return -1
 
-        with open(self._histfile, 'a') as fd:
-            dump_to_history(action, fd)
+        # data change (level 1):
+        #  *  a file is updated (not applicable to pdp0)
+        #  *  a file is added or subtracted
+        #  *  an access page is added or deleted
+        #
+        oldfiles = [c for c in oldmd.get('components',[])
+                      if nerdutils.is_any_type(["DataFile", "AccessPage"])]
+        newfiles = [c for c in oldmd.get('components',[]) 
+                      if nerdutils.is_any_type(["DataFile", "AccessPage"])]
 
-    def _putcreate_history_action(self, relid, who, message, old=None, new=None):
-        id = self.id + relid
-        act = Action.PATCH
-        obj = None
-        if new is None:
-            act = Action.PUT
-        if old is None:
-            if not relid.startswith('#') and not self.bagbldr.bag.has_component("@id:"+relid):
-                act = Action.CREATE
-        elif new:
-            obj = self._jsondiff(old, new)
+        if len(oldfiles) != len(newfiles):
+            return 1
 
-        return Action(act, id, who, message, obj)
-            
-    def _history_comment(self, subj, who, message):
-        return Action(Action.COMMENT, subj, who, message)
-
-    def _jsondiff(self, old, new):
-        return {"jsonpatch": jsonpatch.make_patch(old, new)}
-
-
-
+        # metadata change only
+        return 2
+    
