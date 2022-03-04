@@ -84,7 +84,8 @@ class TestPDPBagger(test.TestCase):
                 },
                 "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.6"
             },
-            "finalize": {}
+            "finalize": {},
+            "repo_base_url": "https://test.data.gov/"
         }
         self.mntrcfg = {
             "id_shoulder": 'pdp1',
@@ -109,6 +110,7 @@ class TestPDPBagger(test.TestCase):
         self.assertIsNotNone(self.bgr.bagbldr)
         self.assertTrue(self.bagparent.is_dir())
         self.assertEqual(self.bgr.bagdir, str(self.bagparent / 'pdp1:goob'))
+        self.assertEqual(self.bgr.cfg['resolver_base_url'], "https://test.data.gov/od/id/")
 
     def test_ensure_base_bag(self):
         bagdir = self.bagparent / 'pdp1:goob'
@@ -321,29 +323,56 @@ class TestPDPBagger(test.TestCase):
 
         nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
         del nerd['components'][2]
+        # del nerd['releaseHistory']
         self.bgr.set_res_nerdm(nerd, tstag, True)
         
         self.assertEqual(self.bgr.finalize_version(tstag), "1.0.0")
         bnerd = self.bgr.bag.nerdm_record(True)
         self.assertEqual(bnerd["version"], "1.0.0")
+        self.assertIn('releaseHistory', bnerd)
+        self.assertIn('hasRelease', bnerd['releaseHistory'])
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['version'], "1.0.0")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['@id'], bnerd['@id']+"/pdr:v/1.0.0")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['location'],
+                         "https://test.data.gov/od/id/"+bnerd['@id']+"/pdr:v/1.0.0")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['description'], "initial release")
+        self.assertEqual(len(bnerd['releaseHistory']['hasRelease']), 1)
 
         nerd['version'] = "1.0.2+ (in edit)"
         self.bgr.set_res_nerdm(nerd, tstag, True)
         self.assertEqual(self.bgr.finalize_version(tstag, 2), "1.0.3")
         bnerd = self.bgr.bag.nerdm_record(True)
         self.assertEqual(bnerd["version"], "1.0.3")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['version'], "1.0.3")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['@id'], bnerd['@id']+"/pdr:v/1.0.3")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['location'],
+                         "https://test.data.gov/od/id/"+bnerd['@id']+"/pdr:v/1.0.3")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['description'], "minor metadata update")
+        self.assertEqual(len(bnerd['releaseHistory']['hasRelease']), 2)
 
         nerd['version'] = "1.0.2+ (in edit)"
         self.bgr.set_res_nerdm(nerd, tstag, True)
         self.assertEqual(self.bgr.finalize_version(tstag, 1), "1.1.0")
         bnerd = self.bgr.bag.nerdm_record(True)
         self.assertEqual(bnerd["version"], "1.1.0")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['version'], "1.1.0")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['@id'], bnerd['@id']+"/pdr:v/1.1.0")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['location'],
+                         "https://test.data.gov/od/id/"+bnerd['@id']+"/pdr:v/1.1.0")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['description'], "major data update")
+        self.assertEqual(len(bnerd['releaseHistory']['hasRelease']), 3)
 
         nerd['version'] = "1.0.2+ (in edit)"
         self.bgr.set_res_nerdm(nerd, tstag, True)
-        self.assertEqual(self.bgr.finalize_version(tstag, 0), "2.0.0")
+        self.assertEqual(self.bgr.finalize_version(tstag, 0, "data reprocessed"), "2.0.0")
         bnerd = self.bgr.bag.nerdm_record(True)
         self.assertEqual(bnerd["version"], "2.0.0")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['version'], "2.0.0")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['@id'], bnerd['@id']+"/pdr:v/2.0.0")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['location'],
+                         "https://test.data.gov/od/id/"+bnerd['@id']+"/pdr:v/2.0.0")
+        self.assertEqual(bnerd['releaseHistory']['hasRelease'][-1]['description'], "data reprocessed")
+        self.assertEqual(len(bnerd['releaseHistory']['hasRelease']), 4)
 
         nerd['version'] = "1.0.2+ (in edit)"
         self.bgr.set_res_nerdm(nerd, tstag, True)

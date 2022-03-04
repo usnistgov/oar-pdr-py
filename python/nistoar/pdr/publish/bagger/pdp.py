@@ -15,7 +15,7 @@ from ... import constants as const
 from ....nerdm.constants import CORE_SCHEMA_URI, PUB_SCHEMA_URI, EXP_SCHEMA_URI, core_schema_base
 from ....nerdm import utils as nerdutils
 from ... import utils as utils
-from ....nerdm.convert.latest import update_to_latest_schema
+from ....nerdm.convert import latest
 from ...preserve.bagit.builder import BagBuilder
 from ... import def_etc_dir
 from .base import SIPBagger
@@ -92,6 +92,9 @@ class NERDmBasedBagger(SIPBagger):
         if self.cfg.get('required_core_nerdm_version'):
             self._nerdmcore_re = re.compile(core_schema_base + r'(' + 
                                             self.cfg['required_core_nerdm_version'] + r')#')
+
+        if not self.cfg.get('resolver_base_url') and self.cfg.get('repo_base_url'):
+            self.cfg['resolver_base_url'] = self.cfg['repo_base_url'].rstrip('/') + "/od/id/"
 
         self._histfile = None
 
@@ -341,7 +344,7 @@ class NERDmBasedBagger(SIPBagger):
 
         # modify the input: remove properties that cannot be set, add others
         handsoff = "@id @context publisher issued firstIssued revised annotated language " + \
-                   "bureauCode programCode doi"
+                   "bureauCode programCode doi releaseHistory"
         for prop in handsoff.split():
             if prop in nerdm:
                 del nerdm[prop]
@@ -407,7 +410,7 @@ class NERDmBasedBagger(SIPBagger):
         elif 'title' not in nerdm or 'contactPoint' not in nerdm:
             raise BadSIPInputError("Input metadata apparently is not a NERDm record (no schema specified)")
 
-        nerdm = update_to_latest_schema(nerdm, False)
+        nerdm = latest.update_to_latest_schema(nerdm, False)
         return nerdm
 
     def _set_standard_res_modifications(self, resmd):
@@ -557,7 +560,7 @@ class NERDmBasedBagger(SIPBagger):
                 if not compmd['_schema'].startswith(core_schema_base):
                     raise BadSIPInputError("Input metadata is not a NERDm record; schema: "+ compmd['_schema'])
 
-            compmd = update_to_latest_schema(compmd, False)
+            compmd = latest.update_to_latest_schema(compmd, False)
         else:
             compmd = deepcopy(compmd)
                     
@@ -708,18 +711,25 @@ class NERDmBasedBagger(SIPBagger):
         else:
             self.bagbldr.destroy()
 
-    def finalize_version(self, who: PubAgent, incrfield: int=None, _action=None) -> str:
+    def finalize_version(self, who: PubAgent, incrfield: int=None, vermsg=None, _action=None) -> str:
         """
         set the version that this dataset should be published under.  The version property is only 
         updated if it has not already been set; that is, only if it is marked with a version string 
         ending in "+ (in edit)".  Otherwise, no changes are made.  Thus, once the version is finalized, 
-        it will not be further updated via subsequent calls to this method.
+        it will not be further updated via subsequent calls to this method.  
 
         If updated, the version is updated by incrementing one of version fields.  Which field should 
         be incremented is determined by _determine_update_level().  
 
-        :param PubAgent who:   the agent requesting the finalization
-        :param int incrfield:  the position of the version field that should be 
+        This method is intended to be called by :py:meth:`ensure_finalize`.
+
+        :param PubAgent  who:  the agent requesting the finalization
+        :param int incrfield:  the position of the version field that should be incremented; if None, 
+                               the field will be determined based on what appears to have changed.
+        :param str    vermsg:  a message to record in the release history, indicating what changed 
+                               with this version.  If None, a default message is set based either on 
+                               what apears to have changed or the value of `incrfield`.  It is 
+                               recommended that this field be specified if also specifying incrfield.
         """
         hist = _action
         if not hist:
@@ -736,25 +746,37 @@ class NERDmBasedBagger(SIPBagger):
             # this shouldn't happen (unless, possibly, it's never been published before)
             if not os.path.isfile(oldnerdfile):
                 ver = "1.0.0"
+                if not vermsg:
+                    vermsg = "initial release"
             else:
                 oldnerd = utils.read_nerd(oldnerdfile)
                 oldver = oldnerd.get('version', '1.0.0') + PENDING_VERSION_SFX
         
         elif not oldver.endswith(PENDING_VERSION_SFX):
-            self.log.info("version already finalized as v%s", oldver)
-            if _action:
-                _action.add_subaction(self._history_comment('#m', who,
-                                                            "version already finalized as v%s" % oldver))
-            return oldver
+            self.log.info("finalized version already set as v%s", oldver)
+            verrel = [r for r in nerd.get('releaseHistory',{}).get('hasRelease',[])
+                        if r.get('version') == oldver]
+
+            if verrel:
+                # no need to update release history
+                if _action:
+                    _action.add_subaction(self._history_comment('#m', who,
+                                                                "version already finalized as v%s" % oldver))
+                return oldver
+
+            # even though the version is set, we need to update the release history
+            ver = oldver
 
         if oldver and oldver.endswith(PENDING_VERSION_SFX):
-            # ends with the pending suffix
+            # version ends with the pending suffix
             oldver = oldver[:(-1*len(PENDING_VERSION_SFX))]
             
             if incrfield is not None:
                 if not isinstance(incrfield, int):
                     raise TypeError("finalize_version(): incrfield is not an int: "+type(incrfield))
                 ver = self._increment_version(oldver, incrfield)
+                if not vermsg and incrfield >= 0:
+                    vermsg = "minor metadata update" if incrfield > 1 else "major data update"
 
             else:
                 # determine how it will be incremented
@@ -762,12 +784,17 @@ class NERDmBasedBagger(SIPBagger):
                     oldnerd = utils.read_nerd(oldnerdfile)
 
                 try:
-                    ver = self._increment_version(oldver, self._determine_update_level(nerd, oldnerd))
+                    (incrfield, why) = self._determine_update_level(nerd, oldnerd)
+                    ver = self._increment_version(oldver, incrfield)
+                    if not vermsg:
+                        vermsg = why
                 except SIPStateException as ex:
                     raise SIPStateException("Don't know how to increment version: "+str(ex))
 
+        rh = self._updated_release_history(nerd, ver, vermsg)
+        updmd = { 'version': ver, 'releaseHistory': rh }
 
-        self.bagbldr.update_metadata_for('', {'version': ver}, message="Setting version to "+ver)
+        self.bagbldr.update_metadata_for('', updmd, message="Setting version to "+ver)
         hist.add_subaction(Action(Action.PATCH, "#m", who, "Setting version to "+ver))
         if not _action:
             self.record_history(hist)
@@ -798,7 +825,22 @@ class NERDmBasedBagger(SIPBagger):
         for i in range(lev+1, len(v)):
             v[i] = 0
         return '.'.join([str(i) for i in v])
-        
+
+    def _updated_release_history(self, nerd, version, message=None):
+        defbaseloc = "https://data.nist.gov/od/id/"
+        ltst = latest.NERDm2Latest(resolver=self.cfg.get('resolver_base_url', defbaseloc))
+        rh = deepcopy(nerd.get('releaseHistory', {}))
+        if not rh:
+            rh = ltst.create_release_history(nerd)
+        myver = [r for r in rh.get('hasRelease',[]) if r.get('version') == version]
+        if not myver:
+            myver = [ ltst.create_release_ref_for(version, nerd['@id']) ]
+            rh['hasRelease'].append(myver[0])
+        if message:
+            myver[0]['description'] = message
+
+        return rh
+            
 
     @abstractmethod
     def _determine_update_level(self, newmd: Mapping, oldmd: Mapping=None):
@@ -809,11 +851,13 @@ class NERDmBasedBagger(SIPBagger):
         :param Mapping newmd:  The metadata after it was updated
         :param Mapping oldmd:  The metadata before it was updated.  If not provided, attempt to 
                                  determine level based solely on the newmd
-        :return:  an integer indicating which level of the version to increment where 0 indicates the
+        :return:  an (int, str) tuple.  The integer indicates
+                  which level of the version to increment where 0 indicates the
                   most significant (i.e. left-most) field should be incremented and 2 indicates the 
                   least significate (of a 3-field version). If the value is higher, the version should 
                   be expanded to at least that level.  A negative value indicates that version should 
                   not be changed; however, most conventions are not expected to support this possibilty. 
+                  The string provides a default message indicating why that level was chosen.
         :raise: SIPStateException, if the inputs are insufficient for determining the level
         """
         raise NotImplementedError()
@@ -1081,14 +1125,18 @@ class PDPBagger(NERDmBasedBagger):
         #  *  a file is added or subtracted
         #  *  an access page is added or deleted
         #
-        oldfiles = [c for c in oldmd.get('components',[])
-                      if nerdutils.is_any_type(["DataFile", "AccessPage"])]
-        newfiles = [c for c in oldmd.get('components',[]) 
-                      if nerdutils.is_any_type(["DataFile", "AccessPage"])]
+        oldfiles = set([c.get('@id','') for c in oldmd.get('components',[])
+                                        if nerdutils.is_any_type(["DataFile", "AccessPage"])])
+        newfiles = set([c.get('@id','') for c in oldmd.get('components',[]) 
+                                        if nerdutils.is_any_type(["DataFile", "AccessPage"])])
 
-        if len(oldfiles) != len(newfiles):
-            return 1
+        if newfiles > oldfiles:
+            return (1, "data links added")
+        elif oldfiles > newfiles:
+            return (1, "data links removed")
+        elif oldfiles != newfiles:
+            return (1, "data links added and removed")
 
         # metadata change only
-        return 2
+        return (2, "metadata updates only")
     
