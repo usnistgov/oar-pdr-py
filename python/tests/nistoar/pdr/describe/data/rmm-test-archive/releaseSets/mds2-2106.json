@@ -39,49 +39,49 @@
         {
             "version": "1.0.0",
             "issued": "2019-08-12 00:00:00",
-            "@id": "ark:/88434/mds2-2106",
+            "@id": "ark:/88434/mds2-2106/pdr:v/1.0.0",
             "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.0.0",
             "description": "initial release"
         },
         {
             "version": "1.1.0",
             "issued": "2019-08-12 00:00:00",
-            "@id": "ark:/88434/mds2-2106",
+            "@id": "ark:/88434/mds2-2106/pdr:v/1.1.0",
             "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.1.0",
             "description": "data update"
         },
         {
             "version": "1.2.0",
             "issued": "2019-08-12 00:00:00",
-            "@id": "ark:/88434/mds2-2106",
+            "@id": "ark:/88434/mds2-2106/pdr:v/1.2.0",
             "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.2.0",
             "description": "data update"
         },
         {
             "version": "1.3.0",
             "issued": "2019-08-12 00:00:00",
-            "@id": "ark:/88434/mds2-2106",
+            "@id": "ark:/88434/mds2-2106/pdr:v/1.3.0",
             "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.3.0",
             "description": "data update"
         },
         {
             "version": "1.4.0",
             "issued": "2019-08-12 00:00:00",
-            "@id": "ark:/88434/mds2-2106",
+            "@id": "ark:/88434/mds2-2106/pdr:v/1.4.0",
             "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.4.0",
             "description": "data update"
         },
         {
             "version": "1.5.0",
             "issued": "2019-08-12 00:00:00",
-            "@id": "ark:/88434/mds2-2106",
+            "@id": "ark:/88434/mds2-2106/pdr:v/1.5.0",
             "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.5.0",
             "description": "data update"
         },
         {
             "version": "1.6.0",
             "issued": "2019-08-12",
-            "@id": "ark:/88434/mds2-2106",
+            "@id": "ark:/88434/mds2-2106/pdr:v/1.6.0",
             "location": "https://data.nist.gov/od/id/ark:/88434/mds2-2106/pdr:v/1.6.0",
             "description": "data update"
         }

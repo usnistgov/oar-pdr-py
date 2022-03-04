@@ -411,7 +411,7 @@ class TestPDRIDHandler(test.TestCase):
         self.assertEqual(ct[0].strip(), "Content-Type: application/json")
         ct = [h for h in self.resp if h.startswith("Content-Length:")]
         self.assertEqual(len(ct), 1)
-        self.assertEqual(ct[0].strip(), "Content-Length: 3624")
+        self.assertEqual(ct[0].strip(), "Content-Length: 3708")
 
         data = json.loads("\n".join(body))
         self.assertEqual(data['@id'], "ark:/88434/mds2-2106/pdr:v")
@@ -433,7 +433,7 @@ class TestPDRIDHandler(test.TestCase):
         self.assertEqual(ct[0].strip(), "Content-Type: application/json")
         ct = [h for h in self.resp if h.startswith("Content-Length:")]
         self.assertEqual(len(ct), 1)
-        self.assertEqual(ct[0].strip(), "Content-Length: 9451")
+        self.assertEqual(ct[0].strip(), "Content-Length: 9535")
 
         data = json.loads("\n".join(body))
         self.assertEqual(data['@id'], "ark:/88434/mds2-2106/pdr:v/1.6.0")
@@ -453,7 +453,7 @@ class TestPDRIDHandler(test.TestCase):
         self.assertEqual(ct[0].strip(), "Content-Type: application/json")
         ct = [h for h in self.resp if h.startswith("Content-Length:")]
         self.assertEqual(len(ct), 1)
-        self.assertEqual(ct[0].strip(), "Content-Length: 9376")
+        self.assertEqual(ct[0].strip(), "Content-Length: 9460")
 
         data = json.loads("\n".join(body))
         self.assertEqual(data['@id'], "ark:/88434/mds2-2106/pdr:v/1.3.0")
@@ -475,7 +475,7 @@ class TestPDRIDHandler(test.TestCase):
         self.assertEqual(ct[0].strip(), "Content-Type: application/json")
         ct = [h for h in self.resp if h.startswith("Content-Length:")]
         self.assertEqual(len(ct), 1)
-        self.assertEqual(ct[0].strip(), "Content-Length: 9376")
+        self.assertEqual(ct[0].strip(), "Content-Length: 9460")
 
         data = json.loads("\n".join(body))
         self.assertEqual(data['@id'], "ark:/88434/mds2-2106/pdr:v/1.3.0")
