@@ -4,6 +4,7 @@ preservation efforts across multiple processes.
 """
 import json, os, time, fcntl, re
 from collections import OrderedDict
+from collections.abc import Mapping
 from copy import deepcopy
 
 from ...exceptions import StateException
@@ -171,20 +172,20 @@ class SIPStatus(object):
     access it.  
     """
 
-    def __init__(self, id, config=None, sysdata=None, _data=None):
+    def __init__(self, id: str, config: dict=None, sysdata: dict=None, _data: dict=None):
         """
         open up the status for the given identifier.  Initial data can be 
         provided or, if no cached data exist, it can be initialized with 
         default data.  In either case, this constructor will not cache the
         data until next call to update() or cache().  
 
-        :param id str:       the identifier for the SIP
-        :param config str:   the configuration data to apply.  If not provided
+        :param str id:       the identifier for the SIP
+        :param str config:   the configuration data to apply.  If not provided
                              defaults will be used; in particular, the status
                              data will be cached to /tmp (intended only for 
                              testing purposes).
-        :param sysdata dict: if not None, include this data as system data
-        :param _data dict:   initialize the status with this data.  This is 
+        :param dict sysdata: if not None, include this data as system data
+        :param dict   _data: initialize the status with this data.  This is 
                              not intended for public use.   
         """
         if not id:
@@ -215,21 +216,21 @@ class SIPStatus(object):
             self._data['sys'].update(sysdata)
 
     @property
-    def id(self):
+    def id(self) -> str:
         """
         the SIP's identifier
         """
         return self._data['user']['id']
 
     @property
-    def message(self):
+    def message(self) -> str:
         """
         the SIP's current status message
         """
         return self._data['user']['message']
 
     @property
-    def siptype(self):
+    def siptype(self) -> str:
         """
         return the label of the SIP convention that the SIP is/was being handled under or an 
         empty string if the SIP is yet to be processed through the publishing service (or 
@@ -238,7 +239,7 @@ class SIPStatus(object):
         return self._data['user']['siptype']
 
     @property
-    def state(self):
+    def state(self) -> str:
         """
         the SIP's status state.  
 
@@ -250,13 +251,13 @@ class SIPStatus(object):
         return "{0} {1} status: {2}: {3}".format(self.id, self.siptype, self.state, self.message)
 
     @property
-    def data(self):
+    def data(self) -> Mapping:
         """
         the current status data.  
         """
         return self._data
 
-    def cache(self):
+    def cache(self) -> None:
         """
         cache the data to a JSON file on disk
         """
@@ -274,7 +275,7 @@ class SIPStatus(object):
         self._data['user']['updated'] = time.asctime()
         SIPStatusFile.write(self._cachefile, self._data)
         
-    def update(self, label, message=None, sysdata=None, cache=True):
+    def update(self, label: str, message: str=None, sysdata: dict=None, cache: bool=True) -> None:
         """
         change the state of the processing.  In addition to updating the 
         data in-memory, the full, current set of status metadata will be 
@@ -300,7 +301,7 @@ class SIPStatus(object):
         if cache:
             self.cache()
 
-    def remember(self, message=None, reset=False):
+    def remember(self, message: str=None, reset: bool=False):
         """
         Save the current status information as part of its history and then 
         reset that status to PENDING,
@@ -325,7 +326,7 @@ class SIPStatus(object):
         if reset or message:
             self.update(state, message)
 
-    def revert(self):
+    def revert(self) -> None:
         """
         reset this status to the last state saved to the status history.  This is usually the state just 
         before the last call to start().  This should be called if SIP processing is canceled.
@@ -349,7 +350,7 @@ class SIPStatus(object):
                 os.remove(self._cachefile)
             
 
-    def start(self, siptype, message=None):
+    def start(self, siptype: str, message: str=None) -> None:
         """
         Signal that the publishing process has started using the specified SIP convention.
         Set the starting time to now and change the state to PROCESSING.  
@@ -368,7 +369,7 @@ class SIPStatus(object):
             self._data['sys'] = {}
         self.update(PROCESSING, message)
 
-    def record_progress(self, message):
+    def record_progress(self, message: str) -> None:
         """
         Update the status with a user-oriented message.  The state will be 
         unchanged, but the data will be cached to disk.
@@ -376,14 +377,14 @@ class SIPStatus(object):
         self._data['user']['message'] = message
         self.cache()
 
-    def refresh(self):
+    def refresh(self) -> None:
         """
         Read the cached status data and replace the data in memory.
         """
         if os.path.exists(self._cachefile):
             self._data = SIPStatusFile.read(self._cachefile)
 
-    def user_export(self):
+    def user_export(self) -> dict:
         """
         return the portion of the status data intended for export through the
         preservation service interface.  
@@ -395,9 +396,10 @@ class SIPStatus(object):
         return out
 
     @classmethod
-    def requests(cls, config):
+    def requests(cls, config: Mapping) -> None:
         """
         return a list of SIP IDs for which there exist status information
+        :param Mapping config:  the status configurtion (which should include the `cachedir` parameter)
         """
         cachedir = config.get('cachedir', '/tmp/sipstatus')
         return [ os.path.splitext(id)[0] for id in os.listdir(cachedir)
