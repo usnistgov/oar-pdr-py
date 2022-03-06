@@ -5,6 +5,7 @@ preservation efforts across multiple processes.
 import json, os, time, fcntl, re
 from collections import OrderedDict
 from collections.abc import Mapping
+from typing import Iterable, Union, List
 from copy import deepcopy
 
 from ...exceptions import StateException
@@ -207,6 +208,7 @@ class SIPStatus(object):
                     ('id', ''),
                     ('state', NOT_FOUND),
                     ('siptype', ''),
+                    ('authorized', []),
                     ('message', user_message[NOT_FOUND]),
                 ])),
                 ('history', [])
@@ -246,6 +248,15 @@ class SIPStatus(object):
         :return str:  one of NOT_FOUND, AWAITING, PENDING, PROCESSING, FINALIZED, PUBLISHED, FAILED
         """
         return self._data['user']['state']
+
+    @property
+    def agent_groups(self) -> [str]:
+        """
+        the agent permission groups that currently have control over the SIP.  An empty list indicates
+        that it is currently unaffiliated.  See :py:class:`~nistoar.pdr.publish.service.prov.PubAgent` 
+        for details on agent groups.
+        """
+        return list(self._data['user']['authorized'])
 
     def __str__(self):
         return "{0} {1} status: {2}: {3}".format(self.id, self.siptype, self.state, self.message)
@@ -301,6 +312,35 @@ class SIPStatus(object):
         if cache:
             self.cache()
 
+    def add_agent_group(self, group: str, cache: bool=True) -> None:
+        """
+        Add an agent group as one of the groups authorized to access and update this SIP
+        (see :py:class:`~nistoar.pdr.publish.service.prov.PubAgent` for details about agents).  
+        In addition to updating the data in-memory, the full, current set of status metadata 
+        will be flushed to disk.  
+        :param str  group:  the name of the agent group to add 
+        :param bool cache:  if True (default), persist the status information after 
+                            update.
+        """
+        if group not in self._data['user']['authorized']:
+            self._data['user']['authorized'].append(group)
+        if cache:
+            self.cache()
+
+    def any_authorized(self, groups: Union[str,Iterable[str]]):
+        """
+        return True if any of the named agent groups is listed as an authorized agent group
+        for the SIP.
+        :param str|list[str] groups: a name of a list of names of agent permis
+        """
+        if not groups:
+            return False
+        if isinstance(groups, str):
+            groups = [groups]
+        if not isinstance(groups, set):
+            groups = set(groups)
+        return bool(groups & set(self._data['user']['authorized']))
+
     def remember(self, message: str=None, reset: bool=False):
         """
         Save the current status information as part of its history and then 
@@ -343,6 +383,7 @@ class SIPStatus(object):
                 ('id', self._data['user']['id']),
                 ('state', NOT_FOUND),
                 ('siptype', self._data['user']['siptype']),
+                ('authorized', []),
                 ('message', user_message[NOT_FOUND])
             ])
             self._data['history'] = []
@@ -396,12 +437,25 @@ class SIPStatus(object):
         return out
 
     @classmethod
-    def requests(cls, config: Mapping) -> None:
+    def requests(cls, config: Mapping, agents: Union[str,Iterable[str],None]=None) -> list:
         """
-        return a list of SIP IDs for which there exist status information
+        return a list of SIP IDs for which there exist status information.  
         :param Mapping config:  the status configurtion (which should include the `cachedir` parameter)
+        :param str|list agents: a name or a list of names of agent groups; if provided, the 
+                                returned list will include only those SIPs whose authorized agent 
+                                groups include at least one of these. 
         """
         cachedir = config.get('cachedir', '/tmp/sipstatus')
-        return [ os.path.splitext(id)[0] for id in os.listdir(cachedir)
-                                         if not id.startswith('_') and
-                                            not id.startswith('.')          ]
+        all = [ os.path.splitext(id)[0] for id in os.listdir(cachedir)
+                                        if not id.startswith('_') and
+                                           not id.startswith('.')      ]
+        if agents is None:
+            return all
+
+        if isinstance(agents, str):
+            agents = [agents]
+        if not isinstance(agents, set):
+            agents = set(agents)
+        out = [s for s in all if SIPStatus(s, config).any_authorized(agents)]
+        return out
+            

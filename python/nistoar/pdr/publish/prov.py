@@ -70,9 +70,9 @@ class PubAgent(object):
 
     def add_agent(self, agent: str) -> None:
         """
-        append an agent name or description to the list of agents delegated to to effect a change.
-        This is intended for use by a service when it receives a request to make a change and that 
-        change comes with a recorded list of agents used to request the change.
+        append an agent name or description to the list of agents that delegated to this agent 
+        to effect a change.  This allows a chain of delegation to be recorded with a change to 
+        show where ultimately the request came from.  
         """
         if agent:
             self._agents.append(agent)

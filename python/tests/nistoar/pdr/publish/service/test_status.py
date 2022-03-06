@@ -189,6 +189,7 @@ class TestSIPStatus(test.TestCase):
                 'id': 'ffff',
                 'state': "not found",
                 'message': status.user_message[status.NOT_FOUND],
+                'authorized': [],
                 'siptype': ''
             },
             'sys': {},
@@ -208,6 +209,25 @@ class TestSIPStatus(test.TestCase):
         self.assertEqual(self.status.data, data)
         self.assertEqual(self.status._cachefile, "/tmp/sipstatus/ffff.json")
 
+    def test_agent(self):
+        self.assertEqual(self.status.agent_groups, [])
+        self.status.agent_groups.append('goober')
+        self.assertEqual(self.status.agent_groups, [])
+        self.assertFalse(self.status.any_authorized('goober'))
+        self.assertFalse(self.status.any_authorized(''))
+        
+        self.status.add_agent_group('goober')
+        self.assertEqual(self.status.agent_groups, ['goober'])
+        self.status.add_agent_group('gurn')
+        self.assertEqual(self.status.agent_groups, ['goober', 'gurn'])
+
+        self.assertTrue(self.status.any_authorized('goober'))
+        self.assertTrue(self.status.any_authorized('gurn'))
+        self.assertTrue(self.status.any_authorized(['bob', 'goober']))
+        self.assertTrue(self.status.any_authorized(['gurn', 'goober', 'bob']))
+        self.assertFalse(self.status.any_authorized(''))
+        
+
     def test_arkid(self):
         self.status = status.SIPStatus("ark:/88888/pdr0-1518")
         self.assertEqual(self.status._cachefile, "/tmp/sipstatus/pdr0-1518.json")
@@ -216,6 +236,38 @@ class TestSIPStatus(test.TestCase):
         self.status.start("goob1")
         self.status.update(status.PENDING, "starting soon")
         self.assertEqual(str(self.status), "ffff goob1 status: pending: starting soon")
+
+    def test_requests(self):
+        self.assertTrue(not os.path.exists(self.status._cachefile))
+        self.assertEqual(status.SIPStatus.requests(self.cfg), [])
+        self.assertEqual(status.SIPStatus.requests(self.cfg, 'hank'), [])
+        
+        self.status.cache()
+        self.assertTrue(os.path.exists(self.status._cachefile))
+        self.assertEqual(status.SIPStatus.requests(self.cfg), ['ffff'])
+        self.assertEqual(status.SIPStatus.requests(self.cfg, 'hank'), [])
+        self.assertEqual(status.SIPStatus.requests(self.cfg, ''), [])
+
+        self.status.add_agent_group("hank", True)
+        self.assertEqual(status.SIPStatus.requests(self.cfg), ['ffff'])
+        self.assertEqual(status.SIPStatus.requests(self.cfg, 'hank'), ['ffff'])
+        self.assertEqual(status.SIPStatus.requests(self.cfg, ''), [])
+
+        stat = status.SIPStatus("goob", self.cfg)
+        stat.add_agent_group("gurn")
+        sips = status.SIPStatus.requests(self.cfg)
+        self.assertIn('ffff', sips)
+        self.assertIn('goob', sips)
+        self.assertEqual(status.SIPStatus.requests(self.cfg, 'hank'), ['ffff'])
+        self.assertEqual(status.SIPStatus.requests(self.cfg, 'gurn'), ['goob'])
+        stat.add_agent_group("hank")
+        sips = status.SIPStatus.requests(self.cfg)
+        self.assertIn('ffff', sips)
+        self.assertIn('goob', sips)
+        sips = status.SIPStatus.requests(self.cfg, 'hank')
+        self.assertIn('ffff', sips)
+        self.assertIn('goob', sips)
+        self.assertEqual(status.SIPStatus.requests(self.cfg, 'gurn'), ['goob'])
 
     def test_cache(self):
         self.assertTrue(not os.path.exists(self.status._cachefile))
