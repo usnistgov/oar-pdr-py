@@ -391,11 +391,13 @@ class SIPStatus(object):
                 os.remove(self._cachefile)
             
 
-    def start(self, siptype: str, message: str=None) -> None:
+    def start(self, siptype: str, agroup: str=None, message: str=None) -> None:
         """
         Signal that the publishing process has started using the specified SIP convention.
         Set the starting time to now and change the state to PROCESSING.  
 
+        :param str siptype:  the label for the SIP convention being applied
+        :param str agroup:   the name of the agent group that is starting the SIP
         :param message str:  an optional message for display to the end user
                              explaining this state.  If not provided, a default
                              explanation is set. 
@@ -408,6 +410,8 @@ class SIPStatus(object):
         self._data['user']['started'] = time.asctime()
         if self.state == FAILED and self._data['sys']:
             self._data['sys'] = {}
+        if agroup:
+            self.add_agent_group(agroup, False)
         self.update(PROCESSING, message)
 
     def record_progress(self, message: str) -> None:

@@ -338,13 +338,15 @@ class TestSIPStatus(test.TestCase):
         self.assertEqual(self.status.data['user']['message'], 
                          status.user_message[status.PROCESSING])
         self.assertEqual(self.status.data['gurn'], 'goob')
+        self.assertEqual(self.status.agent_groups, [])
 
         self.status.update(status.FAILED)
         self.assertNotEqual(self.status.data['user']['state'], 'processing')
 
-        self.status.start("goob1", "chugging...")
+        self.status.start("goob1", "gurn", "chugging...")
         self.assertEqual(self.status.data['user']['state'], 'processing')
         self.assertEqual(self.status.data['user']['message'], "chugging...")
+        self.assertEqual(self.status.agent_groups, ['gurn'])
 
     def test_user_export(self):
         self.status.start('goob')
