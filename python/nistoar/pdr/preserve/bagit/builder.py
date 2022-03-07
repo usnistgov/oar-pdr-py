@@ -15,6 +15,7 @@ from .exceptions import (BagProfileError, BagWriteError, BadBagRequest,
 from ....nerdm.exceptions import (NERDError, NERDTypeError)
 from ....nerdm.convert import PODds2Res
 from ....nerdm.constants import core_schema_base, schema_versions
+from ...constants import FILECMP_EXTENSION
 from ....id import PDRMinter
 from ... import ARK_NAAN, PDR_PUBLIC_SERVER
 from ...utils import (build_mime_type_map, checksum_of, measure_dir_size,
@@ -67,6 +68,7 @@ SUBCOLL_TYPE = NERDPUB_PRE + ":Subcollection"
 NERDM_CONTEXT = "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld"
 DISTSERV = "https://"+PDR_PUBLIC_SERVER+"/od/ds/"
 DEF_MERGE_CONV = "pdp0"
+FILECMP_ID_START = FILECMP_EXTENSION.strip('/') + '/'
 
 class BagBuilder(PreservationSystem):
     """
@@ -812,6 +814,8 @@ class BagBuilder(PreservationSystem):
         """
         if destpath.startswith("@id:cmps/"):
             destpath = destpath[len("@id:cmps/"):]
+        elif destpath.startswith("@id:"+FILECMP_ID_START):
+            destpath = destpath[len("@id:"+FILECMP_ID_START):]
         if not destpath:
             raise ValueError("Empty destpath argument (not allowed to remove "
                              "root collection)")

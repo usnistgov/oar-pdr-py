@@ -344,6 +344,35 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                 
         return cmpid
 
+    def remove_component(self, sipid: str, cmpid: str, who: PubAgent=None):
+        """
+        remove the identified component from the SIP.  
+
+        :param str sipid:  the identifier for the SIP of interest
+        :param str cmpid:  the relative ID of the component to remove
+        :param who:        an actor identifier object, indicating who is requesting this action.  This 
+                           will get recorded in the history data.  If None, an internal administrative 
+                           identity will be assumed.  This identity may affect the identifier assigned.
+        :rtype: bool
+        :returns:  True if the component was found and removed; False, otherwise
+        :raises SIPConflictError:     if the SIP is currently be processed or is being handled via 
+                                         a different convention
+        :raises PublishingException:  if the deletion operation otherwise fails
+        """
+        sts = self.status_of(sipid)
+        if sts.state == status.PROCESSING:
+            raise SIPConflictError(sipid, "Requested SIP is currently being processed: "+sipid)
+        if sts.state == status.NOT_FOUND:
+            raise SIPNotFoundError(sipid)
+
+        shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
+        bagger = self._get_bagger_for(shoulder, sipid)
+
+        if os.path.exists(bagger.bagdir):
+            return bagger.bagbldr.remove_component("@id:"+cmpid)
+        return False
+            
+
     def delete(self, sipid: str, who: PubAgent=None):
         """
         delete the presence of the SIP from this service.  This will be called automatically by the 
@@ -446,13 +475,13 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         if sts.state != status.PENDING:
             raise SIPConflictError(sipid, "SIP {0} is not ready for publishing: {1}"
                                           .format(sipid, sts.message))
-        if sts.siptype != sts.convention:
+        if sts.siptype != self.convention:
             raise SIPConflictError(sipid, "SIP {0} is being handled by a different convention: {1}"
                                           .format(sipid, sts.message))
 
-        sts.update(status.PROCESSING)
         try:
             self.finalize(sipid, who)
+            # sts.update(status.PROCESSING)
             # self.ingester.ingest(sipid, who)
             sts.update(status.PUBLISHED)
         except Exception as ex:
@@ -470,6 +499,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         :param bool withcomps:  if True, and the ID points to a resource, then the member component
                          metadata will be included.
         :rtype Mapping:
+        :raises SIPNotFoundError: if an open SIP does not exist
         """
         reqid = id
         m = ARK_ID_RE.match(id)

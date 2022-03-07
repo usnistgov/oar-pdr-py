@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 import yaml, jsonpatch
 
-from .. import BadSIPInputError, PublishingStateException
+from .. import BadSIPInputError, SIPStateException, PublishingStateException
 from ... import constants as const
 from ....nerdm.constants import CORE_SCHEMA_URI, PUB_SCHEMA_URI, EXP_SCHEMA_URI, core_schema_base
 from ....nerdm import utils as nerdutils
@@ -1118,7 +1118,7 @@ class PDPBagger(NERDmBasedBagger):
         """
         if not oldmd:
             # not built from a previous version
-            return -1
+            return (-1, '')
 
         # data change (level 1):
         #  *  a file is updated (not applicable to pdp0)

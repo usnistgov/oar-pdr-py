@@ -76,7 +76,8 @@ class TestPDPublishingService(test.TestCase):
                 },
                 "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.6"
             },
-            "finalize": {}
+            "finalize": {},
+            "repo_base_url": "https://test.pdr.net/"
         }
             
         self.cfg = {
@@ -451,6 +452,39 @@ class TestPDPublishingService(test.TestCase):
 
         self.assertEqual(self.pubsvc.describe("ark:/88434/ncnr0-hellopk/goober"), {})
         self.assertEqual(self.pubsvc.describe("ncnr0:hello/goober"), {})
+        
+    def test_remove_component(self):
+        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+
+        sipid = self.pubsvc.accept_resource_metadata(nerd, ncnrag, sipid="ncnr0:hello", create=True)
+        self.assertEqual(sipid, "ncnr0:hello")
+        bagdir = self.bagparent / sipid
+        self.assertTrue(bagdir.is_dir())
+        bag = NISTBag(bagdir)
+        bnerd = bag.nerdm_record(True)
+        self.assertEqual(bnerd["@id"], "ark:/88434/ncnr0-hellopk")
+        self.assertEqual(bnerd["pdr:sipid"], "ncnr0:hello")
+        self.assertEqual(bnerd["pdr:aipid"], "ncnr0-hellopk")
+        self.assertEqual(bnerd["title"], nerd['title'])
+        self.assertTrue(len(bnerd.get('components',[])) > 0)
+
+        cmpid = "pdr:f/1491_optSortSphEvaluated20160701.cdf"
+        cmp = [c for c in bnerd['components'] if c['@id'] == cmpid]
+        self.assertEqual(len(cmp), 1)
+
+        self.pubsvc.remove_component(sipid, cmpid, ncnrag)
+        bnerd = bag.nerdm_record(True)
+        cmp = [c for c in bnerd['components'] if c['@id'] == cmpid]
+        self.assertEqual(len(cmp), 0)
+        
+        cmpid = "pdr:see/doi:/10.18434/T4SW26"
+        cmp = [c for c in bnerd['components'] if c['@id'] == cmpid]
+        self.assertEqual(len(cmp), 1)
+
+        self.pubsvc.remove_component(sipid, cmpid, ncnrag)
+        bnerd = bag.nerdm_record(True)
+        cmp = [c for c in bnerd['components'] if c['@id'] == cmpid]
+        self.assertEqual(len(cmp), 0)
 
     def test_delete(self):
         nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
