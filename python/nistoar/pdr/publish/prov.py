@@ -23,7 +23,7 @@ class PubAgent(object):
 
     def __init__(self, group: str, actortype: str, actor: str = None, agents: Iterable[str] = None):
         self._group = group
-        if actortype not in [self.USER, self.AUTO]:
+        if actortype not in [self.USER, self.AUTO, self.UNKN]:
             raise ValueError("PubAgent: actortype not one of "+str((self.USER, self.AUTO)))
         self._actor_type = actortype
         self._agents = []
