@@ -274,7 +274,7 @@ class Ready(SubApp):
     class _Handler(Handler):
 
         def __init__(self, path: str, wsgienv: dict, start_resp: Callable, who=None, config: dict={}):
-            super(_Handler, self).__init__(path, wsgienv, start_resp, who, config)
+            Handler.__init__(self, path, wsgienv, start_resp, who, config)
 
         def do_GET(self, path, ashead=False):
             path = path.lstrip('/')
@@ -282,7 +282,7 @@ class Ready(SubApp):
                 # only the root path is supported
                 return self.send_error(404, "Not found")
 
-            return self.send_ok("Publishing service is up", ashead=ashead)
+            return self.send_ok("Publishing service is up.\n", ashead=ashead)
 
     def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:
         """
