@@ -194,7 +194,7 @@ class TestPDPWSGI(test.TestCase):
         }
         req['wsgi.input'] = StringIO(json.dumps(nerd))
         body = self.tostr( self.app.handle_request(req, self.start) )
-        self.assertIn("200 ", self.resp[0])
+        self.assertIn("201 ", self.resp[0])
 
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")

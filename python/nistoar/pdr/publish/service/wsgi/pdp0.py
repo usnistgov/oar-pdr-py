@@ -142,6 +142,7 @@ class PDP0App(SubApp):
                 raise
 
             try:
+                success = 200
                 if sipid:
                     if not stat.any_authorized(self.who.group):
                         self.info("%s is not authorized to update SIP, %s", self.who.actor, sipid)
@@ -164,6 +165,8 @@ class PDP0App(SubApp):
                 else:
                     # this is a request to create an SIP
                     sipid = self._app.svc.accept_resource_metadata(nerdm, self.who)
+                    if not stat or stat.state == status.NOT_FOUND:
+                        success = 201
 
                     # Is there an accompanying request to finalize or publish?
                     out = None
@@ -179,7 +182,7 @@ class PDP0App(SubApp):
 
                 stat = self._app.svc.status_of(sipid)
                 out['pdr:status'] = stat.state
-                return self.send_json(out)
+                return self.send_json(out, code=success)
 
             except NERDError as ex:
                 self.log.error("Bad NERDm data POSTed to pdp0/%s: %s", sipid, str(ex))

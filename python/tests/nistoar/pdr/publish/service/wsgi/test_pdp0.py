@@ -187,7 +187,7 @@ class TestPDP0App(test.TestCase):
         }
         req['wsgi.input'] = StringIO(json.dumps(nerd))
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
-        self.assertIn("200 ", self.resp[0])
+        self.assertIn("201 ", self.resp[0])
 
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
@@ -273,7 +273,7 @@ class TestPDP0App(test.TestCase):
         }
         req['wsgi.input'] = StringIO(json.dumps(nerd))
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
-        self.assertIn("200 ", self.resp[0])
+        self.assertIn("201 ", self.resp[0])
 
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
@@ -298,7 +298,7 @@ class TestPDP0App(test.TestCase):
         }
         req['wsgi.input'] = StringIO(json.dumps(nerd))
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
-        self.assertIn("200 ", self.resp[0])
+        self.assertIn("201 ", self.resp[0])
 
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
