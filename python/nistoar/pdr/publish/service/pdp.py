@@ -271,7 +271,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                 sts.update(status.PROCESSING)
 
         try:
-            bagger.prepare()
+            bagger.prepare(who=who)
             bagger.set_res_nerdm(nerdm, who, True);
             sts.update(status.PENDING)
 
@@ -341,7 +341,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             sts.start(self.convention, who.group)
 
         try:
-            bagger.prepare()
+            bagger.prepare(who=who)
             cmpid = bagger.set_comp_nerdm(cmpmd, who)
             sts.update(status.PENDING)
 
