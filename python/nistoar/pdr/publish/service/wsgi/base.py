@@ -105,7 +105,7 @@ class Handler(object):
         :param data:     the data to encode in JSON
                          :type data: dict, list, or string
         """
-        return self._send(code, message, json.dumps(data), "application/json", ashead, encoding)
+        return self._send(code, message, json.dumps(data, indent=2), "application/json", ashead, encoding)
 
     def _send(self, code, message, content, contenttype, ashead, encoding):
         if ashead is None:

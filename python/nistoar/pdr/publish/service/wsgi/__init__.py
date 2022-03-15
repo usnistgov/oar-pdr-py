@@ -25,7 +25,10 @@ class PDPApp(PublishSystem):
     Currently, only the "pdp0" convention is supported.
 
     An instance will look for the following parameters in the configuration provided at construction:
-    :param int loglevel:     the loggging level that should be used overall by the app
+    :param str working_dir:  the default parent working directory for state data for all conventions.  
+                             If a convention-level configuration does not set its own 'working_dir'
+                             parameter, it will be set to a directory named after the convention within
+                             the parent working directory specified here.
     :param list authorized:  a list of authorization configurations, one for each client authorized to
                              use this app (see below).
     :param dict conventions: a set of convention-specific configurations where each key is the name 
@@ -59,9 +62,6 @@ class PDPApp(PublishSystem):
 
     def __init__(self, config):
         self.cfg = config
-        level = config.get('loglevel')
-        if level:
-            log.setLevel(level)
 
         # load the authorized identities
         self._id_map = {}
@@ -88,6 +88,16 @@ class PDPApp(PublishSystem):
         cfg = deepcopy(self.cfg.get('conventions', {}).get(conv, {}))
         if not cfg:
             raise ConfigurationException("No configuration available for convention="+conv+"!")
+
+        # Note 'working_dir' should not be inherited via 'override_config_for'
+        if 'working_dir' not in cfg and self.cfg.get('working_dir'):
+            cfg['working_dir'] = os.path.join(self.cfg.get('working_dir'), conv)
+            if not os.path.exists(cfg['working_dir']) and os.path.exists(self.cfg['working_dir']):
+                try:
+                    os.mkdir(cfg['working_dir'])
+                except OSError as ex:
+                    raise PublishingStateException("Unable to create working directory for "+conv+
+                                                   " convention", cause=ex)
 
         # if config inherits from another convention (via 'override_config_for'), combine them properly
         loaded = [conv]

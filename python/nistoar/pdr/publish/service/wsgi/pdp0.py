@@ -12,6 +12,7 @@ from ...prov import PubAgent, Action
 from ... import (PublishingStateException, SIPNotFoundError, BadSIPInputError, NERDError,
                  SIPStateException, SIPConflictError, UnauthorizedPublishingRequest)
 from nistoar.pdr.utils.webrecord import WebRecorder
+from nistoar.nerdm.validate import ValidationError
 
 class PDP0App(SubApp):
     """
@@ -185,7 +186,11 @@ class PDP0App(SubApp):
                 return self.send_json(out, code=success)
 
             except NERDError as ex:
-                self.log.error("Bad NERDm data POSTed to pdp0/%s: %s", sipid, str(ex))
+                self.log.error("Bad NERDm data POSTed to %s: %s", path, str(ex))
+                self.send_error(400, "Bad Input NERDm data", str(ex)+"\n", "text/plain")
+
+            except ValidationError as ex:
+                self.log.error("Invalid NERDm data POSTed to %s: %s", path, str(ex))
                 self.send_error(400, "Bad Input NERDm data", str(ex)+"\n", "text/plain")
 
             except UnauthorizedPublishingRequest as ex:
@@ -198,7 +203,10 @@ class PDP0App(SubApp):
                 self.send_error(409, "Conflicting SIP state", msg+"\n", "text/plain")
 
             except Exception as ex:
-                self.log.exception("Failed to describe SIP: %s: %s", parts[0], str(ex))
+                if sipid:
+                    self.log.exception("Failed to accept SIP: %s: %s", sipid, str(ex))
+                else:
+                    self.log.exception("Failed to accept SIP: %s", str(ex))
                 return self.send_error(500, "Server error")
                 
         def do_PUT(self, path):
@@ -285,8 +293,12 @@ class PDP0App(SubApp):
                 return self.send_json(out)
 
             except NERDError as ex:
-                self.log.error("Bad NERDm data PUT to pdp0/%s: %s", sipid, str(ex))
+                self.log.error("Bad NERDm data PUT to %s: %s", path, str(ex))
                 return self.send_error(400, "Bad Input NERDm data", str(ex)+"\n", "text/plain")
+
+            except ValidationError as ex:
+                self.log.error("Invalid NERDm data PUT to %s: %s", path, str(ex))
+                self.send_error(400, "Bad Input NERDm data", str(ex)+"\n", "text/plain")
 
             except UnauthorizedPublishingRequest as ex:
                 self.log.warning("Unauthorized update request to %s: %s", path, str(ex))
@@ -298,7 +310,7 @@ class PDP0App(SubApp):
                 return self.send_error(409, "Conflicting SIP state", msg+"\n", "text/plain")
 
             except Exception as ex:
-                self.log.exception("Failed to describe SIP: %s: %s", parts[0], str(ex))
+                self.log.exception("Failed to accept SIP update: %s: %s", path, str(ex))
                 return self.send_error(500, "Server error")
 
         def do_DELETE(self, path):
