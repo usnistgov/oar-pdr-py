@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from abc import abstractmethod, abstractproperty
 
 from ... import constants as const
+from ....nerdm import constants as nrdconst
 from ....pdr import config as cfgmod
 from .base import SimpleNerdmPublishingService
 from .. import (PublishingStateException, SIPConflictError, SIPNotFoundError, BadSIPInputError,
@@ -16,6 +17,8 @@ from .. import (PublishingStateException, SIPConflictError, SIPNotFoundError, Ba
 from ..bagger import SIPBagger, SIPBaggerFactory, PDPBagger
 from ..prov import PubAgent
 from ..idmint import PDP0Minter
+from ....nerdm import utils as nerdutils
+from ....nerdm.validate import ValidationError
 from . import status
 
 ARK_PFX_RE = re.compile(const.ARK_PFX_PAT)
@@ -204,6 +207,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         :raises PublishingStateException:  if the SIP is not in a correct state to accept the metadata
         """
         if not sipid:
+            sipid = nerdm.get("pdr:sipid") 
+        if not sipid:
             # assume that if the @id contains a value, it represents an SIP ID
             sipid = nerdm.get("@id")
         if create is None:
@@ -222,6 +227,9 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         # validate the input
         if self.cfg.get('validate_nerdm', True):
+            # ensure that input record has all necessary schema designations
+            self._tweak_for_validation(nerdm)
+
             # will raise ValidationError or NERDError if not valid
             self.validate_res_nerdm(nerdm)
 
@@ -558,6 +566,69 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         else:
             # this is all we know about it
             return { "@id": id, "pdr:sipid": sipid }
+
+    def _tweak_for_validation(self, nerdmd):
+        """
+        this will update the `@type` and `_extensionSchemas` properties to ensure that the input
+        record validates deeply against the key extension schemas for this service.
+        """
+        if nerdutils.is_type(nerdmd, "Resource") or 'contactPoint' in nerdmd:
+            # it's a resource
+            self._tweak_resource_for_validation(nerdmd)
+        elif nerdutils.is_type(nerdmd, "Component") or nerdutils.is_type(nerdmd, "Distribution"):
+            self._tweak_component_for_validation(nerdmd)
+        else:
+            raise ValidationError("@type is missing or insufficient to interpret as an SIP submission")
+
+    def _tweak_resource_for_validation(self, resmd):
+        types = resmd.setdefault('@type', [])
+        extschs = set(resmd.setdefault('_extensionSchemas', []))
+        
+        if not nerdutils.is_type(resmd, "PDRSubmission"):
+            types.append('nrds:PDRSubmission')
+            extschema = nrdconst.SIP_SCHEMA_URI + "#/definitions/PDRSubmission"
+            if extschema not in extschs:
+                extschs.add(extschema)
+
+        if not nerdutils.is_type(resmd, "Resource"):
+            types.append('nrd:Resource')
+
+        if not nerdutils.is_type(resmd, "ExperimentalData") and self._has_exp_md(resmd):
+            nerdutils._insert_before_val(types, 'nrde:ExperimentalData', 'nrdp:DataPublication',
+                                         'nrds:PDRSubmission', 'nrd:PublicDataResource', 'nrd:Resource')
+            extschema = nrdconst.EXP_SCHEMA_URI + "#/definitions/ExperimentalContext"
+            altextschema = nrdconst.EXP_SCHEMA_URI + "#/definitions/AcquisitionActivity"
+            if extschema not in extschs and altextschema not in extschs:
+                extschs.add(extschema)
+
+        resmd["_extensionSchemas"] = list(extschs)
+
+        if 'components' in resmd:
+            for comp in resmd['components']:
+                self._tweak_component_for_validation(comp)
+
+    def _has_exp_md(self, md):
+        isexp = False
+        for prop in "instrumentsUsed isPartOfProjects acquisitionStartTime hasAcquisitionStart acquisitionEndTime hasAcquisitionEnd".split():
+            if prop in md:
+                isexp = True
+                break
+        return isexp
+
+    def _tweak_component_for_validation(self, cmpmd):
+        types = cmpmd.setdefault('@type', [])
+        extschs = cmpmd.setdefault('_extensionSchemas', [])
+        
+        if not nerdutils.is_type(cmpmd, "Component"):
+            types.append('nrd:Component')
+
+        if not nerdutils.is_type(cmpmd, "AcquisitionActivity") and self._has_exp_md(cmpmd):
+            nerdutils._insert_before_val(types, 'nrde:AcquisitionActivity', 'nrdp:AccessPage',
+                                         'nrd:Component')
+            extschema = nrdconst.EXP_SCHEMA_URI + "#/definitions/ExperimentalContext"
+            altextschema = nrdconst.EXP_SCHEMA_URI + "#/definitions/AcquisitionActivity"
+            if extschema not in extschs and altextschema not in extschs:
+                extschs.add(extschema)
 
 
 class PDPublishingService(BagBasedPublishingService):

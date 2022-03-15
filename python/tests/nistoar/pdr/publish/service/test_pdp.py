@@ -19,6 +19,7 @@ from nistoar.pdr.publish.service import status
 
 # datadir = nistoar/preserve/data
 datadir = Path(__file__).parents[2] / 'preserve' / 'data'
+datadir2 = Path(__file__).parents[1] / 'data'
 
 loghdlr = None
 rootlog = None
@@ -237,7 +238,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(bgrn.sipid, "ncnr0:hello")
 
     def test_accept_resource_metadata(self):
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(datadir2 / 'ncnrexp0.json'))
 
         with self.assertRaises(pdp.SIPConflictError):
             self.pubsvc.accept_resource_metadata(nerd, ncnrag, sipid="ncnr0:hello", create=False)
@@ -264,6 +265,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
         # nerdm record has some arbitrary value for '@id'
+        nerd['@id'] = "ark:/88434/goob"
         with self.assertRaises(pdp.UnauthorizedPublishingRequest):
             sipid = self.pubsvc.accept_resource_metadata(nerd, ncnrag, create=True)
 
@@ -280,6 +282,12 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(bnerd["title"], nerd['title'])
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
+        # nerdm record has some arbitrary value for '@id'
+        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        with self.assertRaises(pdp.UnauthorizedPublishingRequest):
+            sipid = self.pubsvc.accept_resource_metadata(nerd, tstag, create=True)
+
+        del nerd['@id']
         sipid = self.pubsvc.accept_resource_metadata(nerd, tstag, create=True)
         self.assertEqual(sipid, "pdp0-0017")
         bagdir = self.bagparent / sipid
