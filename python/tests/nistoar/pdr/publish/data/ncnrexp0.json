@@ -1,0 +1,79 @@
+{
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
+    "_extensionSchemas": [ "https://data.nist.gov/od/dm/nerdm-schema/sip/v0.1#/definitions/PDRSubmission",
+                           "https://data.nist.gov/od/dm/nerdm-schema/exp/v0.1#/definitions/ExperimentalContext" ],
+    "@type": [ "nrdp:PDRSubmission" ],
+    "@id": "ncnr0:22872",
+    "title": "Neutron Reflectometry of Electrochemically Grown Hydrous Iridium Oxide Films",
+    "contactPoint": {
+        "hasEmail": "mailto:joseph.dura@nist.gov",
+        "fn": "Joe Dura",
+        "proxyFor": "https://orchid.org/0000-0001-6877-959X"
+    },
+    "authors": [
+        {
+            "fn": "Eric Rus",
+            "familyName": "Rus",
+            "firstName": "Eric",
+            "orcid": "0000-0001-5031-6888"
+        },
+        {
+            "fn": "Joseph A. Dura",
+            "familyName": "Dura",
+            "firstName": "Joseph",
+            "middleName": "A.",
+            "orcid": "0000-0001-6877-959X"
+        }
+    ],
+    "description": [
+        ""
+    ],
+    "keywords": [ "electrochemistry", "oxide films" ],
+    "accessLevel": "public",
+    "modified": "2018-04-05T17:16:54",
+    "isPartOfProjects": [
+        {
+            "localID": "22872"
+        }
+    ],
+    "instrumentsUsed": [
+        {
+            "localID": "bt7",
+            "title": "Double-focusing triple-axis spectrometer",
+            "abbrev": [ "BT-7" ],
+            "location": "https://www.nist.gov/ncnr/bt-7-double-focusing-triple-axis-spectrometer"
+        }
+    ],
+    "components": [
+        {
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/AccessPage",
+                "https://data.nist.gov/od/dm/nerdm-schema/exp/v0.1#/definitions/ExperimentalContext"
+            ],
+            "@id": "components/201706",
+            "@type": [ "nrde:AcquisitionActivity", "nrdp:AccessPage" ],
+            "accessURL": "https://ncnr.nist.gov/pub/ncnrdata/cgd/201706/22872/data",
+            "title": "Download Access for Activity 201706",
+            "format": {
+                "description": "NCNR Repository web page"
+            },
+            "acquisitionStartTime": 1498848003,
+            "acquisitionEndTime":   1499352540
+        },
+        {
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/AccessPage",
+                "https://data.nist.gov/od/dm/nerdm-schema/exp/v0.1#/definitions/ExperimentalContext"
+            ],
+            "@id": "components/201803",
+            "@type": [ "nrdp:AccessPage" ],
+            "accessURL": "https://ncnr.nist.gov/pub/ncnrdata/cgd/201803/22872/data",
+            "title": "Download Access for Activity 201803",
+            "format": {
+                "description": "NCNR Repository web page"
+            },
+            "acquisitionStartTime": 1522513412,
+            "acquisitionEndTime":   1522948614
+        }
+    ]
+}

@@ -27,6 +27,7 @@ from nistoar.pdr.publish import prov
 
 # datadir = nistoar/preserve/data
 datadir = Path(__file__).parents[2] / 'preserve' / 'data'
+datadir2 = Path(__file__).parents[1] / 'data'
 
 loghdlr = None
 rootlog = None
@@ -182,10 +183,11 @@ class TestPDPBagger(test.TestCase):
         self.assertTrue(not bagdir.exists())
         self.set_bagger_for("pdp1:goob")
 
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        # nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(datadir2 / 'ncnrexp0.json'))
         nerd['bureauCode'] = [ "666:66" ]
         nerd['accessLevel'] = "private"
-        pubshr = nerd['publisher']
+        # pubshr = nerd['publisher']
         self.bgr.set_res_nerdm(nerd, None, False)
 
         saved = self.bgr.bag.nerdm_record(True)
@@ -196,14 +198,14 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(saved.get('bureauCode'), ["006:55"])
         self.assertEqual(saved.get('programCode'), ["006:045"])
         self.assertEqual(saved.get('accessLevel'), "private")
-        self.assertEqual(to_dict(saved.get('publisher')), to_dict(pubshr))
-        self.assertIn("OptSortSph", saved['title'])
+        self.assertIn('publisher', saved)
+        self.assertIn("Neutron", saved['title'])
         self.assertEqual(len(saved['authors']), 2)
-        self.assertEqual(saved['contactPoint']['fn'], "Zachary Levine")
+        self.assertEqual(saved['contactPoint']['fn'], "Joe Dura")
         self.assertEqual(saved['contactPoint']['@type'], "vcard:Contact")
         self.assertEqual(len(saved['components']), 0)
-        self.assertIn(consts.PUB_SCHEMA_URI+"#/definitions/DataPublication", saved.get('_extensionSchemas'))
-        self.assertEqual(len(saved.get('_extensionSchemas')), 1)
+        self.assertIn(consts.SIP_SCHEMA_URI+"#/definitions/PDRSubmission", saved.get('_extensionSchemas'))
+        self.assertEqual(len(saved.get('_extensionSchemas')), 3)
 
     def test_set_comp_nerdm(self):
         bagdir = self.bagparent / 'pdp1:goob'

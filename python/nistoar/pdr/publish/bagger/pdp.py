@@ -15,6 +15,7 @@ from ... import constants as const
 from ....nerdm.constants import CORE_SCHEMA_URI, PUB_SCHEMA_URI, EXP_SCHEMA_URI, core_schema_base
 from ....nerdm import utils as nerdutils
 from ... import utils as utils
+from ....nerdm import utils as nerdmutils
 from ....nerdm.convert import latest
 from ...preserve.bagit.builder import BagBuilder
 from ... import def_etc_dir
@@ -29,13 +30,6 @@ VER_DELIM = const.RELHIST_EXTENSION.lstrip('/')
 FILE_DELIM = const.FILECMP_EXTENSION.lstrip('/')
 LINK_DELIM = const.LINKCMP_EXTENSION.lstrip('/')
 AGG_DELIM = const.AGGCMP_EXTENSION.lstrip('/')
-
-def _insert_before_val(vals, inval, beforeval):
-    try:
-        vals.insert(vals.index(beforeval), inval)
-    except ValueError:
-        vals.append(inval)
-
 
 class NERDmBasedBagger(SIPBagger):
     """
@@ -344,7 +338,7 @@ class NERDmBasedBagger(SIPBagger):
 
         # modify the input: remove properties that cannot be set, add others
         handsoff = "@id @context publisher issued firstIssued revised annotated language " + \
-                   "bureauCode programCode doi releaseHistory"
+                   "bureauCode programCode doi ediid releaseHistory"
         for prop in handsoff.split():
             if prop in nerdm:
                 del nerdm[prop]
@@ -416,16 +410,32 @@ class NERDmBasedBagger(SIPBagger):
     def _set_standard_res_modifications(self, resmd):
         # update the types
         types = resmd.setdefault('@type', [])
-        while 'nrds:PDRSubmission' in types:
-            types.remove('pdr:Submission')
+#        while 'nrds:PDRSubmission' in types:
+#            types.remove('nrds:PDRSubmission')
         if 'nrd:Resource' not in types:
+            types = [t for t in types if not t.endswith(':Resource')]  # fixes unconventional prefixes
             types.append('nrd:Resource')
-        if 'nrd:PublicDataResource' not in types:
-            _insert_before_val(types, 'nrd:PublicDataResource', 'nrd:Resource')
-        if nerdutils.is_type(resmd, 'PublicDataResource') and 'authors' in resmd and len(resmd['authors']) > 0:
-            _insert_before_val(types, 'nrdp:DataPublication', 'nrd:PublicDataResource')
+        if 'nrdp:PublicDataResource' not in types:
+            types = [t for t in types if not t.endswith(':PublicDataResource')]
+            nerdmutils._insert_before_val(types, 'nrdp:PublicDataResource',
+                                          'nrds:PDRSubmission', 'nrd:Resource')
+        if 'nrdp:PublicDataResource' in types:
+            if 'nrdp:DataPublication' not in types and 'authors' in resmd and len(resmd['authors']) > 0:
+                nerdmutils._insert_before_val(types, 'nrdp:DataPublication',
+                                              'nrds:PDRSubmission', 'nrdp:PublicDataResource')
+            if 'nrde:ExperimentalData' not in types:
+                isexp = False
+                for prop in "instrumentsUsed isPartOfProjects acquisitionStartTime hasAcquisitionStart acquisitionEndTime hasAcquisitionEnd".split():
+                    if prop in resmd:
+                        isexp = True
+                        break
+                if isexp:
+                    types = [t for t in types if not t.endswith(':ExperimentalData')]  
+                    nerdmutils._insert_before_val(types, 'nrde:ExperimentalData', 'nrdp:DataPublication',
+                                                  'nrds:PDRSubmission', 'nrdp:PublicDataResource')
+        resmd['@type'] = types
 
-        extschs = set([s for s in resmd.get('_extensionSchemas', []) if not SIPEXT_RE.match(s)])
+        extschs = set(resmd.get('_extensionSchemas', []))
         if nerdutils.is_type(resmd, 'DataPublication'):
             if not any([s for s in extschs if s.endswith('/definitions/DataPublication')]):
                 extschs.add(PUB_SCHEMA_URI + "#/definitions/DataPublication")
@@ -437,6 +447,8 @@ class NERDmBasedBagger(SIPBagger):
         if nerdutils.is_type(resmd, 'ExperimentalData'):
             if not any([s for s in extschs if s.endswith('/definitions/ExperimentalData')]):
                 extschs.add(EXP_SCHEMA_URI + "#/definitions/ExperimentalData")
+            for s in [s for s in extschs if s.endswith('/definitions/ExperimentalContext')]:
+                extschs.remove(s)
         if extschs:
             resmd['_extensionSchemas'] = list(extschs)
 
