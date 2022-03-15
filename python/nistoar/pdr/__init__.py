@@ -72,11 +72,15 @@ def find_jq_lib(config=None):
         # The code might be coming from an installation, build, or source
         # directory.
         import nistoar.jq
+
+        # assume library has been installed; library is rooted at {root}/lib/python,
         basedir = Path(nistoar.jq.__file__).parents[3]
         candidates = [basedir / 'jq']
+
+        # assume library has been built within the source code directory at {root}/python/build/lib*
         basedir = basedir.parents[1]
-        candidates.append(basedir / 'jq')
         candidates.append(basedir / 'metadata' / 'jq')
+        candidates.append(basedir / 'jq')
         
     for dir in candidates:
         if dir.exists():
@@ -121,11 +125,22 @@ def find_merge_etc(config=None):
         # The code might be coming from an installation, build, or source
         # directory.
         import nistoar.nerdm.merge
-        basedir = Path(nistoar.nerdm.merge.__file__).parents[3]
+
+        # assume library has been installed; library is rooted at {root}/lib/python,
+        basedir = Path(nistoar.nerdm.merge.__file__).parents[4]
         candidates = [basedir / 'etc' / 'merge']
+
+        # assume library has been built within the source code directory at {root}/python/build/lib*
+        basedir = Path(__file__).parents[5]
         candidates.append(basedir / 'metadata' / 'etc' / 'merge')
-        basedir = basedir.parents[1]
         candidates.append(basedir / 'etc' / 'merge')
+
+        # assume library being used from its source code location
+        basedir = Path(__file__).parents[3]
+        candidates.append(basedir / 'metadata' / 'etc' / 'merge')
+        candidates.append(basedir / 'etc' / 'merge')
+
+        basedir = basedir.parents[1]
 
     for dir in candidates:
         if dir.exists():
