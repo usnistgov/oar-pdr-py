@@ -2,7 +2,7 @@
     "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
     "_extensionSchemas": [ "https://data.nist.gov/od/dm/nerdm-schema/sip/v0.1#/definitions/PDRSubmission",
                            "https://data.nist.gov/od/dm/nerdm-schema/exp/v0.1#/definitions/ExperimentalContext" ],
-    "@type": [ "nrdp:PDRSubmission" ],
+    "@type": [ "nrds:PDRSubmission" ],
     "@id": "ncnr0:22872",
     "title": "Neutron Reflectometry of Electrochemically Grown Hydrous Iridium Oxide Films",
     "contactPoint": {

@@ -302,8 +302,8 @@ class TestPDPBagger(test.TestCase):
         self.bgr.prepare(who=tstag)
         self.assertTrue(bagdir.exists())
 
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
-        del nerd['components'][2]
+        nerd = utils.read_json(str(datadir2 / 'ncnrexp0.json'))
+        self.assertIn('nrds:PDRSubmission', nerd['@type'])
         self.bgr.set_res_nerdm(nerd, tstag, True)  # saves components, too
         saved = self.bgr.bag.nerdm_record('', True)
         
@@ -315,6 +315,10 @@ class TestPDPBagger(test.TestCase):
         with open(os.path.join(self.bgr.bagdir, "publish.history")) as fd:
             history = prov.load_from_history(fd)
         self.assertTrue(all([a.agent for a in history]))
+
+        saved = utils.read_json(self.bgr.bag.nerd_file_for(''))
+        self.assertNotIn('nrds:PDRSubmission', saved['@type'])
+        self.assertFalse(any([s for s in saved['_extensionSchemas'] if 'Submission' in s]))
 
     def test_finalize_version(self):
         bagdir = self.bagparent / 'pdp1:goob'

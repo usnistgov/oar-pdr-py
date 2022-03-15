@@ -12,7 +12,8 @@ import yaml, jsonpatch
 
 from .. import BadSIPInputError, SIPStateException, PublishingStateException
 from ... import constants as const
-from ....nerdm.constants import CORE_SCHEMA_URI, PUB_SCHEMA_URI, EXP_SCHEMA_URI, core_schema_base
+from ....nerdm.constants import (CORE_SCHEMA_URI, PUB_SCHEMA_URI, EXP_SCHEMA_URI, SIP_SCHEMA_URI,
+                                 core_schema_base)
 from ....nerdm import utils as nerdutils
 from ... import utils as utils
 from ....nerdm import utils as nerdmutils
@@ -1100,6 +1101,19 @@ class PDPBagger(NERDmBasedBagger):
 
         try:
             self.finalize_version(who, _action=hist)
+
+            # remove use of Submission types
+            nerd = self.bagbldr.bag.nerd_metadata_for('', True)
+            updmd = {}
+            tps = [t for t in nerd.get("@type", []) if not t.endswith("Submission")]
+            if tps != nerd.get("@type", []):
+                updmd['@type'] = tps
+            exts = [s for s in nerd.get("_extensionSchemas", []) if not s.startswith(SIP_SCHEMA_URI)]
+            if exts != nerd.get("_extensionSchemas", []):
+                updmd['_extensionSchemas'] = exts
+            if updmd:
+                self.bagbldr.update_metadata_for('', updmd, message="finalize: remove SIP submission types")
+
             self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
             hist.add_subaction(act)
 
