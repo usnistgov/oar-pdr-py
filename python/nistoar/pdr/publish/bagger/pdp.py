@@ -713,10 +713,14 @@ class NERDmBasedBagger(SIPBagger):
                 else:
                     cmpmd['@id'] += cmpmd['proxyFor']
 
-    def delete(self, lock=True):
+    def delete(self, who: PubAgent=None, lock=True):
         """
         delete the working bag from store; this sets the bagger to a virgin state.
         """
+        msg = "Deleting SIP bag by request"
+        if who:
+            msg += " by "+str(who)
+        self.log.info(msg)
         if lock:
             self.ensure_filelock()
             with self.lock:

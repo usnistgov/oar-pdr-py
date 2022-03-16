@@ -206,7 +206,7 @@ class TestPDP0App(test.TestCase):
         }
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
         self.assertIn("200 ", self.resp[0])
-        self.assertEqual(body, ['["pdp0-0017"]'])
+        self.assertEqual(body, ['[\n  "pdp0-0017"\n]'])
 
         self.resp = []
         req = {

@@ -215,7 +215,7 @@ class TestPDPWSGI(test.TestCase):
         }
         body = self.tostr( self.app.handle_request(req, self.start) )
         self.assertIn("200 ", self.resp[0])
-        self.assertEqual(body, ['["pdp0-0017"]'])
+        self.assertEqual(body, ['[\n  "pdp0-0017"\n]'])
 
         self.resp = []
         req = {

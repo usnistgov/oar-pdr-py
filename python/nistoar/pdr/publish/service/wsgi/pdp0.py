@@ -49,9 +49,8 @@ class PDP0App(SubApp):
         ACTION_PUBLISH  = "publish"
 
         def __init__(self, app, path: str, wsgienv: dict, start_resp: Callable, who=None, config: dict={}):
-            Handler.__init__(self, path, wsgienv, start_resp, who, config)
             self._app = app
-            self.log = self._app.log
+            Handler.__init__(self, path, wsgienv, start_resp, who, config, self._app.log)
             self._reqrec = None
             if self._app._recorder:
                 self._reqrec = self._app._recorder.from_wsgi(self._env)
@@ -165,7 +164,7 @@ class PDP0App(SubApp):
 
                 else:
                     # this is a request to create an SIP
-                    sipid = self._app.svc.accept_resource_metadata(nerdm, self.who)
+                    sipid = self._app.svc.accept_resource_metadata(nerdm, self.who, create=True)
                     if not stat or stat.state == status.NOT_FOUND:
                         success = 201
 
@@ -339,7 +338,7 @@ class PDP0App(SubApp):
                 if compid:
                     try:
 
-                        self.pubsvc.remove_component(sipid, compid, self.who)
+                        self._app.svc.remove_component(sipid, compid, self.who)
 
                     except SIPConflictError as ex:
                         self.log.error("%s: unable to remove component, %s: %s", sipid, compid, str(ex))
@@ -348,7 +347,7 @@ class PDP0App(SubApp):
                 else:
                     try:
 
-                        self.pubsvc.delete(sipid, self.who)
+                        self._app.svc.delete(sipid, self.who)
     
                     except SIPConflictError as ex:
                         self.log.error("%s: unable to delete SIP: %s", sipid, compid, str(ex))
@@ -364,6 +363,8 @@ class PDP0App(SubApp):
             except Exception as ex:
                 self.log.exception("Failed to DELETE %s: %s", path, str(ex))
                 return self.send_error(500, "Server error")
+
+            return self.send_ok()
             
         def do_PATCH(self, path):
             # This method is only used to finalize or publish

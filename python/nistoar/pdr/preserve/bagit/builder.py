@@ -243,7 +243,7 @@ class BagBuilder(PreservationSystem):
                 self._nerdm_schema_id += '#'
 
     def __del__(self):
-        self._unset_logfile()
+        self.disconnect_logfile()
 
     def __enter__(self):
         return self
@@ -1925,8 +1925,7 @@ class BagBuilder(PreservationSystem):
         self.ensure_baginfo()
 
         if stop_logging:
-            self._unset_logfile()
-            
+            self.disconnect_logfile()
 
 
     def trim_data_folders(self, rmmeta=False):

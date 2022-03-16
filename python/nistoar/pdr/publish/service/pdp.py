@@ -215,7 +215,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             # if sipid is not provided, assume we're creating a new SIP (rather than updating)
             create = not bool(sipid)
         if not create and not sipid:
-            raise SIPConflictError("Requested update without providing SIP ID")
+            raise SIPConflictError("unknown", "Requested update without providing SIP ID")
 
         nerdm = deepcopy(nerdm)
         if not sipid:
@@ -243,8 +243,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         sts = self.status_of(sipid)
 
         if create:
-            if sts.state == status.PROCESSING:
-                raise SIPConflictError("Unable to create SIP {0}: already in process ({1}: {2})"
+            if sts.state != status.NOT_FOUND and sts.state != status.PUBLISHED:
+                raise SIPConflictError(sipid, "Unable to create SIP {0}: already in process ({1}: {2})"
                                        .format(sipid, sts.siptype, sts.state))
 
             bagger = self._get_bagger_for(shoulder, sipid, minter)
@@ -265,7 +265,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             if sts.state == status.NOT_FOUND or sts.state == status.PUBLISHED:
                 sts.start(self.convention, who.group)
             elif sts.siptype != self.convention:
-                raise SIPConflictError("SIP is already being handled under a different convention: "+
+                raise SIPConflictError(sipid, "SIP is already being handled under a different convention: "+
                                        sts.siptype)
             else:
                 sts.update(status.PROCESSING)
@@ -315,7 +315,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         """
         sts = self.status_of(sipid)
         if sts.state == status.PROCESSING:
-            raise SIPConflictError(
+            raise SIPConflictError(sipid, 
                 "Unable to update SIP {0} with component data: already in process ({1}: {2})"
                 .format(sipid, sts.siptype, sts.state)
             )
@@ -334,7 +334,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         elif sts.state == status.NOT_FOUND:
             if not bagger.get_prepper().aip_exists():
-                raise SIPConflictError(
+                raise SIPConflictError(sipid,
                     "Unable to update SIP {0} with component data: SIP not yet created ({1}: {2})"
                     .format(sipid, sts.siptype, sts.state)
                 )
@@ -403,14 +403,14 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         if sts.state == status.PROCESSING:
             raise SIPConflictError(sipid, "Requested SIP is currently being processed: "+sipid)
         if sts.state != status.NOT_FOUND and sts.state != status.PUBLISHED and sts.siptype != self.convention:
-            raise SIPConflictError("SIP is already being handled under a different convention: "+
+            raise SIPConflictError(sipid, "SIP is already being handled under a different convention: "+
                                    sts.siptype)
         
         shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
         bagger = self._get_bagger_for(shoulder, sipid)
 
         if os.path.exists(bagger.bagdir):
-            bagger.delete()
+            bagger.delete(who)
             if sts.state != status.PUBLISHED:
                 sts.revert()
             if bagger.isrevision and sts.state == NOT_FOUND:

@@ -5,6 +5,7 @@ import sys, re, json
 from abc import ABCMeta, abstractmethod, abstractproperty
 from typing import Callable
 from functools import reduce
+from logging import Logger
 
 from wsgiref.headers import Headers
 # from urllib.parse import parse_qs
@@ -29,7 +30,8 @@ class Handler(object):
     """
     default_agent = PubAgent("public", PubAgent.UNKN, "anonymous")
 
-    def __init__(self, path: str, wsgienv: dict, start_resp: Callable, who=None, config: dict={}):
+    def __init__(self, path: str, wsgienv: dict, start_resp: Callable, who=None, 
+                 config: dict={}, log: Logger=None):
         self._path = path
         self._env = wsgienv
         self._start = start_resp
@@ -40,6 +42,7 @@ class Handler(object):
         if not who:
             who = self.default_agent
         self.who = who
+        self.log = log
 
         self._meth = self._env.get('REQUEST_METHOD', 'GET')
 
@@ -192,12 +195,17 @@ class Handler(object):
         if not self.authorize():
             return self.send_unauthorized()
 
-        if hasattr(self, meth_handler):
-            return getattr(self, meth_handler)(self._path)
-        elif self._meth == "HEAD":
-            return self.do_GET(self._path, ashead=True)
-        else:
-            return self.send_error(405, self._meth + " not supported on this resource")
+        try:
+            if hasattr(self, meth_handler):
+                return getattr(self, meth_handler)(self._path)
+            elif self._meth == "HEAD":
+                return self.do_GET(self._path, ashead=True)
+            else:
+                return self.send_error(405, self._meth + " not supported on this resource")
+        except Exception as ex:
+            if self.log:
+                self.log.exception("Unexpected failure: "+str(ex))
+            return self.send_error(500, "Server failure")
 
     def authorize(self):
         """
@@ -273,8 +281,9 @@ class Ready(SubApp):
 
     class _Handler(Handler):
 
-        def __init__(self, path: str, wsgienv: dict, start_resp: Callable, who=None, config: dict={}):
-            Handler.__init__(self, path, wsgienv, start_resp, who, config)
+        def __init__(self, path: str, wsgienv: dict, start_resp: Callable, who=None,
+                     config: dict={}, log: Logger=None):
+            Handler.__init__(self, path, wsgienv, start_resp, who, config, log)
 
         def do_GET(self, path, ashead=False):
             path = path.lstrip('/')
@@ -293,5 +302,5 @@ class Ready(SubApp):
                              relative to a parent path that this SubApp is configured to 
                              handle.  
         """
-        return self._Handler(path, env, start_resp, who)
+        return self._Handler(path, env, start_resp, who, log=self.log)
 
