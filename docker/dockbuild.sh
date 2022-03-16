@@ -23,7 +23,7 @@ PACKAGE_NAME=oar-pdr-py
 ## containers to be built.  List them in dependency order (where a latter one
 ## depends the former ones).  
 #
-DOCKER_IMAGE_DIRS="pymongo jqfromsrc ejsonschema pdrpytest"
+DOCKER_IMAGE_DIRS="pymongo jqfromsrc ejsonschema pyenv pdrpytest pdpserver"
 
 [ -d "$codedir/metadata/oar-build" ] || {
     echo ${prog}: Missing metadata submodule
@@ -45,7 +45,15 @@ log_intro   # record start of build into log
 
 $codedir/metadata/docker/dockbuild.sh $BUILD_IMAGES
 
+if { echo " $BUILD_IMAGES " | grep -qs " pyenv "; }; then
+    echo '+' docker build $BUILD_OPTS -t $PACKAGE_NAME/pyenv pyenv | logit
+    docker build $BUILD_OPTS -t $PACKAGE_NAME/pyenv pyenv 2>&1 | logit
+fi
 if { echo " $BUILD_IMAGES " | grep -qs " pdrpytest "; }; then
     echo '+' docker build $BUILD_OPTS -t $PACKAGE_NAME/pdrpytest pdrpytest | logit
     docker build $BUILD_OPTS -t $PACKAGE_NAME/pdrpytest pdrpytest 2>&1 | logit
+fi
+if { echo " $BUILD_IMAGES " | grep -qs " pdpserver "; }; then
+    echo '+' docker build $BUILD_OPTS -t $PACKAGE_NAME/pdpserver pdpserver | logit
+    docker build $BUILD_OPTS -t $PACKAGE_NAME/pdpserver pdpserver 2>&1 | logit
 fi

@@ -31,6 +31,7 @@ CMDs:
   build     build the software
   test      build the software and run the unit tests
   install   just install the prerequisites (use with shell)
+  pdpserver start the PDP web service
   shell     start a shell in the docker container used to build and test
   testshell start a shell in the docker container after installing the software
 
@@ -113,7 +114,7 @@ while [ "$1" != "" ]; do
             wordin python $comptypes || comptypes="$comptypes python"
             pyargs=(${pyargs[@]} $1)
             ;;
-        build|install|test|shell)
+        build|install|test|shell|pdpserver)
             cmds="$cmds $1"
             ;;
         *)
@@ -173,6 +174,13 @@ if wordin python $comptypes; then
                         "${args[@]}"  "${pyargs[@]}"
         docker run $ti --rm $volopt "${dargs[@]}" $PKGNAME/pdrpytest testall \
                "${args[@]}"  "${pyargs[@]}"
+    fi
+
+    if wordin pdpserver $cmds; then
+        echo '+' docker run -ti --rm $volopt "${dargs[@]}" -p 9090:9090 $PKGNAME/pdpserver \
+                        "${args[@]}"  "${pyargs[@]}"
+        exec docker run -ti --rm $volopt "${dargs[@]}" -p 9090:9090 $PKGNAME/pdpserver \
+                        "${args[@]}"  "${pyargs[@]}"
     fi
 
     if wordin shell $cmds; then

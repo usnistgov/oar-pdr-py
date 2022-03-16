@@ -12,36 +12,7 @@
 # dependencies sufficient to do these two things.  
 #
 #########################################################################
-
-FROM oar-metadata/ejsonschema
-
-RUN apt-get update && apt-get install -y python-yaml curl wget less sudo zip \
-                                         p7zip-full ca-certificates git
-RUN pip install --upgrade pip setuptools
-RUN pip install funcsigs 'bagit>=1.6.3,<2.0' 'fs>=2.0.21' mako
-
-# install multibag from source
-RUN multibag_ver=0.3 && \
-    curl -L -o multibag-py.zip \
-    https://github.com/usnistgov/multibag-py/archive/$multibag_ver.zip && \
-    unzip -oq multibag-py.zip && \
-    cd multibag-py-$multibag_ver && \
-    echo __version__ = $multibag_ver >> multibag/__init__.py && \
-    python setup.py install --install-purelib=/usr/local/lib/python3.8/dist-packages
-
-# Create the user that build/test operations should run as.  Normally,
-# this is set to match identity information of the host user that is
-# launching the container.
-#
-RUN sed --in-place -e '/CREATE_MAIL_SPOOL/ s/=yes/=no/' /etc/default/useradd
-ARG devuser=developer
-ARG devuid=1000
-RUN grep -qs :${devuid}: /etc/group || \
-    groupadd --gid $devuid $devuser
-RUN grep -Pqs ":${devuid}:\d+:" /etc/passwd || \
-    useradd -m --comment "OAR Developer" --shell /bin/bash \
-            --gid $devuid --uid $devuid $devuser
-RUN echo $devuser "ALL=(ALL)" NOPASSWD:ALL > /etc/sudoers.d/90-developers
+FROM oar-pdr-py/pyenv
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod a+rx /usr/local/bin/entrypoint.sh
@@ -54,5 +25,6 @@ WORKDIR /dev/oar-pdr-py
 
 ENV PYTHONPATH /dev/oar-pdr-py/python/build/lib
 
+ARG devuser=developer
 USER $devuser
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
