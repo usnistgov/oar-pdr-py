@@ -1,0 +1,515 @@
+openapi: 3.1.0
+info:
+  title: PDR Programmatic Data Publishing (PDP) Interface, Convention PDP0
+  summary: A service that accepts SIPs for automated publication according to the pdp0 convention
+  description: >-
+    A client uses the PDP interface to submit a Submission Information Package (SIP) and
+    publish it into the PDR.  Clients may submit and publish and SIP all in one call or
+    via a sequence of calls in which the last call explicitly commits the SIP to
+    publication.  This interface is intended for use by automated clients that, apart from 
+    the initial call, is not driven by human action.  Nevertheless, the multi-call
+    approach does allow the client to see the status of the SIP prior to final
+    publication.
+
+    The pdp0 convention is based on the following assumptions and requirements
+      * An SIP is described by a NERDm-compliant document encoding the metadata for the publicaiton.
+      * The SIP does not include data files to be preserved with the metadata (although the 
+        metadata may refer to externally stored data).
+
+  contact:
+    name:  PDR support office
+    email: datasupport@nist.gov
+
+  version: 0.1
+
+paths:
+  /pdp0:
+    summary: the resource representing the collection of SIPs being processed currently
+    get:
+      summary: List the known SIPs associated with the authorized permission group
+      responses:
+        "200":
+          description:
+            The content successfully lists the SIP identifiers associated with the
+            authorized permission group that are currently known to the service.  The 
+            client can GET or update metadata descriptions of the SIPs via this ID.
+          content:
+            "application/json":
+              schema:
+                description: the list of known SIP identifiers
+                type: array
+                items: { type: string }
+              examples:
+                "multiple":
+                  summary: Multiple SIPs are currently known and queryable
+                  value: '[ "pdp0-0231", "pdp0-1180" ]'
+                "empty":
+                  summary: No SIPs are currently known
+                  value: '[]'
+          links:
+            "getSIP":
+              operationId: getSIP
+              description: returns the current metadata and status of the identified SIP
+            "putSIP":
+              operationId: putSIP
+              description: update the metadata for the SIP
+            "postComp":
+              operationId: postComp
+              description: add a component to the SIP
+            "deleteSIP":
+              operationId: deleteSIP
+              description: remove an SIP currently being submitted in steps
+
+        "401":
+          description:
+            The client did not submit recognized credentials and thus is not authorized
+            to list or access any SIPs.
+          content:
+            "application/json":
+
+    post:
+      summary: Create a new SIP from the supplied metadata
+      description:
+        The client provides a description of the SIP in the form of a NERDm JSON record;
+        the SIP will be created and initialized with the submitted metadata.  The
+        submitted metadata will be filtered, expanded according to policy.  The modified
+        metadata that actually gets saved will be returned. 
+      parameters:
+        "$ref": "#/components/parameters/action"
+        summary:  the additional action to take after creating the SIP
+      requestBody:
+        "$ref": "#/components/requestBodies/SIPResource"
+        summary:  the initial description metadata for the SIP to create
+        description:
+          This is the initial SIP metadata in NERDm format to set.  It need not include
+          all (or any) components that will be part of the final publication (unless the
+          action parameter is used).
+
+          If the client is authorized to do so, the input record can contain a pdr:sipid
+          (or @id) property that specifies the SIP identifier that should be assigned to the
+          SIP when it is created.  The value should be of the form SHLDR:LOCALID where
+          SHLDR is an identifier shoulder that the client is authorized to publish under,
+          and LOCALID is the client-chosen local identifier.  If the client is not so
+          authorized, the identifiers will be overridden.  
+      responses:
+        "201":
+          description:
+            The metadata was accepted and the SIP created.  The response will include the
+            identifier assigned to the SIP as well as its status after creation.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/FullSIP"
+              description:
+                This is the full metadata description of the SIP in NERDm format.  
+        "400":
+          description: >-
+            The client sent bad or unusable input of one of the following forms
+              * The input request body is not parsable as JSON
+              * The JSON document in the request body is not compliant with the NERDm schema,
+                either as a Resource or as some more specific type specified or implied by
+                the JSON data.
+              * An unsupported or unrecognized action parameter value was requested
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The client did not submit recognized credentials and thus is not authorized
+            to create SIPs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+  /pdp0/{sipid}:
+    summary:  access to a specific SIP
+    parameters:
+      "$ref": "#/components/parameters/sipid"
+      summary:  the SIP identifier of the SIP that is the subject of the request.
+    get:
+      operationId: getSIP
+      summary: return the metadata for a known SIP
+      description:
+        If the identified SIP is known and not yet published, then the full NERDm metadata
+        for the SIP that has been submitted to date will be returned.  If the SIP has been
+        published, then abbreviated metadata may just be returned, including the SIP
+        status.
+      responses:
+        "200":
+          description:
+            the SIP was found and metadata was returned
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/FullOrAbbreviatedSIP"
+        "401":
+          description:
+            The client did not submit a credential that allows access to this SIP
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            The specified SIP has not been created yet.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    put:
+      operationId: putSIP
+      summary:
+        create an SIP with the given ID or replace the currently saved metadata for an existing SIP
+      description:
+        The client provides a description of the SIP in the form of a NERDm JSON record.
+        If the SIP does not yet exist, it will be created and initialized with the
+        submitted metadata.  If it does already exist, the metadata is replaced with the
+        given metadata.  (Note that this will remove all previously submitted NERDm
+        components.)  The submitted metadata will be filtered, expanded according to
+        policy.  The modified metadata that actually gets saved will be returned.  In
+        particular, the returned metadata will include an @id property containing the
+        (relative) identifier that was assigned to the component by the service.
+      parameters:
+        "$ref": "#/components/parameters/action"
+        summary:  the additional action to take after creating the SIP
+      requestBody:
+        "$ref": "#/components/requestBodies/SIPResource"
+        summary:  the initial description metadata for the SIP to create
+        description:
+          This is the initial SIP metadata in NERDm format to set.  It need not include
+          all (or any) components that will be part of the final publication (unless the
+          action parameter is used).  
+      responses:
+        "200":
+          description:
+            The SIP already existed and so the metadata was successfully replaced with the
+            submitted metadata; the body contains the metadata that was actually saved.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/FullSIP"
+              description:
+                This is the full metadata description of the SIP in NERDm format.  
+        "400":
+          description: >-
+            The client sent bad or unusable input of one of the following forms
+              * The input request body is not parsable as JSON
+              * The JSON document in the request body is not compliant with the NERDm schema,
+                either as a Resource or as some more specific type specified or implied by
+                the JSON data.
+              * An unsupported or unrecognized action parameter value was requested
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The client did not submit a credential that allows create or access to this
+            SIP.  In particular, if request is to create the SIP, this response will be 
+            returned if the client credential does not allow it to specify the SIP ID that
+            should be assigned to the SIP.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            The SIP does currently exist on the server, either because it has not yet been
+            created or it was deleted.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: postComp
+      summary: Add a component to the SIP from the supplied metadata
+      description:
+        A component refers specifically to an item in NERDm Resource components
+        property; it represents a definable and identifiable piece of a data
+        publication, usually a downloadable data file or an data access page.  This
+        operation allows a new component to be added to the resource.  It returns
+        the added component, appropriately modified according to policy and convention. 
+      parameters:
+        "$ref": "#/components/parameters/action"
+        summary:  the additional action to take after adding the component
+      requestBody:
+        "$ref": "#/components/requestBodies/SIPComponent"
+        summary:  the initial description metadata of component to add
+      responses:
+        "201":
+          description:
+            The metadata was accepted and the component created.  The response will include the
+            relative identifier assigned to the component (as its @id property). 
+          content:
+            "application/json":
+              schema:
+                "$ref": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#/definitions/Component" 
+              description:
+                This is the full metadata description of the component in NERDm format.  
+          links:
+            "putComp":
+              operationId: putComp
+              description: update the metadata for a component with the specified identifier
+            "deleteComp":
+              operationId: deleteComp
+              description: remove the component with the specified identifier from the SIP
+        "400":
+          description: >-
+            The client sent bad or unusable input of one of the following forms
+              * The input request body is not parsable as JSON
+              * The JSON document in the request body is not compliant with the NERDm Component schema
+              * An unsupported or unrecognized action parameter value was requested
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The client did not submit credentials that are authorized to access the SIP.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteSIP
+      summary: Remove the previously submitted SIP
+      description:
+        This will delete all saved information submitted for the SIP since it was created
+        or last published.  If an SIP with its assigned SIP identifier has never been
+        published before, the status of the SIP will be reset to not found; otherwise, it
+        will revert to published.
+      responses:
+        "200":
+          description: The SIP was successfully removed and its status reset
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The client did not submit a credential that allows access to this SIP
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            The specified SIP does not exist on the server, either because it has yet to
+            be created or it was already deleted.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+  /pdp0/{sipid}/{comppath}:
+    get:
+      operationId: getComp
+      summary: return the metadata for a component of an SIP
+      description:
+        If the specified SIP exists and has a component with the specified relative
+        identifier, the metadata for that component is returned as a NERDm Component
+        record.  If the SIP has already been published, an abbreviated description is
+        returned; in this case, it is not guaranteed that a component with the given
+        identifier is known to be part of the published dataset.  (The public PDR
+        resolver service should be used instead.)
+      responses:
+        "200":
+          description:
+            the component was found in the SIP and its metadata was returned
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/FullOrAbbreviatedComp"
+        "401":
+          description:
+            The client did not submit a credential that allows access to this SIP
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            The specified SIP has not been created yet.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+
+      
+      
+
+components:
+  parameters:
+    action:
+      name: action
+      in: query
+      description:
+        The action to take after accepting any input metadata.
+      required: false
+      schema:
+        type: string
+        enum: [ 'finalize', 'publish' ]
+        description:
+          finalize/publish defs
+
+    sipid:
+      name: sipid
+      in: path
+      description:
+        The identifer used to refer to an SIP
+      required: true
+      schema:
+        type: string
+        description: >-
+          An SIP identifier typically takes one of two forms, where SHLDR is an identifier
+          shoulder and LOCALID is a local identifer within the scope the shoulder.
+            * SHLDR:LOCALID -- this form is used when the client is allowed and has opted
+              to choose their own LOCALID value.  In this case, the client is responsible
+              for ensuring that the LOCALID has not been used before.
+            * SHLDR-LOCALID -- this form is used when the client is assigned a LOCALID
+              value by the service.
+
+    comppath:
+      name comppath
+      in: path
+      description:
+        The relative resource path for refering to a component of an SIP.
+      required: true
+      schema:
+        type: string
+        format: path
+
+  schemas:
+    ErrorResponse:
+      title: a JSON-encoded error response
+      description:
+        This is a JSON-encoded description of an error detected by the service while processing
+        a service request.
+      properties:
+        "http:code":
+          description: the HTTP status code response
+          type: integer
+          minimum: 400
+          exclusiveMaximum: 600
+        "http:reason":
+          description: the (brief) HTTP status message associated with the code
+          type: string
+        "pdr:message":
+          description:
+            a more detailed explanation of the error detected.  This message may be quite lengthy.
+          type: string
+        "pdr:sipid":
+          description:
+            the identifier for the SIP being accessed, if known and exists.
+      required: [ 'http:code', 'http:message', 'pdr:message' ]
+
+    FullSIP:
+      title: NERDm Resource Record
+      description: >-
+        This is a complete description of the SIP as a Resource defined by the NERDm JSON
+        schema. As part of a request body, the document must comply with this minimal
+        type or the request will be rejected with a Bad Input (400) error.  The document
+        may reference a more specific type Resource, as is more typical, which may trigger 
+        additional compliance requirements.  This can be done several ways--
+          * including a recognized Resource subtype in the document's @type field
+          * invoking more specific schemas via the document's _extensionSchemas property
+          * including certain properties recognized as being part a key Resource subtype.  
+      anyOf: [
+        { "$ref": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#/definitions/Resource" }
+      ]
+
+    SIPStatus:
+      title: SIP Status Annotations
+      description:
+        This type defines properties that are included in responses from the service that
+        indicate the processing status of the SIP submission.
+      properties:
+        "pdr:status":
+          description: >-
+            A label indicating the state of the SIP in processing.  It can have one of the
+            following values
+              * pending -- the SIP has been created and is ready to be published; further
+                updates are still possible.
+              * awaiting -- the SIP has been created but requires an update before it can
+                be published; the pdr:message property should contain further information
+                about what is needed.
+              * processing -- the SIP is being processed; further update or action is not
+                possible until the processing is completed and the status returns to
+                pending.
+              * finalized -- the finalize action was successfully applied to the SIP and
+                is ready to be published.
+              * published -- the publish action was successfully applied to the SIP;
+                further updates will start a new version of the SIP.
+              * failed -- the SIP was created but is in a condition that does not allow for
+                further processing or publishing.  The pdr:message property may contain a
+                more detailed explanation.  The only way to correct this state is to
+                DELETE the SIP or completed replace its metadata.
+          type: string
+          enum: [ 'pending', 'awaiting', 'processing', 'finalized', 'published' ]
+
+        "pdr:message":
+          title: status explanation
+          description:
+            a message that provides more detail as to the status of the SIP.  It is
+            intended for display and diagnostic purposes and not intended to be
+            machine-interpretable.
+          type: string
+
+        "pdr:sipid":
+          title: SIP identifier
+          description:
+            the identifier that was assigned to the SIP by the service.  It is distinct
+            but related in form to the PDR identifier (@id).
+          type: string
+
+        "@id":
+          title: PDR identifier
+          description:
+            the permanent ARK identifier that will be assigned to the dataset once it is
+            published.  (If the status is published, then this is the identifier that was
+            assigned.)
+          type: string
+      required: [ "pdr:status", "pdr:message", "pdr:sipid" ]
+
+    FullAnnotatedSIP:
+      title: Annotated NERDm Resource Record
+      description:
+        This is a complete description of the SIP as a Resource defined by the NERDm JSON
+        schema which includes additional properties describing the status of the SIP.
+      allOf: [
+        { "$ref": "#/components/schemas/FullSIP" },
+        { "$ref": "#/components/schemas/SIPStatus" }
+      ]
+
+    FullOrAbbreviatedSIP:
+      title: Abbreviated or Annotated NERDm Resource Record
+      description:
+        This is either a full NERDm Resource record describing the SIP or an abbreviated record
+        including only identifiers and the SIP status.  In either case, the object will
+        always include the identifier and status properties (i.e. SIPStatus properties).  
+        At some point after an SIP is published, the SIP will be removed from the server;
+        at this point, only an abbreviated record will be available for retrieval (via
+        GET).
+      anyOf: [
+        { "$ref": "#/components/schemas/FullAnnotatedSIP" },
+        { "$ref": "#/components/schemas/SIPStatus" }
+      ]
+
+  requestBodies:
+    SIPResource:
+      summary: a description of the SIP being submitted
+      content:
+        "application/json":
+          schema:
+            title: a NERDm Resource Record
+            "$ref": "#/components/schemas/FullSIP"
+      required: true
+
+                
+      
+    
