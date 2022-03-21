@@ -16,6 +16,6 @@ echo Working Dir: $OAR_WORKING_DIR
 echo Access the PDP web service at http://localhost:$port/
 echo
 
-uwsgi --plugin python3 --http-socket :9090 --wsgi-file $script \
+uwsgi --plugin python3 --http-socket :9090 --wsgi-file $script --static-map /docs=$PWD/docs \
       --set-ph oar_config_file=$OAR_PDPSERVER_CONFIG \
       --set-ph oar_working_dir=$OAR_WORKING_DIR

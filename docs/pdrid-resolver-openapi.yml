@@ -1,11 +1,11 @@
 openapi: 3.0.0
 info:
   title: PDR Resource Identifier Resolver Service
-  description: |
-     This endpoint resolves ARK-based identifiers assigned by the PDR to resources (datasets, software, collections, etc.) published in the repository.  It can return views in a variety of formats, including JSON-encoded metadata (including as NERDM, the PDR\'s internal metadata format), HTML views (such as landing pages), or data files stored in the repository.  It also provides limited resolution of EDI identifiers. 
+  description: |-
+    This endpoint resolves ARK-based identifiers assigned by the PDR to resources (datasets, software, collections, etc.) published in the repository.  It can return views in a variety of formats, including JSON-encoded metadata (including as NERDM, the PDR\'s internal metadata format), HTML views (such as landing pages), or data files stored in the repository.  It also provides limited resolution of EDI identifiers. 
 
-     Note that this service sometimes delivers its output by redirecting to another URL; thus, to receive
-     the requested view of a resource, one should follow all redirects.  
+    Note that this service sometimes delivers its output by redirecting to another URL; thus, to receive
+    the requested view of a resource, one should follow all redirects.  
 
     All endpoints support multiple formats for the returned information.  The format can be selected
     either via a `format` query parameter or via content negotiation (i.e. the `Accept` request header).

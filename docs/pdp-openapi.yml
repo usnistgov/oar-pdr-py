@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: PDR Programmatic Data Publishing (PDP) Interface, Convention PDP0
   summary: A service that accepts SIPs for automated publication according to the pdp0 convention
-  description: >-
+  description: |-
     A client uses the PDP interface to submit a Submission Information Package (SIP) and
     publish it into the PDR.  Clients may submit and publish and SIP all in one call or
     via a sequence of calls in which the last call explicitly commits the SIP to
@@ -11,7 +11,7 @@ info:
     approach does allow the client to see the status of the SIP prior to final
     publication.
 
-    The pdp0 convention is based on the following assumptions and requirements
+    The pdp0 convention is based on the following assumptions and requirements:
       * An SIP is described by a NERDm-compliant document encoding the metadata for the publicaiton.
       * The SIP does not include data files to be preserved with the metadata (although the 
         metadata may refer to externally stored data).
@@ -85,8 +85,8 @@ paths:
           all (or any) components that will be part of the final publication (unless the
           action parameter is used).
 
-          If the client is authorized to do so, the input record can contain a pdr:sipid
-          (or @id) property that specifies the SIP identifier that should be assigned to the
+          If the client is authorized to do so, the input record can contain a `pdr:sipid`
+          (or `@id`) property that specifies the SIP identifier that should be assigned to the
           SIP when it is created.  The value should be of the form SHLDR:LOCALID where
           SHLDR is an identifier shoulder that the client is authorized to publish under,
           and LOCALID is the client-chosen local identifier.  If the client is not so
@@ -103,7 +103,7 @@ paths:
               description:
                 This is the full metadata description of the SIP in NERDm format.  
         "400":
-          description: >-
+          description: |-
             The client sent bad or unusable input of one of the following forms
               * The input request body is not parsable as JSON
               * The JSON document in the request body is not compliant with the NERDm schema,
@@ -170,7 +170,7 @@ paths:
         given metadata.  (Note that this will remove all previously submitted NERDm
         components.)  The submitted metadata will be filtered, expanded according to
         policy.  The modified metadata that actually gets saved will be returned.  In
-        particular, the returned metadata will include an @id property containing the
+        particular, the returned metadata will include an `@id` property containing the
         (relative) identifier that was assigned to the component by the service.
       parameters:
         "$ref": "#/components/parameters/action"
@@ -194,7 +194,7 @@ paths:
               description:
                 This is the full metadata description of the SIP in NERDm format.  
         "400":
-          description: >-
+          description: |-
             The client sent bad or unusable input of one of the following forms
               * The input request body is not parsable as JSON
               * The JSON document in the request body is not compliant with the NERDm schema,
@@ -243,7 +243,7 @@ paths:
         "201":
           description:
             The metadata was accepted and the component created.  The response will include the
-            relative identifier assigned to the component (as its @id property). 
+            relative identifier assigned to the component (as its `@id` property). 
           content:
             "application/json":
               schema:
@@ -258,7 +258,7 @@ paths:
               operationId: deleteComp
               description: remove the component with the specified identifier from the SIP
         "400":
-          description: >-
+          description: |-
             The client sent bad or unusable input of one of the following forms
               * The input request body is not parsable as JSON
               * The JSON document in the request body is not compliant with the NERDm Component schema
@@ -365,7 +365,7 @@ components:
       required: true
       schema:
         type: string
-        description: >-
+        description: |-
           An SIP identifier typically takes one of two forms, where SHLDR is an identifier
           shoulder and LOCALID is a local identifer within the scope the shoulder.
             * SHLDR:LOCALID -- this form is used when the client is allowed and has opted
@@ -375,7 +375,7 @@ components:
               value by the service.
 
     comppath:
-      name comppath
+      name: comppath
       in: path
       description:
         The relative resource path for refering to a component of an SIP.
@@ -410,7 +410,7 @@ components:
 
     FullSIP:
       title: NERDm Resource Record
-      description: >-
+      description: |-
         This is a complete description of the SIP as a Resource defined by the NERDm JSON
         schema. As part of a request body, the document must comply with this minimal
         type or the request will be rejected with a Bad Input (400) error.  The document
@@ -430,27 +430,27 @@ components:
         indicate the processing status of the SIP submission.
       properties:
         "pdr:status":
-          description: >-
+          description: |-
             A label indicating the state of the SIP in processing.  It can have one of the
             following values
-              * pending -- the SIP has been created and is ready to be published; further
+              * `pending` -- the SIP has been created and is ready to be published; further
                 updates are still possible.
-              * awaiting -- the SIP has been created but requires an update before it can
-                be published; the pdr:message property should contain further information
+              * `awaiting` -- the SIP has been created but requires an update before it can
+                be published; the `pdr:message` property should contain further information
                 about what is needed.
-              * processing -- the SIP is being processed; further update or action is not
+              * `processing` -- the SIP is being processed; further update or action is not
                 possible until the processing is completed and the status returns to
                 pending.
-              * finalized -- the finalize action was successfully applied to the SIP and
+              * `finalized` -- the finalize action was successfully applied to the SIP and
                 is ready to be published.
-              * published -- the publish action was successfully applied to the SIP;
+              * `published` -- the publish action was successfully applied to the SIP;
                 further updates will start a new version of the SIP.
-              * failed -- the SIP was created but is in a condition that does not allow for
-                further processing or publishing.  The pdr:message property may contain a
+              * `failed` -- the SIP was created but is in a condition that does not allow for
+                further processing or publishing.  The `pdr:message` property may contain a
                 more detailed explanation.  The only way to correct this state is to
                 DELETE the SIP or completed replace its metadata.
           type: string
-          enum: [ 'pending', 'awaiting', 'processing', 'finalized', 'published' ]
+          enum: [ 'pending', 'awaiting', 'processing', 'finalized', 'published', 'failed' ]
 
         "pdr:message":
           title: status explanation
@@ -464,7 +464,7 @@ components:
           title: SIP identifier
           description:
             the identifier that was assigned to the SIP by the service.  It is distinct
-            but related in form to the PDR identifier (@id).
+            but related in form to the PDR identifier (`@id`).
           type: string
 
         "@id":

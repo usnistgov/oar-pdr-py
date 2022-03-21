@@ -108,38 +108,38 @@ components:
       properties:
         aipid:
           type: string
-          title: the AIP identifier being described
+          description: the AIP identifier being described
         name:
           type: string
-          title: the name of the serialized version of the bag
+          description: the name of the serialized version of the bag
         sinceVersion:
           type: string
-          title: the version of this AIP that this bag was created for
+          description: the version of this AIP that this bag was created for
         multibagSequence:
           type: number
-          title: the sequence number applied to this bag
+          description: the sequence number applied to this bag
         serialization:
           type: string
-          title: the name of the serialization format applied (e.g. "zip", "7z", etc.)
+          description: the name of the serialization format applied (e.g. "zip", "7z", etc.)
         downloadURL:
           type: string
-          title: the URL for retrieving the serialized
+          description: the URL for retrieving the serialized
         contentType:
           type: string
-          title: 'the content type that will be set when the downloadURL is accessed or when `format` is set to "native"'
+          description: 'the content type that will be set when the downloadURL is accessed or when `format` is set to "native"'
         contentLength:
           type: string
-          title: the size of the serialized bag in bytes
+          description: the size of the serialized bag in bytes
         checksum:
           type: object
-          title: a checksum hash that can be used to confirm an uncorrupted delivery of the file.
+          description: a checksum hash that can be used to confirm an uncorrupted delivery of the file.
           properties:
             algorithm:
               type: string
-              title: 'the algorithm used to generate the hash (e.g. "sha256")'
+              description: 'the algorithm used to generate the hash (e.g. "sha256")'
             hash:
               type: string
-              title: "the checksum's hash value"
+              description: "the checksum's hash value"
   
 paths:
   "/aip":
@@ -177,17 +177,17 @@ paths:
                 properties:
                   aipid:
                     type: string
-                    title: the AIP identifier being described
+                    description: the AIP identifier being described
                   versions:
                     type: array
                     items: { type: string }
-                    title: the versions of this AIP that are available
+                    description: the versions of this AIP that are available
                   maxMultibagSequence:
                     type: number
-                    title: the last sequence number applied AIP bag files
+                    description: the last sequence number applied AIP bag files
                   headBag:
                     type: object
-                    title: a description of the head bag for the latest version of the dataset
+                    description: a description of the head bag for the latest version of the dataset
             text/plain:
               schema:
                 type: string
@@ -251,22 +251,22 @@ paths:
                 properties:
                   aipid:
                     type: string
-                    title: the AIP identifier being described
+                    description: the AIP identifier being described
                   versions:
                     type: array
                     items: { type: string }
-                    title: the versions of this AIP that are available
+                    description: the versions of this AIP that are available
                   maxMultibagSequence:
                     type: number
-                    title: the last sequence number applied AIP bag files
+                    description: the last sequence number applied AIP bag files
                   headBag:
                     type: object
-                    title: a description of the head bag for the latest version of the dataset
+                    description: a description of the head bag for the latest version of the dataset
             application/zip:
               schema:
                 type: string
                 format: binary
-                title: the default format
+                description: the default format
         '404':
           description: No AIP bag file with the given name was found
 
@@ -415,16 +415,16 @@ paths:
                 properties:
                   aipid:
                     type: string
-                    title: the AIP identifier being described
+                    description: the AIP identifier being described
                   version:
                     type: string
-                    title: the version of this AIP being described
+                    description: the version of this AIP being described
                   maxMultibagSequence:
                     type: number
-                    title: the last sequence number applied to the associated AIP bag files
+                    description: the last sequence number applied to the associated AIP bag files
                   headBag:
                     type: object
-                    title: a description of the head bag for this version of the dataset
+                    description: a description of the head bag for this version of the dataset
             text/plain:
               schema:
                 type: string
