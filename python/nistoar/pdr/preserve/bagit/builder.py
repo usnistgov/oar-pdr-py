@@ -1572,7 +1572,7 @@ class BagBuilder(PreservationSystem):
 
         msg = message
         if msg is None:
-            msg = "Adding resourse-level metadata"
+            msg = "Adding resource-level metadata"
         if msg:
             self.record(msg)
         
