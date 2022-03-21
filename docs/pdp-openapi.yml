@@ -406,7 +406,7 @@ components:
         "pdr:sipid":
           description:
             the identifier for the SIP being accessed, if known and exists.
-      required: [ 'http:code', 'http:message', 'pdr:message' ]
+      required: [ 'http:code', 'http:reason', 'pdr:message' ]
 
     FullSIP:
       title: NERDm Resource Record

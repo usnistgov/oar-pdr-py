@@ -147,6 +147,47 @@ class TestPDP0App(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, '/', tstag)
         self.assertEqual(hdlr.get_action(), "finalize")
 
+    def test_send_error_resp(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/',
+            'HTTP_ACCEPT': "text/html, */*;q=0.8"
+        }
+        hdlr = self.app.create_handler(req, self.start, '/', tstag)
+        body = self.tostr(hdlr.send_error_resp(400, "Invalid NERDm", "It's all messed up"))
+        body = "".joins(body)
+        self.assertIn("{\n  ", body)
+        data = json.load(body)
+        self.assertEqual(data.get('http:code'), 400)
+        self.assertEqual(data.get('http:reason'), "Invalid NERDm")
+        self.assertEqual(data.get('pdr:message'), "It's all messed up")
+        self.assertNotIn('pdr:sipid', data)
+        self.assertNotIn('@id', data)
+        self.assertEqual(len(data), 3)
+
+        body = self.tostr(hdlr.send_error_resp(400, "Invalid NERDm", "It's all messed up", "goob:gurn"))
+        body = "".join(body)
+        self.assertIn("{\n  ", body)
+        data = json.loads(body)
+        self.assertEqual(data.get('http:code'), 400)
+        self.assertEqual(data.get('http:reason'), "Invalid NERDm")
+        self.assertEqual(data.get('pdr:message'), "It's all messed up")
+        self.assertEqual(data.get('pdr:sipid'), "goob:gurn")
+        self.assertNotIn('@id', data)
+        self.assertEqual(len(data), 4)
+
+        body = self.tostr(hdlr.send_error_resp(400, "Invalid NERDm", "It's all messed up", "goob:gurn",
+                                               "pubid"))
+        body = "".join(body)
+        self.assertIn("{\n  ", body)
+        data = json.loads(body)
+        self.assertEqual(data.get('http:code'), 400)
+        self.assertEqual(data.get('http:reason'), "Invalid NERDm")
+        self.assertEqual(data.get('pdr:message'), "It's all messed up")
+        self.assertEqual(data.get('pdr:sipid'), "goob:gurn")
+        self.assertEqual(data.get('@id'), "pubid")
+        self.assertEqual(len(data), 5)
+
     def test_not_found(self):
         req = {
             'REQUEST_METHOD': 'GET',
@@ -159,6 +200,28 @@ class TestPDP0App(test.TestCase):
         self.resp = []
         body = self.app.handle_path_request(req, self.start, who=tstag)
         self.assertIn("404 ", self.resp[0])
+        self.assertEqual(body, [])
+        
+    def test_accept(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/',
+            'HTTP_ACCEPT': "text/html, */*;q=0.8"
+        }
+        body = self.app.handle_path_request(req, self.start, who=ncnrag)
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(body, [b"[]"])
+
+        self.resp = []
+        req['HTTP_ACCEPT'] = "application/json"
+        body = self.app.handle_path_request(req, self.start, who=ncnrag)
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(body, [b"[]"])
+
+        self.resp = []
+        req['HTTP_ACCEPT'] = "text/html"
+        body = self.app.handle_path_request(req, self.start, who=ncnrag)
+        self.assertIn("406 ", self.resp[0])
         self.assertEqual(body, [])
         
     def test_no_open_sips(self):

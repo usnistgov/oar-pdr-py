@@ -12,6 +12,7 @@ from wsgiref.headers import Headers
 
 from nistoar.pdr.publish.prov import PubAgent
 from nistoar.pdr import config as cfgmod
+from nistoar.pdr.utils.web import order_accepts
 
 __all__ = ['Unacceptable', 'SubApp', 'Handler']
 
@@ -74,6 +75,10 @@ class Handler(object):
     def send_unauthorized(self, message="Unauthorized", content=None, contenttype=None, ashead=None,
                           encoding='utf-8'):
         return self.send_error(401, message, content, contenttype, ashead, encoding)
+
+    def send_unacceptable(self, message="Not acceptable", content=None, contenttype=None, ashead=None,
+                          encoding='utf-8'):
+        return self.send_error(406, message, content, contenttype, ashead, encoding)
 
     def send_ok(self, content=None, contenttype=None, message="OK", code=200, ashead=None, encoding='utf-8'):
         """
@@ -195,6 +200,9 @@ class Handler(object):
         if not self.authorize():
             return self.send_unauthorized()
 
+        if not self.acceptable():
+            return self.send_unacceptable()
+
         try:
             if hasattr(self, meth_handler):
                 return getattr(self, meth_handler)(self._path)
@@ -219,6 +227,18 @@ class Handler(object):
         this can be over-ridden for tighter or looser authorization.  
         """
         return bool(self.who)
+
+    def acceptable(self):
+        """
+        return True if the client's Accept request is compatible with this handler.
+
+        This default implementation will return True if "*/*" is included in the Accept request
+        or if the Accept header is not specified.
+        """
+        accepts = self._env.get('HTTP_ACCEPT')
+        if not accepts:
+            return True;
+        return "*/*" in order_accepts(accepts)
 
     
 class SubApp(metaclass=ABCMeta):

@@ -12,6 +12,7 @@ from ...prov import PubAgent, Action
 from ... import (PublishingStateException, SIPNotFoundError, BadSIPInputError, NERDError,
                  SIPStateException, SIPConflictError, UnauthorizedPublishingRequest)
 from nistoar.pdr.utils.webrecord import WebRecorder
+from nistoar.pdr.utils.web import order_accepts
 from nistoar.nerdm.validate import ValidationError
 
 class PDP0App(SubApp):
@@ -68,6 +69,29 @@ class PDP0App(SubApp):
             if len(action) > 0 and action[0] in [self.ACTION_FINALIZE, self.ACTION_PUBLISH]:
                 return action[0]
             return self.ACTION_UPDATE
+
+        def send_error_resp(self, code, reason, explain, sipid=None, pdrid=None, ashead=False):
+            """
+            respond to client with a JSON-formated error response.
+            :param int code:    the HTTP code to respond with 
+            :param str reason:  the reason to return as the HTTP status message
+            :param str explain: the more extensive explanation as to the reason for the error; 
+                                this is returned only in the body of the message
+            :param str sipid:   the SIP ID for the requested SIP; if None, it is not applicable or known
+            :param str pdrid:   the PDR ID for the requested SIP; if None, it is not applicable or known
+            :param bool ashead: if true, do not send the body as this is a HEAD request
+            """
+            resp = {
+                'http:code': code,
+                'http:reason': reason,
+                'pdr:message': explain,
+            }
+            if sipid:
+                resp['pdr:sipid'] = sipid
+            if pdrid:
+                resp['@id'] = pdrid
+
+            return self.send_json(resp, reason, code, ashead)
 
         def do_GET(self, path, ashead=False):
             path = path.lstrip('/')
@@ -419,6 +443,19 @@ class PDP0App(SubApp):
             except Exception as ex:
                 self.log.exception("Failed to take %s action on %s: %s", action, path, str(ex))
                 return self.send_error(500, "Server error")
+
+        def acceptable(self):
+            """
+            return True if the client's Accept request is compatible with this handler.
+
+            This default implementation will return True if "*/*" is included in the Accept request
+            or if the Accept header is not specified.
+            """
+            accepts = self._env.get('HTTP_ACCEPT')
+            if not accepts:
+                return True;
+            accepts = order_accepts(accepts)
+            return "*/*" in accepts or "application/json" in accepts
 
 
             
