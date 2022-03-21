@@ -155,9 +155,9 @@ class TestPDP0App(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, '/', tstag)
         body = self.tostr(hdlr.send_error_resp(400, "Invalid NERDm", "It's all messed up"))
-        body = "".joins(body)
+        body = "".join(body)
         self.assertIn("{\n  ", body)
-        data = json.load(body)
+        data = json.loads(body)
         self.assertEqual(data.get('http:code'), 400)
         self.assertEqual(data.get('http:reason'), "Invalid NERDm")
         self.assertEqual(data.get('pdr:message'), "It's all messed up")
@@ -193,14 +193,30 @@ class TestPDP0App(test.TestCase):
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': '/ncnr0:goob',
         }
-        body = self.app.handle_path_request(req, self.start, who=ncnrag)
+        body = self.tostr(self.app.handle_path_request(req, self.start, who=ncnrag))
         self.assertIn("404 ", self.resp[0])
-        self.assertEqual(body, [])
+        body = "".join(body)
+        self.assertIn("{\n  ", body)
+        data = json.loads(body)
+        self.assertEqual(data.get('http:code'), 404)
+        self.assertEqual(data.get('http:reason'), "Authorized SIP Not Found")
+        self.assertIn('pdr:message', data)
+        self.assertNotIn('pdr:sipid', data)
+        self.assertNotIn('@id', data)
+        self.assertEqual(len(data), 3)
 
         self.resp = []
-        body = self.app.handle_path_request(req, self.start, who=tstag)
+        body = self.tostr(self.app.handle_path_request(req, self.start, who=tstag))
         self.assertIn("404 ", self.resp[0])
-        self.assertEqual(body, [])
+        body = "".join(body)
+        self.assertIn("{\n  ", body)
+        data = json.loads(body)
+        self.assertEqual(data.get('http:code'), 404)
+        self.assertEqual(data.get('http:reason'), "Authorized SIP Not Found")
+        self.assertIn('pdr:message', data)
+        self.assertNotIn('pdr:sipid', data)
+        self.assertNotIn('@id', data)
+        self.assertEqual(len(data), 3)
         
     def test_accept(self):
         req = {

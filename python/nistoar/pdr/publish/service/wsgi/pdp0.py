@@ -106,16 +106,17 @@ class PDP0App(SubApp):
                 # need to check authorization
                 stat = self._app.svc.status_of(parts[0])
                 if not stat.any_authorized(self.who.group) or stat.state == status.NOT_FOUND:
-                    return self.send_error(404, "Authorized SIP Not Found")
+                    return self.send_error_resp(404, "Authorized SIP Not Found",
+                                "There are no SIP submissions viewable for the client's authorizaiton.")
 
                 out = self._app.svc.describe(path)
                 out['pdr:status'] = stat.state
                 if out.get('pdr:message') is not None:
-                    out['pdr:message'] = statis/user_message[stat.state]
+                    out['pdr:message'] = status.user_message[stat.state]
                 return self.send_json(out, ashead=ashead)
 
             except SIPNotFoundError as ex:
-                return self.send_error(404, "Not Found")
+                return self.send_error_resp(404, "Not Found", "Requested SIP not found", parts[0])
 
             except Exception as ex:
                 self.log.exception("Failed to describe SIP: %s: %s", parts[0], str(ex))
@@ -130,13 +131,15 @@ class PDP0App(SubApp):
             stat = None
             if len(path.split('/', 1)) > 1:
                 # cannot POST to paths that appear to point to SIP components
-                return self.send_error(405, "Method not allowed on this resource")
+                return self.send_error_resp(405, "Method not allowed on this resource",
+                                            "POST method not allowed on this resource")
             if path:
                 sipid = path
                 stat = self._app.svc.status_of(path)
                 if stat.state == status.NOT_FOUND:
                     # SIP must first be created before a component can be added
-                    return self.send_error(404, "SIP not found")
+                    return self.send_error_resp(404, "SIP not found",
+                                                "SIP submission not found", sipid)
 
             action = self.get_action()
 
@@ -145,7 +148,8 @@ class PDP0App(SubApp):
                 if bodyin is None:
                     if self._reqrec:
                         self._reqrec.record()
-                    return self.send_error(400, "Missing input NERDm document")
+                    return self.send_error_resp(400, "Missing input NERDm document",
+                                                "No input NERDm document provided to POST", sipid)
                 if self.log.isEnabledFor(logging.DEBUG) or self._reqrec:
                     body = bodyin.read()
                     nerdm = json.loads(body, object_pairs_hook=OrderedDict)
@@ -160,7 +164,8 @@ class PDP0App(SubApp):
                     self.log.debug("\n%s", body)
                 if self._reqrec:
                     self._reqrec.add_body_text(body).record()
-                return self.send_error(400, "Input not parseable as JSON")
+                return self.send_error_resp(400, "Input not parseable as JSON",
+                                            "Input document is not parse-able as JSON: "+str(ex), sipid)
 
             except Exception as ex:
                 if self._reqrec:
@@ -209,16 +214,16 @@ class PDP0App(SubApp):
                 stat = self._app.svc.status_of(sipid)
                 out['pdr:status'] = stat.state
                 if out.get('pdr:message') is not None:
-                    out['pdr:message'] = statis/user_message[stat.state]
+                    out['pdr:message'] = status.user_message[stat.state]
                 return self.send_json(out, code=success)
 
             except NERDError as ex:
                 self.log.error("Bad NERDm data POSTed to %s: %s", path, str(ex))
-                self.send_error(400, "Bad Input NERDm data", str(ex)+"\n", "text/plain")
+                self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
 
             except ValidationError as ex:
                 self.log.error("Invalid NERDm data POSTed to %s: %s", path, str(ex))
-                self.send_error(400, "Bad Input NERDm data", str(ex)+"\n", "text/plain")
+                self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
 
             except UnauthorizedPublishingRequest as ex:
                 self.log.warning("Unauthorized create request to %s: %s", path, str(ex))
@@ -227,7 +232,7 @@ class PDP0App(SubApp):
             except PublishingStateException as ex:
                 msg = "Attempt to update SIP in un-update-able state: %s" % str(ex)
                 self.log.error(msg)
-                self.send_error(409, "Conflicting SIP state", msg+"\n", "text/plain")
+                self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
 
             except Exception as ex:
                 if sipid:
@@ -242,7 +247,7 @@ class PDP0App(SubApp):
                 return self.send_unauthorized()
 
             if not path:
-                return self.send_error(405, "Method not allowed")
+                return self.send_error_resp(405, "Method not allowed", "PUT not allowed on this resource")
 
             parts = path.split('/', 1)
             sipid = parts[0]
@@ -262,7 +267,8 @@ class PDP0App(SubApp):
                 if bodyin is None:
                     if self._reqrec:
                         self._reqrec.record()
-                    return self.send_error(400, "Missing input NERDm document")
+                    return self.send_error_resp(400, "Missing input NERDm document",
+                                                "No input NERDm document provided to PUT", sipid)
                 if self.log.isEnabledFor(logging.DEBUG) or self._reqrec:
                     body = bodyin.read()
                     nerdm = json.loads(body, object_pairs_hook=OrderedDict)
@@ -277,7 +283,8 @@ class PDP0App(SubApp):
                     self.log.debug("\n%s", body)
                 if self._reqrec:
                     self._reqrec.add_body_text(body).record()
-                return self.send_error(400, "Input not parseable as JSON")
+                return self.send_error_resp(400, "Input not parseable as JSON",
+                                            "Input document is not parse-able as JSON: "+str(ex), sipid)
 
             except Exception as ex:
                 if self._reqrec:
@@ -318,16 +325,16 @@ class PDP0App(SubApp):
                 stat = self._app.svc.status_of(sipid)
                 out['pdr:status'] = stat.state
                 if out.get('pdr:message') is not None:
-                    out['pdr:message'] = statis/user_message[stat.state]
+                    out['pdr:message'] = status.user_message[stat.state]
                 return self.send_json(out)
 
             except NERDError as ex:
                 self.log.error("Bad NERDm data PUT to %s: %s", path, str(ex))
-                return self.send_error(400, "Bad Input NERDm data", str(ex)+"\n", "text/plain")
+                self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
 
             except ValidationError as ex:
                 self.log.error("Invalid NERDm data PUT to %s: %s", path, str(ex))
-                self.send_error(400, "Bad Input NERDm data", str(ex)+"\n", "text/plain")
+                self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
 
             except UnauthorizedPublishingRequest as ex:
                 self.log.warning("Unauthorized update request to %s: %s", path, str(ex))
@@ -336,7 +343,7 @@ class PDP0App(SubApp):
             except PublishingStateException as ex:
                 msg = "Attempt to update SIP in un-update-able state: %s" % str(ex)
                 self.log.error(msg)
-                return self.send_error(409, "Conflicting SIP state", msg+"\n", "text/plain")
+                self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
 
             except Exception as ex:
                 self.log.exception("Failed to accept SIP update: %s: %s", path, str(ex))
@@ -348,7 +355,8 @@ class PDP0App(SubApp):
                 return self.send_unauthorized()
 
             if not path:
-                return self.send_error(405, "Method not allowed")
+                return self.send_error_resp(405, "Method not allowed on this resource",
+                                            "DELETE method not allowed on this resource")
 
             parts = path.split('/', 1)
             sipid = parts[0]
@@ -358,7 +366,8 @@ class PDP0App(SubApp):
 
             stat = self._app.svc.status_of(sipid)
             if stat.state == status.NOT_FOUND:
-                return self.send_error(404, "SIP not found")
+                return self.send_error_resp(404, "SIP not found",
+                                            "Unable to DELETE: SIP submission not found", sipid)
 
             if not stat.any_authorized(self.who.group):
                 self.info("%s is not authorized to update SIP, %s", self.who.actor, sipid)
@@ -372,7 +381,9 @@ class PDP0App(SubApp):
 
                     except SIPConflictError as ex:
                         self.log.error("%s: unable to remove component, %s: %s", sipid, compid, str(ex))
-                        return self.send_error(409, "Not in DELETEable state")
+                        return self.send_error_resp(409, "Not in DELETEable state",
+                                                    "SIP is not in a DELETEable state: status="+
+                                                    status.user_message[stat.state], sipid)
 
                 else:
                     try:
@@ -381,10 +392,13 @@ class PDP0App(SubApp):
     
                     except SIPConflictError as ex:
                         self.log.error("%s: unable to delete SIP: %s", sipid, compid, str(ex))
-                        return self.send_error(409, "Not in DELETEable state")
+                        return self.send_error_resp(409, "Not in DELETEable state",
+                                                    "SIP is not in a DELETEable state: status="+
+                                                    status.user_message[stat.state], sipid)
 
             except SIPNotFoundError as ex:
-                return self.send_error(404, "SIP Not Found")
+                return self.send_error_resp(404, "SIP not found",
+                                            "SIP submission not found", sipid)
 
             except UnauthorizedPublishingRequest as ex:
                 self.log.warning("Unauthorized request to delete %s: %s", path, str(ex))
@@ -404,7 +418,8 @@ class PDP0App(SubApp):
 
             parts = path.split('/')
             if not path or len(parts) > 1:
-                return self.send_error(405, "Method not allowed")
+                return self.send_error_resp(405, "Method not allowed on this resource",
+                                            "PATCH method not allowed on this resource")
             sipid = parts[0]
 
             action = self.get_action()
@@ -414,7 +429,8 @@ class PDP0App(SubApp):
                 if bodyin:
                    body = bodyin.read(1)
                    if len(body) != 0:
-                       return self.send_error(400, "Body not allowed")
+                       return self.send_error_resp(400, "Body not allowed"
+                         "PATCH request should not include a body--only the action query parameter", sipid)
 
                 out = None
                 if action == self.ACTION_FINALIZE or action == self.ACTION_PUBLISH:
@@ -430,11 +446,12 @@ class PDP0App(SubApp):
                 stat = self._app.svc.status_of(sipid)
                 out['pdr:status'] = stat.state
                 if out.get('pdr:message') is not None:
-                    out['pdr:message'] = statis/user_message[stat.state]
+                    out['pdr:message'] = status.user_message[stat.state]
                 return self.send_json(out)
 
             except SIPNotFoundError as ex:
-                return self.send_error(404, "SIP Not Found")
+                return self.send_error_resp(404, "SIP not found",
+                                            "Unable to act on SIP: SIP submission not found", sipid)
 
             except UnauthorizedPublishingRequest as ex:
                 self.log.warning("Unauthorized %s request on %s: %s", action, path, str(ex))
