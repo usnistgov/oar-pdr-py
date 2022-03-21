@@ -86,6 +86,8 @@ class PDP0App(SubApp):
 
                 out = self._app.svc.describe(path)
                 out['pdr:status'] = stat.state
+                if out.get('pdr:message') is not None:
+                    out['pdr:message'] = statis/user_message[stat.state]
                 return self.send_json(out, ashead=ashead)
 
             except SIPNotFoundError as ex:
@@ -182,6 +184,8 @@ class PDP0App(SubApp):
 
                 stat = self._app.svc.status_of(sipid)
                 out['pdr:status'] = stat.state
+                if out.get('pdr:message') is not None:
+                    out['pdr:message'] = statis/user_message[stat.state]
                 return self.send_json(out, code=success)
 
             except NERDError as ex:
@@ -289,6 +293,8 @@ class PDP0App(SubApp):
 
                 stat = self._app.svc.status_of(sipid)
                 out['pdr:status'] = stat.state
+                if out.get('pdr:message') is not None:
+                    out['pdr:message'] = statis/user_message[stat.state]
                 return self.send_json(out)
 
             except NERDError as ex:
@@ -399,6 +405,8 @@ class PDP0App(SubApp):
 
                 stat = self._app.svc.status_of(sipid)
                 out['pdr:status'] = stat.state
+                if out.get('pdr:message') is not None:
+                    out['pdr:message'] = statis/user_message[stat.state]
                 return self.send_json(out)
 
             except SIPNotFoundError as ex:

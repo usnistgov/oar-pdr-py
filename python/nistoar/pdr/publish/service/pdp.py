@@ -565,7 +565,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         else:
             # this is all we know about it
-            return { "@id": id, "pdr:sipid": sipid }
+            return { "@id": id, "pdr:sipid": sipid,
+                     "pdr:message": "Published SIP metadata is not currently available." }
 
     def _tweak_for_validation(self, nerdmd):
         """
