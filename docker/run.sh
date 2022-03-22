@@ -73,6 +73,7 @@ pyargs=()
 angargs=()
 jargs=()
 testcl=()
+envargs=()
 while [ "$1" != "" ]; do
     case "$1" in
         -d|--docker-build)
@@ -99,6 +100,13 @@ while [ "$1" != "" ]; do
             ;;
         --incl-tests=*)
             testcl=(${testcl[@]} `echo $1 | sed -e 's/[^=]*=//'`)
+            ;;
+        -e|--env)
+            shift
+            envargs=(${envargs[@]} --env $1)
+            ;;
+        --env=*)
+            envargs=(${envargs[@]} --env `echo $1 | sed -e 's/[^=]*=//'`)
             ;;
         -h|--help)
             usage
@@ -162,24 +170,24 @@ if wordin python $comptypes; then
     
     if wordin build $cmds; then
         # build = makedist
-        echo '+' docker run --rm $volopt "${dargs[@]}" $PKGNAME/pdrpytest makedist \
+        echo '+' docker run --rm $volopt "${dargs[@]}" "${envargs[@]}" $PKGNAME/pdrpytest makedist \
                         "${args[@]}"  "${pyargs[@]}"
-        docker run $ti --rm $volopt "${dargs[@]}" $PKGNAME/pdrpytest makedist \
+        docker run $ti --rm $volopt "${dargs[@]}" "${envargs[@]}" $PKGNAME/pdrpytest makedist \
                "${args[@]}"  "${pyargs[@]}"
     fi
 
     if wordin test $cmds; then
         # test = testall
-        echo '+' docker run --rm $volopt "${dargs[@]}" $PKGNAME/pdrpytest testall \
+        echo '+' docker run --rm $volopt "${dargs[@]}" "${envargs[@]}" $PKGNAME/pdrpytest testall \
                         "${args[@]}"  "${pyargs[@]}"
-        docker run $ti --rm $volopt "${dargs[@]}" $PKGNAME/pdrpytest testall \
+        docker run $ti --rm $volopt "${dargs[@]}" "${envargs[@]}" $PKGNAME/pdrpytest testall \
                "${args[@]}"  "${pyargs[@]}"
     fi
 
     if wordin pdpserver $cmds; then
-        echo '+' docker run -ti --rm $volopt "${dargs[@]}" -p 9090:9090 $PKGNAME/pdpserver \
+        echo '+' docker run -ti --rm $volopt "${dargs[@]}" "${envargs[@]}" -p 9090:9090 $PKGNAME/pdpserver \
                         "${args[@]}"  "${pyargs[@]}"
-        exec docker run -ti --rm $volopt "${dargs[@]}" -p 9090:9090 $PKGNAME/pdpserver \
+        exec docker run -ti --rm $volopt "${dargs[@]}" "${envargs[@]}" -p 9090:9090 $PKGNAME/pdpserver \
                         "${args[@]}"  "${pyargs[@]}"
     fi
 
@@ -188,9 +196,9 @@ if wordin python $comptypes; then
         if wordin install $cmds; then
             cmd="installshell"
         fi
-        echo '+' docker run -ti --rm $volopt "${dargs[@]}" $PKGNAME/pdrpytest $cmd \
+        echo '+' docker run -ti --rm $volopt "${dargs[@]}" "${envargs[@]}" $PKGNAME/pdrpytest $cmd \
                         "${args[@]}"  "${pyargs[@]}"
-        exec docker run -ti --rm $volopt "${dargs[@]}" $PKGNAME/pdrpytest $cmd \
+        exec docker run -ti --rm $volopt "${dargs[@]}" "${envargs[@]}" $PKGNAME/pdrpytest $cmd \
                         "${args[@]}"  "${pyargs[@]}"
     fi
 fi
