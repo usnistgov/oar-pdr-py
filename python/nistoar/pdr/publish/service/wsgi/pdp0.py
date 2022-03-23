@@ -309,7 +309,8 @@ class PDP0App(SubApp):
 
                 else:
                     self._app.svc.accept_resource_metadata(nerdm, self.who, sipid,
-                                                           stat.state == status.NOT_FOUND)
+                                                           stat.state == status.NOT_FOUND or
+                                                           stat.state == status.PUBLISHED   )
 
                     out = None
                     if action == self.ACTION_FINALIZE or action == self.ACTION_PUBLISH:

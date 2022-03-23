@@ -61,6 +61,7 @@ class TestPDP0App(test.TestCase):
                 "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.6"
             },
             "finalize": {},
+            "doi_naan": "10.18434",
             "repo_base_url": "https://test.pdr.net/"
         }
         
