@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 import yaml, jsonpatch
 
-from .. import BadSIPInputError, SIPStateException, PublishingStateException
+from .. import BadSIPInputError, SIPStateException, PublishingStateException, ConfigurationException
 from ... import constants as const
 from ....nerdm.constants import (CORE_SCHEMA_URI, PUB_SCHEMA_URI, EXP_SCHEMA_URI, SIP_SCHEMA_URI,
                                  core_schema_base)
@@ -32,6 +32,11 @@ FILE_DELIM = const.FILECMP_EXTENSION.lstrip('/')
 LINK_DELIM = const.LINKCMP_EXTENSION.lstrip('/')
 AGG_DELIM = const.AGGCMP_EXTENSION.lstrip('/')
 
+ASSIGN_DOI_NEVER   = 'never'
+ASSIGN_DOI_ALWAYS  = 'always'
+ASSIGN_DOI_REQUEST = 'request'
+
+
 class NERDmBasedBagger(SIPBagger):
     """
     An abstract SIPBagger that accepts NERDm metadata as its primarily inputs.
@@ -40,6 +45,14 @@ class NERDmBasedBagger(SIPBagger):
     :param Mapping repo_access:         the configuration describing the PDR's APIs 
     :param Mapping bag_builder:         the configuration for the BagBuilder instance that will be
                                         used by this bagger (see BagBuilder)
+    :param str assign_doi:              One of three values that controls the assignment of a DOI:
+                                         * `always` -- always assign a DOI; the NERDm DOI is set 
+                                           according to convention as soon as possible and at least 
+                                           by bag finalization time.
+                                         * `never` -- automatic assignment should never be applied
+                                           (calling :py:meth:`ensure_doi()` does not override this).
+                                         * `request` -- (default) a DOI is only assigned by calling
+                                           :py:meth:`ensure_doi`.
     :param bool hidden_comp_allowed:    if False (default), Hidden type components are not
                                         permitted to be included in the input NERDm metadata.
     :param bool checksum_comp_allowed:  if False (default), ChecksumFile type components are not
@@ -238,9 +251,12 @@ class NERDmBasedBagger(SIPBagger):
             self.bagbldr.update_annotations_for('', minimal_md,
                                                 message="locking convention metadata as annoations")
 
-            # add a history record
             act = Action(Action.CREATE, self.id, who,
                          "Initialized new submission as version "+version)
+            if self.cfg.get('assign_doi') == ASSIGN_DOI_ALWAYS:
+                self.ensure_doi(who, act)
+            
+            # add a history record
             if _action:
                 _action.add_subaction(act)
             else:
@@ -728,6 +744,52 @@ class NERDmBasedBagger(SIPBagger):
         else:
             self.bagbldr.destroy()
 
+    def ensure_doi(self, who: PubAgent=None, lock: bool=True, _action=None):
+        """
+        ensure that the NERDm resource metadata includes the `doi` property set according to this
+        SIP's convention.  This method consults the value of the `assign_doi` configuration parameter:
+        if the value is 'never', no DOI is set.
+
+        This function calls :py:meth:`_determine_doi` which returns the appropriate DOI string to 
+        assign to this SIP according the SIP's convention.
+        """
+        if self.cfg.get('assign_doi') == ASSIGN_DOI_NEVER:
+            return
+        if lock:
+            self.ensure_filelock()
+            with self.lock:
+                self._ensure_doi(who, _action)
+
+        else:
+            self._ensure_doi
+
+    def _ensure_doi(self, who, _action=None, nerd=None):
+        if not nerd:
+            self.ensure_preparation(who, _action)
+            nerd = self.bagbldr.bag.nerd_metadata_for('', True)
+        if nerd.get('doi'):
+            return
+
+        doi = self._determine_doi()  # may raise SIPConflictException
+
+        # lock in the DOI by setting it as an annotation
+        self.bagbldr.update_annotations_for('', {'doi': doi},
+                                            message="Setting DOI to "+doi)
+
+        act = Action(Action.PATCH, "#m", who, "DOI assigned", doi)
+        if _action:
+            _action.add_subaction(act)
+        else:
+            self.record_history(act)
+
+    @abstractmethod
+    def _determine_doi(self):
+        """
+        return a DOI (in the format expected for the NERDm DOI property--i.e. "doi:...")
+        that should be assigned to this SIP according to this SIP's convention.  
+        """
+        raise NotImplementedError()
+
     def finalize_version(self, who: PubAgent, incrfield: int=None, vermsg=None, _action=None) -> str:
         """
         set the version that this dataset should be published under.  The version property is only 
@@ -933,6 +995,8 @@ class PDPBagger(NERDmBasedBagger):
                                         permitted to be included in the input NERDm metadata.
     :param bool checksum_comp_allowed:  if False (default), ChecksumFile type components are not
                                         permitted to be included in the input NERDm metadata.
+    :param str doi_naan:                The NAAN to use when determining the DOI to assign.  This is 
+                                        required if `assign_doi` is not set to "never"
     :param Mapping publisher_metadata:  a dictionary of common, resource-level NERDm metadata reflective
                                         of the record publisher (e.g. NIST).  These will be added to the 
                                         input NERDm resource record (overriding the input values) before
@@ -998,6 +1062,10 @@ class PDPBagger(NERDmBasedBagger):
         super(PDPBagger, self).__init__(sipid, bagparent, config, convention, prepsvc, id)
         self._idmntr = idminter
 
+        self.cfg.setdefault('assign_doi', ASSIGN_DOI_REQUEST)
+        if not self.cfg.get('doi_naan') and self.cfg.get('assign_doi') != ASSIGN_DOI_NEVER:
+            raise ConfigurationException("Missing configuration: doi_naan")
+
     def _id_for(self, sipid, mint=False) -> str:
         """
         determine the PDR ID that should be associated with the SIP of the given ID.
@@ -1025,10 +1093,17 @@ class PDPBagger(NERDmBasedBagger):
         is used as the AIP ID
         """
         if not pdrid:
-            raise PublishingStateException("Unable to determine AIP-ID: PDI-ID is not set yet")
+            raise PublishingStateException("Unable to determine AIP-ID: PDR-ID is not set yet")
         if not ARK_PFX_RE.match(pdrid):
             raise PublishingStateException("Unexpected PDR ID form: "+pdrid)
         return ARK_PFX_RE.sub('', pdrid).replace('/', ' ')
+
+    def _determine_doi(self):
+        localid = self._aipid_for(self.id)
+        naan = self.cfg.get('doi_naan')
+        if not naan:
+            raise PublishingStateException("DOI NAAN not set in configuration")
+        return "doi:%s/%s" % (naan, localid)
 
     def _add_publisher_md(self, resmd) -> None:
         """
@@ -1117,6 +1192,9 @@ class PDPBagger(NERDmBasedBagger):
                 updmd['_extensionSchemas'] = exts
             if updmd:
                 self.bagbldr.update_metadata_for('', updmd, message="finalize: remove SIP submission types")
+
+            if self.cfg.get('assign_doi') == ASSIGN_DOI_ALWAYS:
+                self._ensure_doi(who, hist, nerd)
 
             self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
             hist.add_subaction(act)

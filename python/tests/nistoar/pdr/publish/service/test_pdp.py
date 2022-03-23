@@ -77,6 +77,8 @@ class TestPDPublishingService(test.TestCase):
                 },
                 "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.6"
             },
+            "doi_naan": "10.18434",
+            "assign_doi": "always",
             "finalize": {},
             "repo_base_url": "https://test.pdr.net/"
         }
@@ -261,6 +263,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/ncnr0-hellopk")
         self.assertEqual(bnerd["pdr:sipid"], "ncnr0:hello")
         self.assertEqual(bnerd["pdr:aipid"], "ncnr0-hellopk")
+        self.assertEqual(bnerd["doi"], "doi:10.18434/ncnr0-hellopk")
         self.assertEqual(bnerd["title"], nerd['title'])
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
@@ -279,6 +282,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/ncnr0-0021sh")
         self.assertEqual(bnerd["pdr:sipid"], "ncnr0-0021")
         self.assertEqual(bnerd["pdr:aipid"], "ncnr0-0021sh")
+        self.assertEqual(bnerd["doi"], "doi:10.18434/ncnr0-0021sh")
         self.assertEqual(bnerd["title"], nerd['title'])
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 

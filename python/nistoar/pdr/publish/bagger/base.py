@@ -25,13 +25,13 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
     """
     This class will prepare an SIP organized in a particular form 
     by re-organizing its contents into a working bag.  Subclasses adapt 
-    different SIP format.  This abstract class provides common code.  
+    different SIP formats.  This abstract class provides common code.  
 
     SIPBagger implementations should be written to be indepodent: running 
-    it mutliple times on the same input and output directories should result
+    it mutliple times on the same inputs and outputs should result
     in the same end state.  That is, if run a second time and nothing is 
-    different in the input directory, nothing changes in the output directory.
-    If a file is added in the input directory and the prepper is rerun, that
+    different in the inputs, nothing changes in the output bag.
+    If a file is added to the inputs and the prepper is rerun, that
     new file will get added to the output directory.  
 
     SIPBagger implementations make use of a configuration dictionary to 

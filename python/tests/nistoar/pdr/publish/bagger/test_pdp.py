@@ -86,6 +86,7 @@ class TestPDPBagger(test.TestCase):
                 "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.6"
             },
             "finalize": {},
+            "doi_naan": "10.22222",
             "repo_base_url": "https://test.data.gov/"
         }
         self.mntrcfg = {
@@ -112,6 +113,7 @@ class TestPDPBagger(test.TestCase):
         self.assertTrue(self.bagparent.is_dir())
         self.assertEqual(self.bgr.bagdir, str(self.bagparent / 'pdp1:goob'))
         self.assertEqual(self.bgr.cfg['resolver_base_url'], "https://test.data.gov/od/id/")
+        self.assertEqual(self.bgr.cfg['assign_doi'], "request")
 
     def test_ensure_base_bag(self):
         bagdir = self.bagparent / 'pdp1:goob'
@@ -178,6 +180,37 @@ class TestPDPBagger(test.TestCase):
         self.assertTrue(bagdir.joinpath('metadata','nerdm.json').is_file())
         self.assertEqual(self.bgr.id, "ark:/88888/pdp1-0017sm")
 
+        md = self.bgr.bag.nerd_metadata_for('', True)
+        self.assertNotIn('doi', md)
+
+    def test_ensure_doi(self):
+        bagdir = self.bagparent / 'pdp1:goob'
+        self.assertTrue(not bagdir.exists())
+
+        self.set_bagger_for("pdp1:goob")
+        self.assertEqual(self.bgr.cfg['assign_doi'], "request")
+        self.bgr.cfg['assign_doi'] = 'never'
+        self.bgr.ensure_doi()
+        if self.bgr.bag:     # may be None if ensure_doi() has nothing to do
+            md = self.bgr.bag.nerd_metadata_for('', True)
+            self.assertNotIn('doi', md)
+        
+        self.bgr.cfg['assign_doi'] = 'request'
+        self.bgr.ensure_doi()
+        md = self.bgr.bag.nerd_metadata_for('', True)
+        self.assertEqual(md.get('doi'), "doi:10.22222/pdp1-0017sm")
+
+    def test_ensure_doi_always(self):
+        bagdir = self.bagparent / 'pdp1:goob'
+        self.assertTrue(not bagdir.exists())
+
+        self.set_bagger_for("pdp1:goob")
+        self.assertEqual(self.bgr.cfg['assign_doi'], "request")
+        self.bgr.cfg['assign_doi'] = 'always'
+        self.bgr.prepare()
+        md = self.bgr.bag.nerd_metadata_for('', True)
+        self.assertEqual(md.get('doi'), "doi:10.22222/pdp1-0017sm")
+        
     def test_set_res_nerdm(self):
         bagdir = self.bagparent / 'pdp1:goob'
         self.assertTrue(not bagdir.exists())
@@ -306,7 +339,9 @@ class TestPDPBagger(test.TestCase):
         self.assertIn('nrds:PDRSubmission', nerd['@type'])
         self.bgr.set_res_nerdm(nerd, tstag, True)  # saves components, too
         saved = self.bgr.bag.nerdm_record('', True)
-        
+        self.assertNotIn('doi', saved)
+
+        self.bgr.cfg['assign_doi'] = 'always'
         self.assertTrue(not os.path.exists(os.path.join(self.bgr.bagdir, "bag-info.txt")))
         self.bgr.finalize(who=tstag)
         self.assertTrue(os.path.exists(os.path.join(self.bgr.bagdir, "bag-info.txt")))
@@ -318,6 +353,7 @@ class TestPDPBagger(test.TestCase):
 
         saved = utils.read_json(self.bgr.bag.nerd_file_for(''))
         self.assertNotIn('nrds:PDRSubmission', saved['@type'])
+        self.assertEqual(saved.get('doi'), "doi:10.22222/pdp1-0017sm")
         self.assertFalse(any([s for s in saved['_extensionSchemas'] if 'Submission' in s]))
 
     def test_finalize_version(self):

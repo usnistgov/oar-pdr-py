@@ -537,7 +537,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             shldr = re.sub(r'[:\-].*$', '', sipid)
 
         if not sipid:
-            msg = "BagBasedPublishingService.describe(): SIP identifier not specied"
+            msg = "BagBasedPublishingService.describe(): SIP identifier not specified"
             if id:
                 msg += ": " + id
             raise ValueError(msg)
