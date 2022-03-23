@@ -329,6 +329,19 @@ class TestSIPStatus(test.TestCase):
         self.assertEqual(self.status.data['user']['state'], 'failed')
         self.assertEqual(self.status.data['user']['message'], "SIP is too big")
 
+        self.status.update(status.PUBLISHED, "Published", userdata={
+            'id': "Goober!",
+            'siptype': "unknown",
+            'message': "Kilroy was here",
+            'doi': "doi:10.22222/this"
+        })
+        self.assertEqual(self.status.data['user']['id'], 'ffff')
+        self.assertEqual(self.status.data['user']['siptype'], '')
+        self.assertEqual(self.status.data['user']['state'], 'published')
+        self.assertEqual(self.status.data['user']['message'], "Published")
+        self.assertEqual(self.status.data['user']['doi'], "doi:10.22222/this")
+        
+
     def test_start(self):
         self.assertTrue(not os.path.exists(self.status._cachefile))
         self.status.data['gurn'] = 'goob'

@@ -220,6 +220,8 @@ class TestPDPBagger(test.TestCase):
         nerd = utils.read_json(str(datadir2 / 'ncnrexp0.json'))
         nerd['bureauCode'] = [ "666:66" ]
         nerd['accessLevel'] = "private"
+        nerd['pdr:status'] = "hungry"
+        nerd['pdr:siptype'] = "innocent"
         # pubshr = nerd['publisher']
         self.bgr.set_res_nerdm(nerd, None, False)
 
@@ -239,6 +241,8 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(len(saved['components']), 0)
         self.assertIn(consts.SIP_SCHEMA_URI+"#/definitions/PDRSubmission", saved.get('_extensionSchemas'))
         self.assertEqual(len(saved.get('_extensionSchemas')), 3)
+        self.assertNotIn('pdr:siptype', saved)
+        self.assertNotIn('pdr:status', saved)
 
     def test_set_comp_nerdm(self):
         bagdir = self.bagparent / 'pdp1:goob'

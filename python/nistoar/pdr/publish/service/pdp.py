@@ -425,7 +425,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         return True
 
-    def finalize(self, sipid: str, who: PubAgent=None):
+    def finalize(self, sipid: str, who: PubAgent=None) -> None:
         """
         process all SIP input to get it ready for publication.  The SIP metadata will be updated 
         accordingly (which will affect what is returned from :py:method:`describe`).  
@@ -456,7 +456,14 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         bagger = self._get_bagger_for(shoulder, sipid)
         try:
             bagger.finalize(who)
-            sts.update(status.FINALIZED)
+
+            userdata = None
+            md = bagger.bag.nerdm_metadata_for('', True)
+            if md.get('doi'):
+                userdata = {'doi': md.get('doi')}
+
+            sts.update(status.FINALIZED, userdata=userdata)
+            
         except Exception as ex:
             self.log.error("Failed to publish SIP {0}: {1}".format(sipid, str(ex)))
             sts.update(status.FAILED, sysdata={'errors': [str(ex)]})
@@ -565,8 +572,11 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         else:
             # this is all we know about it
-            return { "@id": id, "pdr:sipid": sipid,
-                     "pdr:message": "Published SIP metadata is not currently available." }
+            out = { "@id": id, "pdr:sipid": sipid, "pdr:status": sts.state, 
+                    "pdr:message": "Published SIP metadata is not currently available." }
+            if 'doi' in sts.data['user']:
+                out['doi'] = sts.data['user']['doi']
+            return out
 
     def _tweak_for_validation(self, nerdmd):
         """

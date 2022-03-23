@@ -355,8 +355,9 @@ class NERDmBasedBagger(SIPBagger):
 
         # modify the input: remove properties that cannot be set, add others
         handsoff = "@id @context publisher issued firstIssued revised annotated language " + \
-                   "bureauCode programCode doi ediid releaseHistory pdr:message pdr:status"
-        for prop in handsoff.split():
+                   "bureauCode programCode doi ediid releaseHistory "
+        handsoff += " ".join([k for k in nerdm.keys() if k.startswith("pdr:")])
+        for prop in handsoff.strip().split():
             if prop in nerdm:
                 del nerdm[prop]
         self._set_standard_res_modifications(nerdm)

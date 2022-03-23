@@ -286,7 +286,8 @@ class SIPStatus(object):
         self._data['user']['updated'] = time.asctime()
         SIPStatusFile.write(self._cachefile, self._data)
         
-    def update(self, label: str, message: str=None, sysdata: dict=None, cache: bool=True) -> None:
+    def update(self, label: str, message: str=None, userdata: dict=None, sysdata: dict=None,
+               cache: bool=True) -> None:
         """
         change the state of the processing.  In addition to updating the 
         data in-memory, the full, current set of status metadata will be 
@@ -297,6 +298,10 @@ class SIPStatus(object):
         :param str  message:  an optional message for display to the end user
                               explaining this state.  If not provided, a default
                               explanation is set. 
+        :param dict userdata: extra data properties that can be part of the 
+                              user-exportable data; properties in this dictionary 
+                              that overlap with the standard status properties will 
+                              be ignored.
         :param dict sysdata:  extra internal data properties to update.  This will
                               not be included in the user-exported data, but it 
                               will get cached.
@@ -307,6 +312,13 @@ class SIPStatus(object):
             raise ValueError("Not a recognized state label: "+label)
         if not message:
             message = user_message[label]
+
+        handsoff = set("id state siptype authorized start_time started updated update_time".split())
+        if userdata and isinstance(userdata, Mapping):
+            for key in userdata:
+                if key not in handsoff:
+                    self._data['user'][key] = userdata[key]
+            
         self._data['user']['state'] = label
         self._data['user']['message'] = message
         if cache:
