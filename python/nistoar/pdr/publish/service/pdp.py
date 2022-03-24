@@ -458,7 +458,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             bagger.finalize(who)
 
             userdata = None
-            md = bagger.bag.nerdm_metadata_for('', True)
+            md = bagger.bag.nerd_metadata_for('', True)
             if md.get('doi'):
                 userdata = {'doi': md.get('doi')}
 
