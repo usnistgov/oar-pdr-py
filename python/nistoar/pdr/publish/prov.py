@@ -352,7 +352,7 @@ class Action(object):
             kw['indent'] = indent
         else:
             kw.update({ 'default_flow_style': True, 'width': float("inf") })
-        yaml.dump(self.to_dict(), out, _ActionYAMLDumper, **kw)
+        yaml.dump(self, out, _ActionYAMLDumper, **kw)
         return out.getvalue()
 
     def serialize_as_json(self, indent=None) -> str:
@@ -451,8 +451,22 @@ class _ActionYAMLDumper(yaml.Dumper):
     @classmethod
     def _action_mapping_representer(cls, dumper, data):
         return dumper.represent_dict(data.items())
+    @classmethod
+    def _pubagent_representer(cls, dumper, agent):
+        return dumper.represent_mapping("tag:yaml.org,2002:map",
+                                        agent.to_dict().items(), flow_style=True)
+    @classmethod
+    def _action_representer(cls, dumper, act):
+        data = act.to_dict()
+        if 'agent' in data:
+            data['agent'] = act.agent
+        if 'subactions' in data:
+            data['subactions'] = act.subactions
+        return dumper.represent_dict(data.items())
 _ActionYAMLDumper.add_multi_representer(Mapping, _ActionYAMLDumper._action_mapping_representer)
 _ActionYAMLDumper.add_representer(OrderedDict, _ActionYAMLDumper._action_mapping_representer)
+_ActionYAMLDumper.add_representer(Action, _ActionYAMLDumper._action_representer)
+_ActionYAMLDumper.add_representer(PubAgent, _ActionYAMLDumper._pubagent_representer)
 
 class _ActionYAMLLoader(yaml.Loader):
     @classmethod
@@ -476,7 +490,7 @@ def dump_to_yaml_history(action: Action, histfp) -> None:
     separate YAML document within the output stream.  
     """
     # histfp.write("---\n")
-    histfp.write(action.serialize())
+    histfp.write(action.serialize(2))
     # histfp.write("\n")
 
 def dump_to_history(action: Action, histfp) -> None:
