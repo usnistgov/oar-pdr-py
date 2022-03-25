@@ -25,6 +25,7 @@ conventions:
         bagger: 
           override_config_for: "pdp0"
           factory_function: "nistoar.pdr.publish.service.pdp.PDPBaggerFactory"
+          assign_doi: "always"
         id_minter: 
           naan: "88434"
           based_on_sipid: True
@@ -39,7 +40,7 @@ conventions:
               NIST-BagIt-Version: "X.3"
               Organization-Address: ["100 Bureau Dr.", "Gaithersburg, MD 20899"]
             ensure_nerdm_type_on_add: "https://data.nist.gov/od/dm/nerdm-schema/v0.6"
-
+          doi_naan: "10.18434"
           finalize:
           repo_base_url: "https://test.pdr.net/"
           
