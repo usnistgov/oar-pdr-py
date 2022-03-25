@@ -15,7 +15,7 @@ from .base import SimpleNerdmPublishingService
 from .. import (PublishingStateException, SIPConflictError, SIPNotFoundError, BadSIPInputError,
                 ConfigurationException, UnauthorizedPublishingRequest)
 from ..bagger import SIPBagger, SIPBaggerFactory, PDPBagger
-from ..prov import PubAgent
+from ..prov import PubAgent, Action
 from ..idmint import PDP0Minter
 from ....nerdm import utils as nerdutils
 from ....nerdm.validate import ValidationError
@@ -271,8 +271,11 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                 sts.update(status.PROCESSING)
 
         try:
-            bagger.prepare(who=who)
-            bagger.set_res_nerdm(nerdm, who, True);
+            ct = Action.PUT if os.path.exists(bagger.bagdir) else Action.CREATE
+            act = Action(ct, sipid, who, "Submit resource metadata")
+            bagger.prepare(who=who, _action=act)
+            bagger.set_res_nerdm(nerdm, who, True, _action=act);
+            bagger.record_history(act)
             sts.update(status.PENDING)
 
         except Exception as ex:

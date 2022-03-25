@@ -254,7 +254,7 @@ class NERDmBasedBagger(SIPBagger):
             act = Action(Action.CREATE, self.id, who,
                          "Initialized new submission as version "+version)
             if self.cfg.get('assign_doi') == ASSIGN_DOI_ALWAYS:
-                self.ensure_doi(who, act)
+                self.ensure_doi(who, _action=act)
             
             # add a history record
             if _action:
@@ -404,9 +404,7 @@ class NERDmBasedBagger(SIPBagger):
 
         finally:
             # record history record
-            if _action:
-                _action.add_subaction(hist)
-            else:
+            if not _action:
                 self.record_history(hist)
 
     def _check_res_schema_id(self, nerdm):
@@ -759,7 +757,7 @@ class NERDmBasedBagger(SIPBagger):
         if lock:
             self.ensure_filelock()
             with self.lock:
-                self._ensure_doi(who, _action)
+                self._ensure_doi(who, _action=_action)
 
         else:
             self._ensure_doi

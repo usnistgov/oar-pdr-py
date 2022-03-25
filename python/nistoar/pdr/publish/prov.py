@@ -5,6 +5,10 @@ The publishing provenance for an SIP going through the publishing process is mod
 actions taken on the SIP data; each is captured as an :py:class:`Action`.  Actions are initiated by 
 an agent, represented by a :py:class:`PubAgent` instance.  Actions are applied to a _subject_, which 
 is either the SIP data as a whole or some portion of it; the subject is identified via an identifier.  
+
+Typically, an SIPBagger will record these records to a file within the bag.  The default format is in 
+the form of a YAML file in which each YAML document encoded in it represents a single request by the 
+client, which can be a compound Action.  
 """
 import time, datetime, json
 from io import StringIO
