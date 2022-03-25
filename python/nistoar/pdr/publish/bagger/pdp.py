@@ -949,7 +949,7 @@ class NERDmBasedBagger(SIPBagger):
         if not self.bagdir or not os.path.exists(self.bagdir):
             self.ensure_preparation(True, action.agent)
         if not self._histfile:
-            self._histfile = os.path.join(self.bagdir, self.cfg.get('history_filename', 'publish.history'))
+            self._histfile = os.path.join(self.bagdir, self.cfg.get('history_filename', 'publish_history.yml'))
 
         with open(self._histfile, 'a') as fd:
             dump_to_history(action, fd)

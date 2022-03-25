@@ -349,9 +349,9 @@ class TestPDPBagger(test.TestCase):
         self.assertTrue(not os.path.exists(os.path.join(self.bgr.bagdir, "bag-info.txt")))
         self.bgr.finalize(who=tstag)
         self.assertTrue(os.path.exists(os.path.join(self.bgr.bagdir, "bag-info.txt")))
-        self.assertTrue(os.path.exists(os.path.join(self.bgr.bagdir, "publish.history")))
+        self.assertTrue(os.path.exists(os.path.join(self.bgr.bagdir, "publish_history.yml")))
 
-        with open(os.path.join(self.bgr.bagdir, "publish.history")) as fd:
+        with open(os.path.join(self.bgr.bagdir, "publish_history.yml")) as fd:
             history = prov.load_from_history(fd)
         self.assertTrue(all([a.agent for a in history]))
 
