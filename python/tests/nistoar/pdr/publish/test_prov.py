@@ -1,4 +1,4 @@
-import os, json, pdb, logging, time
+import os, json, pdb, logging, time, yaml
 import unittest as test
 from io import StringIO
 
@@ -240,11 +240,11 @@ class TestAction(test.TestCase):
         self.assertEqual(data['subactions'][1].get('subject'), "me/leg")
         self.assertNotIn('subactions', data['subactions'][1])
 
-    def test_serialize(self):
+    def test_serialize_as_json(self):
         act = prov.Action(prov.Action.COMMENT, "me", None, "Tak it, mon, tak it")
-        jstr = act.serialize(2)
+        jstr = act.serialize_as_json(2)
         self.assertGreater(len(jstr.split("\n")), 4)
-        jstr = act.serialize()
+        jstr = act.serialize_as_json()
         self.assertEqual(len(jstr.split("\n")), 1)
 
         data = json.loads(jstr)
@@ -259,7 +259,7 @@ class TestAction(test.TestCase):
         act = prov.Action(prov.Action.COMMENT, "me", self.who, "", None, None)
         act.add_subaction(prov.Action(prov.Action.CREATE, "me/arm", self.who))
         act.add_subaction(prov.Action(prov.Action.CREATE, "me/leg", self.who))
-        jstr = act.serialize()
+        jstr = act.serialize_as_json()
         self.assertEqual(len(jstr.split("\n")), 4)
         data = json.loads(jstr)
         self.assertEqual(data.get('type'), "COMMENT")
@@ -274,6 +274,49 @@ class TestAction(test.TestCase):
         self.assertEqual(data['subactions'][1].get('type'), "CREATE")
         self.assertEqual(data['subactions'][1].get('subject'), "me/leg")
         self.assertNotIn('subactions', data['subactions'][1])
+        
+
+    def test_serialize_as_yaml(self):
+        act = prov.Action(prov.Action.COMMENT, "me", None, "Tak it, mon, tak it")
+        jstr = act.serialize_as_yaml(2)
+        self.assertGreater(len(jstr.split("\n")), 4)
+        jstr = act.serialize_as_yaml()
+        self.assertEqual(len(jstr.split("\n")), 2)
+
+        data = yaml.safe_load(StringIO(jstr))
+        self.assertEqual(data.get('type'), "COMMENT")
+        self.assertEqual(data.get('subject'), 'me')
+        self.assertIsNone(data.get('agent'))
+        self.assertEqual(data.get('message'), "Tak it, mon, tak it")
+        self.assertEqual(list(data.keys()), "type subject message date timestamp".split())
+        self.assertGreater(data.get('timestamp', -1), 1634501962)
+        self.assertTrue(data.get('date','goob').startswith("20"))
+
+        act = prov.Action(prov.Action.COMMENT, "me", self.who, "", None, None)
+        act.add_subaction(prov.Action(prov.Action.CREATE, "me/arm", self.who))
+        act.add_subaction(prov.Action(prov.Action.CREATE, "me/leg", self.who))
+        jstr = act.serialize_as_yaml()
+        self.assertEqual(len(jstr.split("\n")), 2)
+        data = yaml.safe_load(StringIO(jstr))
+        self.assertEqual(data.get('type'), "COMMENT")
+        self.assertEqual(data.get('subject'), 'me')
+        self.assertEqual(data.get('agent', {}).get('group'), 'ncnr')
+        self.assertEqual(data.get('message'), "")
+        self.assertEqual(len(data['subactions']), 2)
+        self.assertEqual(list(data.keys()), "type subject agent message subactions".split())
+        self.assertEqual(data['subactions'][0].get('type'), "CREATE")
+        self.assertEqual(data['subactions'][0].get('subject'), "me/arm")
+        self.assertNotIn('subactions', data['subactions'][0])
+        self.assertEqual(data['subactions'][1].get('type'), "CREATE")
+        self.assertEqual(data['subactions'][1].get('subject'), "me/leg")
+        self.assertNotIn('subactions', data['subactions'][1])
+
+    def test_serialize_IS_yaml(self):
+        act = prov.Action(prov.Action.COMMENT, "me", None, "Tak it, mon, tak it")
+        jstr = act.serialize(2)
+        data = yaml.safe_load(StringIO(jstr))
+        self.assertEqual(data.get('type'), "COMMENT")
+        
         
     def test_from_dict(self):
         src = prov.Action(prov.Action.PATCH, "me", self.who, "Tak it, mon, tak it", {"a": 2}, 1634500000)

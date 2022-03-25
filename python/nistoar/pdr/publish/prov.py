@@ -7,10 +7,12 @@ an agent, represented by a :py:class:`PubAgent` instance.  Actions are applied t
 is either the SIP data as a whole or some portion of it; the subject is identified via an identifier.  
 """
 import time, datetime, json
+from io import StringIO
 from typing import List, Iterable
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 
+import yaml
 from jsonpatch import JsonPatch
 
 class PubAgent(object):
@@ -333,7 +335,27 @@ class Action(object):
             acts.append(" "*indent + act.serialize())
         return '[\n%s\n]' % ",\n".join(acts)
 
-    def serialize(self, indent=None) -> str:
+    def serialize(self, *args, **kwargs) -> str:
+        """
+        """
+        return self.serialize_as_yaml(*args, **kwargs)
+
+    def serialize_as_yaml(self, indent=None) -> str:
+        """
+        serialize this agent to a JSON string
+        :param int indent:  use the given value as the desired indentation.  If None, the output will 
+                            not be "pretty-printed"; but each subaction will be on a separate line.
+        """
+        out = StringIO()
+        kw = { "explicit_start": True, "sort_keys": False }
+        if indent is not None:
+            kw['indent'] = indent
+        else:
+            kw.update({ 'default_flow_style': True, 'width': float("inf") })
+        yaml.dump(self.to_dict(), out, _ActionYAMLDumper, **kw)
+        return out.getvalue()
+
+    def serialize_as_json(self, indent=None) -> str:
         """
         serialize this agent to a JSON string
         :param int indent:  use the given value as the desired indentation.  If None, the output will 
@@ -423,18 +445,56 @@ class _ActionJSONEncoder(json.JSONEncoder):
         if isinstance(o, Sequence):
             return self._encode_array(o)
         return super(_ActionJSONEncoder, self).encode(o)
-        
 
-def dump_to_history(action: Action, histfp) -> None:
+# A specialized YAML Dumper
+class _ActionYAMLDumper(yaml.Dumper):
+    @classmethod
+    def _action_mapping_representer(cls, dumper, data):
+        return dumper.represent_dict(data.items())
+_ActionYAMLDumper.add_multi_representer(Mapping, _ActionYAMLDumper._action_mapping_representer)
+_ActionYAMLDumper.add_representer(OrderedDict, _ActionYAMLDumper._action_mapping_representer)
+
+class _ActionYAMLLoader(yaml.Loader):
+    @classmethod
+    def _action_mapping_constructor(cls, dumper, data):
+        return OrderedDict(loader.construct_pairs(node))
+_ActionYAMLLoader.add_multi_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+                                        _ActionYAMLLoader._action_mapping_constructor)
+
+def dump_to_json_history(action: Action, histfp) -> None:
     """
-    record a serialized action to a history file.  A history file is formatted as a sequence of 
-    JSON objects.  While an object may span multiple lines (for readability), each object starts 
-    on a new line.  The whole file, however, is not a legal JSON document.  
+    record a serialized action to a history file in JSON format.  The history file is formatted as a 
+    sequence of JSON objects.  While an object may span multiple lines (for readability), each object 
+    starts on a new line.  The whole file, however, is not a legal JSON document.  
     """
     histfp.write(action.serialize())
     histfp.write("\n")
 
+def dump_to_yaml_history(action: Action, histfp) -> None:
+    """
+    record a serialized action to a history file in YAML format.  Each action is rendered as 
+    separate YAML document within the output stream.  
+    """
+    # histfp.write("---\n")
+    histfp.write(action.serialize())
+    # histfp.write("\n")
+
+def dump_to_history(action: Action, histfp) -> None:
+    """
+    an alias for :py:func:`dump_to_yaml_history`.
+    """
+    dump_to_yaml_history(action, histfp)
+
 def load_from_history(histfp) -> List[Action]:
+    return load_from_yaml_history(histfp)
+
+def load_from_yaml_history(histfp) -> List[Action]:
+    out = []
+    for data in yaml.load_all(histfp, Loader=_ActionYAMLLoader):
+        out.append(Action.from_dict(data))
+    return out
+
+def load_from_json_history(histfp) -> List[Action]:
     out = []
     current = ""
     for line in histfp:
