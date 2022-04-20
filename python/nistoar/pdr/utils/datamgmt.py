@@ -2,7 +2,7 @@
 Utility functions managing data and files
 """
 from collections import Mapping
-import hashlib, os, shutil, time, re
+import hashlib, os, shutil, time, re, math
 
 __all__ = [
     'update_mimetypes_from_file', 'build_mime_type_map', 'checksum_of', 'measure_dir_size',
@@ -111,6 +111,38 @@ def measure_dir_size(dirpath):
         for f in files:
             size += os.stat(os.path.join(root,f)).st_size
     return [size, count]
+
+def formatBytes(nb, numAfterDecimal=-1):
+    """
+    format a byte count for display using metric byte units.  
+    :param int nb:  the number of bytes to format
+    :param int numAfterDecimal:  the number of digits to appear after the decimal if the value is 
+                                 greater than 1000; if less than zero (default), the number will be 
+                                 1 or 2.
+    :rtype: str
+    """
+    if not isinstance(numAfterDecimal, int):
+        numAfterDecimal = -1
+    if not isinstance(nb, int):
+        return ''
+    if nb == 0:
+        return "0 Bytes"
+    if nb == 1:
+        return "1 Byte"
+    base = 1000
+    e = ['Bytes', 'kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
+    f = math.floor(math.log10(nb) / math.log10(base))
+    v = nb / math.pow(base, f)
+    d = numAfterDecimal
+    if d < 0:
+        if f == 0:   # less than 1 kilobyte
+            d = 0
+        elif v < 10.0:
+            d = 2
+        else:
+            d = 1
+        v = round(v, d)
+    return "%s %s" % ( (("%%.%df" % d) % v), e[f] )
 
 def rmtree_sys(rootdir):
     """

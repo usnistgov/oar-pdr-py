@@ -78,7 +78,35 @@ class TestMeausreDirSize(test.TestCase):
     def test_measure2(self):
         vals = utils.measure_dir_size(testdatadir2)
         self.assertEqual(vals[1], 5)
-        self.assertEqual(vals[0], 9246)
+        self.assertEqual(vals[0], 9435)
+
+class TestFormatBytes(test.TestCase):
+
+    def test_format01(self):
+        self.assertEqual(utils.formatBytes('goober'), '')
+        self.assertEqual(utils.formatBytes(0), '0 Bytes')
+        self.assertEqual(utils.formatBytes(1), '1 Byte')
+        self.assertEqual(utils.formatBytes(9), '9 Bytes')
+
+    def test_formatD(self):
+        self.assertEqual(utils.formatBytes(33812812721, 0), '34 GB')
+        self.assertEqual(utils.formatBytes(33812812721, 1), '33.8 GB')
+        self.assertEqual(utils.formatBytes(33812812721, 2), '33.81 GB')
+        self.assertEqual(utils.formatBytes(33812812721, 3), '33.813 GB')
+        self.assertEqual(utils.formatBytes(33812812721, None), '33.8 GB')
+        self.assertEqual(utils.formatBytes(33812812721, -5), '33.8 GB')
+
+    def test_formatN(self):
+        self.assertEqual(utils.formatBytes(12), '12 Bytes')
+        self.assertEqual(utils.formatBytes(999), '999 Bytes')
+        self.assertEqual(utils.formatBytes(1002), '1.00 kB')
+        self.assertEqual(utils.formatBytes(1078), '1.08 kB')
+        self.assertEqual(utils.formatBytes(12781), '12.8 kB')
+        self.assertEqual(utils.formatBytes(812721), '812.7 kB')
+        self.assertEqual(utils.formatBytes(2812721), '2.81 MB')
+        self.assertEqual(utils.formatBytes(12812721), '12.8 MB')
+        self.assertEqual(utils.formatBytes(33812812721), '33.8 GB')
+        self.assertEqual(utils.formatBytes(1033812812721), '1.03 TB')
 
 class TestRmtree(test.TestCase):
 
