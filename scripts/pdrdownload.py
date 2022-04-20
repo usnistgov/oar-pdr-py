@@ -371,10 +371,31 @@ def summarize_done(dlcount, failedcount, failedfile=None):
             print("  See %s for a list of failed downloads" % failedfile)
     return failedcount
 
+def check_files(listfile, destdir, failedtbl=None, rmonerr=True, select=True):
+    """
+    run checks on the files found in the output directory.  Unless particular files or directories are 
+    specified (via `select`), this function will look for all files given in the `listfile` file.  Any 
+    files not found are ignored; however files that are the wrong size or have the wrong checksum will 
+    by default be removed and its info will be added to the failed table file.
+    :param listfile:      the URL or local file path to file table listing the available files
+    :param destdir:       the directory to look for files listed in `listfile`
+    :param str failtbl:   the path to a local file where the list of files that failed to download should 
+                          be written.  This file will be a CSV table where each row is the row from the 
+                          input file table with an extra column appended, indicating the reason for the 
+                          failure.  If None, no such record of failures will be written.
+    :param bool rmonerr:  if True and a file download does not verify via a checksum check, the downloaded 
+                          file will be removed.  
+    :param select:        either a list of filepaths to download or a boolean indicating whether all 
+                          available files should be downloaded.  If a list is given, each element should 
+                          match a file path or an ancestor directory for one of the files listed in 
+                          first column of the file table.
+    """
+    return process_files(False, listfile, destdir, select, failedtbl, True, rmonerr)
+
 def download_files(listfile, destdir, select=True, failedtbl=None, docheck=True, rmonerr=True, force=False):
     """
     download selected or all files from the specified file table into the given destination directory
-    :param filelist:      the URL or local file path to file table listing the available files
+    :param listfile:      the URL or local file path to file table listing the available files
     :param destdir:       the directory to write files into
     :param select:        either a list of filepaths to download or a boolean indicating whether all 
                           available files should be downloaded.  If a list is given, each element should 
@@ -393,6 +414,17 @@ def download_files(listfile, destdir, select=True, failedtbl=None, docheck=True,
     :return: 2-tuple of integers giving the number of files successfully downloaded and the number that 
                           failed to download successfully
     """
+    return process_files(True, listfile, destdir, select, failedtbl, docheck, rmonerr, force)
+                
+
+def process_files(dodownload, listfile, destdir, select=True, failedtbl=None, docheck=True, rmonerr=True,
+                  force=False):
+    """
+    either download or just check downloaded files, depending on the `dodownload` argument.  This provides
+    the implementations for `download_files()` and `check_files()`.
+    :param bool dodownload:  if True, download the files; otherwise, just check downloaded the files 
+                             found in the destination directory.
+    """
     listfile = ensure_filelist(listfile, destdir)
 
     dlcount = 0
@@ -410,21 +442,7 @@ def download_files(listfile, destdir, select=True, failedtbl=None, docheck=True,
                         os.path.join(os.path.basename(os.path.dirname(failedtbl)),
                                      os.path.basename(failedtbl)), 2)
 
-    def openfailed(ffile):
-        mode = 'w'
-        if os.path.exists(ffile):
-            mode = 'a'
-        out = open(ffile, mode)
-        if mode == 'w':
-            try:
-                out.write("# This table list requested files that failed to download\n")
-                out.write("# \n")
-            except Exception as ex:
-                out.close()
-                raise
-        return out
     errfd = None
-
     if not select:
         return (0, 0);
 
@@ -438,7 +456,7 @@ def download_files(listfile, destdir, select=True, failedtbl=None, docheck=True,
                     # comment row
                     continue
                 if hasattr(select, '__contains__') and row[COL_FILE] not in select and \
-                   any([row[COL_FILE].startswith(s+'/') for s in select]):
+                   not any([row[COL_FILE].startswith(s.rstrip('/')+'/') for s in select]):
                     # not requested by user
                     continue
 
@@ -450,7 +468,7 @@ def download_files(listfile, destdir, select=True, failedtbl=None, docheck=True,
                     if not os.path.exists(parent):
                         os.makedirs(parent)
                 destfile = os.path.join(destdir, row[COL_FILE].lstrip('/'))
-                if not force and os.path.exists(destfile):
+                if dodownload and not force and os.path.exists(destfile):
                     if opts.verbosity >= VERBOSE:
                         print("  skipping %s; already downloaded" % row[COL_FILE])
                     continue
@@ -461,53 +479,61 @@ def download_files(listfile, destdir, select=True, failedtbl=None, docheck=True,
                     size = None
 
                 if opts.verbosity > QUIET:
+                    doing = "fetching" if dodownload else "checking"
                     end = "\r" if opts.verbosity < VERBOSE else "\n"
                     sp = ''
                     if opts.verbosity < VERBOSE and nmlen > len(row[COL_FILE]):
                         sp = ' ' * (nmlen - len(row[COL_FILE]) + 2)
                     nmlen = len(row[COL_FILE])
                     sz = " (%s)" % formatBytes(size) if size else ''
-                    print("  fetching %s%s...%s" % (row[COL_FILE], sz, sp), end=end)
-                try:
-                    download_url_to(row[COL_URL], destfile)
-                except URLError as ex:
-                    # failed to open the URL
-                    failed += 1
-                    reason = str(ex)
-                    if opts.verbosity >= VERBOSE:
-                        complain(row[COL_FILE] + ": " + reason)
-                    if failedtbl:
-                        if not errfd:
+                    print("  %s %s%s...%s" % (doing, row[COL_FILE], sz, sp), end=end)
+
+                if dodownload:
+                    # download the file
+                    try:
+                        download_url_to(row[COL_URL], destfile)
+                    except URLError as ex:
+                        # failed to open the URL
+                        failed += 1
+                        reason = str(ex)
+                        if opts.verbosity >= VERBOSE:
+                            complain(row[COL_FILE] + ": " + reason)
+                        if failedtbl:
+                            if not errfd:
+                                errfd = openfailed(failedtbl)
+                            row.append(reason)
+                            errfd.write(",".join(row)+"\n")
+                        continue
+                            
+                    except IOError as ex:
+                        # we'll check the result afterward
+                        reason = "copy error: " + str(ex)
+                        if opts.verbosity >= VERBOSE:
+                            complain(row[COL_FILE] + ": " + reason)
+                    except OSError as ex:
+                        # we'll check the result afterward
+                        reason = str(ex)
+                        if opts.verbosity >= VERBOSE:
+                            complain(row[COL_FILE] + ": " + reason)
+
+                    # the file should now exist
+                    if not os.path.isfile(destfile):
+                        if failedtbl and not errfd:
                             errfd = openfailed(failedtbl)
-                        row.append(reason)
-                        errfd.write(",".join(row)+"\n")
-                    continue
-                        
-                except IOError as ex:
-                    # we'll check the result afterward
-                    reason = "copy error: " + str(ex)
-                    if opts.verbosity >= VERBOSE:
-                        complain(row[COL_FILE] + ": " + reason)
-                except OSError as ex:
-                    # we'll check the result afterward
-                    reason = str(ex)
-                    if opts.verbosity >= VERBOSE:
-                        complain(row[COL_FILE] + ": " + reason)
-                    
-                if not os.path.isfile(destfile):
-                    if failedtbl and not errfd:
-                        errfd = openfailed(failedtbl)
-                    if errfd:
-                        row.append(reason)
-                        errfd.write(",".join(row)+"\n")
+                        if errfd:
+                            row.append(reason)
+                            errfd.write(",".join(row)+"\n")
+                        continue
+
+                elif not os.path.exists(destfile):
                     continue
 
-                try:
-                    if os.stat(destfile).st_size != int(row[COL_SIZE]):
-                        reason = "Wrong download size"
-                except ValueError as ex:
+                if size is None:
                     if opts.verbosity > SILENT:
                         complain("Warning: no size given in file table for "+row[COL_FILE])
+                elif os.stat(destfile).st_size != size:
+                    reason = "Wrong download size"
+
                 if not reason and docheck:
                     if not row[COL_HASH]:
                         if opts.verbosity > SILENT:
@@ -536,6 +562,20 @@ def download_files(listfile, destdir, select=True, failedtbl=None, docheck=True,
             errfd.close()
 
     return (dlcount, failed)
+
+def openfailed(ffile):
+    mode = 'w'
+    if os.path.exists(ffile):
+        mode = 'a'
+    out = open(ffile, mode)
+    if mode == 'w':
+        try:
+            out.write("# This table list requested files that failed to download\n")
+            out.write("# \n")
+        except Exception as ex:
+            out.close()
+            raise
+    return out
 
 def nerdm_to_filelist(nerdm, listfile=None):
     """

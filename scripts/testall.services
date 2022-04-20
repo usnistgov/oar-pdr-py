@@ -8,7 +8,7 @@ execdir=`dirname $0`
 [ "$execdir" = "" -o "$execdir" = "." ] && execdir=$PWD
 PACKAGE_DIR=`(cd $execdir/.. > /dev/null 2>&1; pwd)`
 
-TEST_SCRIPTS="test_resolver.sh"
+TEST_SCRIPTS="test_resolver.sh test_pdrdownload.py"
 TEST_SCRIPT_DIR=$PACKAGE_DIR/scripts/tests
 
 echo "Testing all services..."
@@ -27,7 +27,7 @@ for tstscrp in $TEST_SCRIPTS; do
 done
 
 if [ -n "$fail" ]; then
-    echo "Some service test(s) failed"
+    echo "NOT OK: Some service test(s) failed"
     exit $fail
 else
     echo "All services OK"
