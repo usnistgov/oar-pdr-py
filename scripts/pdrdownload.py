@@ -164,18 +164,20 @@ def run():
     todo = 0
     dlcount = 0
     failed = 0
+    found = 0
     try:
         if opts.verbosity > QUIET:
             print("")
-            todo = summarize_todo(filelist, opts.destdir, opts.select)
+            (found, todo) = summarize_todo(filelist, opts.destdir, opts.select,
+                                           opts.dodownload or not opts.docheck)
             print("")
     except OSError as ex:
         fname = os.path.join(os.path.basename(os.path.dirname(filelist)),
                              os.path.basename(filelist))
         raise MortalError("problem reading file list (%s): %s" % (fname, str(ex)), 3)
 
-    if opts.dodownload:
-        if todo == 0 and opts.verbosity > QUIET:
+    if opts.dodownload or opts.docheck:
+        if opts.dodownload and todo == 0 and opts.verbosity > QUIET:
             print("No records found to be downloaded (use -w to re-download)")
             return failed
 
@@ -187,20 +189,23 @@ def run():
             print("Records with download errors will be written to "+failedfile)
 
         if opts.verbosity > QUIET:
-            print("Beginning download of %i files..." % todo)
-        dlcount, failed = download_files(filelist, opts.destdir, select, failedfile, opts.docheck,
-                                         opts.clean, opts.force)
+            process = "download" if opts.dodownload else "checks"
+            print("Beginning %s of %i files..." % (process, todo if opts.dodownload else found))
+        dlcount, failed = process_files(opts.dodownload, filelist, opts.destdir, select, failedfile, 
+                                         opts.docheck, opts.clean, opts.force)
 
         try:
             if opts.verbosity > QUIET:
-                summarize_done(dlcount, failed, failedfile)
+                summarize_done(opts.dodownload, dlcount, failed, failedfile)
         except OSError as ex:
             raise MortalError("problem reading failed table: "+str(ex), 4)
 
-    elif opts.verbosity > QUIET:
-        print("Add the -D argument to actually download the %sdata." %
-              ("selected " if opts.select else ""))
-        
+    if opts.verbosity > QUIET:
+        if not opts.dodownload:
+            print("Add the -D argument to actually download the %sdata." %
+                  ("selected " if opts.select else ""))
+            if not opts.docheck:
+                print("Add the -C argument to just do a checksum check on the files downloaded so far.")
 
     return failed
 
@@ -306,27 +311,33 @@ def get_default_filelist(pdrid, destdir):
 
     return destfile
 
-def summarize_todo(listfile, destdir, select):
+def summarize_todo(listfile, destdir, select, fordownload=True):
     """
     print to standard out a summary the status of the output directory and what is requested to be done
     :param listfile:   the table file listing the files in the dataset
     :param destdir:    the destination directory for downloaded files
     :param select:     either a list of filenames requested for download or a boolean indicating whether 
                          all files listed in the table file should be downloaded
-    :return: the number of files to be download
+    :param fordownload: if True, provide summary info assuming user has/will request downloads; otherwise,
+                       assume this just for file checks.
+    :return: a 2-tuple giving the number of files already downloaded and the number of files to be downloaded
     """
     listfile = ensure_filelist(listfile, destdir)
 
     found = 0
     total = 0
     selected = 0
+    selfound = 0
+    selsz = 0
+    foundsz = 0
+    totsz = 0
 
     requested = "No"
     if select:
         if isinstance(select, list):
-            select = set(list)
+            select = set(select)
         if isinstance(select, set):
-            requested = len(set)
+            requested = len(select)
             if requested == 0:
                 requested = "No"
         else:
@@ -338,33 +349,63 @@ def summarize_todo(listfile, destdir, select):
         for row in rdr:
             if row[0].lstrip().startswith('#'):
                 continue
+            fname = row[COL_FILE].lstrip().lstrip('/')
+            try:
+                size = int(row[COL_SIZE])
+            except ValueError as ex:
+                size = 0
             total += 1
-            fname = row[0].lstrip().lstrip('/')
+            totsz += size
+
+            fileselected = False
+            if (isinstance(requested, set) and 
+                fname in requested or any([fname.startswith(r+'/') for r in select])) or \
+               requested == "All":
+                fileselected = True
+                
             if os.path.exists(os.path.join(destdir, fname)):
                 found += 1
-            elif isinstance(requested, set):
-                if fname in requested or any([fname.startswith(r+'/') for r in select]):
+                foundsz += size
+                if fileselected and (opts.force or not fordownload):
                     selected.add(fname)
-            elif requested == "All":
-                selected.add(fname)    
+                    selsz += size
+            elif fordownload and fileselected:    
+                selected.add(fname)
+                selsz += size
 
     print("Dataset id: "+opts.pdrid)
     print("Output directory: "+destdir)
     print("File Table: "+listfile)
-    print("  lists %i file%s, %i of which %s already downloaded." %
-          (total, "s" if total != 1 else "", found, "are" if found != 1 else "is"))
+    if totsz == 0:
+        print("  lists %i file%s, %i of which %s already downloaded." %
+              (total, "s" if total != 1 else "", found, "are" if found != 1 else "is"))
+        print("  (Warning: file table appears to not include proper file sizes.)")
+    else:
+        print("  lists %i file%s (%s), %i (%s) of which %s already downloaded." %
+              (total, "s" if total != 1 else "", formatBytes(totsz),
+               found, formatBytes(foundsz), "are" if found != 1 else "is"))
+
+    todo = len(selected)
     if select:
-        print("%i file%s selected to be downloaded" % (len(selected), "s" if len(selected) != 1 else ""))
+        process = "downloaded" if fordownload else "checked"
+        if totsz == 0:
+            print("%i file%s selected to be %s" % (todo, "s" if todo != 1 else "", process))
+        else:
+            print("%i file%s (%s) selected to be %s" %
+                  (todo, "s" if todo != 1 else "", formatBytes(selsz), process))
         if (opts.docheck):
             print("File downloads will be verified by checksums")
 
-    return total if opts.force else total - found
+    return (found, todo)
 
-def summarize_done(dlcount, failedcount, failedfile=None):
+def summarize_done(diddownload, successcount, failedcount, failedfile=None):
     """
     summarize the results of the downloads
     """
-    print("Successfully downloaded %i file%s" % (dlcount, "s" if dlcount != 1 else ""))
+    if diddownload:
+        print("Successfully downloaded %i file%s" % (successcount, "s" if successcount != 1 else ""))
+    else:
+        print("%i downloaded file%s passed integrity checks" % (successcount, "s" if successcount != 1 else ""))
     if failedcount > 0:
         print("%d file%s failed to download correctly"  % (failedcount, "s" if failedcount != 1 else ""))
         if failedfile:
