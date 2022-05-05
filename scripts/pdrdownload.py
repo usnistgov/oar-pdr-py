@@ -337,9 +337,10 @@ def summarize_todo(listfile, destdir, select, fordownload=True):
         if isinstance(select, list):
             select = set(select)
         if isinstance(select, set):
-            requested = len(select)
-            if requested == 0:
+            if len(select) == 0:
                 requested = "No"
+            else:
+                requested = select
         else:
             requested = "All"
 
