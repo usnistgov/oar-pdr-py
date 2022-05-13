@@ -3,6 +3,7 @@
 # type "python3 pdrdownload.py -h" for help on command-line options
 #
 def_pdrid = "mds2-2512"
+def_filelist_url = None
 description="""download data from the NIST PDR dataset, %s""" % def_pdrid
 epilog="Note that no data will actually get downloaded unless --download (or -D) is provided."
 
@@ -165,6 +166,8 @@ def run():
     dlcount = 0
     failed = 0
     found = 0
+    if not opts.select:
+        opts.select = True
     try:
         if opts.verbosity > QUIET:
             print("")
@@ -294,7 +297,9 @@ def get_default_filelist(pdrid, destdir):
     query some default URLs to create a file listing table in the destination directory
     """
     destfile = None
-    flurl = def_filelist_url_pat % pdrid
+    flurl = def_filelist_url
+    if not flurl:
+        flurl = def_filelist_url_pat % pdrid
     try:
         destfile = get_filelist(flurl, destdir)
     except URLError as ex:
@@ -311,7 +316,7 @@ def get_default_filelist(pdrid, destdir):
 
     return destfile
 
-def summarize_todo(listfile, destdir, select, fordownload=True):
+def summarize_todo(listfile, destdir, select=True, fordownload=True):
     """
     print to standard out a summary the status of the output directory and what is requested to be done
     :param listfile:   the table file listing the files in the dataset
@@ -360,7 +365,7 @@ def summarize_todo(listfile, destdir, select, fordownload=True):
 
             fileselected = False
             if (isinstance(requested, set) and 
-                fname in requested or any([fname.startswith(r+'/') for r in select])) or \
+                fname in requested or any([fname.startswith(r+'/') for r in requested])) or \
                requested == "All":
                 fileselected = True
                 
