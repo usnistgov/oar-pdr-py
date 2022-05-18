@@ -6,6 +6,10 @@ import sys, json
 from collections import OrderedDict
 
 from nistoar.pdr.cli import PDRCommandFailure
+from nistoar.pdr.cli.md.get import describe, extract_from_AIP
+from nistoar.pdr.exceptions import IDNotFound
+from nistoar.pdr.distrib import DistribServerError, DistribResourceNotFound
+from nistoar.pdr.describe.rmm import RMMServerError
 from .._args import process_svcep_args, define_comm_md_opts
 
 def define_comm_trans_opts(subparser):
@@ -49,11 +53,11 @@ def fetch_input_rec(id, version, rmmbase, from_aip=False, distbase=None, config=
     :param dict config:  configuration parameters that modifies the behavior of the service
     :param Logger  log:  the logger to send messages to.
     """
-    if from_aip:
+    if not from_aip:
         return describe(id, rmmbase, version, config)
     else:
         if not distbase:
-            raise ValueError("get_input_rec(): when from_aip=True, distbase must be provided")
+            raise ValueError("fetch_input_rec(): when from_aip=True, distbase must be provided")
         return extract_from_AIP(id, distbase, version, rmmbase, None, config, log)
 
 def _get_record_for_cmd(args, cmd, config=None, log=None):
@@ -71,8 +75,8 @@ def _get_record_for_cmd(args, cmd, config=None, log=None):
     if src:
         try:
 
-            return get_input_rec(src, args.version, args.rmmbase,
-                                 bool(args.aipsrc), args.distbase, config, log)
+            return fetch_input_rec(src, args.version, args.rmmbase,
+                                   bool(args.aipsrc), args.distbase, config, log)
 
         except (IDNotFound, DistribResourceNotFound) as ex:
             raise PDRCommandFailure(cmd, "ID not found: "+src, 1)
