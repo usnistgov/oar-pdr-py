@@ -994,6 +994,9 @@ class PDPBagger(NERDmBasedBagger):
                                         permitted to be included in the input NERDm metadata.
     :param bool checksum_comp_allowed:  if False (default), ChecksumFile type components are not
                                         permitted to be included in the input NERDm metadata.
+    :param str assign_doi:              A flag indicating when a DOI should be assigned to a submission; 
+                                        supported values are: "never", "always", "request" (default, i.e.,
+                                        only requested on a per submission-basis).  
     :param str doi_naan:                The NAAN to use when determining the DOI to assign.  This is 
                                         required if `assign_doi` is not set to "never"
     :param Mapping publisher_metadata:  a dictionary of common, resource-level NERDm metadata reflective

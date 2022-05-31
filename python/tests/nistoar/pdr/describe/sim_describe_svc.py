@@ -195,6 +195,7 @@ class SimRMMHandler(object):
         else:
             aipids = self.arch.aipids(coll)
 
+        nonsearch="include exclude".split()
         out = { "ResultCount": 0, "PageSize": 0, "ResultData": [] }
         for id in aipids:
             try:
@@ -204,10 +205,12 @@ class SimRMMHandler(object):
                         return self.send_error(404, id + " does not exist in " + coll)
                     continue
 
-                if any([k != '@id' for k in params.keys()]):
+                if any([k != '@id' for k in params.keys() if k not in nonsearch]):
                     # search criteria present; do a simple test
                     keep = True
                     for prop in params:
+                        if prop in nonsearch:
+                            continue
                         if prop not in data:
                             keep = False
                             break
@@ -220,8 +223,9 @@ class SimRMMHandler(object):
                             break
                     if not keep:
                         continue
-                
-                data["_id"] ={"timestamp":1521220572,"machineIdentifier":3325465}
+
+                if '_id' not in params.get('exclude',[]):
+                    data["_id"] ={"timestamp":1521220572,"machineIdentifier":3325465}
                 out["ResultData"].append(data)
                 out["ResultCount"] += 1
                 out["PageSize"] += 1

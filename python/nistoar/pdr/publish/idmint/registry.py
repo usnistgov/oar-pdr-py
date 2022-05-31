@@ -99,10 +99,13 @@ class CachingIDRegistry(IDRegistry):
     def __init__(self, parentdir: str=None, config: Mapping=None, initloader: IDLoader=None, name: str=None):
         """
         create an IDRegistry.  If registry store file does not exist will be created and loaded 
-        with IDs currently known to the PDR (unless initcache=False).  
+        with IDs currently known to the PDR (unless initloader=None).  
         :param str  parentdir:  a directory where the persistent registry can be saved; if not 
                                   provided, the registry will not be persisted.
         :param Mapping config:  the configuration for this registry
+        :param IDLoader initloader:  an IDLoader instance that should be used to initialize this registry
+                                  if there is no persisted version of the registry found on disk (as
+                                  set by the configuration)
         :param str       name:  a name to give to this collection of registered identifiers; if 
                                   not provided, a default will be determined from idprefix value.
         :raise StateException:  if the given parent directory is not an existing directory
@@ -193,8 +196,6 @@ class CachingIDRegistry(IDRegistry):
         :return: the number of matching IDs loaded
         :raises RMMServerError:   if the remote service is unavailable or has an unexpected error
         """
-        if not idloader:
-            idloader = self.initloader
         if not idloader:
             return 0
 

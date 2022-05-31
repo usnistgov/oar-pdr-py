@@ -26,6 +26,8 @@ notice_data = {
     }
 }
 
+loghdlr = None
+rootlog = None
 def setUpModule():
     global loghdlr
     global rootlog
@@ -37,6 +39,7 @@ def setUpModule():
 
 def tearDownModule():
     global loghdlr
+    global rootlog
     if loghdlr:
         if rootlog:
             rootlog.removeHandler(loghdlr)

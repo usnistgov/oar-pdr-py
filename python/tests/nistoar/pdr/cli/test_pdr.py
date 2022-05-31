@@ -4,7 +4,7 @@ import unittest as test
 from nistoar.testing import *
 from nistoar.pdr import cli
 from nistoar.pdr.exceptions import PDRException, ConfigurationException
-import nistoar.pdr.config as cfgmod
+from nistoar.pdr import config as cfgmod
 
 tmpd = None
 

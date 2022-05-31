@@ -198,6 +198,21 @@ class TestSimRMMHandler(test.TestCase):
         self.assertEqual(len(data['ResultData']), 7)
         self.assertEqual(data['ResultData'][0]['accessLevel'], "public")
         self.assertTrue(not any(['/pdr:v' in r['@id'] for r in data['ResultData']]))
+
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': "GET",
+            'PATH_INFO': "/records",
+            'QUERY_STRING': "include=@id&exclude=_id"
+        }
+        self.hdlr = self.gethandler(req)
+        body = self.hdlr.handle()
+        self.assertEqual(self.resp[0], "200 Identifier exists")
+        data = json.loads("\n".join([ln.decode() for ln in body]))
+        self.assertEqual(data['ResultCount'], 7)
+        self.assertEqual(len(data['ResultData']), 7)
+        self.assertEqual(data['ResultData'][0]['accessLevel'], "public")
+        self.assertTrue(not any(['/pdr:v' in r['@id'] for r in data['ResultData']]))
         
     def test_get_all_releaseSets(self):
         req = {

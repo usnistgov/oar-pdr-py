@@ -43,12 +43,12 @@ def load_into(subparser, current_dests, as_cmd=None):
         define_comm_md_opts(p)
     p.add_argument("-b", "--out-base-name", action="store", metavar="NAME", type=str, dest="outbase",
                    help="write the output to a file with the given base name, if not provided and "+
-                        "--output-file specifies a directory (which causes the output to be split"+
+                        "--output-file specifies a directory (which causes the output to be split "+
                         "into 3 files), a base name is used that is based on the input identifiers.")
     p.add_argument("--keep-pdr-eps", action="store_true", dest="pdreps",
-                   help="When it is necessary to augment the output record with URLs pointing, use the "+
-                        "standard NIST PDR enpoints; with out this option, endpoints based on the "+
-                        "-U/--services-base-url will be used")
+                   help="When it is necessary to augment the output record with URLs pointing to "+
+                        "resolving end-points, use the standard NIST PDR enpoints; with out this "+
+                        "option, endpoints based on the -U/--services-base-url will be used")
 
     return None
 

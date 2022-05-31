@@ -50,7 +50,6 @@ def stopService(authmeth=None):
 loghdlr = None
 rootlog = None
 def setUpModule():
-    print("storedata: "+storedir+"; base: "+basedir)
     global loghdlr
     global rootlog
     ensure_tmpdir()

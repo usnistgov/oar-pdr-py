@@ -4,7 +4,7 @@ from collections import OrderedDict
 from io import StringIO
 
 from nistoar.testing import *
-from nistoar.pdr.preserv.bagit import NISTBag
+from nistoar.pdr.preserve.bagit import NISTBag
 from nistoar.pdr.publish import readme
 import nistoar.pdr.exceptions as exceptions
 from nistoar.pdr.utils import read_nerd
@@ -12,7 +12,7 @@ import nistoar.pdr
 
 utestdir = os.path.dirname(os.path.abspath(__file__))
 pdrdir = os.path.dirname(utestdir)
-datadir = os.path.join( os.path.dirname(utestdir), "preserv", "data" )
+datadir = os.path.join( os.path.dirname(utestdir), "preserve", "data" )
 bagdir = os.path.join(datadir, "samplembag")
 metabagdir = os.path.join(datadir, "metadatabag")
 basedir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(pdrdir))))

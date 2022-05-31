@@ -1,8 +1,10 @@
-import os, json, pdb, logging, time
+import os, json, pdb, logging, time, shutil, re
 import unittest as test
 
 from nistoar.pdr.publish.idmint import registry as reg
 from nistoar.pdr.exceptions import StateException, ConfigurationException
+from nistoar.nerdm.convert.rmm import NERDmForRMM
+from nistoar.pdr.utils import read_nerd
 
 from nistoar.testing import *
 from nistoar.pdr.describe import rmm
@@ -23,13 +25,42 @@ def startService(authmeth=None):
         srvport += 1
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
+    archdir = os.path.join(tdir, "mdarchive")
+    shutil.copytree(datadir, archdir)
+
+    rmmdir = os.path.join(archdir, "rmm-test-archive")
+    loadmd(os.path.join(archdir, "pdr2210.json"), rmmdir)
+    loadmd(os.path.join(archdir, "pdr02d4t.json"), rmmdir)
+
     wpy = "python/tests/nistoar/pdr/describe/sim_describe_svc.py"
     cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
-          "--wsgi-file {2} --pidfile {3}"
+          "--wsgi-file {2} --set-ph archive_dir={3} --pidfile {4}"
     cmd = cmd.format(os.path.join(tdir,"simsrv.log"), srvport,
-                     os.path.join(basedir, wpy), pidfile)
+                     os.path.join(basedir, wpy), rmmdir, pidfile)
     os.system(cmd)
     time.sleep(0.5)
+
+_edi0pfx = 'ark:/88434/edi0'
+def loadmd(nerdfile, rmmdir):
+    rmmrec = read_nerd(nerdfile)
+    if rmmrec.get('@id','').startswith(_edi0pfx):
+        rmmrec['@id'] = _edi0pfx + '-' + rmmrec['@id'][len(_edi0pfx):]
+    rmmrec = NERDmForRMM().to_rmm(rmmrec)
+    basen = re.sub(r'^ark:/\d+/', '', rmmrec['record'].get('ediid', rmmrec['record']['@id']))
+    for part in "record version releaseSet".split():
+        odir = os.path.join(rmmdir, part + "s")
+        if not os.path.exists(odir):
+            os.mkdir(odir)
+
+        ofile = basen
+        if part == "version" and rmmrec['version'].get('version'):
+            ver = rmmrec['version']['version'].replace('.','_')
+            if not ofile.endswith(ver) and not ofile.endswith(rmmrec['version']['version']):
+                ofile += "-v" + ver
+        ofile = os.path.join(odir, ofile+".json")
+
+        with open(ofile, 'w') as fd:
+            json.dump(rmmrec[part], fd, indent=4, separators=(',', ': '))
 
 def stopService(authmeth=None):
     tdir = tmpdir()
@@ -97,15 +128,15 @@ class Test_RMMLoader(test.TestCase):
         data = dict(self.ldr.iter())
         self.assertIn("ark:/88434/pdr02d4t", data)
         self.assertEqual(data["ark:/88434/pdr02d4t"], {"ediid": "ABCDEFG"})
-        self.assertIn("ark:/88434/edi00hw91c", data)
-        self.assertEqual(data["ark:/88434/edi00hw91c"], {"ediid": "ark:/88434/pdr2210"})
-        self.assertEqual(len(data), 2)
+        self.assertIn("ark:/88434/edi0-0hw91c", data)
+        self.assertEqual(data["ark:/88434/edi0-0hw91c"], {"ediid": "ark:/88434/pdr2210"})
+        self.assertEqual(len(data), 9)
         
     def test_iter_filter(self):
         self.ldr = reg.RMMLoader(self.cfg, "ark:/88434/edi0", self.proj)
         data = dict(self.ldr.iter())
-        self.assertIn("ark:/88434/edi00hw91c", data)
-        self.assertEqual(data["ark:/88434/edi00hw91c"], {"ediid": "ark:/88434/pdr2210"})
+        self.assertIn("ark:/88434/edi0-0hw91c", data)
+        self.assertEqual(data["ark:/88434/edi0-0hw91c"], {"ediid": "ark:/88434/pdr2210"})
         self.assertNotIn("ark:/88434/pdr02d4t", data)
         # self.assertEqual(data["ark:/88434/pdr02d4t"], {"ediid": "ABCDEFG"})
         self.assertEqual(len(data), 1)
@@ -116,7 +147,7 @@ class Test_RMMLoader(test.TestCase):
 
         self.ldr = reg.RMMLoader(self.cfg, "ark:/88434/", self.proj)
         data = dict(self.ldr.iter())
-        self.assertEqual(len(data), 2)
+        self.assertEqual(len(data), 9)
 
     def test_loader_in_registry(self):
         self.ldr = reg.RMMLoader(self.cfg, "ark:/88434/pdr", self.proj)

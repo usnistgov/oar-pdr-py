@@ -139,6 +139,7 @@ class TestPDPBagger(test.TestCase):
         self.bagparent = Path(self.workdir) / 'sipbags'
         self.cfg = {
             "working_dir": str(self.workdir),
+            "assign_doi": "never",
             "bag_builder": {
                 "validate_id": False,
                 "init_bag_info": {
@@ -214,8 +215,8 @@ class TestPDPBagger(test.TestCase):
         self.assertIn('publisher', nerd)
         self.assertEqual(nerd.get('version'), '1.1.0+ (in edit)')
 
-        self.assertTrue(bagdir.joinpath('publish.history').is_file())
-        with open(bagdir.joinpath("publish.history")) as fd:
+        self.assertTrue(bagdir.joinpath('publish_history.yml').is_file())
+        with open(bagdir.joinpath("publish_history.yml")) as fd:
             history = prov.load_from_history(fd)
         self.assertIsNotNone(history[-1].agent)
         self.assertEqual(history[-1].agent.actor, 'tester')
@@ -243,8 +244,8 @@ class TestPDPBagger(test.TestCase):
         self.assertIn('publisher', nerd)
         self.assertEqual(nerd.get('version'), '1.6.0+ (in edit)')
 
-        self.assertTrue(bagdir.joinpath('publish.history').is_file())
-        with open(bagdir.joinpath("publish.history")) as fd:
+        self.assertTrue(bagdir.joinpath('publish_history.yml').is_file())
+        with open(bagdir.joinpath("publish_history.yml")) as fd:
             history = prov.load_from_history(fd)
         self.assertIsNotNone(history[-1].agent)
         self.assertEqual(history[-1].agent.actor, 'tester')
@@ -267,12 +268,12 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(nerd.get('pdr:sipid'), 'mds2:8888')
         self.assertEqual(nerd.get('pdr:aipid'), 'mds2-8888')
         self.assertEqual(nerd.get('programCode'), ["006:045"])
-        self.assertEqual(nerd.get('accessLevel'), "public")
+#        self.assertEqual(nerd.get('accessLevel'), "public")
         self.assertIn('publisher', nerd)
         self.assertEqual(nerd.get('version'), '1.0.0')
 
-        self.assertTrue(bagdir.joinpath('publish.history').is_file())
-        with open(bagdir.joinpath("publish.history")) as fd:
+        self.assertTrue(bagdir.joinpath('publish_history.yml').is_file())
+        with open(bagdir.joinpath("publish_history.yml")) as fd:
             history = prov.load_from_history(fd)
         self.assertIsNotNone(history[-1].agent)
         self.assertEqual(history[-1].agent.actor, 'tester')

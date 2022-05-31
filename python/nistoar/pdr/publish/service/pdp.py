@@ -519,7 +519,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         :param bool withcomps:  if True, and the ID points to a resource, then the member component
                          metadata will be included.
         :rtype Mapping:
-        :raises SIPNotFoundError: if an open SIP does not exist
+        :raises SIPNotFoundError: if an open or published SIP with the given ID does not exist
         """
         reqid = id
         m = ARK_ID_RE.match(id)
@@ -572,6 +572,13 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                     # component has not been created yet
                     out = {}
                 return out
+
+        elif self.mdcli and status.state == status.PUBLISHED:
+            # this has been published before; pull in the published record
+            out = self.mdcli.describe(self.id)
+            out.update({ "pdr:sipid": sipid, "pdr:status": sts.state, 
+                         "pdr:message": "SIP was published as "+self.id })
+            return out
 
         else:
             # this is all we know about it

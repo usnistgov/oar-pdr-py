@@ -25,7 +25,7 @@ class TestPreservationSystem(test.TestCase):
 
     def test_subsysabbrev(self):
         si = pres.PreservationSystem()
-        self.assertEqual(si.subsystem_abbrev, "Preserv")
+        self.assertEqual(si.subsystem_abbrev, "Preserve")
 
 
 
