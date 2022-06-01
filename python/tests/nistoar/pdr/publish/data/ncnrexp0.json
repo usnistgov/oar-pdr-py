@@ -1,5 +1,5 @@
 {
-    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#",
+    "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
     "_extensionSchemas": [ "https://data.nist.gov/od/dm/nerdm-schema/sip/v0.1#/definitions/PDRSubmission",
                            "https://data.nist.gov/od/dm/nerdm-schema/exp/v0.1#/definitions/ExperimentalContext" ],
     "@type": [ "nrds:PDRSubmission" ],
@@ -47,7 +47,7 @@
     "components": [
         {
             "_extensionSchemas": [
-                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/AccessPage",
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.7#/definitions/AccessPage",
                 "https://data.nist.gov/od/dm/nerdm-schema/exp/v0.1#/definitions/ExperimentalContext"
             ],
             "@id": "components/201706",
@@ -62,7 +62,7 @@
         },
         {
             "_extensionSchemas": [
-                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.6#/definitions/AccessPage",
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.7#/definitions/AccessPage",
                 "https://data.nist.gov/od/dm/nerdm-schema/exp/v0.1#/definitions/ExperimentalContext"
             ],
             "@id": "components/201803",

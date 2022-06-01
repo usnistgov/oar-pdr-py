@@ -75,7 +75,7 @@ class TestPDPublishingService(test.TestCase):
                     "Organization-Address": ["100 Bureau Dr.",
                                              "Gaithersburg, MD 20899"]
                 },
-                "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.6"
+                "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.7"
             },
             "doi_naan": "10.18434",
             "assign_doi": "always",

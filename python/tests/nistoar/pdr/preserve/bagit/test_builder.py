@@ -1225,7 +1225,7 @@ class TestBuilder2(test.TestCase):
         self.assertFalse(os.path.exists(self.bag.bag.nerd_file_for("trial3/trial3a.json")))
 
     def test_add_ds_pod_convert(self):
-        self.cfg['ensure_nerdm_type_on_add'] = bldr.NERDM_SCH_ID_BASE + "v0.5"
+        self.cfg['ensure_nerdm_type_on_add'] = bldr.NERDM_SCH_ID_BASE + "v0.7"
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
 
         self.assertIsNone(self.bag.ediid)

@@ -351,8 +351,11 @@ class BagBuilder(PreservationSystem):
             hdlrs = [h for h in self.plog.handlers if self._handles_logfile(h,lf)]
             for h in hdlrs:
                 self.plog.removeHandler(h)
-                h.flush()
-                h.close()
+                try:
+                    h.flush()
+                    h.close()
+                except RuntimeError as ex:
+                    pass
             self._log_handlers[lf] = None
         
     def _set_logfile(self):

@@ -83,7 +83,7 @@ class TestPDPBagger(test.TestCase):
                     "Organization-Address": ["100 Bureau Dr.",
                                              "Gaithersburg, MD 20899"]
                 },
-                "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.6"
+                "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.7"
             },
             "finalize": {},
             "doi_naan": "10.22222",
