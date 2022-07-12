@@ -163,7 +163,7 @@ class TestAction(test.TestCase):
         self.assertEqual(act.message, "Tak it, mon, tak it")
         self.assertEqual(act.object, {"a": 2})
         self.assertEqual(act.timestamp, 1634500000)
-        self.assertEqual(act.date, "2021-10-17 15:46:40")
+        self.assertEqual(act.date, "2021-10-17 19:46:40Z")
         self.assertEqual(act.subactions, [])
         self.assertEqual(act.subactions_count(), 0)
 
@@ -327,7 +327,7 @@ class TestAction(test.TestCase):
         self.assertEqual(act.message, "Tak it, mon, tak it")
         self.assertEqual(act.object, {"a": 2})
         self.assertEqual(act.timestamp, 1634500000)
-        self.assertEqual(act.date, "2021-10-17 15:46:40")
+        self.assertEqual(act.date, "2021-10-17 19:46:40Z")
         self.assertEqual(act.subactions, [])
         self.assertEqual(act.subactions_count(), 0)
 

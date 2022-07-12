@@ -10,7 +10,7 @@ Typically, an SIPBagger will record these records to a file within the bag.  The
 the form of a YAML file in which each YAML document encoded in it represents a single request by the 
 client, which can be a compound Action.  
 """
-import time, datetime, json
+import time, datetime, json, re
 from io import StringIO
 from typing import List, Iterable
 from collections import OrderedDict
@@ -164,6 +164,7 @@ class Action(object):
     DELETE:  str = "DELETE"
     COMMENT: str = "COMMENT"
     types = "CREATE PUT PATCH MOVE DELETE COMMENT".split()
+    TZ = datetime.timezone.utc
 
     def __init__(self, acttype: str, subj: str, agent: PubAgent, msg: str = None, obj = None,
                  timestamp: float = 0.0, subacts: List["Action"] = None):
@@ -251,6 +252,8 @@ class Action(object):
         """
         return self._time
 
+    _tzre = re.compile(r"[+\-]\d\d:\d\d$")
+
     @property
     def date(self) -> str:
         """
@@ -258,11 +261,15 @@ class Action(object):
         """
         if not self._time:
             return ""
-        return datetime.datetime.fromtimestamp(self._time).isoformat(sep=" ")
+        out = datetime.datetime.fromtimestamp(self._time, self.TZ).isoformat(sep=" ")
+        if out.endswith("+00:00"):
+            out = out[:-1*len("+00:00")] + "Z"
+        return self._tzre.sub('', out)
 
     def timestamp_now(self) -> None:
         """
-        update the timestamp attached to this action to the current time
+        update the timestamp attached to this action to the current time.  This will be a local system 
+        time if Action.TIME_IS_LOCAL is ``True``; otherwise (the default), it will be UTC.
         """
         self._time = time.time()
 
