@@ -186,7 +186,7 @@ function run_shallow_tests {
     code=`"${curlcmd[@]}" $base$turl`
     [ "$code" == 200 ] || {
         tell "${curlcmd[@]}" $base$turl
-        tell "Failed health check"
+        tell "Failed health check; status=$code"
         ((failures += 1))
     }
 
@@ -195,8 +195,13 @@ function run_shallow_tests {
     code=`"${curlcmd[@]}" $base$turl`
     [ "$code" == 307 ] || {
         tell "${curlcmd[@]}" $base$turl
-        tell "Failed Landing page forwarding"
+        tell "Failed Landing page forwarding: status=$code"
         ((failures += 1))
+    }
+
+    [ "$failures" == "0" ] || {
+        pid=`cat $server_pid_file`
+        ps -ww -o args= -p $pid
     }
 
     return $failures
