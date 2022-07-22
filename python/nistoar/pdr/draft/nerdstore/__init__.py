@@ -6,3 +6,4 @@ persist as part of the draft SIP.  This package defines an abstract interface fo
 the metadata from storage and into memory, enabling new metadata to be merge in, and storing 
 the result.  
 """
+from .base import *

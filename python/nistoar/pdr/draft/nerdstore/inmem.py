@@ -3,11 +3,17 @@ an implementation of the NERDResource storage interface that stores the data in 
 
 This is provide for purposes of testing the interface.
 """
-import copy, re
+
+# See .base.py for function documentation
+
+import copy, re, functools
 from collections import OrderedDict
 from collections.abc import Mapping
 from logging import Logger
+from typing import Iterable, Iterator
+
 from .base import *
+from .base import _NERDOrderedObjectList
 
 import nistoar.nerdm.utils as nerdmutils
 
@@ -52,6 +58,7 @@ class InMemoryObjectList(_NERDOrderedObjectList):
             if not itm.get('@id'):
                 itm = copy.deepcopy(itm)
                 itm['@id'] = self._get_default_id_for(itm)
+                self._data[itm['@id']] = itm
             self._order.append(itm['@id'])
 
     def _new_id(self):
@@ -60,11 +67,11 @@ class InMemoryObjectList(_NERDOrderedObjectList):
         return out
 
     @property
-    def ids(self) => [str]:
+    def ids(self) -> [str]:
         return list(self._order)
 
     @property
-    def count(self) => int:
+    def count(self) -> int:
         return len(self._order)
 
     def _get_item_by_id(self, id: str):
@@ -143,21 +150,23 @@ class InMemoryNonFileComps(InMemoryObjectList, NERDNonFileComps):
         order = []
         n = 0
         for cmp in comps:
-            if 'filepath' not in cmp and cmp.get('@id'):
-                self._data[cmp.get('@id')] = copy.deepcopy(cmp)
-                m = _idre.find(cmd['@id'])
-                if m:
-                    # the id was set by a previous call to this class's minter
-                    # extract the number to ensure future ids are unique
-                    n = int(m.group(1))
-                    if n >= self._ididx:
-                        self._ididx = n + 1
-            order.append(cmp)
+            if 'filepath' not in cmp:
+                if cmp.get('@id'):
+                    self._data[cmp.get('@id')] = copy.deepcopy(cmp)
+                    m = _idre.find(cmd['@id'])
+                    if m:
+                        # the id was set by a previous call to this class's minter
+                        # extract the number to ensure future ids are unique
+                        n = int(m.group(1))
+                        if n >= self._ididx:
+                            self._ididx = n + 1
+                order.append(cmp)
 
         for cmp in order:
             if not cmp.get('@id'):
                 cmp = copy.deepcopy(cmp)
                 cmp['@id'] = self._get_default_id_for(cmp)
+                self._data[cmp['@id']] = cmp
             self._order.append(cmp['@id'])
             
 
@@ -177,8 +186,8 @@ class InMemoryFileComps(NERDFileComps):
     def empty(self):
         if self._res.deleted:
             raise RecordDeleted(self._res.id, "empty")
-        self._order = []
-        self._data = {}
+        self._children.clear()
+        self._files.clear()
 
     def _load_from(self, cmps: [Mapping]):
 
@@ -222,13 +231,13 @@ class InMemoryFileComps(NERDFileComps):
                     subcolls.append(cmp)
 
         # Go through a last time to set the subcollection content info into each subcollection component
-        for cmp in subcolls
+        for cmp in subcolls:
             if cmp.get('filepath') in children:
                 if '_children' not in cmp:
                     cmp['_children'] = OrderedDict()
 
                 # base subcollection contents first on 'has_member' list as this captures order info
-                if cmp.get('has_member']:
+                if cmp.get('has_member'):
                     if isinstance(cmd.get('has_member',[]), str):
                         cmp['has_member'] = [cmp['has_member']]
                     for child in cmp['has_member']:
@@ -241,16 +250,16 @@ class InMemoryFileComps(NERDFileComps):
                         cmp['_children'][child[0]] = child[1]
                             
 
-    def get_file_by_id(self, id: str) => Mapping:
+    def get_file_by_id(self, id: str) -> Mapping:
         return self._export_file(self._get_file_by_id(id))
 
-    def _get_file_by_id(self, id: str) => Mapping:
+    def _get_file_by_id(self, id: str) -> Mapping:
         try:
             return self._files[id]
         except KeyError:
             raise ObjectNotFound(id)
 
-    def get_file_by_path(self, path: str) => Mapping:
+    def get_file_by_path(self, path: str) -> Mapping:
         return self._export_file(self._get_file_by_path(path))
 
     def _export_file(self, fmd):
@@ -259,7 +268,7 @@ class InMemoryFileComps(NERDFileComps):
             out['has_member'] = [OrderedDict([('@id', m[1], 'name', m[0])]) for m in fmd.get("_children",[])]
         return out
 
-    def _get_file_by_path(self, path: str) => Mapping:
+    def _get_file_by_path(self, path: str) -> Mapping:
         return self._get_file_by_relpath(self._children, path.split('/'), path)
 
     def _get_file_by_relpath(self, children: Mapping, steps: [str], origpath):
@@ -281,7 +290,11 @@ class InMemoryFileComps(NERDFileComps):
     def iter_files(self):
         return self._FileIterator(self)
 
-    def data(self) => [Mapping]:
+    @property
+    def count(self) -> int:
+        return len(self._files)
+
+    def data(self) -> [Mapping]:
         return [f for f in self.iter_files()]
 
     class _FileIterator:
@@ -299,18 +312,7 @@ class InMemoryFileComps(NERDFileComps):
                     self.descendents.append(desc.get('_children', []))
                 yield desc
             
-
-    def _add_child_id_iterators_to(self, childcolls, iters=[]):
-        subcolls = []
-        for coll in childcolls:
-            iters.append(iter(coll.get('_children', {}).values()))
-            for id in coll.get('_children').values():
-                child = self._get_file_by_id(id)
-                if self.is_collection(child)
-                         
-        
-
-    def get_ids_in_subcoll(self, collpath: str) => [str]:
+    def get_ids_in_subcoll(self, collpath: str) -> [str]:
         children = self._children
         try:
             coll = self._get_file_by_path(collpath)
@@ -320,7 +322,7 @@ class InMemoryFileComps(NERDFileComps):
             children = coll.get('_children', [])
         return list(children.values())
 
-    def get_subcoll_members(self, collpath: str) => Iterator[Mapping]:
+    def get_subcoll_members(self, collpath: str) -> Iterator[Mapping]:
         for id in self.get_ids_in_subcoll(collpath):
             yield self.get_file_by_id(id)
 
@@ -331,6 +333,30 @@ class InMemoryFileComps(NERDFileComps):
         out = "%s_%d" % (pfx, self._ididx)
         self._ididx += 1
         return out
+
+    def set_order_in_subcoll(self, collpath: str, ids: Iterable[str]) -> Iterable[str]:
+        children = self._children
+        if collpath:
+            coll = self._get_file_by_path(collpath)
+            if not self.is_collection(coll):
+                raise ObjectNotFound(collpath, message=collpath+": not a subcollection component")
+            if '_children' not in coll:
+                coll['_children'] = OrderedDict
+            children = coll['_children']
+
+        # create an inverted child map
+        byid = dict( [(itm[1], itm[0]) for itm in children.items()] )
+
+        # reorder the original map
+        children.clear()
+        missing = []
+        for id in ids:
+            if id in byid:
+                children[byid[id]] = id
+            else:
+                missing.append(id)
+        for id in missing:
+            children[byid[id]] = id
 
     def set_file_at(md, filepath: str=None, id=None):
         # first, make sure we have both an id and a filepath for the input metadata
@@ -362,7 +388,7 @@ class InMemoryFileComps(NERDFileComps):
             children = self._children
             if '/' in oldfile.get('filepath'):
                 try:
-                    parent = self.get_file_by_path(os.path.dirname(oldfile.['filepath']))
+                    parent = self.get_file_by_path(os.path.dirname(oldfile['filepath']))
                 except ObjectNotFound:
                     pass
                 else:
@@ -409,7 +435,7 @@ class InMemoryResource(NERDResource):
         self._files = None
         self._nonfiles = None
 
-        for itm in rec:
+        for itm in rec.items():
             if itm[0] not in self._subprops:
                 self._data[itm[0]] = copy.deepcopy(itm[1])
             elif isinstance(itm[1], (list, tuple)):
@@ -427,6 +453,8 @@ class InMemoryResource(NERDResource):
             self._refs = InMemoryRefList(self)
         if self._nonfiles is None:
             self._nonfiles = InMemoryNonFileComps(self)
+        if self._files is None:
+            self._files = InMemoryFileComps(self)
 
     @property
     def authors(self):
@@ -456,21 +484,23 @@ class InMemoryResource(NERDResource):
             self._data = None
 
     def res_data(self):
-        return copy.deepcopy(self._data)
+        out = copy.deepcopy(self._data)
+        out['@id'] = self.id
+        return out
         
-    def data(self, inclfiles):
+    def data(self, inclfiles=True) -> Mapping:
         out = self.res_data()
-        if self._auths.count() > 0:
+        if self._auths.count > 0:
             out['authors'] = self._auths.data()
-        if self._refs.count() > 0:
+        if self._refs.count > 0:
             out['references'] = self._auths.data()
-        if self._non_files.count() > 0 or self._files.count() > 0:
+        if self._nonfiles.count > 0 or self._files.count > 0:
             out['components'] = []
-            if self._non_files.count() > 0:
+            if self._nonfiles.count > 0:
                 out.extend(self._nonfiles.data())
-            if self._files.count() > 0:
+            if self._files.count > 0:
                 out.extend(self._files.data())
-        return data
+        return out
         
 class InMemoryResourceStorage(NERDResourceStorage):
     """
@@ -519,17 +549,17 @@ class InMemoryResourceStorage(NERDResourceStorage):
         self._ididx += 1
         return out
 
-    def exists(self, id: str) => bool:
+    def exists(self, id: str) -> bool:
         return id in self._recs
 
-    def delete(self, id: str) => bool:
+    def delete(self, id: str) -> bool:
         if id in self._recs:
             self._recs[id].delete()
             del self._recs[id]
             return True
         return False
     
-    def open(self, id: str=None) => NERDResource:
+    def open(self, id: str=None) -> NERDResource:
         if not id:
             id = self._new_id()
         if id not in self._recs:

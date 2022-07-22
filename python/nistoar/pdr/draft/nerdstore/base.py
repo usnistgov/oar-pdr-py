@@ -1,17 +1,24 @@
 """
 Abstract base classes providing the interface to metadata storage.
 """
+import logging
 from abc import ABC, ABCMeta, abstractproperty, abstractmethod
 from collections.abc import MutableMapping, Mapping, MutableSequence
-from typing import Iterable, Iterator
+from typing import Iterable, Iterator, NewType
 
 import nistoar.nerdm.utils as nerdmutils
 
 __all__ = [ "NERDResource", "NERDAuthorList", "NERDRefList", "NERDNonFileComps", "NERDFileComps",
             "NERDStorageException", "MismatchedIdentifier", "RecordDeleted", "ObjectNotFound",
-            "StoredResourceFactory" ]
+            "NERDResourceStorage" ]
 
-class NERDResource(ABCMeta):
+NERDResource     = NewType("NERDResource", ABC)
+NERDAuthorList   = NewType("NERDAuthorList", NERDResource)
+NERDRefList      = NewType("NERDRefList", NERDResource)
+NERDFileComps    = NewType("NERDFileComps", NERDResource)
+NERDNonFileComps = NewType("NERDNonFileComps", NERDResource)
+
+class NERDResource(ABC):
     """
     an abstract base class representing a NERDm Resource record in storage.
 
@@ -25,13 +32,13 @@ class NERDResource(ABCMeta):
     client.  Once an update is made via this interface, it is expected to be immediately persisted to
     the underlying storage.  
     """
-    def __init__(self, id: str, parentlog: Logger = None):
+    def __init__(self, id: str, parentlog: logging.Logger = None):
         self._id = id
 
         if not id:
             raise ValueError("NERDResource: base init requires id")
         if not parentlog:
-            parentlog = getLogger("nerdstore")
+            parentlog = logging.getLogger("nerdstore")
         self.log = parentlog.getChild(id)
 
     @property
@@ -43,28 +50,28 @@ class NERDResource(ABCMeta):
         return self._id
 
     @abstractproperty
-    def authors(self) => NERDAuthors:
+    def authors(self) -> NERDAuthorList:
         """
         the interface to the list of authors
         """
         raise NotImplementedError()
 
     @abstractproperty
-    def files(self) => NERDFiles:
+    def files(self) -> NERDFileComps:
         """
         the interface to the list of files
         """
         raise NotImplementedError()
 
     @abstractproperty
-    def nonfiles(self) => NERDNonFiles:
+    def nonfiles(self) -> NERDNonFileComps:
         """
         the interface to the non-file components
         """
         raise NotImplementedError()
 
     @abstractproperty
-    def references(self) => NERDRefList:
+    def references(self) -> NERDRefList:
         """
         the interface to the list of references
         """
@@ -72,7 +79,7 @@ class NERDResource(ABCMeta):
 
     @abstractmethod
     def replace_res_data(self, md): 
-       """
+        """
         replace all resource-level properties excluding `components`, `authors`, and `references`
         from the provided metadata.  
         """
@@ -109,7 +116,7 @@ class NERDResource(ABCMeta):
         raise NotImplementedError()
 
     @abstractproperty
-    def deleted(self)
+    def deleted(self):
         """
         True if the :py:method:`delete` method was called on this record.  If True,
         calling :py:method:`replace_res_data` or :py:method:`resplace_all_data` will result in 
@@ -118,7 +125,7 @@ class NERDResource(ABCMeta):
         return False
 
     @abstractmethod
-    def data(self, inclfiles=True) => Mapping:
+    def data(self, inclfiles=True) -> Mapping:
         """
         return the resource metadata as a JSON-ready dictionary
 
@@ -127,13 +134,13 @@ class NERDResource(ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def res_data(self) => Mapping:
+    def res_data(self) -> Mapping:
         """
         return the resource metadata, excluding the authors, references, and all components
         """
         raise NotImplementedError()
         
-class _NERDOrderedObjectList(MutableSequence, MutableMapping, metaclass=metaABC):
+class _NERDOrderedObjectList(MutableSequence, MutableMapping, metaclass=ABCMeta):
     """
     an abstract interface for updating the list of objects associated with a NERD Resource property
     """
@@ -141,7 +148,7 @@ class _NERDOrderedObjectList(MutableSequence, MutableMapping, metaclass=metaABC)
     def __init__(self, resource: NERDResource):
         self._res = resource
 
-    def data(self) => [Mapping]:
+    def data(self) -> [Mapping]:
         """
         return the current record as a NERDm dictionary
         """
@@ -172,7 +179,7 @@ class _NERDOrderedObjectList(MutableSequence, MutableMapping, metaclass=metaABC)
         raise NotImplementedError()
 
     @abstractproperty
-    def ids(self) => [str]:
+    def ids(self) -> [str]:
         """
         return the list of identifiers for the items in this list in the order that they 
         should appear.
@@ -180,10 +187,9 @@ class _NERDOrderedObjectList(MutableSequence, MutableMapping, metaclass=metaABC)
         raise NotImplementedError()
 
     @abstractproperty
-    def count(self) => int:
+    def count(self) -> int:
         """
-        return the list of identifiers for the items in this list in the order that they 
-        should appear.
+        return the number of items in this list.
         """
         raise NotImplementedError()
 
@@ -229,10 +235,10 @@ class _NERDOrderedObjectList(MutableSequence, MutableMapping, metaclass=metaABC)
     def __len__(self):
         return len(self.ids)
 
-    def __get_item__(self, key):
+    def __getitem__(self, key):
         if isinstance(key, int):
-            return self.get_author_by_pos(key)
-        return self.get_author_by_id(key)
+            return self._get_item_by_pos(key)
+        return self._get_item_by_id(key)
 
     def __contains__(self, key):
         if isinstance(key, int):
@@ -293,7 +299,7 @@ class _NERDOrderedObjectList(MutableSequence, MutableMapping, metaclass=metaABC)
             return MutableMapping.pop(self, key)
         return MutableMapping.popd(self, key, default)
 
-    def append(self, md: Mapping) => str:
+    def append(self, md: Mapping) -> str:
         """
         add a new item to the end of this list.  If the given dictionary has an `@id` property (or 
         otherwise has a proxy identifier) that is already in the list, that existing item will first 
@@ -319,7 +325,7 @@ class NERDAuthorList(_NERDOrderedObjectList):
     list of authors via :py:property:`ids`, followed by a call to :py:method:`set_order`, passing in 
     the reordered list of identifiers.  
     """
-    def get_author_by_id(self, id: pos):
+    def get_author_by_id(self, id: str):
         """
         return the author description with the given identifier assigned to it.  
         :raise KeyError: if an author with the given identifier is not part of this list
@@ -361,7 +367,7 @@ class NERDRefList(_NERDOrderedObjectList):
     the reordered list of identifiers.  
     """
 
-    def get_reference_by_id(self, id: pos):
+    def get_reference_by_id(self, id: str):
         """
         return the author description with the given identifier assigned to it.  
         :raise KeyError: if an author with the given identifier is not part of this list
@@ -404,7 +410,7 @@ class NERDNonFileComps(_NERDOrderedObjectList):
     list of components via :py:property:`ids`, followed by a call to :py:method:`set_order`, passing in 
     the reordered list of identifiers.  
     """
-    def get_component_by_id(self, id: pos):
+    def get_component_by_id(self, id: str):
         """
         return the author description with the given identifier assigned to it.  
         :raise KeyError: if an author with the given identifier is not part of this list
@@ -429,7 +435,7 @@ class NERDNonFileComps(_NERDOrderedObjectList):
         raise NotImplementedError()
 
 
-class NERDFileComps(Mapping, metaclass=metaABC):
+class NERDFileComps(Mapping, metaclass=ABCMeta):
     """
     an interface to the list of file components. A file component is any component that 
     is either a downloadable file or a Subcollection folder; a file component must have a 
@@ -464,14 +470,14 @@ class NERDFileComps(Mapping, metaclass=metaABC):
         return nerdmutils.is_type(md, "Subcollection")
 
     @abstractmethod
-    def get_file_by_id(self, id: str) => Mapping:
+    def get_file_by_id(self, id: str) -> Mapping:
         """
         return the component in the file list that has the given (location-independent) identifier
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def get_file_by_path(self, path: str) => Mapping:
+    def get_file_by_path(self, path: str) -> Mapping:
         """
         return the component that is currently at the given path location, or None if no file is 
         currently found there.  
@@ -479,20 +485,27 @@ class NERDFileComps(Mapping, metaclass=metaABC):
         raise NotImplementedError()
 
     @abstractproperty
-    def ids(self) => [str]:
+    def ids(self) -> [str]:
         """
-        return the list of identifiers for the files in this list 
+        the list of identifiers for the files in this list 
         """
         raise NotImplementedError()
 
-    def data(self) => [Mapping]:
+    @property
+    def count(self) -> int:
+        """
+        the total number of file components (including subcollections) in this dataset
+        """
+        return len(ids)
+
+    def data(self) -> [Mapping]:
         """
         return the full hierarchy of files as a single flat list
         """
         return [self[d] for d in self.ids]
 
     @abstractmethod
-    def get_ids_in_subcoll(self, collpath: str) => [str]:
+    def get_ids_in_subcoll(self, collpath: str) -> [str]:
         """
         return a list of the identifiers of the direct members of the specified collection in the 
         prefered order of display.  If no order has been set via :py:method:`set_order_in_subcoll`,
@@ -503,7 +516,7 @@ class NERDFileComps(Mapping, metaclass=metaABC):
         """
         raise NotImplementedError()
 
-    def get_subcoll_members(self, collpath: str) => Iterator[Mapping]:
+    def get_subcoll_members(self, collpath: str) -> Iterator[Mapping]:
         """
         return a list of the metadata descriptions of a subcollection's direct members
         :param str collpath:  the file path to the subcollection or an empty string for the top 
@@ -514,7 +527,7 @@ class NERDFileComps(Mapping, metaclass=metaABC):
             yield self.get_file_by_id(id)
 
     @abstractmethod
-    def set_order_in_subcoll(self, collpath: str, ids: Iterable[str]) => Iterable[str]:
+    def set_order_in_subcoll(self, collpath: str, ids: Iterable[str]) -> Iterable[str]:
         """
         set the preferred order of the files within a subcollection.  One should first call 
         :py:method:`get_ids_in_subcoll` or :py:method:`get_subcoll_members` to ensure having a 
@@ -529,15 +542,15 @@ class NERDFileComps(Mapping, metaclass=metaABC):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def unset_order_in_subcollection(self, collpath: str):
-        """
-        remove the order specification for the member files of a specified subcollection so that the 
-        preferred listing is arbitrary.
-        :param str collpath:  the file path to the subcollection or an empty string for the top 
-                              collection to unset the member order for.  
-        """
-        raise NotImplementedError()
+#    @abstractmethod
+#    def unset_order_in_subcollection(self, collpath: str):
+#        """
+#        remove the order specification for the member files of a specified subcollection so that the 
+#        preferred listing is arbitrary.
+#        :param str collpath:  the file path to the subcollection or an empty string for the top 
+#                              collection to unset the member order for.  
+#        """
+#        raise NotImplementedError()
 
     @abstractmethod
     def set_file_at(md, filepath: str=None, id=None):
@@ -562,7 +575,7 @@ class NERDFileComps(Mapping, metaclass=metaABC):
         """
         raise NotImplementedError()
 
-    def move(self, idorpath: str, filepath: str) => str:
+    def move(self, idorpath: str, filepath: str) -> str:
         """
         move a file currently in the list to a new location in the hierarchy by giving it a new 
         file path.
@@ -587,7 +600,7 @@ class NERDFileComps(Mapping, metaclass=metaABC):
 
 
     def __getitem__(self, id):
-        return get_file_by_id(id)
+        return self.get_file_by_id(id)
 
     def __setitem__(self, id, md):
         self.set_file_at(md, id=id)
@@ -657,7 +670,7 @@ class ObjectNotFound(NERDStorageException):
     """
     an exception indicating that a requested object within a record could be found
     """
-    def __init__(self, key=None, message=None):/
+    def __init__(self, key=None, message=None):
         """
         :param str id: the requested object key (identifier or other index) used to locate the object
         """
@@ -672,7 +685,7 @@ class NERDResourceStorage(ABC):
     a factory function that creates or opens existing stored NERDm Resource records
     """
     @abstractmethod
-    def open(self, id: str=None) => NERDResource:
+    def open(self, id: str=None) -> NERDResource:
         """
         Open a resource record having the given identifier.  If a record with `id` does not exist (or 
         was deleted), a new record should be created and the identifier assigned to it.  If `id` is 
@@ -693,14 +706,14 @@ class NERDResourceStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def exists(self, id: str) => bool:
+    def exists(self, id: str) -> bool:
         """
         return True if there is a record in the storage with the given identifier
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def delete(self, id: str) => bool:
+    def delete(self, id: str) -> bool:
         """
         delete the record with the given identifier from the storage.  If the record with that identifer
         does not exist, do nothing (except return False)

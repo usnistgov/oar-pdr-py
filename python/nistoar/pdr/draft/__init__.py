@@ -20,7 +20,7 @@ This package draws on some of the infrastructure the :py:mod:`~nistoar.pdr.publi
 including :py:mod:`provenence tracking<nistoar.pdr.publish.prov>` and 
 :py:mod:`README generation<nistoar.pdr.publish.readme>`.
 """
-import prov, readme
+from ..publish import prov, readme
 
 # subpackages: 
 #   nerdstore
