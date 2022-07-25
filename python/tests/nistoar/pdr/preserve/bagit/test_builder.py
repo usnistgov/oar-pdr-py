@@ -17,6 +17,10 @@ datadir = os.path.join(
     os.path.dirname(os.path.dirname(__file__)),
     "data", "simplesip"
 )
+simplenerd = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)),
+    "data", "1491nerdm.json"
+)
 
 loghdlr = None
 rootlog = None
@@ -1147,7 +1151,7 @@ class TestBuilder2(test.TestCase):
         self.assertIsNone(self.bag.bag)
         self.assertFalse(os.path.exists(os.path.join(self.bag.bagdir,"metadata")))
         
-        with open(os.path.join(datadir, "_nerdm.json")) as fd:
+        with open(simplenerd) as fd:
             mdata = json.load(fd)
         self.bag.add_res_nerd(mdata)
         self.assertIsNotNone(self.bag.ediid)
@@ -1174,7 +1178,7 @@ class TestBuilder2(test.TestCase):
         self.cfg['ensure_nerdm_type_on_add'] = bldr.NERDM_SCH_ID_BASE + "v0.4"
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
         self.assertIsNone(self.bag.ediid)
-        with open(os.path.join(datadir, "_nerdm.json")) as fd:
+        with open(simplenerd) as fd:
             mdata = json.load(fd)
 
         self.bag.add_res_nerd(mdata)
@@ -1759,7 +1763,7 @@ class TestBuilder2(test.TestCase):
         aboutfile = os.path.join(self.bag.bagdir,"about.txt")
         self.assertTrue( not os.path.exists(aboutfile) )
 
-        with open(os.path.join(datadir, "_nerdm.json")) as fd:
+        with open(simplenerd) as fd:
             mdata = json.load(fd)
         self.bag.add_res_nerd(mdata)
         
