@@ -6,7 +6,7 @@ This is provide for purposes of testing the interface.
 
 # See .base.py for function documentation
 
-import copy, re, functools
+import os, copy, re, functools
 from collections import OrderedDict
 from collections.abc import Mapping
 from logging import Logger
@@ -224,7 +224,8 @@ class InMemoryFileComps(NERDFileComps):
                         children[parent] = []
                     children[parent].append( (os.path.basename(cmp['filepath']), cmp['@id']) )
                 else:
-                    children[''].append(cmp['filepath'])
+                    children[''].append( (cmp['filepath'], cmp['@id']) )
+                    self._children[cmp['filepath']] = cmp['@id']
 
                 # remember subcollections
                 if self.is_collection(cmp):
@@ -288,7 +289,7 @@ class InMemoryFileComps(NERDFileComps):
         return [f.get('@id', '') for id in self.iter_files()]
 
     def iter_files(self):
-        return self._FileIterator(self)
+        return iter(self._FileIterator(self))
 
     @property
     def count(self) -> int:
@@ -300,17 +301,18 @@ class InMemoryFileComps(NERDFileComps):
     class _FileIterator:
         def __init__(self, fstore, children=None):
             self._fs = fstore
-            if children is not None:
+            if children is None:
                 children = list(fstore._children.values())
             self.descendents = children
         def __iter__(self):
             return self
         def __next__(self):
-            while self.descendents:
-                desc = self._fs.get_file_by_id(self.descendents.pop(0))
+            if self.descendents:
+                desc = self._fs._get_file_by_id(self.descendents.pop(0))
                 if desc.get('_children'):
-                    self.descendents.append(desc.get('_children', []))
-                yield desc
+                    self.descendents.extend(desc.get('_children', {}).values())
+                return desc
+            raise StopIteration()
             
     def get_ids_in_subcoll(self, collpath: str) -> [str]:
         children = self._children
@@ -472,10 +474,13 @@ class InMemoryResource(NERDResource):
     def replace_res_data(self, md):
         if self.deleted:
             raise RecordDeleted(self.id, "replace")
-        for itm in rec:
+        rec = OrderedDict()
+        for itm in md.items():
             if itm[0] not in self._subprops:
-                self._data[itm[0]] = copy.deepcopy(itm[1])
+                rec[itm[0]] = copy.deepcopy(itm[1])
+        self._data = rec
 
+    @property
     def deleted(self):
         return self._data is None
 
@@ -497,9 +502,9 @@ class InMemoryResource(NERDResource):
         if self._nonfiles.count > 0 or self._files.count > 0:
             out['components'] = []
             if self._nonfiles.count > 0:
-                out.extend(self._nonfiles.data())
+                out['components'].extend(self._nonfiles.data())
             if self._files.count > 0:
-                out.extend(self._files.data())
+                out['components'].extend(self._files.data())
         return out
         
 class InMemoryResourceStorage(NERDResourceStorage):

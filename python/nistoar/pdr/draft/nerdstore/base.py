@@ -656,7 +656,7 @@ class RecordDeleted(NERDStorageException):
         if not message:
             message = ""
             if id:
-                message = "%s:" % id
+                message = "%s: " % id
             message += "Unable to perform operation"
             if opname:
                 message += ", %s" % opname
