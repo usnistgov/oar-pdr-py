@@ -51,7 +51,6 @@ class DBClientFactory(ABC):
         """
         pass
 
-
 class DBClient(ABC):
     """
     a client connected to the database for a particular service (e.g. drafting, DMPs, etc.)
@@ -153,7 +152,7 @@ class DBClient(ABC):
         """
         raise NotImplementedError()
 
-    @abstractproperty
+    @property
     def native(self):
         return self._native
 
@@ -171,19 +170,55 @@ class DBClient(ABC):
         """
         pass
 
+class DBGroups(ABC):
+    """
+    an interface for creating and using user groups
+    """
+
+    def __init__(self, dbclient: DBClient):
+        self._cli = dbclient
+
+    @property
+    def native(self):
+        return self._cli._native
+
+    def create_group(self, name: str, foruser: str):
+        """
+        create a new group for the given user.  
+        :param str name:     the name of the group to create
+        :param str foruser:  the user to create the group for.  This user will be set as the group's creator
+                             and administrator
+        """
+        pass
+
+    def get(self, id: str):
+        """
+        return the group by its given group identifier
+        """
+        pass
+
+    def get_by_name(self, name: str, creator: str):
+        """
+        return the group assigned the given name by its creator.
+        """
+        pass
+
+
 class ProjectRecord(ABC):
     """
     a single record from the project collection representing one project created by the user
     """
 
-    def __init__(self, nativeclient=None, recdata: Mapping):
+    def __init__(self, recdata: Mapping, dbclient: DBClient=None):
         """
-        initialize the record with a dictionary retrieved from the underlying project collection
+        initialize the record with a dictionary retrieved from the underlying project collection.  
+        The dictionary must include an `id` property with a valid ID value.
         """
-        self._native = nativeclient
+        self._cli = dbclient
         if not recdata.get('id'):
             raise ValueError("Record data is missing its 'id' property")
         self._data = self._initialize(recdata)
+        self._acls = ACLs(self.data.get("acls", {}))
 
     def _initialize(self, rec) -> Mapping:
         if 'data' not in rec:
@@ -198,13 +233,13 @@ class ProjectRecord(ABC):
             # Should be None or a date
             rec['deactivated'] = None
 
-        if 'acl' not in rec:
-            rec['acl'] = {}
+        if 'acls' not in rec:
+            rec['acls'] = {}
         for perm in OWN:
-            if perm not in rec['acl']:
-                rec['acl'][perm] = []
-                if rec.get('owner') and rec.get('owner') not in rec['acl'][perm]:
-                    rec['acl'][perm].append(owner)
+            if perm not in rec['acls']:
+                rec['acls'][perm] = []
+                if rec.get('owner') and rec.get('owner') not in rec['acls'][perm]:
+                    rec['acls'][perm].append(owner)
 
         self._initialize_data(rec)
         self._initialize_meta(rec)
@@ -213,13 +248,13 @@ class ProjectRecord(ABC):
         """
         add default data to the given dictionary of application-specific project data.  
         """
-        pass
+        return self._data["data"]
 
     def _initialize_meta(self, recmeta: MutableMapping):
         """
         add default data to the given dictionary of application-specific project metadata
         """
-        pass
+        return self._data["meta"]
 
     @property
     def id(self):
@@ -233,7 +268,7 @@ class ProjectRecord(ABC):
         """
         the epoch timestamp indicating when this record was first corrected
         """
-        return self._data.get('created')
+        return self._data.get('created', 0)
 
     @property
     def created_date(self) -> str:
@@ -242,4 +277,82 @@ class ProjectRecord(ABC):
         """
         return datetime.fromtimestamp(self.created).isoformat()
 
-    
+    @property
+    def data(self) -> MutableMapping:
+        """
+        the application-specific data for this record.  This dictionary contains data that is generally 
+        updateable directly by the user (e.g. via the GUI interface).  The expected properties for
+        are determined by the application.
+        """
+        return self._data['data']
+
+    @property
+    def meta(self) -> MutableMapping:
+        """
+        the application-specific metadata for this record.  This dictionary contains data that is generally
+        not directly editable by the application, but which the application must track in order to manage
+        the updating process.  The expected properties for this dictionary are determined by the application.
+        """
+        return self._data['meta']
+
+    @property
+    def acls(self) -> ACLs:
+        """
+        An object for accessing and updating the access control lists (ACLs) for this record
+        """
+        return self._acls
+
+class ACLs:
+    """
+    a class for accessing and manipulating access control lists on a record
+    """
+
+    def __init__(self, acldata: MutableMapping=None, projrec: ProjectRecord=None):
+        """
+        intialize the object from raw ACL data 
+        :param MutableMapping acldata:  the raw ACL data as returned from the record store as a dictionary
+        :param ProjectRecord  projrec:  the record object that the ACLs apply to.  This will be used as 
+                                          needed to interact with the backend record store
+        """
+        if not acldata:
+            acldata = {}
+        self._perms = acldata
+        self._rec = projrec
+
+    def iter_perm_granted(self, perm_name):
+        """
+        return an iterator to the list of identities that have been granted the given permission.  These
+        will be either user names or group names.  If the given permission name is not a recognized 
+        permission, then an iterator to an empty list is returned.
+        """
+        return iter(self._perms.get(perm_name, []))
+
+    def grant_perm_to(self, perm_name, *ids):
+        """
+        add the user or group identities to the list having the given permission.  
+        """
+        if perm_name not in self._perms:
+            self._perms[perm_name] = []
+        for id in ids:
+            if id not in self._perms[perm_name]:
+                self._perms[perm_name].append(id)
+
+    def revoke_perm_from(self, perm_name, *ids):
+        """
+        remove the given identities from the list having the given permission.  For each given identity 
+        that does not currently have the permission, nothing is done.  
+        """
+        if perm_name not in self._perms:
+            return
+        self._perms[perm_name] = list(set(self._perms[perm_name]).difference(ids))
+
+    def granted(self, perm_name, ids=[]):
+        """
+        return True if any of the given identities have the specified permission.  Normally, this will be 
+        a list including a user identity and all the group identities that is user is a member of; however, 
+        this is neither required nor checked by this implementation.
+
+        This should be considered lowlevel; consider using :py:method:`authorized` instead.  
+        """
+        return len(set(self._perms[perm_name]).intersection(ids)) > 0
+        
