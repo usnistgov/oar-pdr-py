@@ -10,9 +10,9 @@ This interface is based on the following model:
 """
 import time
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
-from collections.abc import Mapping, MutableMapping, Sequence, Set
+from collections.abc import Mapping, MutableMapping, Set
 from collections import OrderedDict
-from typing import Union, List
+from typing import Union, List, Sequence, AbstractSet, MutableSet, NewType, Iterator
 from enum import Enum
 from datetime import datetime
 
@@ -37,28 +37,475 @@ ADMIN     = 'admin'
 DELETE    = 'delete'
 OWN       = (READ, WRITE, ADMIN, DELETE,)
 
-Permissions = Union[str, Sequence[str], Set[str]]
+Permissions = Union[str, Sequence[str], AbstractSet[str]]
 
-class DBClientFactory(ABC):
+# forward declarations
+ProtectedRecord = NewType("ProtectedRecord", object)
+DBClient = NewType("DBClient", ABC)
+DBPeople = NewType("DBPeople", object)
+
+class ACLs:
     """
-    an abstract class for creating client connections to the database
+    a class for accessing and manipulating access control lists on a record
     """
 
-    def createClient(self, servicetype: str, foruser: str = ANONYMOUS):
+    def __init__(self, acldata: MutableMapping=None, forrec: ProtectedRecord=None):
         """
-        create a client connected to the database and the contents related to the given service
-
-        .. code-block::
-           :caption: Example
-
-           # connect to the DMP collection
-           client = dbio.DBClienFactory(configdata).createClient(dbio.DMP_PROJECTS)
-
-        :param str servicetype:  the service data desired.  The value should be one of ``DRAFT_SERVICE``
-                                 or ``DMP_SERVICE``
+        intialize the object from raw ACL data 
+        :param MutableMapping acldata:  the raw ACL data as returned from the record store as a dictionary
+        :param ProjectRecord  projrec:  the record object that the ACLs apply to.  This will be used as 
+                                          needed to interact with the backend record store
         """
-        pass
+        if not acldata:
+            acldata = {}
+        self._perms = acldata
+        self._rec = forrec
 
+    def iter_perm_granted(self, perm_name):
+        """
+        return an iterator to the list of identities that have been granted the given permission.  These
+        will be either user names or group names.  If the given permission name is not a recognized 
+        permission, then an iterator to an empty list is returned.
+        """
+        return iter(self._perms.get(perm_name, []))
+
+    def grant_perm_to(self, perm_name, *ids):
+        """
+        add the user or group identities to the list having the given permission.  
+        :param str perm_name:  the permission to be granted
+        :param str id:   the identities of the users the permission should be granted to 
+        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
+                               authorized to grant this permission
+        """
+        if (not self._rec.owner or self._rec._cli._who != self._rec.owner) and \
+           not self._rec.authorized(self._rec._cli._who, ADMIN):
+            raise NotAuthorized(self._rec._cli._who, "grant permission")
+
+        if perm_name not in self._perms:
+            self._perms[perm_name] = []
+        for id in ids:
+            if id not in self._perms[perm_name]:
+                self._perms[perm_name].append(id)
+
+    def revoke_perm_from(self, who, perm_name, *ids):
+        """
+        remove the given identities from the list having the given permission.  For each given identity 
+        that does not currently have the permission, nothing is done.  
+        """
+        if (not self._rec.owner or self._rec._cli._who != self._rec.owner) and \
+           not self._rec.authorized(self._rec._cli._who, ADMIN):
+            raise NotAuthorized(self._rec._cli._who, "revoke permission")
+
+        if perm_name not in self._perms:
+            return
+        self._perms[perm_name] = list(set(self._perms[perm_name]).difference(ids))
+
+
+    def _granted(self, perm_name, ids=[]):
+        """
+        return True if any of the given identities have the specified permission.  Normally, this will be 
+        a list including a user identity and all the group identities that is user is a member of; however, 
+        this is neither required nor checked by this implementation.
+
+        This should be considered lowlevel; consider using :py:method:`authorized` instead which resolves 
+        a users membership.  
+        """
+        return len(set(self._perms[perm_name]).intersection(ids)) > 0
+        
+
+class ProtectedRecord(ABC):
+    """
+    a base class for records that have ACLs attached to them
+    """
+
+    def __init__(self, servicetype: str, recdata: Mapping, dbclient: DBClient=None):
+        """
+        initialize the record with a dictionary retrieved from the underlying project collection.  
+        The dictionary must include an `id` property with a valid ID value.
+        """
+        if not servicetype:
+            raise ValueError("ProtectedRecord(): must set service type (servicetype)")
+        self._coll = servicetype
+        self._cli = dbclient
+        if not recdata.get('id'):
+            raise ValueError("Record data is missing its 'id' property")
+        self._data = self._initialize(recdata)
+        self._acls = ACLs(self._data.get("acls", {}))
+
+    def _initialize(self, recdata: MutableMapping) -> MutableMapping:
+        """
+        initialize any missing data in the raw record data constituting the content of the record.  
+        The implementation is allowed to update the input dictionary directly.  
+
+        This default implimentation ensures that the record contains a minimal `acls` property
+
+        :return: an combination of the given data and defaults
+                 :rtype: MutableMapping
+        """
+        if not recdata.get('acls'):
+            recdata['acls'] = {}
+        if not recdata.get('owner'):
+            recdata['owner'] = self._cli.user_id if self._cli else ""
+        for perm in OWN:
+            if perm not in recdata:
+                recdata['acls'][perm] = []
+        return recdata
+
+    @property
+    def id(self):
+        """
+        the unique identifier for the record
+        """
+        return self._data.get('id')
+
+    @property
+    def owner(self):
+        return self._data.get('owner', "")
+
+
+    @property
+    def acls(self) -> ACLs:
+        """
+        An object for accessing and updating the access control lists (ACLs) for this record
+        """
+        return self._acls
+
+    def save(self):
+        """
+        save any updates to this record.  This implementation checks to make sure that the user 
+        attached to the underlying client is authorized to make updates.
+
+        :raises NotAuthorized:  if the user given by who is not authorized update the record
+        """
+        if (not self.owner or self._cli._who != self.owner) and not self.authorized(WRITE):
+            raise NotAuthorized(self._cli._who, "update")
+        self._cli._upsert(self._coll, self.as_dict())
+
+    def authorized(self, perm: Permissions, who: str = None):
+        """
+        return True if the given user has the specified permission to commit an action on this record.
+        The action is typically one of the base action permissions defined in this module, but it can 
+        also be a custom permission suppported by this type of record.  This implementation will take 
+        into account all of the groups the user is a member of.
+
+        :param str|Sequence[str]|Set[str] perm:  a single permission or a list or set of permissions that 
+                         the user must have to complete the requested action.  If a list of permissions 
+                         is given, the user `who` must have all of the permissions.
+        :param str who:  the identifier for the user attempting the action; if not given, the user id
+                         attached to the DBClient is assumed.
+        """
+        if not who:
+            who = self._cli._who
+        if (self.owner and who == self.owner) or who in self._cli._cfg.get("superusers", []):
+            return True
+            
+        if isinstance(perm, str):
+            perm = [perm]
+        if isinstance(perm, list):
+            perm = set(perm)
+
+        idents = [self._cli._who] + list(self._cli.user_groups)
+        for p in perm:
+            if not self.acls._granted(p, idents):
+                return False
+        return True
+
+    def validate(self, errs=None, data=None) -> List[str]:
+        """
+        validate this record and return a list of error statements about its validity or an empty list
+        if the record is valid.
+
+        This implementation checks the `acls` property
+        """
+        if data is None:
+            data = self._data
+        if errs is None:
+            errs = []
+
+        if 'acls' not in data:
+            errs.append("Missing 'acls' property")
+        elif not isinstance(data['acls'], MutableMapping):
+            errs.append("'acls' property not a dictionary")
+
+        for perm in OWN:
+            if perm not in data['acls']:
+                errs.append("ACLs: missing permmission: "+perm)
+            elif not isinstance(data['acls'][perm], list):
+                errs.append("ACL '{}': not a list".format(perm))
+
+        return errs
+
+    def to_dict(self):
+        return dict(self._data)
+        
+class Group(ProtectedRecord):
+    """
+    an updatable representation of a group.
+    """
+
+    def __init__(self, recdata: MutableMapping, dbclient: DBClient=None):
+        """
+        initialize the group record with a dictionary retrieved from the underlying group database 
+        collection.  The dictionary must include an `id` property with a valid ID value.
+        """
+        super(Group, self).__init__(GROUPS_COLL, recdata, dbclient)
+
+    def _initialize(self, recdata: MutableMapping):
+        out = super(Group, self)._initialize(recdata)
+        if 'members' not in out:
+            recdata['members'] = []
+        
+    def validate(self, errs=None, data=None) -> List[str]:
+        """
+        validate this record and return a list of error statements about its validity or an empty list
+        if the record is valid.
+        """
+        # check the acls property
+        errs = super(Group, self).validate(data, errs)
+
+        for prop in "id name owner members".split():
+            if not data.get(prop):
+                errs.append("'{}' property not set".format(prop))
+
+        for prop in "id name owner".split():
+            if not isinstance(data['id'], str):
+                errs.append("'{}' property: not a str".format(prop))
+        if not isinstance(data['members'], list):
+            errs.append("'members' property: not a list")
+
+        return errs
+
+    def add_member(self, *memids):
+        """
+        add members to this group (if they aren't already members)
+        :param str memids:  the identities of the users to be added to the group
+        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
+                               authorized to add members
+        """
+        if not self.authorized(WRITE):
+            raise NotAuthorized(self._cli._who, "add member")
+
+        for id in memids:
+            if id not in self._data['members']:
+                self._data['members'].append(id)
+
+    def remove_member(self, *memids):
+        """
+        remove members from this group; any given ids that are not currently members are ignored.
+        :param str memids:  the identities of the users to be removed from the group
+        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
+                               authorized to remove members
+        """
+        if not self.authorized(who, WRITE):
+            raise NotAuthorized(self._cli._who, "remove member")
+
+        for id in memids:
+            if id in self._data['members']:
+                self._data['members'].remove(id)
+
+class DBGroups(object):
+    """
+    an interface for creating and using user groups.  Each group has a unique identifier assigned to it
+    and holds a list of user (and/or group) identities indicating the members of the groups.  In addition
+    to its unique identifier, a group also has a mnumonic name given to it by the group's owner; the 
+    group name need not be globally unique, but it should be unique within the owner's namespace.  
+    """
+
+    def __init__(self, dbclient: DBClient, idshoulder: str=DEF_GROUPS_SHOULDER):
+        """
+        initialize the interface with the groups collection
+        :param DBClient dbclient:  the database client to use to interact with the database backend
+        :param str    idshoulder:  the base shoulder to use for new group identifiers
+        """
+        self._cli = dbclient
+        self._shldr = idshoulder
+
+    @property
+    def native(self):
+        return self._cli._native
+
+    def create_group(self, name: str, foruser: str = None):
+        """
+        create a new group for the given user.  
+        :param str name:     the name of the group to create
+        :param str foruser:  the identifier of the user to create the group for.  This user will be set as 
+                             the group's owner/administrator.  If not given, the user attached to the 
+                             underlying :py:class:`DBClient` will be used.  
+        :raises AlreadyExists: if the user has already defined a group with this name
+        """
+        if not foruser:
+            foruser = self._cli._who
+        if not self._cli._authorized_create(self._shlder, foruser):
+            raise NotAuthorized(foruser, "create group")
+
+        if self.get_by_name(name, foruser):
+            raise AlreadyExists("User {} has already defined a group with name={}".format(foruser, name))
+        
+        out = Group({
+            "id": self._mint_id(self._shlder, name, foruser),
+            "name": name,
+            "owner": foruser,
+            "members": [ foruser ],
+            "acls": {
+                ADMIN:  foruser,
+                READ:   foruser,
+                WRITE:  foruser,
+                DELETE: foruser
+            }
+        }, self._cli)
+        out.save()
+
+    def _mint_id(self, shoulder, name, owner):
+        """
+        create and register a new identifier that can be assigned to a new group
+        :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
+                               how the identifier is formed.  
+        """
+        return "{}:{}:{}".format(shoulder, name, owner)
+
+    def get(self, gid: str) -> Group:
+        """
+        return the group by its given group identifier
+        """
+        m = self._cli._get_from_coll(GROUPS_COLL, gid)
+        if not m:
+            return None
+        m = Group(m)
+        if m.authorized(who, READ):
+            return m
+        raise NotAuthorized(id, "read")
+
+    def __getitem__(self, id) -> Group:
+        out = self.get(id)
+        if not out:
+            raise KeyError(id)
+        return out
+
+    def get_by_name(self, name: str, owner: str) -> Group:
+        """
+        return the group assigned the given name by its owner.  This assumes that the given owner 
+        has only created one group with the given name.  
+        """
+        matches = self._cli._select_from_coll(GROUPS_COLL, name=name, owner=owner)
+        for m in matches:
+            if m.authorized(self._cli._who, READ):
+                return m
+        return None
+
+    def select_ids_for_user(self, id: str) -> MutableSet:
+        """
+        return all the groups that a user (or a group) is a member of.  This implementation will 
+        resolve the groups that the user is indirectly a member of--i.e. a user's group itself is a 
+        member of another group.  
+        """
+        checked = set()
+        out = set(self._cli._select_prop_contains(GROUPS_COLL, 'member', id))
+        follow = list(out)
+        while len(follow) > 0:
+            g = follow.pop(0)
+            if g not in checked:
+                add = set(slef._cli._select_prop_contains(GROUPS_COLL, 'member', g))
+                out |= add
+                checked.add(g)
+                follow |= add.difference(checked)
+
+        return out
+
+    def delete_group(self, gid: str) -> bool:
+        """
+        delete the specified group from the database.  The user attached to the underlying 
+        :py:class:`DBClient` must either be the owner of the record or have `DELETE` permission
+        to carry out this option. 
+        :return:  True if the group was found and successfully deleted; False, otherwise
+                  :rtype: bool
+        """
+        g = self.get(gid)
+        if not g:
+            return False
+        if not g.authorized(DELETE):
+            raise NotAuthorized(gid, "delete group")
+
+        self._cli._delete_from(GROUPS_COLL, gid)
+        return True
+
+
+
+class ProjectRecord(ProtectedRecord):
+    """
+    a single record from the project collection representing one project created by the user
+    """
+
+    def __init__(self, projcoll: str, recdata: Mapping, dbclient: DBClient=None):
+        """
+        initialize the record with a dictionary retrieved from the underlying project collection.  
+        The dictionary must include an `id` property with a valid ID value.
+        """
+        super(ProjectRecord, self).__init__(projcoll, recdata, dbclient)
+
+    def _initialize(self, rec: MutableMapping) -> MutableMapping:
+        rec = super(ProjectRecord, self)._initialize(rec)
+
+        if 'data' not in rec:
+            rec['data'] = OrderedDict()
+        if 'meta' not in rec:
+            rec['meta'] = OrderedDict()
+        if 'curators' not in rec:
+            rec['curators'] = []
+        if 'created' not in rec:
+            rec['created'] = time.time()
+        if 'deactivated' not in rec:
+            # Should be None or a date
+            rec['deactivated'] = None
+
+        self._initialize_data(rec)
+        self._initialize_meta(rec)
+        return rec
+                
+    def _initialize_data(self, recdata: MutableMapping):
+        """
+        add default data to the given dictionary of application-specific project data.  
+        """
+        return recdata["data"]
+
+    def _initialize_meta(self, recdata: MutableMapping):
+        """
+        add default data to the given dictionary of application-specific project metadata
+        """
+        return recdata["meta"]
+
+    @property
+    def created(self) -> float:
+        """
+        the epoch timestamp indicating when this record was first corrected
+        """
+        return self._data.get('created', 0)
+
+    @property
+    def created_date(self) -> str:
+        """
+        the creation timestamp formatted as an ISO string
+        """
+        return datetime.fromtimestamp(self.created).isoformat()
+
+    @property
+    def data(self) -> MutableMapping:
+        """
+        the application-specific data for this record.  This dictionary contains data that is generally 
+        updateable directly by the user (e.g. via the GUI interface).  The expected properties for
+        are determined by the application.
+        """
+        return self._data['data']
+
+    @property
+    def meta(self) -> MutableMapping:
+        """
+        the application-specific metadata for this record.  This dictionary contains data that is generally
+        not directly editable by the application, but which the application must track in order to manage
+        the updating process.  The expected properties for this dictionary are determined by the application.
+        """
+        return self._data['meta']
+
+        
 class DBClient(ABC):
     """
     a client connected to the database for a particular service (e.g. drafting, DMPs, etc.)
@@ -74,12 +521,12 @@ class DBClient(ABC):
         self._dbgroups = DBGroups(self)
 
     @property
-    def user_id(self) => str:
+    def user_id(self) -> str:
         return self._who
 
     @property
-    def user_groups(self) => frozenset:
-        if self._whogrps:
+    def user_groups(self) -> frozenset:
+        if not self._whogrps:
             self.recache_user_groups()
         return self._whogrps
 
@@ -89,7 +536,7 @@ class DBClient(ABC):
         a member of.  This function will recache this list (resulting in queries to the backend 
         database).  
         """
-        self._whogrps = frozenset(self.groups.select_ids_for_user(self._who) + PUBLIC_GROUP)
+        self._whogrps = frozenset(self.groups.select_ids_for_user(self._who) | set([PUBLIC_GROUP]))
 
     def create_record(self, owner: str = None, shoulder: str=None) -> ProjectRecord:
         """
@@ -170,12 +617,12 @@ class DBClient(ABC):
         if not out:
             return None
         out = ProjectRecord(self._projcoll, out, self)
-        if (not out.owner or self._who != out.owner) and not self.authorized(perm):
+        if not self.authorized(perm):
             raise NotAuthorized(self._who, perm)
         return out
 
     @abstractmethod
-    def select_records(self, perm: Permissions=OWN) -> List[ProjectRecord]:
+    def select_records(self, perm: Permissions=OWN) -> Iterator[ProjectRecord]:
         """
         return an iterator of project records for which the given user has at least one of the given 
         permissions
@@ -192,12 +639,14 @@ class DBClient(ABC):
     def native(self):
         return self._native
 
+    @property
     def groups(self) -> DBGroups:
         """
         access to the management of groups
         """
         return self._dbgroups
 
+    @property
     def people(self) -> DBPeople:
         """
         access to the people collection
@@ -218,7 +667,7 @@ class DBClient(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def _get_from_coll(self, collname, id) => MutableMapping:
+    def _get_from_coll(self, collname, id) -> MutableMapping:
         """
         return a record with a given identifier from the specified collection
         :param str collname:   the logical name of the database collection (e.g. table, etc.) to pull 
@@ -228,7 +677,7 @@ class DBClient(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def _select_from_coll(self, collname, **constraints) => Iterator[MutableMapping]:
+    def _select_from_coll(self, collname, **constraints) -> Iterator[MutableMapping]:
         """
         return an iterator to the records from a specified collectino that match the set of 
         given constraints.
@@ -242,7 +691,7 @@ class DBClient(ABC):
         raise NotImplementedError()
     
     @abstractmethod
-    def _select_prop_contains(self, collname, prop, target) => Iterator[MutableMapping]:
+    def _select_prop_contains(self, collname, prop, target) -> Iterator[MutableMapping]:
         """
         return an iterator to the records from a specified collection in which the named list property
         contains a given target value.
@@ -267,461 +716,28 @@ class DBClient(ABC):
         raise NotImplementedError()
         
 
-class ProtectedRecord(ABC):
+class DBClientFactory(ABC):
     """
-    a base class for records that have ACLs attached to them
-    """
-
-    def __init__(self, servicetype: str, recdata: Mapping, dbclient: DBClient=None):
-        """
-        initialize the record with a dictionary retrieved from the underlying project collection.  
-        The dictionary must include an `id` property with a valid ID value.
-        """
-        if not servicetype:
-            raise ValueError("ProtectedRecord(): must set service type (servicetype)")
-        self._coll = servicetype
-        self._cli = dbclient
-        if not recdata.get('id'):
-            raise ValueError("Record data is missing its 'id' property")
-        self._data = self._initialize(recdata)
-        self._acls = ACLs(self.data.get("acls", {}))
-
-    def _initialize(self, recdata: MutableMapping) => MutableMapping:
-        """
-        initialize any missing data in the raw record data constituting the content of the record.  
-        The implementation is allowed to update the input dictionary directly.  
-
-        This default implimentation ensures that the record contains a minimal `acls` property
-
-        :return: an combination of the given data and defaults
-                 :rtype: MutableMapping
-        """
-        if not recdata.get('acls'):
-            recdata['acls'] = {}
-        for perm in OWN:
-            if perm not in recdata:
-                recdata['acls'][perm] = []
-
-    @property
-    def id(self):
-        """
-        the unique identifier for the record
-        """
-        return self._data.get('id')
-
-    @property
-    def owner(self):
-        return self._data.get('owner', "")
-
-
-    @property
-    def acls(self) -> ACLs:
-        """
-        An object for accessing and updating the access control lists (ACLs) for this record
-        """
-        return self._acls
-
-    def save(self):
-        """
-        save any updates to this record.  This implementation checks to make sure that the user 
-        attached to the underlying client is authorized to make updates.
-
-        :raises NotAuthorized:  if the user given by who is not authorized update the record
-        """
-        if (not self.owner or self._cli._who != self.owner) and not self.authorized(WRITE):
-            raise NotAuthorized(self._cli._who, "update")
-        self._cli._upsert(self._coll, self.as_dict())
-
-    def authorized(self, perm: Permissions, who: str = None):
-        """
-        return True if the given user has the specified permission to commit an action on this record.
-        The action is typically one of the base action permissions defined in this module, but it can 
-        also be a custom permission suppported by this type of record.  This implementation will take 
-        into account all of the groups the user is a member of.
-
-        :param str|Sequence[str]|Set[str] perm:  a single permission or a list or set of permissions that 
-                         the user must have to complete the requested action.  If a list of permissions 
-                         is given, the user `who` must have all of the permissions.
-        :param str who:  the identifier for the user attempting the action; if not given, the user id
-                         attached to the DBClient is assumed.
-        """
-        if not who:
-            who = self._cli._who
-        if who in self._cli._cfg.get("superusers", []):
-            return True
-            
-        if isinstance(perm, str):
-            perm = set(perm)
-        elif isinstance(perm, list):
-            perm = set(perm)
-
-        idents = [self._cli._who] + list(self._cli.user_groups)
-        for p in perm:
-            if not self.acls._granted(p, idents):
-                return False
-        return True
-
-    def validate(self, errs=None, data=None) => List[str]:
-        """
-        validate this record and return a list of error statements about its validity or an empty list
-        if the record is valid.
-
-        This implementation checks the `acls` property
-        """
-        if data is None:
-            data = self._data
-        if errs is None:
-            errs = []
-
-        if 'acls' not in data:
-            errs.append("Missing 'acls' property")
-        elif not isinstance(data['acls'], MutableMapping):
-            errs.append("'acls' property not a dictionary")
-
-        for perm in OWN:
-            if perm not in data['acls']:
-                errs.append("ACLs: missing permmission: "+perm)
-            elif not isinstance(data['acls'][perm], list):
-                errs.append("ACL '{}': not a list".format(perm))
-
-        return errs
-
-    def to_dict(self):
-        return dict(self._data)
-        
-        
-class DBGroups(ABC):
-    """
-    an interface for creating and using user groups.  Each group has a unique identifier assigned to it
-    and holds a list of user (and/or group) identities indicating the members of the groups.  In addition
-    to its unique identifier, a group also has a mnumonic name given to it by the group's owner; the 
-    group name need not be globally unique, but it should be unique within the owner's namespace.  
+    an abstract class for creating client connections to the database
     """
 
-    def __init__(self, dbclient: DBClient, idshoulder: str=DEF_GROUPS_SHOULDER):
-        """
-        initialize the interface with the groups collection
-        :param DBClient dbclient:  the database client to use to interact with the database backend
-        :param str    idshoulder:  the base shoulder to use for new group identifiers
-        """
-        self._cli = dbclient
-        self._shldr = idshoulder
+    def __init__(self, config):
+        self._cfg = config
 
-    @property
-    def native(self):
-        return self._cli._native
+    @abstractmethod
+    def create_client(self, servicetype: str, foruser: str = ANONYMOUS):
+        """
+        create a client connected to the database and the contents related to the given service
 
-    def create_group(self, name: str, foruser: str = None):
-        """
-        create a new group for the given user.  
-        :param str name:     the name of the group to create
-        :param str foruser:  the identifier of the user to create the group for.  This user will be set as 
-                             the group's owner/administrator.  If not given, the user attached to the 
-                             underlying :py:class:`DBClient` will be used.  
-        :raises AlreadyExists: if the user has already defined a group with this name
-        """
-        if not foruser:
-            foruser = self._cli._who
-        if not self._cli._authorized_create(self._shlder, foruser):
-            raise NotAuthorized(foruser, "create group")
+        .. code-block::
+           :caption: Example
 
-        if self.get_by_name(name, foruser):
-            raise AlreadyExists("User {} has already defined a group with name={}".format(foruser, name))
-        
-        out = Group({
-            "id": self._mint_id(self._shlder, name, foruser),
-            "name": name,
-            "owner": foruser,
-            "members": [ foruser ],
-            "acls": {
-                ADMIN:  foruser,
-                READ:   foruser,
-                WRITE:  foruser,
-                DELETE: foruser
-            }
-        }, self._cli)
-        out.save()
+           # connect to the DMP collection
+           client = dbio.DBClienFactory(configdata).createClient(dbio.DMP_PROJECTS, userid)
 
-    def _mint_id(self, shoulder, name, owner):
+        :param str servicetype:  the service data desired.  The value should be one of ``DRAFT_SERVICE``
+                                 or ``DMP_SERVICE``
         """
-        create and register a new identifier that can be assigned to a new group
-        :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
-                               how the identifier is formed.  
-        """
-        return "{}:{}:{}".format(shoulder, name, owner)
-
-    def get(self, gid: str) => Group:
-        """
-        return the group by its given group identifier
-        """
-        m = self._cli._get_from_coll(GROUPS_COLL, gid)
-        if not m:
-            return None
-        m = Group(m)
-        if (m.owner and self._cli._who == m.owner) or m.authorized(who, READ):
-            return m
-        raise NotAuthorized(id, "read")
-
-    def __getitem__(self, id) => Group:
-        out = self.get(id)
-        if not out:
-            raise KeyError(id)
-        return out
-
-    def get_by_name(self, name: str, owner: str) => Group:
-        """
-        return the group assigned the given name by its owner.  This assumes that the given owner 
-        has only created one group with the given name.  
-        """
-        matches = self._cli._select_from_coll(GROUPS_COLL, name=name, owner=owner)
-        for m in matches:
-            if (m.owner and who == m.owner) or m.authorized(self._cli._who, READ):
-                return m
-        return None
-
-    def select_ids_for_user(self, id):
-        """
-        return all the groups that a user (or a group) is a member of.  This implementation will 
-        resolve the groups that the user is indirectly a member of--i.e. a user's group itself is a 
-        member of another group.  
-        """
-        checked = set()
-        out = set(self._cli._select_prop_contains(GROUPS_COLL, 'member', id))
-        follow = list(out)
-        while len(follow) > 0:
-            g = follow.pop(0)
-            if g not in checked:
-                add = set(slef._cli._select_prop_contains(GROUPS_COLL, 'member', g))
-                out |= add
-                checked.add(g)
-                follow |= add.difference(checked)
-
-        return out
-
-    def delete_group(self, gid: str) => bool:
-        """
-        delete the specified group from the database.  The user attached to the underlying 
-        :py:class:`DBClient` must either be the owner of the record or have `DELETE` permission
-        to carry out this option. 
-        :return:  True if the group was found and successfully deleted; False, otherwise
-                  :rtype: bool
-        """
-        g = self.get(gid)
-        if not g:
-            return False
-        if (not g.owner or g.owner != self._cli._who) and not g.authorized(DELETE):
-            raise NotAuthorized(gid, "delete group")
-
-        self._cli._delete_from(GROUPS_COLL, gid)
-        return True
+        pass
 
 
-class Group(ProtectedRecord):
-    """
-    an updatable representation of a group.
-    """
-
-    def __init__(self, recdata: MutableMapping, dbclient: DBClient=None):
-        """
-        initialize the group record with a dictionary retrieved from the underlying group database 
-        collection.  The dictionary must include an `id` property with a valid ID value.
-        """
-        super(Group, self).__init__(GROUPS_COLL, recdata, dbclient)
-
-    def _initialize(self, recdata: MutableMapping):
-        out = super(Group, self)._initialize(recdata)
-        if 'members' not in out:
-            recdata['members'] = []
-        
-    def validate(self, errs=None, data=None) => List[str]:
-        """
-        validate this record and return a list of error statements about its validity or an empty list
-        if the record is valid.
-        """
-        # check the acls property
-        errs = super(Group, self).validate(data, errs)
-
-        for prop in "id name owner members".split():
-            if not data.get(prop):
-                errs.append("'{}' property not set".format(prop))
-
-        for prop in "id name owner".split():
-            if not isinstance(data['id'], str):
-                errs.append("'{}' property: not a str".format(prop))
-        if not isinstance(data['members'], list):
-            errs.append("'members' property: not a list")
-
-        return errs
-
-    def add_member(self, *memids):
-        """
-        add members to this group (if they aren't already members)
-        :param str memids:  the identities of the users to be added to the group
-        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
-                               authorized to add members
-        """
-        if (not self.owner or self._cli._who != self.owner) and not self.authorized(WRITE):
-            raise NotAuthorized(self._cli._who, "add member")
-
-        for id in memids:
-            if id not in self._data['members']:
-                self._data['members'].append(id)
-
-    def remove_member(self, *memids):
-        """
-        remove members from this group; any given ids that are not currently members are ignored.
-        :param str memids:  the identities of the users to be removed from the group
-        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
-                               authorized to remove members
-        """
-        if (not self.owner or self._cli._who != self.owner) and not self.authorized(who, WRITE):
-            raise NotAuthorized(self._cli._who, "remove member")
-
-        for id in memids:
-            if id in self._data['members']:
-                self._data['members'].remove(id)
-
-
-
-class ProjectRecord(ProtectedRecord):
-    """
-    a single record from the project collection representing one project created by the user
-    """
-
-    def __init__(self, projcoll: str, recdata: Mapping, dbclient: DBClient=None):
-        """
-        initialize the record with a dictionary retrieved from the underlying project collection.  
-        The dictionary must include an `id` property with a valid ID value.
-        """
-        super(ProjectRecord, self).__init__(projcoll, recdata, dbclient)
-
-    def _initialize(self, rec: MutableMapping) -> MutableMapping:
-        rec = super(ProjectRecord, self)._initialize(rec)
-
-        if 'data' not in rec:
-            rec['data'] = OrderedDict()
-        if 'meta' not in rec:
-            rec['meta'] = OrderedDict()
-        if 'curators' not in rec:
-            rec['curators'] = []
-        if 'created' not in rec:
-            rec['created'] = time.time()
-        if 'deactivated' not in rec:
-            # Should be None or a date
-            rec['deactivated'] = None
-
-        self._initialize_data(rec)
-        self._initialize_meta(rec)
-                
-    def _initialize_data(self, recdata: MutableMapping):
-        """
-        add default data to the given dictionary of application-specific project data.  
-        """
-        return self._data["data"]
-
-    def _initialize_meta(self, recmeta: MutableMapping):
-        """
-        add default data to the given dictionary of application-specific project metadata
-        """
-        return self._data["meta"]
-
-    @property
-    def created(self) -> float:
-        """
-        the epoch timestamp indicating when this record was first corrected
-        """
-        return self._data.get('created', 0)
-
-    @property
-    def created_date(self) -> str:
-        """
-        the creation timestamp formatted as an ISO string
-        """
-        return datetime.fromtimestamp(self.created).isoformat()
-
-    @property
-    def data(self) -> MutableMapping:
-        """
-        the application-specific data for this record.  This dictionary contains data that is generally 
-        updateable directly by the user (e.g. via the GUI interface).  The expected properties for
-        are determined by the application.
-        """
-        return self._data['data']
-
-    @property
-    def meta(self) -> MutableMapping:
-        """
-        the application-specific metadata for this record.  This dictionary contains data that is generally
-        not directly editable by the application, but which the application must track in order to manage
-        the updating process.  The expected properties for this dictionary are determined by the application.
-        """
-        return self._data['meta']
-
-class ACLs:
-    """
-    a class for accessing and manipulating access control lists on a record
-    """
-
-    def __init__(self, acldata: MutableMapping=None, forrec: ProtectedRecord=None):
-        """
-        intialize the object from raw ACL data 
-        :param MutableMapping acldata:  the raw ACL data as returned from the record store as a dictionary
-        :param ProjectRecord  projrec:  the record object that the ACLs apply to.  This will be used as 
-                                          needed to interact with the backend record store
-        """
-        if not acldata:
-            acldata = {}
-        self._perms = acldata
-        self._rec = forrec
-
-    def iter_perm_granted(self, perm_name):
-        """
-        return an iterator to the list of identities that have been granted the given permission.  These
-        will be either user names or group names.  If the given permission name is not a recognized 
-        permission, then an iterator to an empty list is returned.
-        """
-        return iter(self._perms.get(perm_name, []))
-
-    def grant_perm_to(self, perm_name, *ids):
-        """
-        add the user or group identities to the list having the given permission.  
-        :param str perm_name:  the permission to be granted
-        :param str id:   the identities of the users the permission should be granted to 
-        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
-                               authorized to grant this permission
-        """
-        if (not self._rec.owner or self._rec._cli._who != self._rec.owner) and \
-           not self._rec.authorized(self._rec._cli._who, ADMIN):
-            raise NotAuthorized(self._rec._cli._who, "grant permission")
-
-        if perm_name not in self._perms:
-            self._perms[perm_name] = []
-        for id in ids:
-            if id not in self._perms[perm_name]:
-                self._perms[perm_name].append(id)
-
-    def revoke_perm_from(self, who, perm_name, *ids):
-        """
-        remove the given identities from the list having the given permission.  For each given identity 
-        that does not currently have the permission, nothing is done.  
-        """
-        if (not self._rec.owner or self._rec._cli._who != self._rec.owner) and \
-           not self._rec.authorized(self._rec._cli._who, ADMIN):
-            raise NotAuthorized(self._rec._cli._who, "revoke permission")
-
-        if perm_name not in self._perms:
-            return
-        self._perms[perm_name] = list(set(self._perms[perm_name]).difference(ids))
-
-
-    def _granted(self, perm_name, ids=[]):
-        """
-        return True if any of the given identities have the specified permission.  Normally, this will be 
-        a list including a user identity and all the group identities that is user is a member of; however, 
-        this is neither required nor checked by this implementation.
-
-        This should be considered lowlevel; consider using :py:method:`authorized` instead which resolves 
-        a users membership.  
-        """
-        return len(set(self._perms[perm_name]).intersection(ids)) > 0
-        
