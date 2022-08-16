@@ -17,6 +17,7 @@ from enum import Enum
 from datetime import datetime
 
 from nistoar.base.config import ConfigurationException
+from .. import MIDASException
 
 DRAFT_PROJECTS = "draft"
 DMP_PROJECTS   = "dmp"
@@ -49,7 +50,7 @@ class ACLs:
     a class for accessing and manipulating access control lists on a record
     """
 
-    def __init__(self, acldata: MutableMapping=None, forrec: ProtectedRecord=None):
+    def __init__(self, forrec: ProtectedRecord, acldata: MutableMapping=None):
         """
         intialize the object from raw ACL data 
         :param MutableMapping acldata:  the raw ACL data as returned from the record store as a dictionary
@@ -73,12 +74,11 @@ class ACLs:
         """
         add the user or group identities to the list having the given permission.  
         :param str perm_name:  the permission to be granted
-        :param str id:   the identities of the users the permission should be granted to 
+        :param str ids:        the identities of the users the permission should be granted to 
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to grant this permission
         """
-        if (not self._rec.owner or self._rec._cli._who != self._rec.owner) and \
-           not self._rec.authorized(self._rec._cli._who, ADMIN):
+        if not self._rec.authorized(ADMIN):
             raise NotAuthorized(self._rec._cli._who, "grant permission")
 
         if perm_name not in self._perms:
@@ -87,13 +87,16 @@ class ACLs:
             if id not in self._perms[perm_name]:
                 self._perms[perm_name].append(id)
 
-    def revoke_perm_from(self, who, perm_name, *ids):
+    def revoke_perm_from(self, perm_name, *ids):
         """
         remove the given identities from the list having the given permission.  For each given identity 
         that does not currently have the permission, nothing is done.  
+        :param str perm_name:  the permission to be revoked
+        :param str ids:        the identities of the users the permission should be revoked from
+        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
+                               authorized to grant this permission
         """
-        if (not self._rec.owner or self._rec._cli._who != self._rec.owner) and \
-           not self._rec.authorized(self._rec._cli._who, ADMIN):
+        if not self._rec.authorized(ADMIN):
             raise NotAuthorized(self._rec._cli._who, "revoke permission")
 
         if perm_name not in self._perms:
@@ -130,7 +133,7 @@ class ProtectedRecord(ABC):
         if not recdata.get('id'):
             raise ValueError("Record data is missing its 'id' property")
         self._data = self._initialize(recdata)
-        self._acls = ACLs(self._data.get("acls", {}))
+        self._acls = ACLs(self, self._data.get("acls", {}))
 
     def _initialize(self, recdata: MutableMapping) -> MutableMapping:
         """
@@ -179,7 +182,7 @@ class ProtectedRecord(ABC):
         """
         if (not self.owner or self._cli._who != self.owner) and not self.authorized(WRITE):
             raise NotAuthorized(self._cli._who, "update")
-        self._cli._upsert(self._coll, self.as_dict())
+        self._cli._upsert(self._coll, self.to_dict())
 
     def authorized(self, perm: Permissions, who: str = None):
         """
@@ -559,7 +562,7 @@ class DBClient(ABC):
         if not shoulder:
             shoulder = self._default_shoulder()
         if not self._authorized_create(shoulder, owner):
-            raise NotAuthorized(owner, "create")
+            raise NotAuthorized(owner, "create record")
 
         rec = self._new_record(self._mint_id(shoulder))
         rec.save()
@@ -738,6 +741,46 @@ class DBClientFactory(ABC):
         :param str servicetype:  the service data desired.  The value should be one of ``DRAFT_SERVICE``
                                  or ``DMP_SERVICE``
         """
-        pass
+        raise NotImplementedError()
+
+
+class DBIOException(MIDASException):
+    """
+    a general base Exception class for exceptions that occur while interacting with the DBIO framework
+    """
+    pass
+
+class NotAuthorized(DBIOException):
+    """
+    an exception indicating that the user attempted an operation that they are not authorized to 
+    """
+
+    def __init__(self, who: str=None, op: str=None, message: str=None):
+        """
+        create the exception
+        :param str who:     the identifier of the user who requested the operation
+        :param str op:      a brief phrase or term identifying the unauthorized operation. (A verb
+                            or verb phrase is recommended.)
+        :param str message: the message describing why the exception was raised; if not given,
+                            a default message is constructed from `userid` and `op`.
+        """
+        self.user_id = who
+        self.operation = op
+        if not message:
+            if not op:
+                op = "effect an unspecified action"
+            message = "User "
+            if who:
+                message += who + " "
+            message += "is not authorized to {}".format(op)
+
+        super(NotAuthorized, self).__init__(message)
+
+class AlreadyExists(DBIOException):
+    """
+    an exception indicating a disallowed attempt to create a record that already exists (or includes 
+    identifying data the corresponds to an already existing record).
+    """
+    pass
 
 
