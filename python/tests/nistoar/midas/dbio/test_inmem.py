@@ -174,7 +174,7 @@ class TestInMemoryDBClient(test.TestCase):
 
     def test_select_records(self):
         # test query on existing but empty collection
-        it = self.cli.select_records(base.READ)
+        it = self.cli.select_records(base.ACLs.READ)
         self.assertTrue(hasattr(it, "__next__"), "selection not in the form of an iterator")
         recs = list(it)
         self.assertEqual(len(recs), 0)
@@ -187,7 +187,7 @@ class TestInMemoryDBClient(test.TestCase):
         self.cli._db[base.DMP_PROJECTS]["goob"] = rec.to_dict()
         self.cli._db[base.DMP_PROJECTS]["goob"]["owner"] = "alice"
 
-        recs = list(self.cli.select_records(base.READ))
+        recs = list(self.cli.select_records(base.ACLs.READ))
         self.assertEqual(len(recs), 1)
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
         self.assertEqual(recs[0].id, id)

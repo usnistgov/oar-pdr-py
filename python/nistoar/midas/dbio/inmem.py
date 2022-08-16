@@ -58,7 +58,7 @@ class InMemoryDBClient(base.DBClient):
         self._db[coll][recdata['id']] = recdata
         return not exists
 
-    def select_records(self, perm: base.Permissions=base.OWN) -> Iterator[base.ProjectRecord]:
+    def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
             perm = [perm]
         if isinstance(perm, (list, tuple)):

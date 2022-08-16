@@ -30,14 +30,6 @@ DEF_GROUPS_SHOULDER = "grp0"
 PUBLIC_GROUP = DEF_GROUPS_SHOULDER + ":public"    # all users are implicitly part of this group
 ANONYMOUS = PUBLIC_GROUP
 
-# Permissions
-READ      = 'read'
-WRITE     = 'write'
-READWRITE = WRITE
-ADMIN     = 'admin'
-DELETE    = 'delete'
-OWN       = (READ, WRITE, ADMIN, DELETE,)
-
 Permissions = Union[str, Sequence[str], AbstractSet[str]]
 
 # forward declarations
@@ -49,6 +41,14 @@ class ACLs:
     """
     a class for accessing and manipulating access control lists on a record
     """
+    
+    # Permissions
+    READ      = 'read'
+    WRITE     = 'write'
+    READWRITE = WRITE
+    ADMIN     = 'admin'
+    DELETE    = 'delete'
+    OWN       = (READ, WRITE, ADMIN, DELETE,)
 
     def __init__(self, forrec: ProtectedRecord, acldata: MutableMapping=None):
         """
@@ -78,7 +78,7 @@ class ACLs:
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to grant this permission
         """
-        if not self._rec.authorized(ADMIN):
+        if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli._who, "grant permission")
 
         if perm_name not in self._perms:
@@ -96,7 +96,7 @@ class ACLs:
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to grant this permission
         """
-        if not self._rec.authorized(ADMIN):
+        if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli._who, "revoke permission")
 
         if perm_name not in self._perms:
@@ -151,7 +151,7 @@ class ProtectedRecord(ABC):
             recdata['acls'] = {}
         if not recdata.get('owner'):
             recdata['owner'] = self._cli.user_id if self._cli else ""
-        for perm in OWN:
+        for perm in ACLs.OWN:
             if perm not in recdata:
                 recdata['acls'][perm] = [recdata['owner']] if recdata['owner'] else []
         return recdata
@@ -182,8 +182,8 @@ class ProtectedRecord(ABC):
 
         :raises NotAuthorized:  if the user given by who is not authorized update the record
         """
-        if (not self.owner or self._cli._who != self.owner) and not self.authorized(WRITE):
-            raise NotAuthorized(self._cli._who, "update")
+        if not self.authorized(ACLs.WRITE):
+            raise NotAuthorized(self._cli._who, "update record")
         self._cli._upsert(self._coll, self.to_dict())
 
     def authorized(self, perm: Permissions, who: str = None):
@@ -237,7 +237,7 @@ class ProtectedRecord(ABC):
         elif not isinstance(data['acls'], MutableMapping):
             errs.append("'acls' property not a dictionary")
 
-        for perm in OWN:
+        for perm in ACLs.OWN:
             if perm not in data['acls']:
                 errs.append("ACLs: missing permmission: "+perm)
             elif not isinstance(data['acls'][perm], list):
@@ -292,7 +292,7 @@ class Group(ProtectedRecord):
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to add members
         """
-        if not self.authorized(WRITE):
+        if not self.authorized(ACLs.WRITE):
             raise NotAuthorized(self._cli._who, "add member")
 
         for id in memids:
@@ -306,7 +306,7 @@ class Group(ProtectedRecord):
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to remove members
         """
-        if not self.authorized(who, WRITE):
+        if not self.authorized(who, ACLs.WRITE):
             raise NotAuthorized(self._cli._who, "remove member")
 
         for id in memids:
@@ -357,10 +357,10 @@ class DBGroups(object):
             "owner": foruser,
             "members": [ foruser ],
             "acls": {
-                ADMIN:  [foruser],
-                READ:   [foruser],
-                WRITE:  [foruser],
-                DELETE: [foruser]
+                ACLs.ADMIN:  [foruser],
+                ACLs.READ:   [foruser],
+                ACLs.WRITE:  [foruser],
+                ACLs.DELETE: [foruser]
             }
         }, self._cli)
         out.save()
@@ -381,7 +381,7 @@ class DBGroups(object):
         if not m:
             return None
         m = Group(m)
-        if m.authorized(who, READ):
+        if m.authorized(who, ACLs.READ):
             return m
         raise NotAuthorized(id, "read")
 
@@ -398,7 +398,7 @@ class DBGroups(object):
         """
         matches = self._cli._select_from_coll(GROUPS_COLL, name=name, owner=owner)
         for m in matches:
-            if m.authorized(self._cli._who, READ):
+            if m.authorized(self._cli._who, ACLs.READ):
                 return m
         return None
 
@@ -432,7 +432,7 @@ class DBGroups(object):
         g = self.get(gid)
         if not g:
             return False
-        if not g.authorized(DELETE):
+        if not g.authorized(ACLs.DELETE):
             raise NotAuthorized(gid, "delete group")
 
         self._cli._delete_from(GROUPS_COLL, gid)
@@ -614,7 +614,7 @@ class DBClient(ABC):
         """
         raise NotImplementedError()
 
-    def record_for(self, id: str, perm: str=READ) -> ProjectRecord:
+    def record_for(self, id: str, perm: str=ACLs.READ) -> ProjectRecord:
         """
         return a single project record by its identifier.  The record is only 
         returned if the user this client is attached to is authorized to access the record with 
@@ -632,7 +632,7 @@ class DBClient(ABC):
         return out
 
     @abstractmethod
-    def select_records(self, perm: Permissions=OWN) -> Iterator[ProjectRecord]:
+    def select_records(self, perm: Permissions=ACLs.OWN) -> Iterator[ProjectRecord]:
         """
         return an iterator of project records for which the given user has at least one of the given 
         permissions
