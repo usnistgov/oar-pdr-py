@@ -2,7 +2,7 @@ import os, json, pdb, logging
 from pathlib import Path
 import unittest as test
 
-from nistoar.dbio import inmem, base
+from nistoar.midas.dbio import inmem, base
 
 class TestInMemoryDBClientFactory(test.TestCase):
 
