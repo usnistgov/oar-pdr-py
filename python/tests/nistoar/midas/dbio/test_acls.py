@@ -20,32 +20,32 @@ class TestACLs(test.TestCase):
         self.assertIn(base.WRITE, self.acls._perms)
         self.assertIn(base.ADMIN, self.acls._perms)
         self.assertIn(base.DELETE, self.acls._perms)
-        self.assertEqual(self.acls._perms[base.READ], [])
-        self.assertEqual(self.acls._perms[base.WRITE], [])
-        self.assertEqual(self.acls._perms[base.ADMIN], [])
-        self.assertEqual(self.acls._perms[base.DELETE], [])
+        self.assertEqual(self.acls._perms[base.READ], [self.user])
+        self.assertEqual(self.acls._perms[base.WRITE], [self.user])
+        self.assertEqual(self.acls._perms[base.ADMIN], [self.user])
+        self.assertEqual(self.acls._perms[base.DELETE], [self.user])
 
     def test_grant_revoke_perm(self):
         self.acls.grant_perm_to(base.READ, "alice")
         self.acls.grant_perm_to(base.READ, "bob")
         self.acls.grant_perm_to(base.WRITE, "alice")
 
-        self.assertEqual(list(self.acls.iter_perm_granted(base.READ)), "alice bob".split())
-        self.assertEqual(list(self.acls.iter_perm_granted(base.WRITE)), ["alice"])
-        self.assertEqual(list(self.acls.iter_perm_granted(base.DELETE)), [])
+        self.assertEqual(list(self.acls.iter_perm_granted(base.READ)), [self.user, "alice", "bob"])
+        self.assertEqual(list(self.acls.iter_perm_granted(base.WRITE)), [self.user, "alice"])
+        self.assertEqual(list(self.acls.iter_perm_granted(base.DELETE)), [self.user])
 
         self.acls.revoke_perm_from(base.READ, "alice")
         
-        self.assertEqual(list(self.acls.iter_perm_granted(base.READ)), ["bob"])
-        self.assertEqual(list(self.acls.iter_perm_granted(base.WRITE)), ["alice"])
-        self.assertEqual(list(self.acls.iter_perm_granted(base.DELETE)), [])
+        self.assertEqual(list(self.acls.iter_perm_granted(base.READ)), [self.user, "bob"])
+        self.assertEqual(list(self.acls.iter_perm_granted(base.WRITE)), [self.user, "alice"])
+        self.assertEqual(list(self.acls.iter_perm_granted(base.DELETE)), [self.user])
 
 
     def test_iter_perm_granted(self):
         self.acls._perms[base.READ] = "alice bob".split()
         it = self.acls.iter_perm_granted(base.DELETE)
         self.assertTrue(hasattr(it, "__next__"), "selection not in the form of an iterator")
-        self.assertEqual(len(list(it)), 0)
+        self.assertEqual(len(list(it)), 1)
         it = self.acls.iter_perm_granted(base.READ)
         self.assertTrue(hasattr(it, "__next__"), "selection not in the form of an iterator")
         self.assertEqual(len(list(it)), 2)

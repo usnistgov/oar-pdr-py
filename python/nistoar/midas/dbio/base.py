@@ -101,7 +101,9 @@ class ACLs:
 
         if perm_name not in self._perms:
             return
-        self._perms[perm_name] = list(set(self._perms[perm_name]).difference(ids))
+        for id in ids:
+            if id in self._perms[perm_name]:
+                self._perms[perm_name].remove(id)
 
 
     def _granted(self, perm_name, ids=[]):
@@ -151,7 +153,7 @@ class ProtectedRecord(ABC):
             recdata['owner'] = self._cli.user_id if self._cli else ""
         for perm in OWN:
             if perm not in recdata:
-                recdata['acls'][perm] = []
+                recdata['acls'][perm] = [recdata['owner']] if recdata['owner'] else []
         return recdata
 
     @property
@@ -190,6 +192,11 @@ class ProtectedRecord(ABC):
         The action is typically one of the base action permissions defined in this module, but it can 
         also be a custom permission suppported by this type of record.  This implementation will take 
         into account all of the groups the user is a member of.
+
+        Note that in this implementation, the owner of the record is automatically granted all permissions
+        regardless whether the user is explicitly added to the specified access control list.  Further,
+        the underlying configuration can contain a `superusers` property; if set, this implementation will 
+        authorize the user if the user's id matches any of those given in this property list.  
 
         :param str|Sequence[str]|Set[str] perm:  a single permission or a list or set of permissions that 
                          the user must have to complete the requested action.  If a list of permissions 
@@ -350,10 +357,10 @@ class DBGroups(object):
             "owner": foruser,
             "members": [ foruser ],
             "acls": {
-                ADMIN:  foruser,
-                READ:   foruser,
-                WRITE:  foruser,
-                DELETE: foruser
+                ADMIN:  [foruser],
+                READ:   [foruser],
+                WRITE:  [foruser],
+                DELETE: [foruser]
             }
         }, self._cli)
         out.save()
