@@ -50,6 +50,13 @@ class TestACLs(test.TestCase):
         it = self.acls.iter_perm_granted(ACLs.READ)
         self.assertTrue(hasattr(it, "__next__"), "selection not in the form of an iterator")
         self.assertEqual(len(list(it)), 2)
+
+    def test_unauthorized(self):
+        self.cli._who = "gary"
+        with self.assertRaises(base.NotAuthorized):
+            self.acls.grant_perm_to(ACLs.WRITE, "alice")
+
+
         
         
                          

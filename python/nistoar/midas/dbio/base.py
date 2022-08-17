@@ -10,6 +10,7 @@ This interface is based on the following model:
 """
 import time
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
+from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
 from collections import OrderedDict
 from typing import Union, List, Sequence, AbstractSet, MutableSet, NewType, Iterator
@@ -184,7 +185,7 @@ class ProtectedRecord(ABC):
         """
         if not self.authorized(ACLs.WRITE):
             raise NotAuthorized(self._cli._who, "update record")
-        self._cli._upsert(self._coll, self.to_dict())
+        self._cli._upsert(self._coll, self._data)
 
     def authorized(self, perm: Permissions, who: str = None):
         """
@@ -214,7 +215,7 @@ class ProtectedRecord(ABC):
         if isinstance(perm, list):
             perm = set(perm)
 
-        idents = [self._cli._who] + list(self._cli.user_groups)
+        idents = [who] + list(self._cli.user_groups)
         for p in perm:
             if not self.acls._granted(p, idents):
                 return False
@@ -246,7 +247,7 @@ class ProtectedRecord(ABC):
         return errs
 
     def to_dict(self):
-        return dict(self._data)
+        return deepcopy(self._data)
         
 class Group(ProtectedRecord):
     """
@@ -263,27 +264,51 @@ class Group(ProtectedRecord):
     def _initialize(self, recdata: MutableMapping):
         out = super(Group, self)._initialize(recdata)
         if 'members' not in out:
-            recdata['members'] = []
+            out['members'] = []
+        return out
+
+    @property
+    def name(self):
+        """
+        the mnumonic name given to this group by its owner
+        """
+        return self._data['name']
         
     def validate(self, errs=None, data=None) -> List[str]:
         """
         validate this record and return a list of error statements about its validity or an empty list
         if the record is valid.
         """
-        # check the acls property
-        errs = super(Group, self).validate(data, errs)
+        if not data:
+            data = self._data
 
-        for prop in "id name owner members".split():
-            if not data.get(prop):
-                errs.append("'{}' property not set".format(prop))
+        # check the acls property
+        errs = super(Group, self).validate(errs, data)
 
         for prop in "id name owner".split():
+            if not data.get(prop):
+                errs.append("'{}' property not set".format(prop))
             if not isinstance(data['id'], str):
                 errs.append("'{}' property: not a str".format(prop))
+
+        if not 'members' in data:
+            errs.append("'members' property not found")
         if not isinstance(data['members'], list):
             errs.append("'members' property: not a list")
 
         return errs
+
+    def iter_members(self):
+        """
+        iterate through the user IDs that constitute the members of this group
+        """
+        return iter(self._data['members'])
+
+    def is_member(self, userid):
+        """
+        return True if the user for the given identifier is a member of this group
+        """
+        return userid in self._data['members']
 
     def add_member(self, *memids):
         """
@@ -306,7 +331,7 @@ class Group(ProtectedRecord):
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to remove members
         """
-        if not self.authorized(who, ACLs.WRITE):
+        if not self.authorized(ACLs.WRITE):
             raise NotAuthorized(self._cli._who, "remove member")
 
         for id in memids:
@@ -340,19 +365,22 @@ class DBGroups(object):
         :param str name:     the name of the group to create
         :param str foruser:  the identifier of the user to create the group for.  This user will be set as 
                              the group's owner/administrator.  If not given, the user attached to the 
-                             underlying :py:class:`DBClient` will be used.  
-        :raises AlreadyExists: if the user has already defined a group with this name
+                             underlying :py:class:`DBClient` will be used.  Only a superuser (an identity
+                             listed in the `superuser` config parameter) can create a group for another 
+                             user.
+        :raises AlreadyExists:  if the user has already defined a group with this name
+        :raises NotAuthorized:  if the user is not authorized to create this group
         """
         if not foruser:
             foruser = self._cli._who
-        if not self._cli._authorized_create(self._shlder, foruser):
-            raise NotAuthorized(foruser, "create group")
+        if not self._cli._authorized_group_create(self._shldr, foruser):
+            raise NotAuthorized(self._cli._who, "create group")
 
-        if self.get_by_name(name, foruser):
+        if self.name_exists(name, foruser):
             raise AlreadyExists("User {} has already defined a group with name={}".format(foruser, name))
         
         out = Group({
-            "id": self._mint_id(self._shlder, name, foruser),
+            "id": self._mint_id(self._shldr, name, foruser),
             "name": name,
             "owner": foruser,
             "members": [ foruser ],
@@ -364,6 +392,7 @@ class DBGroups(object):
             }
         }, self._cli)
         out.save()
+        return out
 
     def _mint_id(self, shoulder, name, owner):
         """
@@ -371,7 +400,28 @@ class DBGroups(object):
         :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
                                how the identifier is formed.  
         """
-        return "{}:{}:{}".format(shoulder, name, owner)
+        return "{}:{}:{}".format(shoulder, owner, name)
+
+    def exists(self, gid: str) -> bool:
+        """
+        return True if a group with the given ID exists.  READ permission on the identified 
+        record is not required to use this method. 
+        """
+        return bool(self._cli._get_from_coll(GROUPS_COLL, gid))
+
+    def name_exists(self, name: str, owner: str = None) -> bool:
+        """
+        return True if a group with the given name exists.  READ permission on the identified 
+        record is not required to use this method.
+        :param str name:  the mnumonic name of the group given to it by its owner
+        :param str owner: the ID of the user owning the group of interest; if not given, the 
+                          user ID attached to the `DBClient` is assumed.
+        """
+        it = self._cli._select_from_coll(GROUPS_COLL, name=name, owner=owner)
+        try:
+            return bool(next(it))
+        except StopIteration:
+            return False
 
     def get(self, gid: str) -> Group:
         """
@@ -380,8 +430,8 @@ class DBGroups(object):
         m = self._cli._get_from_coll(GROUPS_COLL, gid)
         if not m:
             return None
-        m = Group(m)
-        if m.authorized(who, ACLs.READ):
+        m = Group(m, self._cli)
+        if m.authorized(ACLs.READ):
             return m
         raise NotAuthorized(id, "read")
 
@@ -391,14 +441,17 @@ class DBGroups(object):
             raise KeyError(id)
         return out
 
-    def get_by_name(self, name: str, owner: str) -> Group:
+    def get_by_name(self, name: str, owner: str = None) -> Group:
         """
         return the group assigned the given name by its owner.  This assumes that the given owner 
-        has only created one group with the given name.  
+        has created only one group with the given name.  
         """
+        if not owner:
+            owner = self._cli._who
         matches = self._cli._select_from_coll(GROUPS_COLL, name=name, owner=owner)
         for m in matches:
-            if m.authorized(self._cli._who, ACLs.READ):
+            m = Group(m, self._cli)
+            if m.authorized(ACLs.READ):
                 return m
         return None
 
@@ -409,15 +462,17 @@ class DBGroups(object):
         member of another group.  
         """
         checked = set()
-        out = set(self._cli._select_prop_contains(GROUPS_COLL, 'member', id))
+        out = set(g['id'] for g in self._cli._select_prop_contains(GROUPS_COLL, 'members', id))
         follow = list(out)
         while len(follow) > 0:
             g = follow.pop(0)
             if g not in checked:
-                add = set(slef._cli._select_prop_contains(GROUPS_COLL, 'member', g))
+                add = set(g['id'] for g in self._cli._select_prop_contains(GROUPS_COLL, 'members', g))
                 out |= add
                 checked.add(g)
-                follow |= add.difference(checked)
+                follow.extend(add.difference(checked))
+
+        out.add(PUBLIC_GROUP)
 
         return out
 
@@ -546,7 +601,7 @@ class DBClient(ABC):
         a member of.  This function will recache this list (resulting in queries to the backend 
         database).  
         """
-        self._whogrps = frozenset(self.groups.select_ids_for_user(self._who) | set([PUBLIC_GROUP]))
+        self._whogrps = frozenset(self.groups.select_ids_for_user(self._who))
 
     def create_record(self, owner: str = None, shoulder: str=None) -> ProjectRecord:
         """
@@ -568,7 +623,7 @@ class DBClient(ABC):
             owner = self._who
         if not shoulder:
             shoulder = self._default_shoulder()
-        if not self._authorized_create(shoulder, owner):
+        if not self._authorized_project_create(shoulder, owner):
             raise NotAuthorized(owner, "create record")
 
         rec = self._new_record(self._mint_id(shoulder))
@@ -581,12 +636,24 @@ class DBClient(ABC):
             raise ConfigurationException("Missing required configuration parameter: default_shoulder")
         return out
 
-    def _authorized_create(self, shoulder, who):
-        shldrs = set(self._cfg.get("allowed_shoulders", []))
-        defshldr = self._cfg.get("default_shoulder")
+    def _authorized_project_create(self, shoulder, who):
+        shldrs = set(self._cfg.get("allowed_project_shoulders", []))
+        defshldr = self._cfg.get("default_project_shoulder")
         if defshldr:
             shldrs.add(defshldr)
-        return shoulder in shldrs
+        return self._authorized_create(shoulder, shldrs, who)
+
+    def _authorized_group_create(self, shoulder, who):
+        shldrs = set(self._cfg.get("allowed_group_shoulders", []))
+        defshldr = DEF_GROUPS_SHOULDER
+        if defshldr:
+            shldrs.add(defshldr)
+        return self._authorized_create(shoulder, shldrs, who)
+
+    def _authorized_create(self, shoulder, shoulders, who):
+        if self._who and who != self._who and self._who not in self._cfg.get("superusers", []):
+            return False
+        return shoulder in shoulders
 
     def _mint_id(self, shoulder):
         """

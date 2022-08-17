@@ -55,7 +55,7 @@ class InMemoryDBClient(base.DBClient):
         if coll not in self._db:
             self._db[coll] = {}
         exists = bool(self._db[coll].get(recdata['id']))
-        self._db[coll][recdata['id']] = recdata
+        self._db[coll][recdata['id']] = deepcopy(recdata)
         return not exists
 
     def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
