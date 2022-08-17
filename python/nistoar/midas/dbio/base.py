@@ -8,7 +8,7 @@ This interface is based on the following model:
   *  A record can be expressed as a Python dictionary which can be exported into JSON
 
 """
-import time
+import time, math
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
 from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
@@ -117,6 +117,9 @@ class ACLs:
         a users membership.  
         """
         return len(set(self._perms[perm_name]).intersection(ids)) > 0
+
+    def __str__(self):
+        return "<ACLs: {}>".format(str(self._perms))
         
 
 class ProtectedRecord(ABC):
@@ -153,7 +156,7 @@ class ProtectedRecord(ABC):
         if not recdata.get('owner'):
             recdata['owner'] = self._cli.user_id if self._cli else ""
         for perm in ACLs.OWN:
-            if perm not in recdata:
+            if perm not in recdata['acls']:
                 recdata['acls'][perm] = [recdata['owner']] if recdata['owner'] else []
         return recdata
 
@@ -248,7 +251,7 @@ class ProtectedRecord(ABC):
 
     def to_dict(self):
         return deepcopy(self._data)
-        
+
 class Group(ProtectedRecord):
     """
     an updatable representation of a group.
@@ -337,6 +340,11 @@ class Group(ProtectedRecord):
         for id in memids:
             if id in self._data['members']:
                 self._data['members'].remove(id)
+
+    def __str__(self):
+        return "<{} Group: {} ({}) owner={}>".format(self._coll.rstrip("s"), self.id,
+                                                     self.name, self.owner)
+
 
 class DBGroups(object):
     """
@@ -494,7 +502,6 @@ class DBGroups(object):
         return True
 
 
-
 class ProjectRecord(ProtectedRecord):
     """
     a single record from the project collection representing one project created by the user
@@ -539,6 +546,13 @@ class ProjectRecord(ProtectedRecord):
         return recdata["meta"]
 
     @property
+    def name(self) -> str:
+        """
+        the mnumonic name given to this record by its creator
+        """
+        return self._data.get('name', "")
+
+    @property
     def created(self) -> float:
         """
         the epoch timestamp indicating when this record was first corrected
@@ -550,7 +564,7 @@ class ProjectRecord(ProtectedRecord):
         """
         the creation timestamp formatted as an ISO string
         """
-        return datetime.fromtimestamp(self.created).isoformat()
+        return datetime.fromtimestamp(math.floor(self.created)).isoformat()
 
     @property
     def data(self) -> MutableMapping:
@@ -570,6 +584,10 @@ class ProjectRecord(ProtectedRecord):
         """
         return self._data['meta']
 
+    def __str__(self):
+        return "<{} ProjectRecord: {} ({}) owner={}>".format(self._coll.rstrip("s"), self.id,
+                                                             self.name, self.owner)
+        
         
 class DBClient(ABC):
     """
@@ -681,20 +699,57 @@ class DBClient(ABC):
         """
         raise NotImplementedError()
 
-    def record_for(self, id: str, perm: str=ACLs.READ) -> ProjectRecord:
+    def exists(self, gid: str) -> bool:
+        """
+        return True if a group with the given ID exists.  READ permission on the identified 
+        record is not required to use this method. 
+        """
+        return bool(self._cli._get_from_coll(self._projcoll, gid))
+
+    def name_exists(self, name: str, owner: str = None) -> bool:
+        """
+        return True if a group with the given name exists.  READ permission on the identified 
+        record is not required to use this method.
+        :param str name:  the mnumonic name of the group given to it by its owner
+        :param str owner: the ID of the user owning the group of interest; if not given, the 
+                          user ID attached to the `DBClient` is assumed.
+        """
+        it = self._cli._select_from_coll(self._projcoll, name=name, owner=owner)
+        try:
+            return bool(next(it))
+        except StopIteration:
+            return False
+
+    def get_record_by_name(self, name: str, owner: str = None) -> Group:
+        """
+        return the group assigned the given name by its owner.  This assumes that the given owner 
+        has created only one group with the given name.  
+        """
+        if not owner:
+            owner = self._cli._who
+        matches = self._cli._select_from_coll(self._projcoll, name=name, owner=owner)
+        for m in matches:
+            m = ProjectRecord(self._projcoll, m, self._cli)
+            if m.authorized(ACLs.READ):
+                return m
+        return None
+
+    def get_record_for(self, id: str, perm: str=ACLs.READ) -> ProjectRecord:
         """
         return a single project record by its identifier.  The record is only 
         returned if the user this client is attached to is authorized to access the record with 
         the given permission.
         
         :param str   id:  the identifier for the record of interest
-        :param str perm:  the permission type that the user must be authorized for in order 
+        :param str perm:  the permission type that the user must be authorized for in order for 
+                          the record to be returned; if user is not authorized, an exception is raised.
+                          Default: `ACLs.READ`
         """
         out = self._get_from_coll(self._projcoll, id)
         if not out:
             return None
         out = ProjectRecord(self._projcoll, out, self)
-        if not self.authorized(perm):
+        if not out.authorized(perm):
             raise NotAuthorized(self._who, perm)
         return out
 
