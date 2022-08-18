@@ -52,6 +52,7 @@
     ],
     "references": [
         {
+            "@id": "pdr:ref/doi:10.1364/OE.24.014100",
             "@type": "deo:BibliographicReference",
             "refType": "IsReferencedBy",
             "location": "https://doi.org/10.1364/OE.24.014100",
