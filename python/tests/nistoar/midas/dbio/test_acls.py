@@ -12,7 +12,7 @@ class TestACLs(test.TestCase):
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
         self.cli = self.fact.create_client(base.DMP_PROJECTS, self.user)
-        self.rec = self.cli.create_record(self.user)
+        self.rec = self.cli.create_record("test")
         self.acls = self.rec.acls
 
     def test_ctor(self):

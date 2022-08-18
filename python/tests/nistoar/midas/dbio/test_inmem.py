@@ -166,12 +166,6 @@ class TestInMemoryDBClient(test.TestCase):
         rec2 = self.cli._get_from_coll(base.GROUPS_COLL, "p:bob")
         self.assertEqual(rec2, {"id": "p:bob", "members": ["p:bob", "alice"]})
 
-    def test_new_record(self):
-        rec = self.cli._new_record("nist0:ava1")
-        self.assertTrue(isinstance(rec, base.ProjectRecord))
-        self.assertEqual(rec.id, "nist0:ava1")
-        self.assertEqual(rec._coll, base.DMP_PROJECTS)
-
     def test_select_records(self):
         # test query on existing but empty collection
         it = self.cli.select_records(base.ACLs.READ)
@@ -183,9 +177,8 @@ class TestInMemoryDBClient(test.TestCase):
         id = "pdr0:0002"
         rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
-        rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": "goob"}, self.cli)
+        rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": "goob", "owner": "alice"}, self.cli)
         self.cli._db[base.DMP_PROJECTS]["goob"] = rec.to_dict()
-        self.cli._db[base.DMP_PROJECTS]["goob"]["owner"] = "alice"
 
         recs = list(self.cli.select_records(base.ACLs.READ))
         self.assertEqual(len(recs), 1)

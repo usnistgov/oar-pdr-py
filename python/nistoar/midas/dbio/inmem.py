@@ -23,9 +23,6 @@ class InMemoryDBClient(base.DBClient):
         self._db['nextnum'][shoulder] += 1
         return self._db['nextnum'][shoulder]
 
-    def _new_record(self, id):
-        return base.ProjectRecord(self._projcoll, {"id": id}, self)
-
     def _get_from_coll(self, collname, id) -> MutableMapping:
         return deepcopy(self._db.get(collname, {}).get(id))
 

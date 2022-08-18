@@ -4,7 +4,7 @@ import unittest as test
 
 from nistoar.midas.dbio import inmem, base
 
-class TestGroup(test.TestCase):
+class TestProjectRecord(test.TestCase):
 
     def setUp(self):
         self.cfg = { "default_shoulder": "pdr0" }

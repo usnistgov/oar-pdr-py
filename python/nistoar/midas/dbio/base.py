@@ -80,7 +80,7 @@ class ACLs:
                                authorized to grant this permission
         """
         if not self._rec.authorized(self.ADMIN):
-            raise NotAuthorized(self._rec._cli._who, "grant permission")
+            raise NotAuthorized(self._rec._cli.user_id, "grant permission")
 
         if perm_name not in self._perms:
             self._perms[perm_name] = []
@@ -98,7 +98,7 @@ class ACLs:
                                authorized to grant this permission
         """
         if not self._rec.authorized(self.ADMIN):
-            raise NotAuthorized(self._rec._cli._who, "revoke permission")
+            raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
 
         if perm_name not in self._perms:
             return
@@ -187,7 +187,7 @@ class ProtectedRecord(ABC):
         :raises NotAuthorized:  if the user given by who is not authorized update the record
         """
         if not self.authorized(ACLs.WRITE):
-            raise NotAuthorized(self._cli._who, "update record")
+            raise NotAuthorized(self._cli.user_id, "update record")
         self._cli._upsert(self._coll, self._data)
 
     def authorized(self, perm: Permissions, who: str = None):
@@ -209,7 +209,7 @@ class ProtectedRecord(ABC):
                          attached to the DBClient is assumed.
         """
         if not who:
-            who = self._cli._who
+            who = self._cli.user_id
         if (self.owner and who == self.owner) or who in self._cli._cfg.get("superusers", []):
             return True
             
@@ -321,11 +321,13 @@ class Group(ProtectedRecord):
                                authorized to add members
         """
         if not self.authorized(ACLs.WRITE):
-            raise NotAuthorized(self._cli._who, "add member")
+            raise NotAuthorized(self._cli.user_id, "add member")
 
         for id in memids:
             if id not in self._data['members']:
                 self._data['members'].append(id)
+
+        return self
 
     def remove_member(self, *memids):
         """
@@ -335,11 +337,13 @@ class Group(ProtectedRecord):
                                authorized to remove members
         """
         if not self.authorized(ACLs.WRITE):
-            raise NotAuthorized(self._cli._who, "remove member")
+            raise NotAuthorized(self._cli.user_id, "remove member")
 
         for id in memids:
             if id in self._data['members']:
                 self._data['members'].remove(id)
+
+        return self
 
     def __str__(self):
         return "<{} Group: {} ({}) owner={}>".format(self._coll.rstrip("s"), self.id,
@@ -380,9 +384,11 @@ class DBGroups(object):
         :raises NotAuthorized:  if the user is not authorized to create this group
         """
         if not foruser:
-            foruser = self._cli._who
+            if self._cli.user_id == ANONYMOUS:
+                raise ValueException("create_group(): foruser must be specified when client is anonymous")
+            foruser = self._cli.user_id
         if not self._cli._authorized_group_create(self._shldr, foruser):
-            raise NotAuthorized(self._cli._who, "create group")
+            raise NotAuthorized(self._cli.user_id, "create group")
 
         if self.name_exists(name, foruser):
             raise AlreadyExists("User {} has already defined a group with name={}".format(foruser, name))
@@ -400,6 +406,7 @@ class DBGroups(object):
             }
         }, self._cli)
         out.save()
+        self._cli.recache_user_groups()
         return out
 
     def _mint_id(self, shoulder, name, owner):
@@ -425,6 +432,8 @@ class DBGroups(object):
         :param str owner: the ID of the user owning the group of interest; if not given, the 
                           user ID attached to the `DBClient` is assumed.
         """
+        if not owner:
+            owner = self.user_id
         it = self._cli._select_from_coll(GROUPS_COLL, name=name, owner=owner)
         try:
             return bool(next(it))
@@ -455,7 +464,7 @@ class DBGroups(object):
         has created only one group with the given name.  
         """
         if not owner:
-            owner = self._cli._who
+            owner = self._cli.user_id
         matches = self._cli._select_from_coll(GROUPS_COLL, name=name, owner=owner)
         for m in matches:
             m = Group(m, self._cli)
@@ -621,30 +630,38 @@ class DBClient(ABC):
         """
         self._whogrps = frozenset(self.groups.select_ids_for_user(self._who))
 
-    def create_record(self, owner: str = None, shoulder: str=None) -> ProjectRecord:
+    def create_record(self, name: str, shoulder: str=None, foruser: str = None) -> ProjectRecord:
         """
         create (and save) and return a new project record.  A new unique identifier should be assigned
         to the record.
 
-        :param str    owner:  the ID of the user that should be registered as the owner.  If not 
-                              specified, the value of :py:property:`user_id` will be assumed.  
+        :param str     name:  the mnumonic name (provided by the requesting user) to give to the 
+                              record.
         :param str shoulder:  the identifier shoulder prefix to create the new ID with.  
                               (The implementation should ensure that the requested shoulder is 
-                              recognized and that requesting user is authorized to request 
+                              recognized and that the requesting user is authorized to request 
                               the shoulder.)
+        :param str  foruser:  the ID of the user that should be registered as the owner.  If not 
+                              specified, the value of :py:property:`user_id` will be assumed.  In 
+                              this implementation, only a superuser can create a record for someone 
+                              else.
         :raise ValueException:  if :py:property:`user_id` corresponds to an anonymous user and `owner`
                               is not specified.
         """
-        if not owner:
-            if self._who == ANONYMOUS:
-                raise ValueException("create_record(): owner must be specified when client is anonymous")
-            owner = self._who
+        if not foruser:
+            if self.user_id == ANONYMOUS:
+                raise ValueException("create_record(): foruser must be specified when client is anonymous")
+            foruser = self.user_id
         if not shoulder:
             shoulder = self._default_shoulder()
-        if not self._authorized_project_create(shoulder, owner):
-            raise NotAuthorized(owner, "create record")
+        if not self._authorized_project_create(shoulder, foruser):
+            raise NotAuthorized(self.user_id, "create record")
+        if self.name_exists(name, foruser):
+            raise AlreadyExists("User {} has already defined a record with name={}".format(foruser, name))
 
-        rec = self._new_record(self._mint_id(shoulder))
+        rec = self._new_record_data(self._mint_id(shoulder))
+        rec['name'] = name
+        rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
         return rec
 
@@ -656,7 +673,7 @@ class DBClient(ABC):
 
     def _authorized_project_create(self, shoulder, who):
         shldrs = set(self._cfg.get("allowed_project_shoulders", []))
-        defshldr = self._cfg.get("default_project_shoulder")
+        defshldr = self._cfg.get("default_shoulder")
         if defshldr:
             shldrs.add(defshldr)
         return self._authorized_create(shoulder, shldrs, who)
@@ -679,7 +696,7 @@ class DBClient(ABC):
         :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
                                how the identifier is formed.  
         """
-        return "{0}-{1:04}".format(shoulder, self._next_recnum(shoulder))
+        return "{0}:{1:04}".format(shoulder, self._next_recnum(shoulder))
 
     @abstractmethod
     def _next_recnum(self, shoulder):
@@ -691,20 +708,19 @@ class DBClient(ABC):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def _new_record(self, id):
+    def _new_record_data(self, id):
         """
         return a new ProjectRecord instance with the given identifier assigned to it.  Generally, 
         this record should not be committed yet.
         """
-        raise NotImplementedError()
+        return {"id": id}
 
     def exists(self, gid: str) -> bool:
         """
         return True if a group with the given ID exists.  READ permission on the identified 
         record is not required to use this method. 
         """
-        return bool(self._cli._get_from_coll(self._projcoll, gid))
+        return bool(self._get_from_coll(self._projcoll, gid))
 
     def name_exists(self, name: str, owner: str = None) -> bool:
         """
@@ -714,7 +730,9 @@ class DBClient(ABC):
         :param str owner: the ID of the user owning the group of interest; if not given, the 
                           user ID attached to the `DBClient` is assumed.
         """
-        it = self._cli._select_from_coll(self._projcoll, name=name, owner=owner)
+        if not owner:
+            owner = self.user_id
+        it = self._select_from_coll(self._projcoll, name=name, owner=owner)
         try:
             return bool(next(it))
         except StopIteration:
@@ -726,10 +744,10 @@ class DBClient(ABC):
         has created only one group with the given name.  
         """
         if not owner:
-            owner = self._cli._who
-        matches = self._cli._select_from_coll(self._projcoll, name=name, owner=owner)
+            owner = self.user_id
+        matches = self._select_from_coll(self._projcoll, name=name, owner=owner)
         for m in matches:
-            m = ProjectRecord(self._projcoll, m, self._cli)
+            m = ProjectRecord(self._projcoll, m, self)
             if m.authorized(ACLs.READ):
                 return m
         return None
@@ -750,7 +768,7 @@ class DBClient(ABC):
             return None
         out = ProjectRecord(self._projcoll, out, self)
         if not out.authorized(perm):
-            raise NotAuthorized(self._who, perm)
+            raise NotAuthorized(self.user_id, perm)
         return out
 
     @abstractmethod
