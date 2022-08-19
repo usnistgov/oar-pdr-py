@@ -804,7 +804,7 @@ class DBClient(ABC):
         return None
 
     @abstractmethod
-    def _upsert(self, coll: str, recdata: Mapping):
+    def _upsert(self, coll: str, recdata: Mapping) -> bool:
         """
         insert or update a data record into the specified collection.  
         :param str coll:  the name of the record collection to insert the record into.  

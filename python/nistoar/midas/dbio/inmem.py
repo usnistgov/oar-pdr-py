@@ -14,8 +14,8 @@ class InMemoryDBClient(base.DBClient):
     """
 
     def __init__(self, dbdata: Mapping, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS):
-        super(InMemoryDBClient, self).__init__(config, projcoll, None, foruser)
         self._db = dbdata
+        super(InMemoryDBClient, self).__init__(config, projcoll, self._db, foruser)
 
     def _next_recnum(self, shoulder):
         if shoulder not in self._db['nextnum']:
@@ -48,7 +48,7 @@ class InMemoryDBClient(base.DBClient):
             return True
         return False
 
-    def _upsert(self, coll: str, recdata: Mapping):
+    def _upsert(self, coll: str, recdata: Mapping) -> bool:
         if coll not in self._db:
             self._db[coll] = {}
         exists = bool(self._db[coll].get(recdata['id']))
@@ -70,7 +70,7 @@ class InMemoryDBClient(base.DBClient):
                 
 class InMemoryDBClientFactory(base.DBClientFactory):
     """
-    a DBClientFactory the creates InMemoryDBClient 
+    a DBClientFactory that creates InMemoryDBClient instances
     """
 
     def __init__(self, config, dbdata = None):

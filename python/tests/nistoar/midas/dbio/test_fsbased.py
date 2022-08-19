@@ -1,41 +1,76 @@
-import os, json, pdb, logging
+import os, json, pdb, logging, tempfile
 from pathlib import Path
 import unittest as test
 
-from nistoar.midas.dbio import inmem, base
+from nistoar.midas.dbio import fsbased, base
 
 class TestInMemoryDBClientFactory(test.TestCase):
 
     def setUp(self):
+        self.outdir = tempfile.TemporaryDirectory(prefix="_test_dbclient.", dir=".")
         self.cfg = { "goob": "gurn" }
-        self.fact = inmem.InMemoryDBClientFactory(self.cfg, { "nextnum": { "hank": 2 }})
+        self.fact = fsbased.FSBasedDBClientFactory(self.cfg, self.outdir.name)
+
+    def tearDown(self):
+        self.outdir.cleanup()
 
     def test_ctor(self):
         self.assertEqual(self.fact._cfg, self.cfg)
-        self.assertTrue(self.fact._db)
-        self.assertEqual(self.fact._db.get(base.DRAFT_PROJECTS), {})
-        self.assertEqual(self.fact._db.get(base.DMP_PROJECTS), {})
-        self.assertEqual(self.fact._db.get(base.GROUPS_COLL), {})
-        self.assertEqual(self.fact._db.get(base.PEOPLE_COLL), {})
-        self.assertEqual(self.fact._db.get("nextnum"), {"hank": 2})
+        self.assertEqual(self.fact._dbroot, str(self.outdir.name))
+        self.assertEqual(len([f for f in os.listdir(self.fact._dbroot) if not f.startswith(".")]), 0)
 
     def test_create_client(self):
         cli = self.fact.create_client(base.DMP_PROJECTS, "ava1")
-        self.assertEqual(cli._db, self.fact._db)
         self.assertEqual(cli._cfg, self.fact._cfg)
         self.assertEqual(cli._projcoll, base.DMP_PROJECTS)
         self.assertEqual(cli._who, "ava1")
         self.assertIsNone(cli._whogrps)
-        self.assertIs(cli._native, self.fact._db)
+        self.assertEqual(os.path.normpath(str(cli._native)), self.outdir.name.lstrip("./"))
         self.assertIsNotNone(cli._dbgroups)
-        
 
-class TestInMemoryDBClient(test.TestCase):
+class TestFSBasedDBClient(test.TestCase):
 
     def setUp(self):
+        self.outdir = tempfile.TemporaryDirectory(prefix="_test_dbclient.", dir=".")
         self.cfg = {}
         self.user = "nist0:ava1"
-        self.cli = inmem.InMemoryDBClientFactory({}).create_client(base.DMP_PROJECTS, self.user)
+        self.cli = fsbased.FSBasedDBClient(self.outdir.name, self.cfg, base.DMP_PROJECTS, self.user)
+    
+    def tearDown(self):
+        self.outdir.cleanup()
+
+    def test_ensure_collectin(self):
+        self.assertTrue(not os.path.exists(os.path.join(self.outdir.name, "goob")))
+        self.cli._ensure_collection("goob")
+        self.assertTrue(os.path.exists(os.path.join(self.outdir.name, "goob")))
+        self.cli._ensure_collection("goob")
+
+        self.assertTrue(not os.path.exists(os.path.join(self.outdir.name, "nextnum")))
+        self.cli._ensure_collection("nextnum")
+        self.assertTrue(os.path.exists(os.path.join(self.outdir.name, "nextnum")))
+
+    def test_read_rec(self):
+        self.assertIsNone(self.cli._read_rec("goob", "gurn.json"))
+        self.cli._ensure_collection("goob")
+        self.assertIsNone(self.cli._read_rec("goob", "gurn.json"))
+        with open(os.path.join(self.outdir.name, "goob", "gurn.json"), 'w') as fd:
+            fd.write("%d\n" % 3)
+        rec = self.cli._read_rec("goob", "gurn")
+        self.assertEqual(rec, 3)
+
+    def test_write_rec(self):
+        self.assertTrue(not os.path.exists(os.path.join(self.outdir.name, "nextnum")))
+        self.cli._write_rec("nextnum", "goob", 4)
+        self.assertTrue(os.path.exists(os.path.join(self.outdir.name, "nextnum", "goob.json")))
+        with open(os.path.join(self.outdir.name, "nextnum", "goob.json")) as fd:
+            self.assertEqual(fd.read(), "4")
+
+        self.cli._write_rec("nextnum", "goob", 8)
+        self.assertEqual(self.cli._read_rec("nextnum", "goob"), 8)
+
+        rec = { "id": "pdr0:1", "data": { "a": [ 0 ]}}
+        self.cli._write_rec(base.DMP_PROJECTS, rec["id"], rec)
+        self.assertEqual(self.cli._read_rec(base.DMP_PROJECTS, rec["id"]), rec)
 
     def test_next_recnum(self):
         self.assertEqual(self.cli._next_recnum("goob"), 1)
@@ -53,19 +88,19 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertIsNone(self.cli._get_from_coll(base.GROUPS_COLL, "p:mine"))
 
         # put in some test data into the underlying database
-        self.cli._db[base.GROUPS_COLL]["p:bob"] = {"id": "p:bob", "owner": "alice"}
+        self.cli._write_rec(base.GROUPS_COLL, "p:bob", {"id": "p:bob", "owner": "alice"})
         self.assertIsNone(self.cli._get_from_coll(base.GROUPS_COLL, "p:mine"))
         self.assertEqual(self.cli._get_from_coll(base.GROUPS_COLL, "p:bob"),
                          {"id": "p:bob", "owner": "alice"})
         
-        self.cli._db[base.GROUPS_COLL]["p:mine"] = {"id": "p:mine", "owner": "p:bob"}
+        self.cli._write_rec(base.GROUPS_COLL, "p:mine", {"id": "p:mine", "owner": "p:bob"})
         self.assertEqual(self.cli._get_from_coll(base.GROUPS_COLL, "p:mine"),
                          {"id": "p:mine", "owner": "p:bob"})
         self.assertEqual(self.cli._get_from_coll(base.GROUPS_COLL, "p:bob"),
                          {"id": "p:bob", "owner": "alice"})
 
         self.assertIsNone(self.cli._get_from_coll("nextnum", "goob"))
-        self.cli._db["nextnum"] = {"goob": 0}
+        self.cli._write_rec("nextnum", "goob", 0)
         self.assertEqual(self.cli._get_from_coll("nextnum", "goob"), 0)
 
     def test_select_from_coll(self):
@@ -76,11 +111,12 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(len(recs), 0)
 
         # test query on existing but empty collection
+        self.cli._ensure_collection(base.GROUPS_COLL)
         recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob", hobby="knitting"))
         self.assertEqual(len(recs), 0)
 
         # put in some test data into the underlying database
-        self.cli._db[base.GROUPS_COLL]["p:bob"] = {"id": "p:bob", "owner": "alice", "hobby": "whittling"}
+        self.cli._write_rec(base.GROUPS_COLL, "p:bob", {"id": "p:bob", "owner": "alice", "hobby": "whittling"})
         it = self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob", hobby="knitting")
         self.assertTrue(hasattr(it, "__next__"), "selection not in the form of an iterator")
         recs = list(it)
@@ -89,7 +125,8 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0], {"id": "p:bob", "owner": "alice", "hobby": "whittling"})
 
-        self.cli._db[base.GROUPS_COLL]["p:mine"] = {"id": "p:mine", "owner": "p:bob", "hobby": "whittling"}
+        self.cli._write_rec(base.GROUPS_COLL, "p:mine",
+                            {"id": "p:mine", "owner": "p:bob", "hobby": "whittling"})
         recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="alice", hobby="whittling"))
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0], {"id": "p:bob", "owner": "alice", "hobby": "whittling"})
@@ -104,16 +141,17 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(len(recs), 0)
 
         # test query on existing but empty collection
+        self.cli._ensure_collection(base.GROUPS_COLL)
         recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "alice"))
         self.assertEqual(len(recs), 0)
 
         # put in some test data into the underlying database
-        self.cli._db[base.GROUPS_COLL]["p:bob"] = {"id": "p:bob", "members": ["p:bob"]}
-        self.cli._db[base.GROUPS_COLL]["stars"] = {"id": "stars", "members": ["p:tom", "p:bob"]}
+        self.cli._write_rec(base.GROUPS_COLL, "p:bob", {"id": "p:bob", "members": ["p:bob"]})
+        self.cli._write_rec(base.GROUPS_COLL, "stars", {"id": "stars", "members": ["p:tom", "p:bob"]})
         recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "alice"))
         self.assertEqual(len(recs), 0)
 
-        self.cli._db[base.GROUPS_COLL]["p:bob"]["members"].append("alice")
+        self.cli._write_rec(base.GROUPS_COLL, "p:bob", {"id": "p:bob", "members": ["p:bob", "alice"]})
         it = self.cli._select_prop_contains(base.GROUPS_COLL, "members", "alice")
         self.assertTrue(hasattr(it, "__next__"), "selection not in the form of an iterator")
         recs = list(it)
@@ -129,13 +167,17 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertFalse(self.cli._delete_from("alice", "p:bob"))
 
         # test query on existing but empty collection
+        self.cli._ensure_collection(base.GROUPS_COLL)
         self.assertFalse(self.cli._delete_from(base.GROUPS_COLL, "p:bob"))
 
-        self.cli._db[base.GROUPS_COLL]["p:bob"] = {"id": "p:bob", "members": ["p:bob"]}
-        self.cli._db[base.GROUPS_COLL]["stars"] = {"id": "stars", "members": ["p:tom", "p:bob"]}
+        self.cli._write_rec(base.GROUPS_COLL, "p:bob", {"id": "p:bob", "members": ["p:bob"]})
+        self.cli._write_rec(base.GROUPS_COLL, "stars", {"id": "stars", "members": ["p:tom", "p:bob"]})
+        self.assertTrue(os.path.exists(os.path.join(self.outdir.name, base.GROUPS_COLL, "p:bob.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.outdir.name, base.GROUPS_COLL, "stars.json")))
+
         self.assertTrue(self.cli._delete_from(base.GROUPS_COLL, "p:bob"))
-        self.assertNotIn("p:bob", self.cli._db[base.GROUPS_COLL])
-        self.assertIn("stars", self.cli._db[base.GROUPS_COLL])
+        self.assertTrue(not os.path.exists(os.path.join(self.outdir.name, base.GROUPS_COLL, "p:bob.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.outdir.name, base.GROUPS_COLL, "stars.json")))
 
     def test_upsert(self):
         # test on a non-existent collection
@@ -155,6 +197,7 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertIsNone(self.cli._get_from_coll("about", "alice"))
 
         # test on an existing collection
+        self.cli._ensure_collection(base.GROUPS_COLL)
         self.assertIsNone(self.cli._get_from_coll(base.GROUPS_COLL, "g:friends"))
         self.assertIsNone(self.cli._get_from_coll(base.GROUPS_COLL, "stars"))
 
@@ -176,9 +219,9 @@ class TestInMemoryDBClient(test.TestCase):
         # inject some data into the database
         id = "pdr0:0002"
         rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id}, self.cli)
-        self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
+        self.cli._write_rec(base.DMP_PROJECTS, id, rec.to_dict())
         rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": "goob", "owner": "alice"}, self.cli)
-        self.cli._db[base.DMP_PROJECTS]["goob"] = rec.to_dict()
+        self.cli._write_rec(base.DMP_PROJECTS, "goob", rec.to_dict())
 
         recs = list(self.cli.select_records(base.ACLs.READ))
         self.assertEqual(len(recs), 1)
@@ -186,10 +229,17 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(recs[0].id, id)
 
         
-        
+
+
+
+
                          
 if __name__ == '__main__':
     test.main()
-        
 
+
+
+
+        
+        
         
