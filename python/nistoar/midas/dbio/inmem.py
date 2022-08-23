@@ -70,10 +70,20 @@ class InMemoryDBClient(base.DBClient):
                 
 class InMemoryDBClientFactory(base.DBClientFactory):
     """
-    a DBClientFactory that creates InMemoryDBClient instances
+    a DBClientFactory that creates InMemoryDBClient instances in which records are stored in data
+    structures kept in memory.  Records remain in memory for the life of the factory and all the 
+    clients it creates.  
     """
 
-    def __init__(self, config, dbdata = None):
+    def __init__(self, config: Mapping, _dbdata = None):
+        """
+        Create the factory with the given configuration.
+
+        :param dict  config:  the configuration parameters used to configure clients
+        :param dict _dbdata:  the initial data for the database.  (Note: internal knowledge of 
+                              of the in-memory data structure required to use this input.)  If 
+                              not provided, an empty database is created.
+        """
         super(InMemoryDBClientFactory, self).__init__(config)
         self._db = {
             base.DRAFT_PROJECTS: {},
@@ -82,8 +92,8 @@ class InMemoryDBClientFactory(base.DBClientFactory):
             base.PEOPLE_COLL: {},
             "nextnum": {}
         }
-        if dbdata:
-            self._db.update(deepcopy(dbdata))
+        if _dbdata:
+            self._db.update(deepcopy(_dbdata))
             
 
     def create_client(self, servicetype: str, foruser: str = base.ANONYMOUS):

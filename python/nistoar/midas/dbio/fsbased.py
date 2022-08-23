@@ -135,10 +135,29 @@ class FSBasedDBClient(base.DBClient):
 
 class FSBasedDBClientFactory(base.DBClientFactory):
     """
-    a DBClientFactory that creates FSBasedDBClient instances
+    a DBClientFactory that creates FSBasedDBClient instances in which records are stored in JSON
+    files on disk under a specified directory.
+
+    In addition to :py:method:`common configuration parameters <nistoar.midas.dbio.base.DBClient.__init__>`, 
+    this implementation also supports:
+
+    ``db_root_dir``
+         the root directory where the database's record files will be store below.  If not specified,
+         this value must be provided to the constructor directly.  
     """
 
     def __init__(self, config: Mapping, dbroot: str = None):
+        """
+        Create the factory with the given configuration.
+
+        :param dict config:  the configuration parameters used to configure clients
+        :param str  dbroot:  the root directory to use to store database record files below; if 
+                             not provided, the value of the ``db_root_dir`` configuration 
+                             parameter will be used.  
+        :raise ConfigurationException:  if the database's root directory is provided neither as an
+                             argument nor a configuration parameter.
+        :raise DBIOException:  if the specified root directory does not exist
+        """
         super(FSBasedDBClientFactory, self).__init__(config)
         if not dbroot:
             dbroot = self.cfg.get("db_root_dir")

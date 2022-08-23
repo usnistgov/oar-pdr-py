@@ -177,10 +177,30 @@ class MongoDBClient(base.DBClient):
 
 class MongoDBClientFactory(base.DBClientFactory):
     """
-    a DBClientFactory that creates FSBasedDBClient instances
+    a DBClientFactory that creates MongoDBClient instances in which records are stored in a MongoDB 
+    database.
+
+    In addition to :py:method:`common configuration parameters <nistoar.midas.dbio.base.DBClient.__init__>`, 
+    this implementation also supports:
+
+    ``db_url``
+        the URL for the MongoDB connection, of the form, 
+        ``mongodb://``*[USER*``:``*PASS*``@``*]HOST[*``:``*PORT]*``/``*DBNAME*
     """
 
     def __init__(self, config: Mapping, dburl: str = None):
+        """
+        Create the factory with the given configuration.
+
+        :param dict config:  the configuration parameters used to configure clients
+        :param str   dburl:  the URL for the MongoDB connection; it takes the same form as the 
+                             ``db_url`` configuration parameter.  If 
+                             not provided, the value of the ``db_url`` configuration 
+                             parameter will be used.  
+        :raise ConfigurationException:  if the database's URL is provided neither as an
+                             argument nor a configuration parameter.
+        :raise ValueError:  if the specified database URL is of an incorrect form
+        """
         super(MongoDBClientFactory, self).__init__(config)
         if not dburl:
             dburl = self._cfg.get("db_url")
