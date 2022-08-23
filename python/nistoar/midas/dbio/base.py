@@ -31,6 +31,9 @@ DEF_GROUPS_SHOULDER = "grp0"
 PUBLIC_GROUP = DEF_GROUPS_SHOULDER + ":public"    # all users are implicitly part of this group
 ANONYMOUS = PUBLIC_GROUP
 
+__all__ = ["DBClient", "DBClientFactory", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP", "ANONYMOUS",
+           "DRAFT_PROJECTS", "DMP_PROJECTS"]
+
 Permissions = Union[str, Sequence[str], AbstractSet[str]]
 
 # forward declarations
@@ -785,8 +788,19 @@ class DBClient(ABC):
         """
         raise NotImplementedError()
 
+    def is_connected(self) -> bool:
+        """
+        return True if this client is currently connected to its underlying database
+        """
+        return self._native is not None
+
     @property
     def native(self):
+        """
+        an instance of the native client specific for the underlying database being used.
+        Accessing this property may implicitly cause the client to establish a connection.  (See 
+        also :py:method:`is_connected`.)
+        """
         return self._native
 
     @property
