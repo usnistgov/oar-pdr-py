@@ -1,7 +1,8 @@
 """
 an implementation of the NERDResource storage interface that stores the data in memory (using OrderedDicts).
 
-This is provide for purposes of testing the interface.
+This is provide for purposes of testing the interface.  See 
+:py:mod:`nerdstore.base<nistoar.pdr.draft.nerdstore.base` for full interface documentation.  
 """
 
 # See .base.py for function documentation
@@ -13,7 +14,7 @@ from logging import Logger
 from typing import Iterable, Iterator
 
 from .base import *
-from .base import _NERDOrderedObjectList
+from .base import _NERDOrderedObjectList, DATAFILE_TYPE, SUBCOLL_TYPE, DOWNLOADABLEFILE_TYPE
 
 import nistoar.nerdm.utils as nerdmutils
 
@@ -190,18 +191,17 @@ class InMemoryFileComps(NERDFileComps):
         self._files.clear()
 
     def _load_from(self, cmps: [Mapping]):
-
         # Once through to load all files by their ID
         for cmp in cmps:
             if cmp.get('filepath'):
                 if cmp.get('@id'):
-                    m = _idre.find(cmd['@id'])
+                    m = _idre.search(cmd['@id'])
                     if m:
                         # the id was set by a previous call to this class's minter
                         # extract the number to ensure future ids are unique
                         n = int(m.group(1))
-                        if n > self.ididx:
-                            self.ididx = n + 1
+                        if n > self._ididx:
+                            self._ididx = n + 1
                     # store a copy of the file component
                     self._files[cmp['@id']] = copy.deepcopy(cmp)
 
@@ -219,10 +219,10 @@ class InMemoryFileComps(NERDFileComps):
 
                 # build parent-children map
                 if '/' in cmp['filepath']:
-                    parent = os.path.dirname(cmp['filepath'])
+                    parent = self._dirname(cmp['filepath'])
                     if parent not in children:
                         children[parent] = []
-                    children[parent].append( (os.path.basename(cmp['filepath']), cmp['@id']) )
+                    children[parent].append( (self._basename(cmp['filepath']), cmp['@id']) )
                 else:
                     children[''].append( (cmp['filepath'], cmp['@id']) )
                     self._children[cmp['filepath']] = cmp['@id']
@@ -261,12 +261,15 @@ class InMemoryFileComps(NERDFileComps):
             raise ObjectNotFound(id)
 
     def get_file_by_path(self, path: str) -> Mapping:
+        if not path:
+            raise ValueError("get_file__path(): No path specified")
         return self._export_file(self._get_file_by_path(path))
 
     def _export_file(self, fmd):
-        out = OrderedDict([m for m in fmd.items() if not m[0].startswith("_")])
+        out = OrderedDict([copy.deepcopy(m) for m in fmd.items() if not m[0].startswith("_")])
         if self.is_collection(out):
-            out['has_member'] = [OrderedDict([('@id', m[1], 'name', m[0])]) for m in fmd.get("_children",[])]
+            out['has_member'] = [OrderedDict([('@id', m[1]), ('name', m[0])])
+                                 for m in fmd.get("_children",{}).items()]
         return out
 
     def _get_file_by_path(self, path: str) -> Mapping:
@@ -276,17 +279,17 @@ class InMemoryFileComps(NERDFileComps):
         top = steps.pop(0)
         if top not in children:
             raise ObjectNotFound(origpath)
-        child = self._get_file_by_id(self._children[top])
+        child = self._get_file_by_id(children[top])  # may raise ObjectNotFound
         if not steps:
             return child
         
         if not self.is_collection(child):
             raise ObjectNotFound(origpath)
-        return self._get_file_by_relpath(self, child.get('_children',{}), steps)
+        return self._get_file_by_relpath(child.get('_children',{}), steps, origpath)
 
     @property
     def ids(self):
-        return [f.get('@id', '') for id in self.iter_files()]
+        return [f.get('@id', '') for f in self.iter_files()]
 
     def iter_files(self):
         return iter(self._FileIterator(self))
@@ -316,12 +319,14 @@ class InMemoryFileComps(NERDFileComps):
             
     def get_ids_in_subcoll(self, collpath: str) -> [str]:
         children = self._children
-        try:
-            coll = self._get_file_by_path(collpath)
-        except ObjectNotFound:
-            return []
-        else:
-            children = coll.get('_children', [])
+        if collpath != "":
+            try:
+                coll = self._get_file_by_path(collpath)
+            except ObjectNotFound:
+                return []
+            else:
+                children = coll.get('_children', [])
+
         return list(children.values())
 
     def get_subcoll_members(self, collpath: str) -> Iterator[Mapping]:
@@ -343,85 +348,212 @@ class InMemoryFileComps(NERDFileComps):
             if not self.is_collection(coll):
                 raise ObjectNotFound(collpath, message=collpath+": not a subcollection component")
             if '_children' not in coll:
-                coll['_children'] = OrderedDict
+                coll['_children'] = OrderedDict()
             children = coll['_children']
 
         # create an inverted child map
-        byid = dict( [(itm[1], itm[0]) for itm in children.items()] )
+        byid = OrderedDict( [(itm[1], itm[0]) for itm in children.items()] )
+        ids = list(ids)
+        for id in byid:
+            if id not in ids:
+                ids.append(id)
 
         # reorder the original map
         children.clear()
-        missing = []
         for id in ids:
             if id in byid:
                 children[byid[id]] = id
-            else:
-                missing.append(id)
-        for id in missing:
-            children[byid[id]] = id
 
-    def set_file_at(md, filepath: str=None, id=None):
+    def exists(self, id):
+        return id in self._files
+
+    def delete_file(self, id: str) -> bool:
+        if id not in self._files:
+            return False
+
+        fmd = self._get_file_by_id(id)
+
+        # deregister it with its parent
+        self._deregister_from_parent(fmd['filepath'])
+
+        # now forget the file entry
+        del self._files[id]
+        return True
+
+    def _deregister_from_parent(self, filepath):
+        if '/' in filepath:
+            try:
+                parent = self._get_file_by_path(self._dirname(filepath))
+                name = self._basename(filepath)
+                if name in parent.get('_children',{}):
+                    del parent['_children'][name]
+            except ObjectNotFound:
+                pass
+        else:
+            if filepath in self._children:
+                del self._children[filepath]
+
+    def _register_with_parent(self, filepath, id):
+        children = self._children
+        name = filepath
+        if '/' in filepath:
+            parent = self._get_file_by_path(self._dirname(filepath))
+            name = self._basename(filepath)
+            if not self.is_collection(parent):
+                raise  ObjectNotFound(parent, message=self._dirname(filepath)+": Not a subcollection")
+            if '_children' not in parent:
+                parent['_children'] = OrderedDict()
+            children = parent['_children']
+
+        children[name] = id
+        
+
+    def set_file_at(self, md, filepath: str=None, id=None, as_coll: bool=None):
+        """
+        add or update a file component.  If `id` is given (or otherwise included in the metadata as 
+        the `@id` property) and it already exists in the file list, its metadata will be replaced
+        with the data provided; if it does not exist, then the `filepath` will be used to locate and 
+        update an existing file.  If a file matching either the `id` nor the `filepath` does not exist,
+        a new file is added with the given file path (or with the path given in the metadata); if the 
+        file does not have an identifier, a new one will be assigned.  If the previously existing file
+        with the given identifier has a file path different from the given `filepath`; the file component 
+        will be effectively moved to that file with the new metadata.  
+
+        The implementation may require that the parent subcollection referenced in `filepath` exist already.
+
+        :return: the identifier assigned to the file component
+                 :rtype: str
+        :raises FilepathNotSpecified: if the file path is not set via `filepath` parameter and cannot 
+                 otherwise be determined via the previous or updated metadata.  
+        :raises ObjectNotFound:  if the implementation requires that parent subcollections already exist
+                 but does not.  
+        """
         # first, make sure we have both an id and a filepath for the input metadata
-        oldfile = self.get(id) if id else None
         if not id:
             id = md.get('@id')
+        oldfile = None
+        if id:
+            try:
+                oldfile = self._get_file_by_id(id)
+            except ObjectNotFound:
+                pass
 
         if not filepath:
             filepath = md.get('filepath')
         if not filepath and oldfile:
             filepath = oldfile.get('filepath')
         if not filepath:
-            raise ValueError("set_file_at(): filepath be provided directly")
-        if not id:
-            if not oldfile:
-                try:
-                    oldfile = self.get_file_by_path(filepath)
-                except ObjectNotFound:
-                    pass
-            if oldfile:
-                id = oldfile.get('@id')
-        if not id:
-            id = self._get_default_id_for(md)
+            raise ValueError("set_file_at(): filepath must be provided")
 
-        # is the file getting moved?
-        if oldfile and filepath != oldfile.get('filepath'):
-            # unregister it from its old parent
-            name = os.path.basename(oldfile.get('filepath'))
-            children = self._children
-            if '/' in oldfile.get('filepath'):
-                try:
-                    parent = self.get_file_by_path(os.path.dirname(oldfile['filepath']))
-                except ObjectNotFound:
-                    pass
-                else:
-                    children = parent.get('_children')
-            if children is not None:
-                try:
-                    del children[name]
-                except KeyError:
-                    pass
-        
-        name = os.path.basename(filepath)
-        children = self._children
-        if '/' in filepath:
-            parentpath = os.path.dirname(filepath)
-            coll = self.get_file_by_filepath(parentpath)  # may raise ObjectNotFound
-            if not self.is_collection(coll):
-                raise ObjectNotFound(parentpath, message=parentpath+": not a subcollection")
-            children = coll.setdefault('_children', OrderedDict())
+        destfile = None
+        try:
+            destfile = self._get_file_by_path(filepath)
+        except ObjectNotFound:
+            pass
+        if not oldfile:
+            oldfile = destfile
 
-        md = copy.deepcopy(md)
-        md['@id'] = id
-        md['filepath'] = filepath
-        self._files[id] = md
-        if children.get(name) and children.get(name) != id:
-            try:
-                del self._files[children[name]]
-            except KeyError:
-                pass
-        children[name] = id
+        if oldfile and not id:
+            id = oldfile.get('@id')
 
-        return id
+        as_coll = [SUBCOLL_TYPE] if as_coll is True else None
+
+        md = self._import_file(md, filepath, id, as_coll)  # assigns an @id if needed
+
+        # Note: at this point,
+        #   oldfile = existing file with same id as md
+        #  destfile = existing file with same filepath as md
+
+        # ensure the parent collection exists
+        if '/' in filepath and not self.path_is_collection(self._dirname(filepath)):
+            raise ObjectNotFound(self._dirname(filepath))
+
+        # 
+        deldestfile = False
+        if destfile and self.is_collection(destfile) and \
+           (destfile['@id'] != md['@id'] or not self.is_collection(md)):
+            if destfile.get('_children'):
+                # destination is a non-empty collection: don't clobber collections
+                raise CollectionRemovalDissallowed(destfile['filepath'], "collection is not empty")
+            deldestfile = True
+
+        if oldfile:
+            if self.is_collection(oldfile) and self.is_collection(md):
+                # updating a collection; preserve its contents
+                md['_children'] = oldfile.get('_children')
+                if md['_children'] is None:
+                    md['_children'] = OrderedDict()
+
+            if filepath != oldfile.get('filepath'):
+                # this is a file move; deregister it from its old parent
+                self._deregister_from_parent(oldfile['filepath'])
+
+        # save this record
+        self._files[md['@id']] = md
+
+        if deldestfile and destfile['@id'] in self._files:
+            # delete the old destination file
+            del self._files[destfile['@id']]
+
+        # register the new file with its parent
+        self._register_with_parent(md['filepath'], md['@id'])
+
+        return md['@id']
+
+    def exists(self, id: str) -> bool:
+        return id in self._files
+
+    def path_exists(self, filepath) -> bool:
+        try:
+            return (self._get_file_by_path(filepath))
+        except ObjectNotFound:
+            return False
+            
+    def path_is_collection(self, filepath) -> bool:
+        try:
+            return self.is_collection(self._get_file_by_path(filepath))
+        except ObjectNotFound:
+            return False
+
+    def _import_file(self, fmd: Mapping, filepath: str=None, id: str=None, astype=None):
+        # Copy and convert the file metadata into the form that is held internally
+        out = OrderedDict([copy.deepcopy(m) for m in fmd.items() if m[0] != 'has_member'])
+        if filepath:
+            out['filepath'] = filepath
+        if id:
+            out['@id'] = id
+        if astype:
+            if isinstance(astype, str):
+                astype = [astype]
+            if isinstance(astype, (tuple, list)):
+                out['@type'] = list(astype)
+
+        if out.get('@id'):
+            m = _idre.search(out['@id'])
+            if m:
+                # the id was set by a previous call to this class's minter
+                # extract the number to ensure future ids are unique
+                n = int(m.group(1))
+                if n > self._ididx:
+                    self._ididx = n + 1
+        else:
+            out['@id'] = self._get_default_id_for(out)
+
+        if not out.get('filepath'):
+            # Missing a filepath (avoid this); set to default
+            out['filepath'] = self._basename(cmp['@id'])
+
+        if not out.get('@type'):
+            # Assume that this should be a regular file
+            out['@type'] = [DATAFILE_TYPE, DOWNLOADABLEFILE_TYPE]
+                
+        # if self.is_collection(fmd) and 'has_member' in fmd:
+        #     # convert 'has_member' to '_children'
+        #     out['_children'] = OrderedDict()
+        #     for child in fmd['has_member']:
+        #         if '@id' in child and 'filepath' in child:
+        #             out['_children'][self._basename(child['filepath'])] = child['@id']
+        return out
 
 class InMemoryResource(NERDResource):
     """
@@ -487,14 +619,23 @@ class InMemoryResource(NERDResource):
     def delete(self):
         if not self.deleted:
             self._data = None
+            self._files = None
+            self._nonfiles = None
+            self._refs = None
+            self._auths = None
 
     def res_data(self):
+        if self._data is None:
+            return None
         out = copy.deepcopy(self._data)
         out['@id'] = self.id
         return out
         
     def data(self, inclfiles=True) -> Mapping:
         out = self.res_data()
+        if out is None:
+            return None
+
         if self._auths.count > 0:
             out['authors'] = self._auths.data()
         if self._refs.count > 0:
@@ -537,7 +678,7 @@ class InMemoryResourceStorage(NERDResourceStorage):
         """
         if not id:
             id = rec.get('@id')
-            m = _idre.find(id)
+            m = _idre.search(id)
             if m:
                 n = int(m.group(1))
                 if n >= self._ididx:
@@ -553,9 +694,6 @@ class InMemoryResourceStorage(NERDResourceStorage):
         out = "%s_%d" % (self._pfx, self._ididx)
         self._ididx += 1
         return out
-
-    def exists(self, id: str) -> bool:
-        return id in self._recs
 
     def delete(self, id: str) -> bool:
         if id in self._recs:

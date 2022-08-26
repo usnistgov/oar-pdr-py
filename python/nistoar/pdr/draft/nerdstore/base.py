@@ -7,10 +7,11 @@ from collections.abc import MutableMapping, Mapping, MutableSequence
 from typing import Iterable, Iterator, NewType
 
 import nistoar.nerdm.utils as nerdmutils
+from nistoar.pdr.preserve.bagit.builder import (DATAFILE_TYPE, SUBCOLL_TYPE, DOWNLOADABLEFILE_TYPE)
 
 __all__ = [ "NERDResource", "NERDAuthorList", "NERDRefList", "NERDNonFileComps", "NERDFileComps",
             "NERDStorageException", "MismatchedIdentifier", "RecordDeleted", "ObjectNotFound",
-            "NERDResourceStorage" ]
+            "CollectionRemovalDissallowed", "NERDResourceStorage" ]
 
 NERDResource     = NewType("NERDResource", ABC)
 NERDAuthorList   = NewType("NERDAuthorList", NERDResource)
@@ -473,6 +474,7 @@ class NERDFileComps(Mapping, metaclass=ABCMeta):
     def get_file_by_id(self, id: str) -> Mapping:
         """
         return the component in the file list that has the given (location-independent) identifier
+        :raises ObjectNotFound:  if no file exists in this set with the given identifier
         """
         raise NotImplementedError()
 
@@ -481,6 +483,7 @@ class NERDFileComps(Mapping, metaclass=ABCMeta):
         """
         return the component that is currently at the given path location, or None if no file is 
         currently found there.  
+        :raises ObjectNotFound:  if no file exists in this set with the given identifier
         """
         raise NotImplementedError()
 
@@ -556,7 +559,7 @@ class NERDFileComps(Mapping, metaclass=ABCMeta):
     def set_file_at(md, filepath: str=None, id=None):
         """
         add or update a file component.  If `id` is given (or otherwise included in the metadata as 
-        the `@id` property) and it already exists in the file list, it's metadata will be replaced
+        the `@id` property) and it already exists in the file list, its metadata will be replaced
         with the data provided; if it does not exist, then the `filepath` will be used to locate and 
         update an existing file.  If a file matching either the `id` nor the `filepath` does not exist,
         a new file is added with the given file path (or with the path given in the metadata); if the 
@@ -585,19 +588,71 @@ class NERDFileComps(Mapping, metaclass=ABCMeta):
         :return: the identifier for the moved file
                  :rtype: str
         """
-        comp = self.get_file_by_id(idorpath)
+        try:
+            comp = self.get_file_by_id(idorpath)
+        except ObjectNotFound:
+            comp = None
         if not comp:
-            comp = self.get_file_by_path(idorpath)
-        if not comp:
-            raise ObjectNotFound(idorpath, message="Failed to move file: ID/path not found: "+idorpath)
-        if comp.get('filepath') == idorpath:
+            try:
+                comp = self.get_file_by_path(idorpath)
+                if not comp:
+                    raise ObjectNotFound(idorpath)
+            except ObjectNotFound as ex:
+                raise ObjectNotFound(idorpath, message="Failed to move file: "+str(ex))
+            
+        if comp.get('filepath') == filepath:
             return comp.get('@id')
 
+        try:
+            dest = self.get_file_by_path(filepath)  # may raise ObjectNotFound
+            if self.is_collection(dest):
+                filepath = "/".join([ dest['filepath'], self._basename(comp['filepath']) ])
+        except ObjectNotFound:
+            pass
+
         # there may well be a more efficient way to do this (via the subclass)
-        self.set_file_at(comp, comp.get('filepath'), comp.get('@id'))
+        self.set_file_at(comp, filepath, comp.get('@id'))
         # member order?
         return comp.get('@id')
 
+    @abstractmethod
+    def delete_file(self, id: str) -> bool:
+        """
+        remove a file from this set.  
+        :returns:  False if the file was not found in this collection; True, otherwise
+                   :rtype: bool
+        :raises CollectionRemovalDissallowed:  if the id points to a non-empty collection
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def exists(self, id: str) -> bool:
+        """
+        return True if the stored files include one with the given identifier
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def path_exists(self, filepath: str) -> bool:
+        """
+        return True if the stored files include one with the given filepath
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def path_is_collection(self, filepath: str) -> bool:
+        """
+        return True if the stored files include a collection with the given filepath
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def _basename(filepath):
+        return filepath.rsplit('/', 1)[-1]
+
+    @staticmethod
+    def _dirname(filepath):
+        return filepath.rsplit('/', 1)[0]
 
     def __getitem__(self, id):
         return self.get_file_by_id(id)
@@ -680,6 +735,23 @@ class ObjectNotFound(NERDStorageException):
                 message += ": %s" % key
         super(ObjectNotFound, self).__init__(message)
 
+class CollectionRemovalDissallowed(NERDStorageException):
+    """
+    an exception indicating an attempt to delete or overwrite a collection is disallowed.  This is typically 
+    disallowed if doing so would subsequently throw away the contents in the collection.
+    """
+    def __init__(self, path: str=None, reason: str=None, message: str=None):
+        if not message:
+            message = ""
+            if path:
+                message += "%s: " % path
+            message += "Removal of collection is disallowed"
+            if reason:
+                message += ": %s" % reason
+        super(CollectionRemovalDissallowed, self).__init__(message)
+        self._path = path
+
+
 class NERDResourceStorage(ABC):
     """
     a factory function that creates or opens existing stored NERDm Resource records
@@ -721,3 +793,4 @@ class NERDResourceStorage(ABC):
         """
         raise NotImplementedError()
 
+    
