@@ -461,7 +461,19 @@ class TestInMemoryFileComps(test.TestCase):
         self.assertEqual(file['@id'], "file_3")
         self.assertEqual(file['filepath'], "trial4/trial4a.json")
 
+class TestInMemoryAuthorList(test.TestCase):
 
+    def setUp(self):
+        nerd = load_simple()
+        self.auths = inmem.InMemoryAuthorList(nerd, nerd['authors'])
+
+    def test_ctor(self):
+        self.assertEqual(self.auths._order, "auth_0 auth_1".split())
+        self.assertEqual(self.auths._data['auth_0']['familyName'], "Levine")
+        self.assertEqual(self.auths._data['auth_1']['familyName'], "Curry")
+        self.assertEqual(self.auths._ididx, 2)
+
+    
 
         
         
