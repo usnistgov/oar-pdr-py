@@ -141,7 +141,7 @@ class NERDResource(ABC):
         """
         raise NotImplementedError()
         
-class _NERDOrderedObjectList(MutableSequence, MutableMapping, metaclass=ABCMeta):
+class _NERDOrderedObjectList(metaclass=ABCMeta):
     """
     an abstract interface for updating the list of objects associated with a NERD Resource property
     """
@@ -229,14 +229,18 @@ class _NERDOrderedObjectList(MutableSequence, MutableMapping, metaclass=ABCMeta)
     @abstractmethod
     def _remove_item(self, id: str):
         """
-        delete the item from the list with the given identiifer
+        delete and return the item from the list with the given identiifer
         """
         raise NotImplementedError()
 
     def __len__(self):
         return len(self.ids)
 
-    def __getitem__(self, key):
+    def get(self, key):
+        """
+        return one of the items from this list.  Here, the key is either a string, indicating the 
+        item identifier, or a an integer, indicating its position
+        """
         if isinstance(key, int):
             return self._get_item_by_pos(key)
         return self._get_item_by_id(key)
@@ -251,7 +255,7 @@ class _NERDOrderedObjectList(MutableSequence, MutableMapping, metaclass=ABCMeta)
         for id in ids:
             yield self._get_item_by_id(id)
 
-    def __setitem__(self, key, md):
+    def set(self, key, md):
         if isinstance(key, int):
             itm = self._get_item_by_pos(key)
             key = itm.get('@id') if itm else None
@@ -275,40 +279,69 @@ class _NERDOrderedObjectList(MutableSequence, MutableMapping, metaclass=ABCMeta)
 
     def insert(self, pos, md):
         """
-        inserts an item into the specified position in the list.  Items at that position and after it
-        will increse its position by one.  If an item already exists in the list with the same key, 
-        it will be deleted first.
+        inserts a new item into the specified position in the list.  If the item has an '@id' property
+        and that identifier is already in the list, it will be replaced with a new one. (Use
+        :py:method:`move` to move an item already in the list to that position.)  
+        
         :return:  the ID assigned to metadata
                   :rtype: str
         """
-        id = self._select_id_for(self, md)
-        if id in self:
-            self._remove_item(id)
+        id = md['@id']
+        if not id or id in self:
+            id = self._get_default_id_for(md)
         self._set_item(id, md, pos)
         return id
 
-    def __delitem__(self, key):
-        if isinstance(key, int):
-            itm = self.get_author_by_pos(key)
-            key = itm.get('@id')
-        self._remove_item(key)
-
-    def pop(self, key, default=None):
-        if isinstance(key, int):
-            return MutableSequence.pop(self, key)
-        if not default:
-            return MutableMapping.pop(self, key)
-        return MutableMapping.popd(self, key, default)
-
     def append(self, md: Mapping) -> str:
         """
-        add a new item to the end of this list.  If the given dictionary has an `@id` property (or 
-        otherwise has a proxy identifier) that is already in the list, that existing item will first 
-        be deleted from the list.
+        add a new item to the end of this list.  If the item has an '@id' property and that 
+        identifier is already in the list, it will be replaced with a new one. (Use :
+        py:method:`move` to move an item already in the list to the end.)
+
         :param Mapping md:  a dictionary containing the metadata describing a single item
         :return:  string giving the identifier assigned to this item.
         """
         return self.insert(self.count, md)
+
+    def pop(self, key):
+        """
+        remove and return an item from the list.  This method, along with :py:method:`insert` or 
+        :py:method:`append`, can be used to move an item in the list; however, :py:method:`move` 
+        would be more efficient.  
+        :param str|int key:  the id or position of the item to be removed
+        """
+        if isinstance(key, int):
+            itm = self.get_author_by_pos(key)
+            key = itm.get('@id')
+        return self._remove_item(key)
+
+    @abstractmethod
+    def move(self, idorpos: str, pos: int, rel: int = 0) -> int:
+        """
+        move an item currently in the list to a new position.  The `rel` parameter allows one to 
+        push an item up or down in the order.  
+
+        :param idorpos:  the target item to move, either as the string identifier or its current 
+                         position
+        :param int pos:  the new position of the item (where `rel` controls whether this is an 
+                         absolute or relative position).  If the absolute position is zero or less,
+                         the item will be moved to the beginning of the list; if it is a value greater
+                         or equal to the number of items in the list, it will be move to the end of the
+                         list.  Zero as an absolute value is the first position in the list.  If `pos`
+                         is set to `None`, the item will be moved to the end of the list (regardless,
+                         of the value of rel.  
+        :param int|bool rel:  if value evaluates as False (default), then `pos` will be interpreted
+                         as an absolute value.  Otherwise, it will be treated as a position 
+                         relative to its current position.  A positive number will cause the item 
+                         to be move `pos` places toward the end of the list; a negative number moves 
+                         it toward the beginning of the list.  Any other non-numeric value that 
+                         evaluates to True behaves as a value of +1.  
+        :raises KeyError:  if the target item is not found in the list
+        :return:  the new (absolute) position of the item after the move (taking into `rel`).
+                  :rtype: int
+        """
+        raise NotImplementedError()
+
         
 class NERDAuthorList(_NERDOrderedObjectList):
     """

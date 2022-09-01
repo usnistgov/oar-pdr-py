@@ -7,7 +7,7 @@ This is provide for purposes of testing the interface.  See
 
 # See .base.py for function documentation
 
-import os, copy, re, functools
+import os, copy, re, math
 from collections import OrderedDict
 from collections.abc import Mapping
 from logging import Logger
@@ -76,29 +76,68 @@ class InMemoryObjectList(_NERDOrderedObjectList):
         return len(self._order)
 
     def _get_item_by_id(self, id: str):
-        return self._data[id]
+        return copy.deepcopy(self._data[id])
 
     def _get_item_by_pos(self, pos: int):
-        return self._data[self._order[pos]]
+        return copy.deepcopy(self._data[self._order[pos]])
 
     def set_order(self, ids: Iterable[str]):
         neworder = []
         for id in ids:
-            if id not in neworder:
+            if id not in neworder and id in self._order:
                 neworder.append(id)
         for id in self._order:
             if id not in neworder:
                 neworder.append(id)
         self._order = neworder
 
+    def move(self, idorpos: str, pos: int = None, rel: int = 0) -> int:
+        if pos is None:
+            pos = self.count
+            rel = 0
+        if not isinstance(pos, int):
+            raise TypeError("move(): pos is not an int")
+
+        if isinstance(idorpos, int):
+            if idorpos < -1*(len(self._order)-1) or idorpos >= len(self._order):
+                raise IndexError(idorpos)
+            oldpos = idorpos
+        else:
+            self._data[idorpos]  # raises KeyError
+            try: 
+                oldpos = self._order.index(idorpos)
+            except ValueError:
+                # shouldn't happen; self-correcting programmer error (danger!)
+                self._order.append(idorpos)
+                oldpos = len(self._order) - 1
+
+        if not isinstance(rel, (int, float)):
+            rel = 1 if bool(rel) else 0
+        if rel != 0:
+            rel = math.floor(round(math.fabs(rel)/rel))  # +1 or -1
+            pos = oldpos + rel * pos
+        # if pos == oldpos:
+        #     return pos
+
+        id = self._order.pop(oldpos)
+        if pos > len(self._order):
+            self._order.append(id)
+            return len(self._order) -1
+
+        elif pos < 0:
+            pos = 0
+            
+        self._order.insert(pos, id)
+        return pos
+
     def _set_item(self, id: str, md: Mapping, pos: int=None):
-        if abs(pos) > self.count:
+        if pos is not None and abs(pos) > self.count:
             raise IndexError("NERDm List index out of range: "+str(pos))
         md = OrderedDict(md)
         md['@id'] = id
         
+        neworder = list(self._order)
         if pos is not None:
-            neworder = list(self._order)
             try:
                 oldpos = neworder.index(id)
             except ValueError as ex:
@@ -117,11 +156,12 @@ class InMemoryObjectList(_NERDOrderedObjectList):
         self._order = neworder
 
     def _remove_item(self, id: str):
-        del self._data[id]
+        out = self._data.pop(id)
         try:
             self._order.remove(id)
         except ValueError:
             pass
+        return out
 
 class InMemoryAuthorList(InMemoryObjectList, NERDAuthorList):
     """

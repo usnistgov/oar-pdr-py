@@ -63,19 +63,19 @@ class TestInMemoryResource(test.TestCase):
         
         itms = res.authors
         self.assertEqual(itms.count, 2)
-        self.assertEqual(itms[0].get('familyName'), "Levine")
+        self.assertEqual(itms.get(0).get('familyName'), "Levine")
 
         itms = res.references
         self.assertEqual(itms.count, 1)
-        self.assertEqual(itms[0].get('refType'), "IsReferencedBy")
+        self.assertEqual(itms.get(0).get('refType'), "IsReferencedBy")
 
         itms = res.nonfiles
         self.assertEqual(itms.count, 1)
-        self.assertEqual(itms[0].get('accessURL'), nerd['components'][2]['accessURL'])
+        self.assertEqual(itms.get(0).get('accessURL'), nerd['components'][2]['accessURL'])
 
         itms = res.files
         self.assertEqual(itms.count, 4)
-        self.assertEqual(itms['file_0'].get('filepath'), nerd['components'][0]['filepath'])
+        self.assertEqual(itms.get('file_0').get('filepath'), nerd['components'][0]['filepath'])
 
     def test_replace_res_data(self):
         res = inmem.InMemoryResource("pdr0:0001")
@@ -468,14 +468,254 @@ class TestInMemoryAuthorList(test.TestCase):
         self.auths = inmem.InMemoryAuthorList(nerd, nerd['authors'])
 
     def test_ctor(self):
+        self.assertEqual(self.auths._pfx, "auth")
         self.assertEqual(self.auths._order, "auth_0 auth_1".split())
         self.assertEqual(self.auths._data['auth_0']['familyName'], "Levine")
         self.assertEqual(self.auths._data['auth_1']['familyName'], "Curry")
         self.assertEqual(self.auths._ididx, 2)
 
-    
+        self.assertEqual(self.auths.ids, "auth_0 auth_1".split())
+        self.assertEqual(self.auths.count, 2)
 
+    def test_contains(self):
+        self.assertIn("auth_1", self.auths)
+        self.assertIn("auth_0", self.auths)
+        self.assertNotIn("auth_2", self.auths)
+
+    def test_getsetpop(self):
+        # test access by id or position
+        auth = self.auths.get("auth_1")
+        self.assertEqual(auth['familyName'], "Curry")
+        self.assertEqual(auth['givenName'], "John")
+        auth = self.auths.get(1)
+        self.assertEqual(auth['familyName'], "Curry")
+        self.assertEqual(auth['givenName'], "John")
+        self.assertEqual(self.auths.ids, "auth_0 auth_1".split())
+
+        # an update to my copy doesn't change original
+        auth['givenName'] = "Steph"
+        self.assertEqual(self.auths.get(1)['givenName'], "John")
+        self.assertEqual(auth['givenName'], "Steph")
+
+        # update original via set
+        self.auths.set(1, auth)
+        auth = self.auths.get("auth_1")
+        self.assertEqual(auth['familyName'], "Curry")
+        self.assertEqual(auth['givenName'], "Steph")
+        self.assertEqual(self.auths.get(1)['givenName'], "Steph")
+        self.assertEqual(self.auths.ids, "auth_0 auth_1".split())
+
+        # let's append a new author
+        auth['givenName'] = "John"
+        self.auths.append(auth)
+        self.assertEqual(self.auths.count, 3)
+        auth = self.auths.get(-1)
+        self.assertEqual(auth['givenName'], "John")
+        self.assertEqual(auth['@id'], "auth_2")
+        self.assertEqual(self.auths.get(1)['givenName'], "Steph")
+        self.assertEqual(self.auths.ids, "auth_0 auth_1 auth_2".split())
+
+        # let's prepend a new author
+        auth['givenName'] = "George"
+        self.auths.insert(0, auth)
+        self.assertEqual(self.auths.count, 4)
+        auth = self.auths.get(0)
+        self.assertEqual(auth['givenName'], "George")
+        self.assertEqual(auth['@id'], "auth_3")
+        self.assertEqual(self.auths.get(2)['givenName'], "Steph")
+        self.assertEqual(self.auths.get(1)['familyName'], "Levine")
+        self.assertEqual(self.auths.get(-1)['givenName'], "John")
+        self.assertEqual(self.auths.ids, "auth_3 auth_0 auth_1 auth_2".split())
+
+        # let's insert a new author
+        auth['givenName'] = "Paul"
+        self.auths.insert(2, auth)
+        self.assertEqual(self.auths.count, 5)
+        auth = self.auths.get(2)
+        self.assertEqual(auth['givenName'], "Paul")
+        self.assertEqual(auth['@id'], "auth_4")
+        self.assertEqual(self.auths.get(3)['givenName'], "Steph")
+        self.assertEqual(self.auths.get(0)['givenName'], "George")
+        self.assertEqual(self.auths.get(1)['familyName'], "Levine")
+        self.assertEqual(self.auths.get(-1)['givenName'], "John")
+        self.assertEqual(self.auths.ids, "auth_3 auth_0 auth_4 auth_1 auth_2".split())
+
+        # pop from end and readd: id is retained
+        auth = self.auths.pop(-1)
+        self.assertEqual(self.auths.count, 4)
+        self.assertEqual(auth['givenName'], "John")
+        self.assertEqual(auth['@id'], "auth_2")
+        self.assertNotIn(auth['@id'], self.auths)
+        self.assertEqual(self.auths.ids, "auth_3 auth_0 auth_4 auth_1".split())
+        self.auths.append(auth)
+        self.assertEqual(self.auths.count, 5)
+        self.assertIn(auth['@id'], self.auths)
+        self.assertEqual(self.auths.get(-1)['givenName'], "John")
+        self.assertEqual(self.auths.ids, "auth_3 auth_0 auth_4 auth_1 auth_2".split())
+
+        # pop off from beginning
+        auth = self.auths.pop(0)
+        self.assertEqual(self.auths.count, 4)
+        self.assertEqual(auth['givenName'], "George")
+        self.assertEqual(auth['@id'], "auth_3")
+        self.assertEqual(self.auths.get(1)['givenName'], "Paul")
+        self.assertEqual(self.auths.get(2)['givenName'], "Steph")
+        self.assertEqual(self.auths.get(0)['familyName'], "Levine")
+        self.assertEqual(self.auths.get(-1)['givenName'], "John")
+        self.assertEqual(self.auths.ids, "auth_0 auth_4 auth_1 auth_2".split())
+
+        # pop out from a position
+        auth = self.auths.pop(2)
+        self.assertEqual(self.auths.count, 3)
+        self.assertEqual(auth['givenName'], "Steph")
+        self.assertEqual(auth['@id'], "auth_1")
+        self.assertEqual(self.auths.get(0)['familyName'], "Levine")
+        self.assertEqual(self.auths.get(1)['givenName'], "Paul")
+        self.assertEqual(self.auths.get(2)['givenName'], "John")
+        self.assertEqual(self.auths.get(-1)['givenName'], "John")
+        self.assertEqual(self.auths.ids, "auth_0 auth_4 auth_2".split())
+
+        # pop off from end
+        auth = self.auths.pop(-1)
+        self.assertEqual(self.auths.count, 2)
+        self.assertEqual(auth['givenName'], "John")
+        self.assertEqual(auth['@id'], "auth_2")
+        self.assertEqual(self.auths.get(1)['givenName'], "Paul")
+        self.assertEqual(self.auths.get(0)['familyName'], "Levine")
+        self.assertEqual(self.auths.get(-1)['givenName'], "Paul")
+        self.assertEqual(self.auths.ids, "auth_0 auth_4".split())
+
+    def test_iter(self):
+        auth = self.auths.get("auth_1")
+        auth['givenName'] = "Steph"
+        self.auths.append(auth)
+        self.assertEqual(self.auths.count, 3)
+        self.assertEqual(self.auths.ids, "auth_0 auth_1 auth_2".split())
+
+        it = iter(self.auths)
+        self.assertTrue(hasattr(it, '__next__'), "not an iterator")
+        names = [a['givenName'] for a in it]
+        self.assertEqual(names, "Zachary John Steph".split())
+
+    def test_set_order(self):
+        auth = self.auths.get("auth_1")
+        auth['givenName'] = "Steph"
+        self.auths.append(auth)
+        auth['givenName'] = "George"
+        self.auths.append(auth)
+        auth['givenName'] = "Paul"
+        self.auths.append(auth)
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_0 auth_1 auth_2 auth_3 auth_4".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Zachary John Steph George Paul".split())
+
+        self.auths.set_order("auth_3 auth_1 auth_0 auth_4 auth_2".split())
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_3 auth_1 auth_0 auth_4 auth_2".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "George John Zachary Paul Steph".split())
         
+        self.auths.set_order("auth_0 auth_1 auth_4".split())
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_0 auth_1 auth_4 auth_3 auth_2".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Zachary John Paul George Steph".split())
+        
+        self.auths.set_order("auth_0 auth_1 auth_2 auth_3 auth_4 auth_0 auth_8 auth_4".split())
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_0 auth_1 auth_2 auth_3 auth_4".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Zachary John Steph George Paul".split())
+
+    def test_move(self):
+        auth = self.auths.get("auth_1")
+        auth['givenName'] = "Steph"
+        self.auths.append(auth)
+        auth['givenName'] = "George"
+        self.auths.append(auth)
+        auth['givenName'] = "Paul"
+        self.auths.append(auth)
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_0 auth_1 auth_2 auth_3 auth_4".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Zachary John Steph George Paul".split())
+
+        # move to end
+        self.auths.move("auth_1", None)
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_0 auth_2 auth_3 auth_4 auth_1".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Zachary Steph George Paul John".split())
+        
+        self.auths.move("auth_2")
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_0 auth_3 auth_4 auth_1 auth_2".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Zachary George Paul John Steph".split())
+        
+        self.auths.move("auth_2")
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_0 auth_3 auth_4 auth_1 auth_2".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Zachary George Paul John Steph".split())
+        
+        # move to absolute position
+        self.auths.move(3, 1)
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_0 auth_1 auth_3 auth_4 auth_2".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Zachary John George Paul Steph".split())
+
+        self.auths.move("auth_2", -5, 0)
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_2 auth_0 auth_1 auth_3 auth_4".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Steph Zachary John George Paul".split())
+
+        self.auths.move("auth_0", 10, False)
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_2 auth_1 auth_3 auth_4 auth_0".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Steph John George Paul Zachary".split())
+
+        # push an author down
+        self.auths.move(1, 2, 1)
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_2 auth_3 auth_4 auth_1 auth_0".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Steph George Paul John Zachary".split())
+        
+        self.auths.move("auth_4", -1, True)
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_2 auth_4 auth_3 auth_1 auth_0".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Steph Paul George John Zachary".split())
+        
+        self.auths.move(0, 10, "Goober!")
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_4 auth_3 auth_1 auth_0 auth_2".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Paul George John Zachary Steph".split())
+
+        # pull an author up
+        self.auths.move(4, 3, -1)
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_4 auth_2 auth_3 auth_1 auth_0".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Paul Steph George John Zachary".split())
+        
+        self.auths.move("auth_3", -2, -1)
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_4 auth_2 auth_1 auth_0 auth_3".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "Paul Steph John Zachary George".split())
+        
+        self.auths.move(-3, 20, -1)
+        self.assertEqual(self.auths.count, 5)
+        self.assertEqual(self.auths.ids, "auth_1 auth_4 auth_2 auth_0 auth_3".split())
+        self.assertEqual([a['givenName'] for a in iter(self.auths)],
+                         "John Paul Steph Zachary George".split())
         
                          
 if __name__ == '__main__':
