@@ -316,7 +316,7 @@ class _NERDOrderedObjectList(metaclass=ABCMeta):
         return self._remove_item(key)
 
     @abstractmethod
-    def move(self, idorpos: str, pos: int, rel: int = 0) -> int:
+    def move(self, idorpos: str, pos: int = None, rel: int = 0) -> int:
         """
         move an item currently in the list to a new position.  The `rel` parameter allows one to 
         push an item up or down in the order.  

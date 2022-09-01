@@ -717,7 +717,78 @@ class TestInMemoryAuthorList(test.TestCase):
         self.assertEqual([a['givenName'] for a in iter(self.auths)],
                          "John Paul Steph Zachary George".split())
         
-                         
+
+class TestInMemoryRefList(test.TestCase):
+
+    def setUp(self):
+        nerd = load_simple()
+        self.refs = inmem.InMemoryRefList(nerd, nerd['references'])
+
+    def test_ctor(self):
+        self.assertEqual(self.refs._pfx, "ref")
+        self.assertEqual(self.refs._order, "ref_0".split())
+        self.assertEqual(self.refs._data['ref_0']['refType'], "IsReferencedBy")
+        self.assertEqual(self.refs._ididx, 1)
+
+        self.assertEqual(self.refs.ids, "ref_0".split())
+        self.assertEqual(self.refs.count, 1)
+
+    def test_contains(self):
+        self.assertIn("ref_0", self.refs)
+        self.assertNotIn("ref_2", self.refs)
+
+
+    def test_getsetpop(self):
+        # test access by id or position
+        ref = self.refs.get("ref_0")
+        self.assertEqual(ref['refType'], "IsReferencedBy")
+
+        # add a reference
+        ref['refType'] = "IsSupplementTo"
+        self.refs.append(ref)
+        ref = self.refs.get(-1)
+        self.assertEqual(ref['refType'], "IsSupplementTo")
+        self.assertEqual(ref['@id'], "ref_1")
+        self.assertEqual(self.refs.get(0)['refType'], "IsReferencedBy")
+
+
+class TestInMemoryNonFileList(test.TestCase):
+
+    def setUp(self):
+        nerd = load_simple()
+        self.cmps = inmem.InMemoryNonFileComps(inmem.InMemoryResource("goob"))
+        self.cmps._load_data(nerd['components'])
+
+    def test_ctor(self):
+        self.assertEqual(self.cmps._pfx, "cmp")
+        self.assertEqual(self.cmps._order, "cmp_0".split())
+        self.assertEqual(self.cmps._data['cmp_0']['mediaType'], "application/zip")
+        self.assertIn("accessURL", self.cmps._data['cmp_0'])
+        self.assertEqual(self.cmps._ididx, 1)
+
+        self.assertEqual(self.cmps.ids, "cmp_0".split())
+        self.assertEqual(self.cmps.count, 1)
+
+    def test_contains(self):
+        self.assertIn("cmp_0", self.cmps)
+        self.assertNotIn("cmp_2", self.cmps)
+
+
+    def test_getsetpop(self):
+        # test access by id or position
+        cmp = self.cmps.get("cmp_0")
+        self.assertEqual(cmp['mediaType'], "application/zip")
+
+        # add a cmperence
+        cmp['mediaType'] = "text/plain"
+        self.cmps.append(cmp)
+        cmp = self.cmps.get(-1)
+        self.assertEqual(cmp['mediaType'], "text/plain")
+        self.assertEqual(cmp['@id'], "cmp_1")
+        self.assertEqual(self.cmps.get(0)['mediaType'], "application/zip")
+
+
+
 if __name__ == '__main__':
     test.main()
         
