@@ -19,14 +19,14 @@ class TestInMemoryResource(test.TestCase):
 
     def test_createempty(self):
         res = inmem.InMemoryResource("pdr0:0001")
-        data = res.data()
-        self.assertIsNotNone(res.data())
+        data = res.get_data()
+        self.assertIsNotNone(res.get_data())
         self.assertEqual(res.id, "pdr0:0001")
         self.assertEqual(data.get('@id'), "pdr0:0001")
         self.assertIsNone(data.get('title'))
 
         self.assertFalse(res.deleted)
-        self.assertIsNotNone(res.res_data())
+        self.assertIsNotNone(res.get_res_data())
 
         itms = res.authors
         self.assertTrue(isinstance(itms, ns.NERDAuthorList))
@@ -49,14 +49,14 @@ class TestInMemoryResource(test.TestCase):
 
         res.delete()
         self.assertTrue(res.deleted)
-        self.assertIsNone(res.data())
-        self.assertIsNone(res.res_data())
+        self.assertIsNone(res.get_data())
+        self.assertIsNone(res.get_res_data())
 
     def test_load_data(self):
         nerd = load_simple()
         res = inmem.InMemoryResource("pdr0:0001", nerd)
         self.assertEqual(res.id, "pdr0:0001")
-        data = res.res_data()
+        data = res.get_res_data()
         self.assertEqual(data.get('@id'), "pdr0:0001")
         self.assertEqual(data.get('title'), nerd['title'])
         self.assertEqual(data.get('contactPoint'), nerd['contactPoint'])
@@ -79,7 +79,7 @@ class TestInMemoryResource(test.TestCase):
 
     def test_replace_res_data(self):
         res = inmem.InMemoryResource("pdr0:0001")
-        data = res.data()
+        data = res.get_data()
         self.assertEqual(res.id, "pdr0:0001")
         self.assertEqual(data.get('@id'), "pdr0:0001")
         self.assertIsNone(data.get('title'))
@@ -99,7 +99,7 @@ class TestInMemoryResource(test.TestCase):
             'authors': [ { "fn": "Gurn Cranston" } ]
         }
         res.replace_res_data(md)
-        data = res.data()
+        data = res.get_data()
         self.assertEqual(res.id, "pdr0:0001")
         self.assertEqual(data.get('@id'), "pdr0:0001")
         self.assertEqual(data.get('title'), "The Replacements")
@@ -111,7 +111,7 @@ class TestInMemoryResource(test.TestCase):
         
         nerd = load_simple()
         res.replace_res_data(nerd)
-        data = res.data()
+        data = res.get_data()
         self.assertEqual(res.id, "pdr0:0001")
         self.assertEqual(data.get('@id'), "pdr0:0001")
         self.assertTrue(data.get('title').startswith('OptSortSph: '))
@@ -124,7 +124,7 @@ class TestInMemoryResource(test.TestCase):
         self.assertIsNone(data.get('components'))
         
         res.replace_res_data(md)
-        data = res.data()
+        data = res.get_data()
         self.assertEqual(res.id, "pdr0:0001")
         self.assertEqual(data.get('@id'), "pdr0:0001")
         self.assertEqual(data.get('title'), "The Replacements")
@@ -137,7 +137,7 @@ class TestInMemoryResource(test.TestCase):
         
         res = inmem.InMemoryResource("pdr0:0001", nerd)
         res.replace_res_data(md)
-#        data = res.data()
+#        data = res.get_data()
         self.assertEqual(res.id, "pdr0:0001")
         self.assertEqual(data.get('@id'), "pdr0:0001")
         self.assertEqual(data.get('title'), "The Replacements")
@@ -182,7 +182,7 @@ class TestInMemoryFileComps(test.TestCase):
         paths = [f['filepath'] for f in files.iter_files()]
         self.assertEqual(len(paths), 4)
 
-        fcmps = files.data()
+        fcmps = files.get_data()
         self.assertTrue(isinstance(fcmps, list))
         self.assertEqual([f['filepath'] for f in fcmps], paths)
         
@@ -779,7 +779,7 @@ class TestInMemoryNonFileList(test.TestCase):
         cmp = self.cmps.get("cmp_0")
         self.assertEqual(cmp['mediaType'], "application/zip")
 
-        # add a cmperence
+        # add a component
         cmp['mediaType'] = "text/plain"
         self.cmps.append(cmp)
         cmp = self.cmps.get(-1)

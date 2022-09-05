@@ -1,7 +1,7 @@
 """
 an implementation of the NERDResource storage interface that stores the data in memory (using OrderedDicts).
 
-This is provide for purposes of testing the interface.  See 
+This is provided for purposes of testing the interface.  See 
 :py:mod:`nerdstore.base<nistoar.pdr.draft.nerdstore.base` for full interface documentation.  
 """
 
@@ -16,9 +16,7 @@ from typing import Iterable, Iterator
 from .base import *
 from .base import _NERDOrderedObjectList, DATAFILE_TYPE, SUBCOLL_TYPE, DOWNLOADABLEFILE_TYPE
 
-import nistoar.nerdm.utils as nerdmutils
-
-_idre = re.compile(r"\w_(\d+)$")
+_idre = re.compile(r"^\w+_(\d+)$")
 
 class InMemoryObjectList(_NERDOrderedObjectList):
     """
@@ -44,15 +42,6 @@ class InMemoryObjectList(_NERDOrderedObjectList):
         order = []
         n = 0
         for itm in items:
-            if itm.get('@id'):
-                self._data[cmp.get('@id')] = copy.deepcopy(itm)
-                m = _idre.find(itm['@id'])
-                if m:
-                    # the id was set by a previous call to this class's minter
-                    # extract the number to ensure future ids are unique
-                    n = int(m.group(1))
-                    if n >= self._ididx:
-                        self._ididx = n + 1
             order.append(itm)
 
         for itm in order:
@@ -66,6 +55,15 @@ class InMemoryObjectList(_NERDOrderedObjectList):
         out = "%s_%d" % (self._pfx, self._ididx)
         self._ididx += 1
         return out
+
+    def _reserve_id(self, id):
+        m = _idre.search(id)
+        if m:
+            # the id was set by a previous call to this class's minter
+            # extract the number to ensure future ids are unique
+            n = int(m.group(1))
+            if n >= self._ididx:
+                self._ididx = n + 1
 
     @property
     def ids(self) -> [str]:
@@ -213,7 +211,7 @@ class InMemoryNonFileComps(InMemoryObjectList, NERDNonFileComps):
 
 class InMemoryFileComps(NERDFileComps):
     """
-    an in-memory implementation of the NERDAuthorList interface
+    an in-memory implementation of the NERDFileComps interface
     """
     def __init__(self, resource: NERDResource, comps=[], iscollf=None):
         super(InMemoryFileComps, self).__init__(resource, iscollf)
@@ -338,7 +336,7 @@ class InMemoryFileComps(NERDFileComps):
     def count(self) -> int:
         return len(self._files)
 
-    def data(self) -> [Mapping]:
+    def get_data(self) -> [Mapping]:
         return [f for f in self.iter_files()]
 
     class _FileIterator:
@@ -448,7 +446,7 @@ class InMemoryFileComps(NERDFileComps):
         children[name] = id
         
 
-    def set_file_at(self, md, filepath: str=None, id=None, as_coll: bool=None):
+    def set_file_at(self, md, filepath: str=None, id=None, as_coll: bool=None) -> str:
         """
         add or update a file component.  If `id` is given (or otherwise included in the metadata as 
         the `@id` property) and it already exists in the file list, its metadata will be replaced
@@ -545,7 +543,7 @@ class InMemoryFileComps(NERDFileComps):
 
     def path_exists(self, filepath) -> bool:
         try:
-            return (self._get_file_by_path(filepath))
+            return bool(self._get_file_by_path(filepath))
         except ObjectNotFound:
             return False
             
@@ -581,7 +579,7 @@ class InMemoryFileComps(NERDFileComps):
 
         if not out.get('filepath'):
             # Missing a filepath (avoid this); set to default
-            out['filepath'] = self._basename(cmp['@id'])
+            out['filepath'] = self._basename(out['@id'])
 
         if not out.get('@type'):
             # Assume that this should be a regular file
@@ -664,15 +662,15 @@ class InMemoryResource(NERDResource):
             self._refs = None
             self._auths = None
 
-    def res_data(self):
+    def get_res_data(self):
         if self._data is None:
             return None
         out = copy.deepcopy(self._data)
         out['@id'] = self.id
         return out
         
-    def data(self, inclfiles=True) -> Mapping:
-        out = self.res_data()
+    def get_data(self, inclfiles=True) -> Mapping:
+        out = self.get_res_data()
         if out is None:
             return None
 
@@ -701,7 +699,7 @@ class InMemoryResourceStorage(NERDResourceStorage):
                                   :py:method:`open`.
         """
         self.log = logger
-        self._pfx = ""
+        self._pfx = newidprefix
         self._recs = {}
         self._ididx = 0
         if existing is None:
@@ -748,3 +746,7 @@ class InMemoryResourceStorage(NERDResourceStorage):
         if id not in self._recs:
             self._recs[id] = InMemoryResource(id, None, self.log)
         return self._recs[id]
+
+    def exists(self, id: str) -> bool:
+        return id in self._recs
+

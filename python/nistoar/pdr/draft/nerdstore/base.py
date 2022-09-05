@@ -94,7 +94,7 @@ class NERDResource(ABC):
         if isinstance(md.get('authors'), list):
             self.authors.empty()
             for auth in md.get('authors', []):
-                self.author.append(auth)
+                self.authors.append(auth)
         if isinstance(md.get('references'), list):
             self.references.empty()
             for ref in md.get('references', []):
@@ -104,7 +104,7 @@ class NERDResource(ABC):
             self.files.empty()
             for cmp in md['components']:
                 if 'filepath' in cmp:
-                    self.files.append(cmp)
+                    self.files.set_file_at(cmp, cmp['filepath'])
                 else:
                     self.nonfiles.append(cmp)
 
@@ -126,7 +126,7 @@ class NERDResource(ABC):
         return False
 
     @abstractmethod
-    def data(self, inclfiles=True) -> Mapping:
+    def get_data(self, inclfiles=True) -> Mapping:
         """
         return the resource metadata as a JSON-ready dictionary
 
@@ -135,7 +135,7 @@ class NERDResource(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def res_data(self) -> Mapping:
+    def get_res_data(self) -> Mapping:
         """
         return the resource metadata, excluding the authors, references, and all components
         """
@@ -149,7 +149,7 @@ class _NERDOrderedObjectList(metaclass=ABCMeta):
     def __init__(self, resource: NERDResource):
         self._res = resource
 
-    def data(self) -> [Mapping]:
+    def get_data(self) -> [Mapping]:
         """
         return the current record as a NERDm dictionary
         """
@@ -277,26 +277,41 @@ class _NERDOrderedObjectList(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def _new_id(self):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _reserve_id(self, id):
+        """
+        if necessary, ensure that :py:method:`_new_id` will not create an identifier that 
+        matches the given one.  This allows method :py:method:`append` and :py:method:`insert` to 
+        accept identifier's given to it.  
+        """
+        raise NotImplementedError()
+        
     def insert(self, pos, md):
         """
         inserts a new item into the specified position in the list.  If the item has an '@id' property
-        and that identifier is already in the list, it will be replaced with a new one. (Use
+        and that identifier is already in the list, the identifier will be replaced with a new one. (Use
         :py:method:`move` to move an item already in the list to that position.)  
         
         :return:  the ID assigned to metadata
                   :rtype: str
         """
-        id = md['@id']
+        id = md.get('@id')
         if not id or id in self:
             id = self._get_default_id_for(md)
+        else:
+            self._reserve_id(id)
         self._set_item(id, md, pos)
         return id
 
     def append(self, md: Mapping) -> str:
         """
         add a new item to the end of this list.  If the item has an '@id' property and that 
-        identifier is already in the list, it will be replaced with a new one. (Use :
-        py:method:`move` to move an item already in the list to the end.)
+        identifier is already in the list, the identifier will be replaced with a new one. (Use 
+        :py:method:`move` to move an item already in the list to the end.)
 
         :param Mapping md:  a dictionary containing the metadata describing a single item
         :return:  string giving the identifier assigned to this item.
@@ -375,14 +390,12 @@ class NERDAuthorList(_NERDOrderedObjectList):
 
     def _get_default_id_for(self, md):
         out = md.get('orcid')
+        if out:
+            out = re.sub(r'^https://orcid.org/', 'doi:', out)
         if not out:
             out = self._new_id()
         return out
 
-    @abstractmethod
-    def _new_id(self):
-        raise NotImplementedError()
-        
 
 class NERDRefList(_NERDOrderedObjectList):
     """
@@ -417,6 +430,8 @@ class NERDRefList(_NERDOrderedObjectList):
 
     def _get_default_id_for(self, md):
         out = md.get('doi')
+        if out:
+            out = re.sub(r'^https://doi.org/', 'doi:', out)
         if not out:
             out = self._new_id()
         return out
@@ -459,17 +474,10 @@ class NERDNonFileComps(_NERDOrderedObjectList):
         return self._get_item_by_pos(pos)
 
     def _get_default_id_for(self, md):
-        out = md.get('doi')
-        if not out:
-            out = self._new_id()
-        return out
-
-    @abstractmethod
-    def _new_id(self):
-        raise NotImplementedError()
+        return self._new_id()
 
 
-class NERDFileComps(Mapping, metaclass=ABCMeta):
+class NERDFileComps(metaclass=ABCMeta):
     """
     an interface to the list of file components. A file component is any component that 
     is either a downloadable file or a Subcollection folder; a file component must have a 
@@ -532,13 +540,19 @@ class NERDFileComps(Mapping, metaclass=ABCMeta):
         """
         the total number of file components (including subcollections) in this dataset
         """
-        return len(ids)
+        return len(self.ids)
 
-    def data(self) -> [Mapping]:
+    def get_files(self) -> [Mapping]:
         """
         return the full hierarchy of files as a single flat list
         """
-        return [self[d] for d in self.ids]
+        return [self.get(d) for d in self.ids]
+
+    def get(self, idorpath):
+        try:
+            return self.get_file_by_id(idorpath)
+        except ObjectNotFound:
+            return self.get_file_by_path(idorpath)
 
     @abstractmethod
     def get_ids_in_subcoll(self, collpath: str) -> [str]:
@@ -589,7 +603,7 @@ class NERDFileComps(Mapping, metaclass=ABCMeta):
 #        raise NotImplementedError()
 
     @abstractmethod
-    def set_file_at(md, filepath: str=None, id=None):
+    def set_file_at(md, filepath: str=None, id=None, as_coll: bool=None) -> str:
         """
         add or update a file component.  If `id` is given (or otherwise included in the metadata as 
         the `@id` property) and it already exists in the file list, its metadata will be replaced
@@ -602,6 +616,15 @@ class NERDFileComps(Mapping, metaclass=ABCMeta):
 
         The implementation may require that the parent subcollection referenced in `filepath` exist already.
 
+        :param Mapping   md:  the file component metadata for the file to add
+        :param str filepath:  the file path to insert the file into.  If provided, it will override
+                              the `md`'s `filepath` property; otherwise, the `filepath` property
+                              will be assumed as the insert location.  
+        :param str       id:  the identifier to assign to the file metadata.  If provided, it will 
+                              override the `@id` property in `md`; otherwise, the `@id` will be used.
+                              If neither is provided, one will be assigned to it.
+        :param bool as_coll:  True if the metadata is meant to describe a subcollection.  If True, 
+                              the `@type` property will be set appropriately for a subcollection.
         :return: the identifier assigned to the file component
                  :rtype: str
         :raises FilepathNotSpecified: if the file path is not set via `filepath` parameter and cannot 
@@ -687,17 +710,11 @@ class NERDFileComps(Mapping, metaclass=ABCMeta):
     def _dirname(filepath):
         return filepath.rsplit('/', 1)[0]
 
-    def __getitem__(self, id):
-        return self.get_file_by_id(id)
-
-    def __setitem__(self, id, md):
-        self.set_file_at(md, id=id)
-
     def __iter__(self):
         return iter(self.ids)
 
     def __len__(self):
-        return len(self.ids)
+        return self.count
     
 
 class NERDStorageException(Exception):
@@ -784,6 +801,12 @@ class CollectionRemovalDissallowed(NERDStorageException):
         super(CollectionRemovalDissallowed, self).__init__(message)
         self._path = path
 
+class StorageFormatException(NERDStorageException):
+    """
+    an exception indicating that data in the underlying storage appears missing when expected or 
+    otherwise corrupted.
+    """
+    pass
 
 class NERDResourceStorage(ABC):
     """
