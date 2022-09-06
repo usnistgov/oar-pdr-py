@@ -28,6 +28,7 @@ from nistoar.pdr.publish import prov
 # datadir = nistoar/preserve/data
 datadir = Path(__file__).parents[2] / 'preserve' / 'data'
 datadir2 = Path(__file__).parents[1] / 'data'
+simplenerd = datadir / '1491nerdm.json'
 
 loghdlr = None
 rootlog = None
@@ -216,7 +217,7 @@ class TestPDPBagger(test.TestCase):
         self.assertTrue(not bagdir.exists())
         self.set_bagger_for("pdp1:goob")
 
-        # nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        # nerd = utils.read_json(str(simplenerd))
         nerd = utils.read_json(str(datadir2 / 'ncnrexp0.json'))
         nerd['bureauCode'] = [ "666:66" ]
         nerd['accessLevel'] = "private"
@@ -249,7 +250,7 @@ class TestPDPBagger(test.TestCase):
         self.assertTrue(not bagdir.exists())
         self.set_bagger_for("pdp1:goob")
 
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
         nerd['bureauCode'] = [ "666:66" ]
         nerd['accessLevel'] = "private"
         pubshr = nerd['publisher']
@@ -367,7 +368,7 @@ class TestPDPBagger(test.TestCase):
         self.bgr.prepare(who=tstag)
         self.assertTrue(bagdir.exists())
 
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
         del nerd['components'][2]
         # del nerd['releaseHistory']
         self.bgr.set_res_nerdm(nerd, tstag, True)
@@ -441,7 +442,7 @@ class TestPDPBagger(test.TestCase):
         self.bgr.prepare()
         self.assertTrue(bagdir.exists())
 
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
         del nerd['components'][2]
         self.bgr.set_res_nerdm(nerd, None, True)  # saves components, too
 

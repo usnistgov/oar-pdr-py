@@ -52,7 +52,6 @@
     ],
     "references": [
         {
-            "@id": "pdr:ref/doi:10.1364/OE.24.014100",
             "@type": "deo:BibliographicReference",
             "refType": "IsReferencedBy",
             "location": "https://doi.org/10.1364/OE.24.014100",
@@ -65,11 +64,11 @@
     "license": "http://www.nist.gov/open/license.cfm",
     "components": [
         {
-            "description": "First trial of experiment",
-            "downloadURL": "https://data.nist.gov/od/ds/3A1EE2F169DD3B8CE0531A570681DB5D1491/trial1.json",
-            "mediaType": "application/json",
-            "title": "JSON version of the Mathematica notebook",
-            "filepath": "trial1.json",
+            "downloadURL": "https://s3.amazonaws.com/nist-midas/1491_optSortSphEvaluated20160701.cdf",
+            "title": "CDF version of the Mathematica notebook",
+            "description": "A .cdf version of the Mathematica notebook. A reader for this file is available at: http://www.wolfram.com/cdf/",
+            "mediaType": "application/vnd.wolfram.player",
+            "filepath": "1491_optSortSphEvaluated20160701.cdf",
             "@type": [
                 "nrdp:DataFile",
                 "dcat:Distribution"
@@ -79,11 +78,10 @@
             ]
         },
         {
-            "description": "First trial of experiment",
-            "downloadURL": "https://data.nist.gov/od/ds/3A1EE2F169DD3B8CE0531A570681DB5D1491/trial2.json",
-            "mediaType": "application/json",
-            "title": "JSON version of the Mathematica notebook",
-            "filepath": "trial2.json",
+            "downloadURL": "https://s3.amazonaws.com/nist-midas/1491_optSortSphEvaluated20160701.cdf.sha256",
+            "mediaType": "text/plain",
+            "title": "SHA-256 file for the CDF version of the Mathematica notebook",
+            "filepath": "1491_optSortSphEvaluated20160701.cdf.sha256",
             "@type": [
                 "nrdp:DataFile",
                 "dcat:Distribution"
@@ -109,23 +107,49 @@
             ]
         },
         {
-            "description": "Third trial of experiment with different parts",
-            "mediaType": "application/json",
-            "title": "Third trial data",
-            "filepath": "trial3",
+            "downloadURL": "https://s3.amazonaws.com/nist-midas/1491_optSortSphEvaluated20160701.nb",
+            "mediaType": "application/mathematica",
+            "title": "Download for the Mathematica notebook",
+            "filepath": "1491_optSortSphEvaluated20160701.nb",
             "@type": [
-                "nrdp:Subcollection"
+                "nrdp:DataFile",
+                "dcat:Distribution"
             ],
             "_extensionSchemas": [
-                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.4#/definitions/Subcollection"
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.4#/definitions/DataFile"
             ]
         },
         {
-            "description": "First trial of experiment",
-            "downloadURL": "https://data.nist.gov/od/ds/3A1EE2F169DD3B8CE0531A570681DB5D1491/trial3/trial3a.json",
-            "mediaType": "application/json",
-            "title": "JSON version of the Mathematica notebook",
-            "filepath": "trial3/trial3a.json",
+            "downloadURL": "https://s3.amazonaws.com/nist-midas/1491_optSortSph20160701.m",
+            "mediaType": "text/plain",
+            "title": "ASCII version of the code (without documentation)",
+            "filepath": "1491_optSortSph20160701.m",
+            "@type": [
+                "nrdp:DataFile",
+                "dcat:Distribution"
+            ],
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.4#/definitions/DataFile"
+            ]
+        },
+        {
+            "downloadURL": "https://s3.amazonaws.com/nist-midas/1491_optSortSphEvaluated20160701.nb.sha256",
+            "mediaType": "text/plain",
+            "title": "SHA-256 file for Mathematica download file",
+            "filepath": "1491_optSortSphEvaluated20160701.nb.sha256",
+            "@type": [
+                "nrdp:DataFile",
+                "dcat:Distribution"
+            ],
+            "_extensionSchemas": [
+                "https://data.nist.gov/od/dm/nerdm-schema/pub/v0.4#/definitions/DataFile"
+            ]
+        },
+        {
+            "downloadURL": "https://s3.amazonaws.com/nist-midas/1491_optSortSph20160701.m.sha256",
+            "mediaType": "text/plain",
+            "title": "SHA-256 file for ASCII version of the code",
+            "filepath": "1491_optSortSph20160701.m.sha256",
             "@type": [
                 "nrdp:DataFile",
                 "dcat:Distribution"
