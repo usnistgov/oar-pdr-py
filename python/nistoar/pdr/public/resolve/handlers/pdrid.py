@@ -30,6 +30,7 @@ class PDRIDHandler(Handler):
         super(PDRIDHandler, self).__init__(path, wsgienv, start_resp, config)
         self._naan = str(self.cfg.get('naan', ark_naan))
         self.log = log
+        self._mdcachedir = self.cfg.get("metadata_cache_dir")
 
     def do_GET(self, path, ashead=False, format=None):
         """
@@ -157,7 +158,7 @@ class PDRIDHandler(Handler):
             if not baseurl:
                 raise ConfigurationException("Missing required configuration: APIs.mdSearch")
             try:
-                nerdm = MetadataClient(baseurl).describe(dsid, version)
+                nerdm = MetadataClient(baseurl, self._mdcachedir).describe(dsid, version)
             except IDNotFound as ex:
                 return self.send_error(404, "Dataset ID Not Found")
             except Exception as ex:
@@ -234,7 +235,7 @@ class PDRIDHandler(Handler):
             if not baseurl:
                 raise ConfigurationException("Missing required configuration: APIs.mdSearch")
             try:
-                nerdm = MetadataClient(baseurl).describe(dsid + const.RELHIST_EXTENSION)
+                nerdm = MetadataClient(baseurl, self._mdcachedir).describe(dsid + const.RELHIST_EXTENSION)
             except IDNotFound as ex:
                 return self.send_error(404, "Dataset ID Not Found")
             except Exception as ex:
@@ -265,7 +266,7 @@ class PDRIDHandler(Handler):
         if not baseurl:
             raise ConfigurationException("Missing required configuration: APIs.mdSearch")
         try:
-            cmpmd = MetadataClient(baseurl).describe(cmpid, version)
+            cmpmd = MetadataClient(baseurl, self._mdcachedir).describe(cmpid, version)
         except IDNotFound as ex:
             return self.send_error(404, "Component ID Not Found")
         except Exception as ex:
