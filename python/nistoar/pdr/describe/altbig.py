@@ -14,6 +14,7 @@ from nistoar.nerdm.utils import Version
 from nistoar.pdr.utils import read_json
 
 _ark_id_re = re.compile(const.ARK_ID_PAT)
+_dlurl_ver_re = re.compile(r'/_v/\d+\.\d+\.\d+')
 VER_DELIM  = const.RELHIST_EXTENSION
 FILE_DELIM = const.FILECMP_EXTENSION
 LINK_DELIM = const.LINKCMP_EXTENSION
@@ -162,10 +163,21 @@ class MetadataClient(object):
             version = 'latest'
 
         out = self._get(id, version, reqid)
+        idm = _ark_id_re.match(out.get('@id',''))
         if version == 'latest':
-            idm = _ark_id_re.match(out.get('@id',''))
             if idm and idm.group(const.ARK_ID_PATH_GRP):
                 out['@id'] = out['@id'][:idm.start(const.ARK_ID_PATH_GRP)]
+            for cmp in out.get('components', []):
+                if cmp.get('downloadURL'):
+                    cmp['downloadURL'] = _dlurl_ver_re.sub('', cmp['downloadURL'])
+        elif idm and not idm.group(const.ARK_ID_PATH_GRP):
+            out['@id'] += VER_DELIM + '/' + version
+            latest_dl_re = re.compile(r'/od/ds/(ark:/\d+/)*[\w\-]+/')
+            for cmp in out.get('components', []):
+                m = latest_dl_re.search(cmp.get('downloadURL', ''))
+                if m and cmp['downloadURL'][m.end():m.end()+3] != "v_/":
+                    cmp['downloadURL'] = cmp['downloadURL'][:m.end()] + "_v/"+version+'/' + \
+                                         cmp['downloadURL'][m.end():]
 
         return out
 

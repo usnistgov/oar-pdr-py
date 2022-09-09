@@ -4,14 +4,20 @@ import unittest as test
 from nistoar.testing import *
 from nistoar.pdr.describe import rmm, altbig, hybrid
 from nistoar.pdr.utils import read_json, write_json
+from nistoar.pdr import constants as const
 
 testdir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 datadir = os.path.join(testdir, 'data', 'rmm-test-archive', 'versions')
 basedir = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.dirname(testdir)))))
 
+VER_DELIM  = const.RELHIST_EXTENSION
+DSVER_DELIM = "/_v"
+
 port = 9091
 baseurl = "http://localhost:{0}/".format(port)
+verpath_re = re.compile(VER_DELIM+r'/\d+\.\d+.\d+')
+dsverpath_re = re.compile(DSVER_DELIM+r'/\d+\.\d+.\d+')
 
 cachedir = None
 def setup_cache():
@@ -22,6 +28,13 @@ def setup_cache():
     for f in "mds2-2106-v1_5_0.json mds2-2106-v1_6_0.json".split():
         nerd = read_json(os.path.join(datadir, f))
         nerd['big'] = True
+        if VER_DELIM in nerd.get('@id',''):
+            nerd['@id'] = verpath_re.sub('', nerd['@id'])
+        for cmp in nerd.get('components', []):
+            if DSVER_DELIM in cmp.get('downloadURL',''):
+                cmp['downloadURL'] = dsverpath_re.sub('', cmp['downloadURL'])
+            if VER_DELIM in cmp.get('downloadURL',''):
+                cmp['downloadURL'] = verpath_re.sub('', cmp['downloadURL'])
         write_json(nerd, os.path.join(cachedir, f))
 
 def startService(authmeth=None):
@@ -100,6 +113,8 @@ class TestMetadataClient(test.TestCase):
         self.assertEqual(data['version'], '1.6.0')
         self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 7)
         self.assertTrue(not data.get('big'))
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(all(["/_v/" in u for u in dlus]))
 
     def test_describe_ark_version(self):
         data = self.cli.describe("ark:/88434/mds2-2106", "1.6.0")
@@ -108,6 +123,8 @@ class TestMetadataClient(test.TestCase):
         self.assertEqual(data['version'], '1.6.0')
         self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 7)
         self.assertTrue(data.get('big'))
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(all(["/_v/" in u for u in dlus]))
 
         data = self.cli.describe("ark:/88434/mds2-2106", "1.5.0")
         self.assertEqual(data['@id'], 'ark:/88434/mds2-2106/pdr:v/1.5.0')
@@ -115,6 +132,15 @@ class TestMetadataClient(test.TestCase):
         self.assertEqual(data['version'], '1.5.0')
         self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 6)
         self.assertTrue(data.get('big'))
+
+        data = self.cli.describe("ark:/88434/mds2-2106")
+        self.assertEqual(data['@id'], 'ark:/88434/mds2-2106')
+        self.assertEqual(data['ediid'], 'ark:/88434/mds2-2106')
+        self.assertEqual(data['version'], '1.6.0')
+        self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 7)
+        self.assertTrue(data.get('big'))
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(not any(["/_v/" in u for u in dlus]))
 
         data = self.cli.describe("ark:/88434/mds00sxbvh", "1.0.4")
         self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.4')

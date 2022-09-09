@@ -96,10 +96,14 @@ class TestAltBigMetadataClient(test.TestCase):
         data = self.cli.describe("mds003r0x6")
         self.assertEqual(data['@id'], 'ark:/88434/mds003r0x6')
         self.assertEqual(data['ediid'], '1E0F15DAAEFB84E4E0531A5706813DD8436')
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(not any(["/_v/" in u for u in dlus]))
 
         data = self.cli.describe("mds2-2110")
         self.assertEqual(data['@id'], 'ark:/88434/mds2-2110')
         self.assertEqual(data['ediid'], 'ark:/88434/mds2-2110')
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(not any(["/_v/" in u for u in dlus]))
 
     def test_describe_ark_version(self):
         self.assertFalse(self.cli._versions, "Index unintentionally created")
@@ -110,6 +114,8 @@ class TestAltBigMetadataClient(test.TestCase):
         self.assertEqual(data['version'], '1.6.0')
         self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 7)
         self.assertFalse(self.cli._versions, "Index unintentionally created")
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(all(["/_v/" in u for u in dlus]))
 
         data = self.cli.describe("ark:/88434/mds00sxbvh", "1.0.4")
         self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.4')
@@ -117,24 +123,48 @@ class TestAltBigMetadataClient(test.TestCase):
         self.assertEqual(data['version'], '1.0.4')
         self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 5)
         self.assertTrue(self.cli._versions)
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(all(["/_v/" in u for u in dlus]))
 
         data = self.cli.describe("ark:/88434/mds00sxbvh", "1.0.1")
         self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.1')
         self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
         self.assertEqual(data['version'], '1.0.1')
         self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 2)
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(not any(["/_v/" in u for u in dlus]))  # non-distrib svc urls
 
         data = self.cli.describe("ark:/88434/mds00sxbvh/pdr:v/1.0.4")
         self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.4')
         self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
         self.assertEqual(data['version'], '1.0.4')
         self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 5)
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(not any(["/_v/" in u for u in dlus]))  # non-distrib svc urls
 
         data = self.cli.describe("ark:/88434/mds00sxbvh/pdr:v/1.0.1")
         self.assertEqual(data['@id'], 'ark:/88434/mds00sxbvh/pdr:v/1.0.1')
         self.assertEqual(data['ediid'], '1E651A532AFD8816E0531A570681A662439')
         self.assertEqual(data['version'], '1.0.1')
         self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 2)
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(not any(["/_v/" in u for u in dlus]))
+
+        data = self.cli.describe("ark:/88434/mds2-2106/pdr:v/1.3.0")
+        self.assertEqual(data['@id'], 'ark:/88434/mds2-2106/pdr:v/1.3.0')
+        self.assertEqual(data['ediid'], 'ark:/88434/mds2-2106')
+        self.assertEqual(data['version'], '1.3.0')
+        self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 4)
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(all(["/_v/" in u for u in dlus]))
+
+        data = self.cli.describe("ark:/88434/mds2-2106")
+        self.assertEqual(data['@id'], 'ark:/88434/mds2-2106')
+        self.assertEqual(data['ediid'], 'ark:/88434/mds2-2106')
+        self.assertEqual(data['version'], '1.6.0')
+        self.assertEqual(len(data.get('releaseHistory',{}).get('hasRelease',[])), 7)
+        dlus = [c['downloadURL'] for c in data.get('components', []) if 'downloadURL' in c]
+        self.assertTrue(not any(["/_v/" in u for u in dlus]))
 
         with self.assertRaises(altbig.IDNotFound):
             data = self.cli.describe("ark:/88434/mds00sxbvh", "1.0.8")
@@ -159,6 +189,8 @@ class TestAltBigMetadataClient(test.TestCase):
         self.assertEqual(data['@id'], 'ark:/88434/mds2-2106/cmps/NIST_NPL_InterlabData2019.csv')
         self.assertEqual(data['version'], '1.6.0')
         self.assertIn('@context', data)
+        self.assertIn('downloadURL', data)
+        self.assertNotIn('/_v/', data['downloadURL'])
         self.assertNotIn('components', data)
         self.assertNotIn('releaseHistory', data)
         self.assertNotIn('versionHistory', data)
@@ -167,6 +199,8 @@ class TestAltBigMetadataClient(test.TestCase):
         self.assertEqual(data['@id'], 'ark:/88434/mds2-2106/cmps/NIST_NPL_InterlabData2019.csv')
         self.assertEqual(data['version'], '1.6.0')
         self.assertIn('@context', data)
+        self.assertIn('downloadURL', data)
+        self.assertNotIn('/_v/', data['downloadURL'])
         self.assertNotIn('components', data)
         self.assertNotIn('releaseHistory', data)
         self.assertNotIn('versionHistory', data)
@@ -175,6 +209,8 @@ class TestAltBigMetadataClient(test.TestCase):
         self.assertEqual(data['@id'], 'ark:/88434/mds2-2106/pdr:v/1.4.0/cmps/NIST_NPL_InterlabData2019.csv')
         self.assertEqual(data['version'], '1.4.0')
         self.assertIn('@context', data)
+        self.assertIn('downloadURL', data)
+        self.assertIn('/_v/', data['downloadURL'])
         self.assertNotIn('components', data)
         self.assertNotIn('releaseHistory', data)
         self.assertNotIn('versionHistory', data)

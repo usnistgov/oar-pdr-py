@@ -14,10 +14,6 @@ from .. import constants as const
 
 _ark_id_re = re.compile(const.ARK_ID_PAT)
 VER_DELIM  = const.RELHIST_EXTENSION
-FILE_DELIM = const.FILECMP_EXTENSION
-LINK_DELIM = const.LINKCMP_EXTENSION
-AGG_DELIM  = const.AGGCMP_EXTENSION
-OLD_COMP_DELIM = "/cmps"
 
 class MetadataClient(object):
     """
@@ -61,9 +57,14 @@ class MetadataClient(object):
                   :rtype: Mapping
         :raises IDNotFound:  if the identifier is unknown
         """
-        if self.alt_record_exists(id, version):
+        vers_specified = (bool(version) and version != 'latest') or VER_DELIM in id
+        if not vers_specified and self.alt_record_exists(id, version):
             return self._altcli.describe(id, version)
-        return self._rmmcli.describe(id, version)
+        out = self._rmmcli.describe(id, version)
+        if vers_specified and not id.endswith(VER_DELIM) and \
+           self.alt_record_exists(id, out.get('version', '0')):
+            return self._altcli.describe(id, version)
+        return out
 
     def search(self, query=None, latest=True):
         """
