@@ -232,7 +232,8 @@ class MetadataClient(object):
             if idm.group(const.ARK_ID_PATH_GRP) and \
                idm.group(const.ARK_ID_PATH_GRP).startswith(VER_DELIM):
                 fields = idm.group(const.ARK_ID_PATH_GRP).split('/')
-                version = fields[2]
+                if len(fields) > 2:
+                    version = fields[2]
 
         if not self._versions:
             if version and version != 'latest':
