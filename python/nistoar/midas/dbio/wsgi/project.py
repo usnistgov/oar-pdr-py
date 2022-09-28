@@ -16,9 +16,9 @@ from collections.abc import Mapping, Sequence
 
 from nistoar.pdr.publish SubApp, Handler   # use same sevice infrastructure as the publishing service
 from nistoar.pdr.utils.webrecord import WebRecorder
-from nistoar.midas import dbio
-from nistoar.midas.dbio import ProjectRecord
-from .project import ProjectRequestHandler
+from .. import dbio
+from ..dbio import ProjectRecord
+from .broker import ProjectRecordBroker
 
 
 class MIDASProjectApp(SubApp):
