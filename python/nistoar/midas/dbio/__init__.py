@@ -1,11 +1,11 @@
 """
 dbio:  a module for accessing information from a common database.  
 
-In the MIDAS framework, a common database model can be used for storing different types of records 
-that can be created by users.  There are two key types supported currently: *DMPs* (Data Management 
-Plans) and *draft EDIs* (Enterprise Data Inventory records).  This module provides an interface to 
-access and update those records through the life cycle of the records.  This includes managing 
-authorization to access or update the records.
+In the MIDAS framework, a common database model can be used for storing different types of _project 
+records_ that can be created by users.  There are two key types supported currently: *DMPs* (Data 
+Management Plans) and *draft EDIs* (Enterprise Data Inventory records).  This module provides an 
+interface to access and update those records through the life cycle of the records.  This includes 
+managing authorization to access or update the records.
 
 ----------------------
 Typical Use

@@ -75,6 +75,9 @@ class TestDBClient(test.TestCase):
         self.assertTrue(self.cli.name_exists("test", self.user))
 
     def test_get_record(self):
+        with self.assertRaises(base.ObjectNotFound):
+            self.cli.get_record_for("pdr0:0001")
+
         self.cli.create_record("test1")
         self.cli.create_record("test2")
         rec = self.fact.create_client(base.DRAFT_PROJECTS, "alice").create_record("goob")

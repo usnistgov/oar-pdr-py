@@ -31,8 +31,8 @@ DEF_GROUPS_SHOULDER = "grp0"
 PUBLIC_GROUP = DEF_GROUPS_SHOULDER + ":public"    # all users are implicitly part of this group
 ANONYMOUS = PUBLIC_GROUP
 
-__all__ = ["DBClient", "DBClientFactory", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP", "ANONYMOUS",
-           "DRAFT_PROJECTS", "DMP_PROJECTS"]
+__all__ = ["DBClient", "DBClientFactory", "ProjectRecord", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP", 
+           "ANONYMOUS", "DRAFT_PROJECTS", "DMP_PROJECTS"]
 
 Permissions = Union[str, Sequence[str], AbstractSet[str]]
 
@@ -90,6 +90,20 @@ class ACLs:
         for id in ids:
             if id not in self._perms[perm_name]:
                 self._perms[perm_name].append(id)
+
+    def revoke_perm_from_all(self, perm_name):
+        """
+        remove the given identities from the list having the given permission.  For each given identity 
+        that does not currently have the permission, nothing is done.  
+        :param str perm_name:  the permission to be revoked
+        :param str ids:        the identities of the users the permission should be revoked from
+        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
+                               authorized to grant this permission
+        """
+        if not self._rec.authorized(self.ADMIN):
+            raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
+        if perm_name in self._perms:
+            self._perms[perm_name] = []
 
     def revoke_perm_from(self, perm_name, *ids):
         """
@@ -253,6 +267,7 @@ class ProtectedRecord(ABC):
         return errs
 
     def to_dict(self):
+        self._data['acls'] = self.acls._data
         return deepcopy(self._data)
 
 class Group(ProtectedRecord):
@@ -564,6 +579,13 @@ class ProjectRecord(ProtectedRecord):
         """
         return self._data.get('name', "")
 
+    @name.setter
+    def name(self, val):
+        """
+        assign the given name as the record's mnumonic name
+        """
+        self._data['name'] = val
+        
     @property
     def created(self) -> float:
         """
@@ -587,6 +609,10 @@ class ProjectRecord(ProtectedRecord):
         """
         return self._data['data']
 
+    @data.setter
+    def data(self, data: Mapping):
+        self._data['data'] = deepcopy(data)
+
     @property
     def meta(self) -> MutableMapping:
         """
@@ -595,6 +621,10 @@ class ProjectRecord(ProtectedRecord):
         the updating process.  The expected properties for this dictionary are determined by the application.
         """
         return self._data['meta']
+
+    @meta.setter
+    def meta(self, data: Mapping):
+        self._data['meta'] = deepcopy(data)
 
     def __str__(self):
         return "<{} ProjectRecord: {} ({}) owner={}>".format(self._coll.rstrip("s"), self.id,
@@ -768,7 +798,7 @@ class DBClient(ABC):
         """
         out = self._get_from_coll(self._projcoll, id)
         if not out:
-            return None
+            raise ObjectNotFound(id)
         out = ProjectRecord(self._projcoll, out, self)
         if not out.authorized(perm):
             raise NotAuthorized(self.user_id, perm)
@@ -843,7 +873,7 @@ class DBClient(ABC):
     @abstractmethod
     def _select_from_coll(self, collname, **constraints) -> Iterator[MutableMapping]:
         """
-        return an iterator to the records from a specified collectino that match the set of 
+        return an iterator to the records from a specified collection that match the set of 
         given constraints.
 
         :param str collname:   the logical name of the database collection (e.g. table, etc.) to pull 
@@ -944,4 +974,24 @@ class AlreadyExists(DBIOException):
     """
     pass
 
+class ObjectNotFound(DBIOException):
+    """
+    an exception indicating that the requested record, or a requested part of a record, does not exist.
+    """
+    def __init__(self, recid, part=None, message=None):
+        """
+        initialize this exception
+        :param str recid:  the id of the record that was existed
+        :param str  part:  the part of the record that was requested.  Do not provide this parameter if 
+                           the entire record does not exist.  
+        """
+        self.record_id = recid
+        self.record_part = part
+
+        if not message:
+            if part:
+                message = "Requested portion of record (id=%s) does not exist: %s" % (recid, part)
+            else:
+                message = "Requested record with id=%s does not exist" % recid
+        super(ObjectNotFound, self).__init__(message)
 
