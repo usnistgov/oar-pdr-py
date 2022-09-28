@@ -1,7 +1,7 @@
 """
 Some common code for implementing the WSGI front end to dbio
 """
-from nistoar.pdr.publish import Handler   # use same sevice infrastructure as the publishing service
+from nistoar.pdr.publish.service.wsgi import Handler   # same infrastructure as the publishing service
 
 class DBIOHandler(Handler):
     """

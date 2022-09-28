@@ -14,7 +14,7 @@ from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 
-from nistoar.pdr.publish import SubApp, Handler   # use same sevice infrastructure as the publishing service
+from nistoar.pdr.publish.service.wsgi import SubApp, Handler  # same infrastructure as publishing service
 from nistoar.pdr.utils.webrecord import WebRecorder
 from .. import dbio
 from ..dbio import ProjectRecord
