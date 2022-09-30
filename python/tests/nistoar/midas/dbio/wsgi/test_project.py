@@ -240,6 +240,36 @@ class TestMIDASProjectApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("405 ", self.resp[0])
 
+    def test_create(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"data": {"color": "red"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertEqual(hdlr.cfg, self.cfg)
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+
+        self.resp = []
+        req['wsgi.input'] = StringIO(json.dumps({"name": "big", "owner": "nobody", "data": {"color": "red"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertEqual(hdlr.cfg, self.cfg)
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "big")
+        self.assertEqual(resp['owner'], "nstr1")
+        self.assertEqual(resp['id'], "mdm1:0003")
+        self.assertEqual(resp['data'], {"color": "red"})
+        self.assertEqual(resp['meta'], {})
+
+
     def test_search(self):
         path = ""
         req = {

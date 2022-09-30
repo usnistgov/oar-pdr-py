@@ -51,7 +51,7 @@ class MIDASProjectApp(SubApp):
 
         # set up dbio client and the request handler that will mediate with it
         dbcli = self._dbfact.create_client(self._name, who.actor)
-        pbroker = self._prjbrkr_cls(dbcli, self.cfg, env, self.log)
+        pbroker = self._prjbrkr_cls(dbcli, self.cfg, who, env, self.log)
 
         # now parse the requested path; we have different handlers for different types of paths
         path = path.strip('/')
@@ -447,17 +447,17 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
-        if not newdata['name']:
+        if not newdata.get('name'):
             return self.send_error_resp(400, "Bad POST input", "No mneumonic name provided")
 
         try:
-            prec = self.create_record(newdata['name'], newdata.get("data"), newdata.get("meta"))
+            prec = self._pbrkr.create_record(newdata['name'], newdata.get("data"), newdata.get("meta"))
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.AlreadyExists as ex:
             return self.send_error_resp(400, "Name already in use", str(ex))
     
-        return self.send_json(prec.to_dict())
+        return self.send_json(prec.to_dict(), "Project Created", 201)
 
 
 class ProjectACLsHandler(ProjectRecordHandler):
