@@ -32,7 +32,7 @@ PUBLIC_GROUP = DEF_GROUPS_SHOULDER + ":public"    # all users are implicitly par
 ANONYMOUS = PUBLIC_GROUP
 
 __all__ = ["DBClient", "DBClientFactory", "ProjectRecord", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP", 
-           "ANONYMOUS", "DRAFT_PROJECTS", "DMP_PROJECTS"]
+           "ANONYMOUS", "DRAFT_PROJECTS", "DMP_PROJECTS", "ObjectNotFound", "NotAuthorized", "AlreadyExists"]
 
 Permissions = Union[str, Sequence[str], AbstractSet[str]]
 
@@ -227,7 +227,7 @@ class ProtectedRecord(ABC):
         """
         if not who:
             who = self._cli.user_id
-        if (self.owner and who == self.owner) or who in self._cli._cfg.get("superusers", []):
+        if who in self._cli._cfg.get("superusers", []):
             return True
             
         if isinstance(perm, str):
@@ -267,7 +267,7 @@ class ProtectedRecord(ABC):
         return errs
 
     def to_dict(self):
-        self._data['acls'] = self.acls._data
+        self._data['acls'] = self.acls._perms
         return deepcopy(self._data)
 
 class Group(ProtectedRecord):

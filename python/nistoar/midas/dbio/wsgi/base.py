@@ -1,19 +1,26 @@
 """
 Some common code for implementing the WSGI front end to dbio
 """
-from nistoar.pdr.publish.service.wsgi import Handler   # same infrastructure as the publishing service
+import logging, json
+from collections import OrderedDict
+from collections.abc import Callable
+
+from nistoar.pdr.publish.service.wsgi import SubApp, Handler   # same infrastructure as the publishing service
+from nistoar.pdr.publish.prov import PubAgent
+from .. import DBClient
 
 class DBIOHandler(Handler):
     """
     a base class for handling requests for DBIO data.  It provides some common utililty functions 
     for sending responses and dealing with errors.
     """
-    def __init__(self, subapp: SubApp, wsgienv: dict, start_resp: Callable, who: PubAgent, path: str="", 
-                 config: dict=None, log: Logger=None):
+    def __init__(self, subapp: SubApp, dbclient: DBClient, wsgienv: dict, start_resp: Callable, 
+                 who: PubAgent, path: str="", config: dict=None, log: logging.Logger=None):
         """
         Initialize this handler with the request particulars.  
 
         :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param DBClient dbclient: the DBIO client to use
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
         :param PubAgent  who:  the authenticated user making the request.  
@@ -26,15 +33,13 @@ class DBIOHandler(Handler):
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
                                logger attached to the SubApp will be used.  
         """
-        self._app = app
+        self._app = subapp
         if config is None:
-            config = self._app._cfg
-        if not who:
-            who = self._app._dbcli.user_id
+            config = self._app.cfg
         if not log:
             log = self._app.log
         Handler.__init__(self, path, wsgienv, start_resp, who, config, log)
-        self._dbcli = self._app._dbcli
+        self._dbcli = dbclient
         self._reqrec = None
         if hasattr(self._app, "_recorder") and self._app._recorder:
             self._reqrec = self._app._recorder.from_wsgi(self._env)
@@ -43,14 +48,14 @@ class DBIOHandler(Handler):
         def __init__(self, code, reason, explain=None, id=None):
             if not explain:
                 explain = reason or ''
-            super(FatalError, self).__init__(explain)
+            super(DBIOHandler.FatalError, self).__init__(explain)
             self.code = code
             self.reason = reason
             self.explain = explain
             self.id = id
 
     def send_fatal_error(self, fatalex: FatalError, ashead=False):
-        send_error_resp(fatalex.code, fatalex.reason, fatalex.explain, fatalex.id, ashead)
+        self.send_error_resp(fatalex.code, fatalex.reason, fatalex.explain, fatalex.id, ashead)
 
     def send_error_resp(self, code, reason, explain, id=None, ashead=False):
         """
@@ -68,7 +73,7 @@ class DBIOHandler(Handler):
             'midas:message': explain,
         }
         if id:
-            resp['midas:id'] = sipid
+            resp['midas:id'] = id
 
         return self.send_json(resp, reason, code, ashead)
 
@@ -81,7 +86,7 @@ class DBIOHandler(Handler):
             if bodyin is None:
                 if self._reqrec:
                     self._reqrec.record()
-                raise FatalError(400, "Missing input", "Missing expected input JSON data")
+                raise self.FatalError(400, "Missing input", "Missing expected input JSON data")
 
             if self.log.isEnabledFor(logging.DEBUG) or self._reqrec:
                 body = bodyin.read()
