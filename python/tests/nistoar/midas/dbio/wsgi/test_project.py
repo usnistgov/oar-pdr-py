@@ -62,8 +62,13 @@ class TestMIDASProjectApp(test.TestCase):
         self.resp = []
         self.rootpath = "/midas/dmp/"
 
-    def create_record(self, name="goob"):
-        return self.dbfact.create_client(base.DMP_PROJECTS, nistr.actor).create_record(name, "mdm1")
+    def create_record(self, name="goob", meta=None):
+        cli = self.dbfact.create_client(base.DMP_PROJECTS, nistr.actor)
+        out = cli.create_record(name, "mdm1")
+        if meta:
+            out.meta = meta
+            out.save()
+        return out
 
     def sudb(self):
         return self.dbfact.create_client(base.DMP_PROJECTS, "rlp")
@@ -565,6 +570,67 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         self.assertEqual(self.body2dict(body), ["nstr1"])
         
+    def test_get_info(self):
+        path = "mdm1:0003/id"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectInfoHandler))
+        prec = self.create_record("goob", {"foo": "bar"})
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "mdm1:0003")
+
+        self.resp = []
+        path = "mdm1:0001/id"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("404 ", self.resp[0])
+
+        self.resp = []
+        path = "mdm1:0003/meta"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectInfoHandler))
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp, {"foo": "bar"})
+
+        self.resp = []
+        path = "mdm1:0003/meta/foo"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectInfoHandler))
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "bar")
+
+        self.resp = []
+        path = "mdm1:0003/meta/bob"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectInfoHandler))
+        body = hdlr.handle()
+        self.assertIn("404 ", self.resp[0])
+
 
                          
 if __name__ == '__main__':

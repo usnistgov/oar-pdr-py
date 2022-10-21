@@ -81,7 +81,7 @@ class MIDASProjectApp(SubApp):
         # the fallback handler will return some arbitrary part of the record
         if len(idattrpart) > 2:
             idattrpart[1] = "/".join(idattrpart[1:])
-        return ProjectInfoHandler(self, env, start_resp, who, idattrpart[0], idattrpart[1])
+        return ProjectInfoHandler(pbroker, self, env, start_resp, who, idattrpart[0], idattrpart[1])
 
 class ProjectRecordHandler(DBIOHandler):
     """
@@ -159,7 +159,7 @@ class ProjectHandler(ProjectRecordHandler):
 
 class ProjectInfoHandler(ProjectRecordHandler):
     """
-    handle retrieval of simple parts of a project record
+    handle retrieval of simple parts of a project record.  Only GET requests are allowed via this handler.
     """
 
     def __init__(self, broker: ProjectRecordBroker, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
