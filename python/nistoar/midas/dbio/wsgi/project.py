@@ -30,9 +30,9 @@ class MIDASProjectApp(SubApp):
     """
     def_project_broker_class = ProjectRecordBroker
 
-    def __init__(self, servicetype, log: Logger, dbcli_factory: DBClientFactory,
+    def __init__(self, projname, log: Logger, dbcli_factory: DBClientFactory,
                  config: dict={}, project_broker_cls=None):
-        super(MIDASProjectApp, self).__init__(servicetype, log, config)
+        super(MIDASProjectApp, self).__init__(projname, log, config)
 
         ## create dbio client from config
         self._prjbrkr_cls = self.cfg.get('project_handler_class', self.def_project_broker_class)

@@ -7,14 +7,14 @@ from nistoar.midas.dbio import inmem, base
 from nistoar.midas.dbio.wsgi import project as prj
 from nistoar.pdr.publish import prov
 
-tmpdir = tempfile.TemporaryDirectory(prefix="_test_broker.")
+tmpdir = tempfile.TemporaryDirectory(prefix="_test_project.")
 loghdlr = None
 rootlog = None
 def setUpModule():
     global loghdlr
     global rootlog
     rootlog = logging.getLogger()
-    loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_pdp.log"))
+    loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_project.log"))
     loghdlr.setLevel(logging.DEBUG)
     rootlog.addHandler(loghdlr)
 
