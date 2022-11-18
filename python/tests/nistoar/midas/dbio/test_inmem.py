@@ -20,7 +20,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
         self.assertEqual(self.fact._db.get("nextnum"), {"hank": 2})
 
     def test_create_client(self):
-        cli = self.fact.create_client(base.DMP_PROJECTS, "ava1")
+        cli = self.fact.create_client(base.DMP_PROJECTS, {}, "ava1")
         self.assertEqual(cli._db, self.fact._db)
         self.assertEqual(cli._cfg, self.fact._cfg)
         self.assertEqual(cli._projcoll, base.DMP_PROJECTS)
@@ -35,7 +35,7 @@ class TestInMemoryDBClient(test.TestCase):
     def setUp(self):
         self.cfg = {}
         self.user = "nist0:ava1"
-        self.cli = inmem.InMemoryDBClientFactory({}).create_client(base.DMP_PROJECTS, self.user)
+        self.cli = inmem.InMemoryDBClientFactory({}).create_client(base.DMP_PROJECTS, {}, self.user)
 
     def test_next_recnum(self):
         self.assertEqual(self.cli._next_recnum("goob"), 1)

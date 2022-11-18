@@ -10,10 +10,10 @@ class TestDBClient(test.TestCase):
         self.cfg = { "default_shoulder": "pdr0", "allowed_project_shoulders": ["mds3"] }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
-        self.cli = self.fact.create_client(base.DRAFT_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DRAFT_PROJECTS, {}, self.user)
 
     def test_ctor(self):
-        self.assertIs(self.cli._cfg, self.cfg)
+        self.assertEqual(self.cli._cfg, self.cfg)
         self.assertEqual(self.cli.user_id, self.user)
         self.assertIsNone(self.cli._whogrps)
         self.assertTrue(isinstance(self.cli.groups, base.DBGroups))
@@ -60,7 +60,7 @@ class TestDBClient(test.TestCase):
 
         with self.assertRaises(base.NotAuthorized):
             self.cli.create_record("hers", foruser="alice")
-        rec = self.fact.create_client(base.DRAFT_PROJECTS, "alice").create_record("goob", foruser="alice")
+        rec = self.fact.create_client(base.DRAFT_PROJECTS, {}, "alice").create_record("goob", foruser="alice")
         self.assertEqual(rec.id, "pdr0:0002")
         self.assertEqual(rec.owner, "alice")
         self.assertEqual(rec.name, "goob")
@@ -80,7 +80,7 @@ class TestDBClient(test.TestCase):
 
         self.cli.create_record("test1")
         self.cli.create_record("test2")
-        rec = self.fact.create_client(base.DRAFT_PROJECTS, "alice").create_record("goob")
+        rec = self.fact.create_client(base.DRAFT_PROJECTS, {}, "alice").create_record("goob")
 
         rec = self.cli.get_record_for("pdr0:0001")
         self.assertEqual(rec.name, "test1")
@@ -91,7 +91,7 @@ class TestDBClient(test.TestCase):
         with self.assertRaises(base.NotAuthorized):
             self.cli.get_record_for("pdr0:0003")
     
-        goob = self.fact.create_client(base.DRAFT_PROJECTS, "alice").get_record_for("pdr0:0003")
+        goob = self.fact.create_client(base.DRAFT_PROJECTS, {}, "alice").get_record_for("pdr0:0003")
         self.assertEqual(goob.name, "goob")
         
         goob.acls.grant_perm_to(base.ACLs.READ, self.user)
@@ -112,7 +112,7 @@ class TestDBClient(test.TestCase):
     def test_get_record_by_name(self):
         self.cli.create_record("test1")
         self.cli.create_record("test2")
-        rec = self.fact.create_client(base.DRAFT_PROJECTS, "alice").create_record("goob")
+        rec = self.fact.create_client(base.DRAFT_PROJECTS, {}, "alice").create_record("goob")
 
         rec = self.cli.get_record_by_name("test1")
         self.assertEqual(rec.name, "test1")
@@ -123,7 +123,7 @@ class TestDBClient(test.TestCase):
         self.assertIsNone(self.cli.get_record_by_name("goob"))
         self.assertIsNone(self.cli.get_record_by_name("goob", "alice"))
 
-        goob = self.fact.create_client(base.DRAFT_PROJECTS, "alice").get_record_by_name("goob")
+        goob = self.fact.create_client(base.DRAFT_PROJECTS, {}, "alice").get_record_by_name("goob")
         self.assertEqual(goob.name, "goob")
         self.assertEqual(goob.id, "pdr0:0003")
 
@@ -144,7 +144,7 @@ class TestDBClient(test.TestCase):
         rec.acls.grant_perm_to(rec.acls.WRITE, "alice")
         rec.save()
 
-        cli = self.fact.create_client(base.DRAFT_PROJECTS, "alice")
+        cli = self.fact.create_client(base.DRAFT_PROJECTS, {}, "alice")
         rec = cli.create_record("test1")
         rec = cli.create_record("test2")
 

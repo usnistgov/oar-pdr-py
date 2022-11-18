@@ -20,7 +20,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
         self.assertEqual(len([f for f in os.listdir(self.fact._dbroot) if not f.startswith(".")]), 0)
 
     def test_create_client(self):
-        cli = self.fact.create_client(base.DMP_PROJECTS, "ava1")
+        cli = self.fact.create_client(base.DMP_PROJECTS, {}, "ava1")
         self.assertEqual(cli._cfg, self.fact._cfg)
         self.assertEqual(cli._projcoll, base.DMP_PROJECTS)
         self.assertEqual(cli._who, "ava1")

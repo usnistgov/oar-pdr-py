@@ -10,7 +10,7 @@ class TestGroup(test.TestCase):
         self.cfg = { "default_shoulder": "pdr0" }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
-        self.cli = self.fact.create_client(base.DMP_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
         self.rec = base.Group({"id": "g:ava1:friends", "name": "friends", "owner": self.user}, self.cli)
 
     def test_ctor(self):
@@ -84,7 +84,7 @@ class TestDBGroups(test.TestCase):
         self.cfg = { "default_shoulder": "pdr0" }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
-        self.cli = self.fact.create_client(base.DMP_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
         self.dbg = self.cli.groups
 
     def test_ctor(self):
@@ -117,7 +117,7 @@ class TestDBGroups(test.TestCase):
         with self.assertRaises(base.NotAuthorized):
             grp = self.dbg.create_group("friends", "alice")
 
-        self.cfg['superusers'] = [self.user]
+        self.cli._cfg['superusers'] = [self.user]
         grp = self.dbg.create_group("friends", "alice")
         self.assertEqual(grp.name, "friends")
         self.assertEqual(grp.owner, "alice")
@@ -169,7 +169,7 @@ class TestDBGroups(test.TestCase):
 
         self.assertIsNone(self.dbg.get_by_name("friends", "alice"))
 
-        self.cfg['superusers'] = [self.user]
+        self.cli._cfg['superusers'] = [self.user]
         grp = self.dbg.create_group("friends", "alice")
         grp = self.dbg.get_by_name("friends", "alice")
         self.assertEqual(grp.id, "grp0:alice:friends")

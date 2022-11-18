@@ -10,7 +10,7 @@ class TestProjectRecord(test.TestCase):
         self.cfg = { "default_shoulder": "pdr0" }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
-        self.cli = self.fact.create_client(base.DRAFT_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DRAFT_PROJECTS, {}, self.user)
         self.rec = base.ProjectRecord(base.DRAFT_PROJECTS,
                                       {"id": "pdr0:2222", "name": "brains", "owner": self.user}, self.cli)
 

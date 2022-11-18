@@ -43,7 +43,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
             mongo.MongoDBClientFactory(self.cfg)
 
     def test_create_client(self):
-        cli = self.fact.create_client(base.DMP_PROJECTS, "bob")
+        cli = self.fact.create_client(base.DMP_PROJECTS, {}, "bob")
         self.assertEqual(cli._cfg, self.fact._cfg)
         self.assertEqual(cli._projcoll, base.DMP_PROJECTS)
         self.assertEqual(cli._who, "bob")
@@ -252,7 +252,7 @@ class TestMongoProjectRecord(test.TestCase):
     def setUp(self):
         self.fact = mongo.MongoDBClientFactory({}, dburl)
         self.user = "nist0:ava1"
-        self.cli = self.fact.create_client(base.DRAFT_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DRAFT_PROJECTS, {}, self.user)
         self.rec = base.ProjectRecord(base.DRAFT_PROJECTS,
                                       {"id": "pdr0:2222", "name": "brains", "owner": self.user}, self.cli)
 
