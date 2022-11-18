@@ -958,7 +958,7 @@ class DBClientFactory(ABC):
            :caption: Example
 
            # connect to the DMP collection
-           client = dbio.MIDASDBClienFactory(configdata).create_client(dbio.DMP_PROJECTS, config, userid)
+           client = dbio.MIDASDBClientFactory(configdata).create_client(dbio.DMP_PROJECTS, config, userid)
 
         :param str servicetype:  the service data desired.  The value should be one of ``DRAFT_PROJECTS``
                                  or ``DMP_PROJECTS``
