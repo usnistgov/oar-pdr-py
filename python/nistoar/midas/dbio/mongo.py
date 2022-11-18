@@ -1,14 +1,15 @@
 """
 An implementation of the dbio interface that uses a MongoDB database as it backend store
 """
-from collections.abc import Mapping, MutableMapping, Set
 import re
+from copy import deepcopy
+from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
 
 from pymongo import MongoClient
 
-from nistoar.base.config import ConfigurationException
+from nistoar.base.config import ConfigurationException, merge_config
 
 _dburl_re = re.compile(r"^mongodb://(\w+(:\S+)?@)?\w+(\.\w+)*(:\d+)?/\w+$")
 

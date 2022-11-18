@@ -3,7 +3,7 @@ The abstract interface for interacting with the database.
 
 This interface is based on the following model:
 
-  *  Each service (drafting, DMPs, etc.) has its own collection that extends on a common base model
+  *  Each service (DAP, DMPs, etc.) has its own collection that extends on a common base model
   *  Each *record* in the collection represents a "project" that a user is working on via the service
   *  A record can be expressed as a Python dictionary which can be exported into JSON
 
@@ -634,6 +634,24 @@ class ProjectRecord(ProtectedRecord):
 class DBClient(ABC):
     """
     a client connected to the database for a particular service (e.g. drafting, DMPs, etc.)
+
+    As this class is abstract, implementations provide support for specific storage backends.  
+    All implementations support the following common set of configuration parameters:
+
+    ``superusers``
+         (List[str]) _optional_.  a list of strings giving the identifiers of users that 
+         should be considered superusers who will be afforded authorization for all operations
+    ``allowed_project_shoulders``
+         (List[str]) _optional_.  a list of strings representing the identifier prefixes--i.e. 
+         the _shoulders_--that can be used to create new project identifiers.  If not provided,
+         the only allowed shoulder will be that given by ``default_shoulder``.
+    ``default_shoulder``
+         (str) _required_.  the identifier prefix--i.e. the _shoulder_--that should be used 
+         by default when not otherwise requested by the user when creating new project records.
+    ``allowed_group_shoulders``
+         (List[str]) _optional_.  a list of strings representing the identifier prefixes--i.e. 
+         the _shoulders_--that can be used to create new group identifiers.  If not provided,
+         the only allowed shoulder will be the default, ``grp0``. 
     """
 
     def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS):
@@ -647,10 +665,16 @@ class DBClient(ABC):
 
     @property
     def user_id(self) -> str:
+        """
+        the identifier of the user that this client is acting on behalf of
+        """
         return self._who
 
     @property
     def user_groups(self) -> frozenset:
+        """
+        the set of identifiers for groups that the user given by :py:property:`user_id` belongs to.
+        """
         if not self._whogrps:
             self.recache_user_groups()
         return self._whogrps
@@ -671,9 +695,8 @@ class DBClient(ABC):
         :param str     name:  the mnumonic name (provided by the requesting user) to give to the 
                               record.
         :param str shoulder:  the identifier shoulder prefix to create the new ID with.  
-                              (The implementation should ensure that the requested shoulder is 
-                              recognized and that the requesting user is authorized to request 
-                              the shoulder.)
+                              (The implementation should ensure that the requested user is authorized 
+                              to request the shoulder.)
         :param str  foruser:  the ID of the user that should be registered as the owner.  If not 
                               specified, the value of :py:property:`user_id` will be assumed.  In 
                               this implementation, only a superuser can create a record for someone 
@@ -916,10 +939,18 @@ class DBClientFactory(ABC):
     """
 
     def __init__(self, config):
+        """
+        initialize the factory with its configuration.  The configuration provided here serves as 
+        the default parameters for the cient as these can be overridden by the configuration parameters
+        provided via :py:method:`create_client`.  Generally, it is recommended that the parameters 
+        the configure the backend storage be provided here, and that the non-storage parameters--namely,
+        the ones that control authorization--be provided via :py:method:`create_client` as these can 
+        depend on the type of project being access (e.g. "dmp" vs. "dap").
+        """
         self._cfg = config
 
     @abstractmethod
-    def create_client(self, servicetype: str, foruser: str = ANONYMOUS):
+    def create_client(self, servicetype: str, config: Mapping={}, foruser: str = ANONYMOUS):
         """
         create a client connected to the database and the contents related to the given service
 
@@ -927,10 +958,15 @@ class DBClientFactory(ABC):
            :caption: Example
 
            # connect to the DMP collection
-           client = dbio.MIDASDBClienFactory(configdata).create_client(dbio.DMP_PROJECTS, userid)
+           client = dbio.MIDASDBClienFactory(configdata).create_client(dbio.DMP_PROJECTS, config, userid)
 
         :param str servicetype:  the service data desired.  The value should be one of ``DRAFT_PROJECTS``
                                  or ``DMP_PROJECTS``
+        :param Mapping  config:  the configuration to pass into the client.  This will be merged into and 
+                                 override the configuration provided to the factory at construction time. 
+                                 Typically, the configuration provided here are the common parameters that 
+                                 are independent of the type of backend storage.
+        :param str     foruser:  The identifier of the user that DBIO requests will be made on behalf of.
         """
         raise NotImplementedError()
 

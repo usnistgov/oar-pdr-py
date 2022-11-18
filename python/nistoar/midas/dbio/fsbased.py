@@ -3,12 +3,13 @@ An implementation of the dbio interface that persists data to files on disk.
 """
 import os, json
 from pathlib import Path
+from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
 
 from nistoar.pdr.utils import read_json, write_json
-from nistoar.base.config import ConfigurationException
+from nistoar.base.config import ConfigurationException, merge_config
 
 class FSBasedDBClient(base.DBClient):
     """
@@ -167,6 +168,7 @@ class FSBasedDBClientFactory(base.DBClientFactory):
             raise base.DBIOException("FSBasedDBClientFactory: %s: does not exist as a directory" % dbroot)
         self._dbroot = dbroot
 
-    def create_client(self, servicetype: str, foruser: str = base.ANONYMOUS):
-        return FSBasedDBClient(self._dbroot, self._cfg, servicetype, foruser)
+    def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
+        cfg = merge_config(config, deepcopy(self._cfg))
+        return FSBasedDBClient(self._dbroot, cfg, servicetype, foruser)
 

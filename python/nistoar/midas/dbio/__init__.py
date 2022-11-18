@@ -22,10 +22,11 @@ you indicate the type of record you want to access and the identity of the end u
    from nistoar.midas import dbio
 
    # the factory will need a configuration (see CLIENT CONFIGURATION section)
+   storeconfig = { "mongodb//localhost:27017/MIDAS" }  # storage-specific configuration
    config = { "default_shoulder": "mdst" }
 
    # connect to the DMP collection
-   client = dbio.MIDASDBClientFactory(config).create_client(dbio.DMP_PROJECTS, userid)
+   client = dbio.MIDASDBClientFactory(storeconfig).create_client(dbio.DMP_PROJECTS, config, userid)
 
    # create a new record:
    rec = client.create_record(user_specified_rec_name)
@@ -133,13 +134,13 @@ All backend types support the following configuration properties:
 ``default_shoulder``
     the identifier prefix--i.e. the ID *shoulder*--that will be used to create the identifier for 
     a new project record if one is not specified in the call to 
-    :py:method:`~nistoar.midas.dbio.DBClient.create_client`.  This is effectively a required 
+    :py:method:`~nistoar.midas.dbio.DBClient.create_record`.  This is effectively a required 
     parameter; however, if not specified, ``allowed_project_shoulders`` must be set to create new 
     project records.
 
 ``allowed_project_shoulders``
     a list of shoulders that one can request when creating new project records via 
-    :py:method:`~nistoar.midas.dbio.DBClient.create_client`.  Note that the value the of 
+    :py:method:`~nistoar.midas.dbio.DBClient.create_record`.  Note that the value the of 
     ``default_shoulder`` is implicitly added to this list; thus, if not specified, the 
     default is the ``default_shoulder``.
 

@@ -8,6 +8,8 @@ from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
 
+from nistoar.base.config import merge_config
+
 class InMemoryDBClient(base.DBClient):
     """
     an in-memory DBClient implementation 
@@ -96,8 +98,9 @@ class InMemoryDBClientFactory(base.DBClientFactory):
             self._db.update(deepcopy(_dbdata))
             
 
-    def create_client(self, servicetype: str, foruser: str = base.ANONYMOUS):
+    def create_client(self, servicetype: str, config: Mapping={}, foruser: str = base.ANONYMOUS):
+        cfg = merge_config(config, deepcopy(self._cfg))
         if servicetype not in self._db:
             self._db[servicetype] = {}
-        return InMemoryDBClient(self._db, self._cfg, servicetype, foruser)
+        return InMemoryDBClient(self._db, cfg, servicetype, foruser)
         
