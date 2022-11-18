@@ -28,11 +28,12 @@ service's parent resources.
 import os, sys, logging, json, re
 from logging import Logger
 from wsgiref.headers import Headers
+from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Callable
 from copy import deepcopy
 
 from ... import system
-from . import project as prj, SubApp, Handler
+from . import project as prj, SubApp, Handler, DBIOHandler
 from ..base import DBClientFactory
 from ..inmem import InMemoryDBClientFactory
 from nistoar.pdr.publish.prov import PubAgent
@@ -43,6 +44,7 @@ log = logging.getLogger(system.system_abbrev)   \
              .getChild('wsgi')
 
 DEF_BASE_PATH = "/midas/"
+DEF_DBIO_CLIENT_FACTORY_CLASS = InMemoryDBClientFactory
 
 class SubAppFactory:
     """
@@ -63,6 +65,11 @@ class SubAppFactory:
                                  be included in the output.  
         """
         self.cfg = config
+        if "services" not in self.cfg:
+            raise ConfigurationException("Missing required config parameter: services")
+        if not isinstance(self.cfg["services"], Mapping):
+            raise ConfigurationException("Config parameter type error: services: not a dictionary: "+
+                                         type(self.cfg["services"]))
         self.subapps = subapps
 
     def register_subapp(self, typename: str, factory: Callable):
@@ -94,12 +101,13 @@ class SubAppFactory:
                                select the SubApp factory function in the set of SubApp provided at 
                                construction time.
         """
-        if appname not in self.cfg:
+        svccfg = self.cfg["services"]
+        if appname not in svccfg:
             return None
         if not convention:
             convention = "def"
 
-        appcfg = deepcopy(self.cfg[appname])
+        appcfg = deepcopy(svccfg[appname])
         if "conventions" in appcfg:
             cnvcfg = deepcopy(appcfg.get("conventions", {}).get(convention))
             if not cnvcfg and convention == "def" and appcfg.get("default_convention"):
@@ -112,8 +120,8 @@ class SubAppFactory:
             if cnvcfg:
                 appcfg = merge_config(cnvcfg, appcfg)
 
-        if type:
-            appcfg['type'] = type
+        if typename:
+            appcfg['type'] = typename
         elif not appcfg.get('type'):
             appcfg['type'] = "%s/%s" % (appname, convention)
         appcfg.setdefault("project_name", appname)
@@ -140,7 +148,7 @@ class SubAppFactory:
             raise ConfigurationException("Missing configuration parameter: type")
         factory = self.subapps[typename]
 
-        return factory(appconfig.get('name', typename), log, dbio_client_factory, appconfig)
+        return factory(appconfig.get('project_name', typename), log, dbio_client_factory, appconfig)
 
     def create_suite(self, log: Logger, dbio_client_factory: DBClientFactory) -> MutableMapping:
         """
@@ -150,27 +158,23 @@ class SubAppFactory:
         be About SubApps that provide information and proof-of-life for parent paths.  
         """
         out = OrderedDict()
-        about = About(self.cfg.get("about"))
+        about = About(log, self.cfg.get("about", {}))
 
-        for appname, appcfg in self.cfg.items():
+        for appname, appcfg in self.cfg['services'].items():
             if not isinstance(appcfg, Mapping):
                 # wrong type; skip
                 continue
 
-            about.add_service(appname, appcfg.get('about', {}))
-            aboutapp = About(appcfg.get('about', {}))
+            aboutapp = About(log, appcfg.get('about', {}))
             
             if "conventions" in appcfg:
                 if not isinstance(appcfg["conventions"], Mapping):
                     raise ConfigurationException("Parameter 'conventions' not a dictionary: "+
                                                  type(appcfg["conventions"]))
                 
-                for conv in self appcfg.get("conventions", {}):
+                for conv in appcfg.get("conventions", {}):
                     cnvcfg = self.config_for_convention(appname, conv)
                     if isinstance(cnvcfg, Mapping):
-
-                        # Add an entry into the About SubApp
-                        about.add_version(conv, cnvcfg.get("about", {}))
 
                         path = "%s/%s" % (appname, conv)
                         try:
@@ -179,7 +183,14 @@ class SubAppFactory:
                             if self.cfg.get("strict", False):
                                 raise ConfigurationException("MIDAS app type not recognized: "+str(ex))
                             else:
-                                log.warn("Skipping unrecognized MIDAS app type: "+str(ex))
+                                log.warning("Skipping unrecognized MIDAS app type: "+str(ex))
+                                continue
+                        except ConfigurationException as ex:
+                            ex.message = "While creating subapp for %s: %s" % (path, str(ex))
+                            raise
+
+                        # Add an entry into the About SubApp
+                        aboutapp.add_version(conv, cnvcfg.get("about", {}))
 
                         # if so configured, set as default
                         if appcfg.get("default_convention") == conv:
@@ -189,21 +200,25 @@ class SubAppFactory:
 
             else:
                 # No conventions configured for this app name; try to create an app from the defaults
-                path = appcfg.get("path")
-                if path is None:
-                    path = "%s/def" % appname
+                cnvcfg = self.config_for_convention(appname, "def")
+                path = "%s/def" % appname
                 try:
-                    out[path] = self.create_subapp(log, dbio_client_factory, appcfg)
+                    out[path] = self.create_subapp(log, dbio_client_factory, cnvcfg)
+                    aboutapp.add_version("def", cnvcfg.get("about", {}))
                 except KeyError as ex:
                     if self.cfg.get("strict", False):
                         raise ConfigurationException("MIDAS app type not recognized: "+str(ex))
                     else:
-                        log.warn("Skipping unrecognized MIDAS app type: "+str(ex))
+                        log.warning("Skipping unrecognized MIDAS app type: "+str(ex))
+                        continue
+                except ConfigurationException as ex:
+                    raise ConfigurationException("While creating subapp for %s: %s" % (path, str(ex)),
+                                                 cause=ex)
 
             out[appname] = aboutapp
+            about.add_service(appname, appcfg.get('about', {}))
 
         out[""] = about
-
         return out
 
 
@@ -239,18 +254,19 @@ class About(SubApp):
 
     """
 
-    def __init__(self, base_data: Mapping=None):
+    def __init__(self, log, base_data: Mapping=None):
         """
         initialize the SubApp.  Some default properties may be added to base_data.
         :param Mapping base_data:  the initial data the should appear in the GET response JSON object
         """
+        super(About, self).__init__("about", log, {})
         if not base_data:
             base_data = OrderedDict()
         self.data = self._init_data(base_data)
 
     def _init_data(self, data: Mapping):
         data = deepcopy(data)
-        if "message" is not in data:
+        if "message" not in data:
             data["message"] = "Service is available"
         return data
 
@@ -272,7 +288,7 @@ class About(SubApp):
         """
         if compcat not in self.data:
             self.data[compcat] = OrderedDict()
-        if not isinstance(self.data[comcat], MutableMapping):
+        if not isinstance(self.data[compcat], MutableMapping):
             raise ValueError("Category property is not an object: %s: %s" % (comcat, type(self.data[comcat])))
 
         self.data[compcat][compname] = data
@@ -296,6 +312,13 @@ class About(SubApp):
             Handler.__init__(self, path, wsgienv, start_resp, who, config, log)
             self.app = parentapp
 
+        def handle(self):
+            # no sub resources are supported via this SubApp
+            if self._path.strip('/'):
+                return self.send_error(404, "Not found")
+
+            return super().handle()
+
         def do_GET(self, path, ashead=False):
             path = path.strip('/')
             if path:
@@ -304,6 +327,16 @@ class About(SubApp):
 
             return self.send_json(self.app.data, ashead=ashead)
     
+    def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:
+        """
+        return a handler instance to handle a particular request to a path
+        :param Mapping env:  the WSGI environment containing the request
+        :param Callable start_resp:  the start_resp function to use initiate the response
+        :param str path:     the path to the resource being requested.  This is usually 
+                             relative to a parent path that this SubApp is configured to 
+                             handle.  
+        """
+        return self._Handler(self, path, env, start_resp, who, log=self.log)
     
 
 
@@ -319,10 +352,27 @@ class MIDASApp:
     """
 
     def __init__(self, config: Mapping, dbio_client_factory: DBClientFactory=None,
-                 base_ep: str=None, subapp_factory_funcs=None):
+                 base_ep: str=None, subapp_factory_funcs: Mapping=None):
+        """
+        initial the App
+        :param Mapping config:  the collected configuration for the App (see the 
+                                :py:module:`wsgi module documentation <nistoar.midas.dbio.wsgi>` 
+                                for the schema
+        :param DBClientFactory dbio_client_factory:  the DBIO client factory to use to create
+                                clients used to access the DBIO storage backend.  If not specified,
+                                the in-memory client factory will be used.  
+        :param str base_ep:     the resource path to assume as the base of all services provided by
+                                this App.  If not provided, a value set in the configuration is 
+                                used (which itself defaults to "/midas/").
+        :param Mapping subapp_factory_funcs: a map of project service names to ``SubApp`` classes 
+                                that implement the MIDAS Project services that can be included in 
+                                this App.  The service name (which gets matched to the ``type``)
+                                configuration parameter, normally has the form "_service_/_convention_".
+                                If not provided (typical), an internal map is used.
+        """
         self.cfg = config
         if not self.cfg.get("services"):
-            raise ConfigurationException("No MIDAS apps configured (missing 'service' parameter)")
+            raise ConfigurationException("No MIDAS apps configured (missing 'services' parameter)")
 
         if base_ep is None:
             base_ep = self.cfg.get('base_endpoint', DEF_BASE_PATH)
@@ -333,8 +383,11 @@ class MIDASApp:
         if not subapp_factory_funcs:
             subapp_factory_funcs = _MIDASSubApps
 
-        factory = SubAppFactory(self.cfg.get('services'), subapp_factory_funcs)
-        self.subapps = factory.create_suite()
+        if not dbio_client_factory:
+            dbio_client_factory = DEF_DBIO_CLIENT_FACTORY_CLASS(self.cfg.get('dbio', {}))
+
+        factory = SubAppFactory(self.cfg, subapp_factory_funcs)
+        self.subapps = factory.create_suite(log, dbio_client_factory)
 
         # Add the groups endpoint
         # TODO
@@ -388,7 +441,10 @@ class MIDASApp:
             # this will handle any other non-existing paths
             subapp = self.subapps.get('')
 
-        return subapp.handle_path_request(env, start_resp, path, who)
+        return subapp.handle_path_request(env, start_resp, "/".join(path), who)
+
+    def __call__(self, env, start_resp):
+        return self.handle_request(env, start_resp)
 
 
 

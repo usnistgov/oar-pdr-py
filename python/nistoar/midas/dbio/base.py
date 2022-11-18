@@ -268,6 +268,7 @@ class ProtectedRecord(ABC):
 
     def to_dict(self):
         self._data['acls'] = self.acls._perms
+        self._data['type'] = self._coll
         return deepcopy(self._data)
 
 class Group(ProtectedRecord):

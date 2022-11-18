@@ -45,25 +45,29 @@ class TestMIDASProjectApp(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "superusers": [ "rlp" ],
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mdm1"
-                },
-                "default": {
-                    "default_shoulder": "mdm0"
+            "broker": {
+                "clients": {
+                    "midas": {
+                        "default_shoulder": "mdm1"
+                    },
+                    "default": {
+                        "default_shoulder": "mdm0"
+                    }
                 }
             },
-            "allowed_project_shoulders": ["mdm1", "spc1"],
-            "default_shoulder": "mdm0"
+            "dbio": {
+                "superusers": [ "rlp" ],
+                "allowed_project_shoulders": ["mdm1", "spc1"],
+                "default_shoulder": "mdm0"
+            }
         }
-        self.dbfact = inmem.InMemoryDBClientFactory(self.cfg, { "nextnum": { "mdm1": 2 }})
+        self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdm1": 2 }})
         self.app = prj.MIDASProjectApp(base.DMP_PROJECTS, rootlog.getChild("dmpapi"), self.dbfact, self.cfg)
         self.resp = []
         self.rootpath = "/midas/dmp/"
 
     def create_record(self, name="goob", meta=None):
-        cli = self.dbfact.create_client(base.DMP_PROJECTS, nistr.actor)
+        cli = self.dbfact.create_client(base.DMP_PROJECTS, self.cfg["dbio"], nistr.actor)
         out = cli.create_record(name, "mdm1")
         if meta:
             out.meta = meta
@@ -71,7 +75,7 @@ class TestMIDASProjectApp(test.TestCase):
         return out
 
     def sudb(self):
-        return self.dbfact.create_client(base.DMP_PROJECTS, "rlp")
+        return self.dbfact.create_client(base.DMP_PROJECTS, self.cfg["dbio"], "rlp")
 
     def test_create_handler_name(self):
         path = "mdm1:0001/name"

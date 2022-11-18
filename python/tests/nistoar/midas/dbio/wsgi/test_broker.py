@@ -43,8 +43,8 @@ class TestProjectRecordBroker(test.TestCase):
             "allowed_project_shoulders": ["mdm1", "spc1"],
             "default_shoulder": "mdm0"
         }
-        self.fact = inmem.InMemoryDBClientFactory(self.cfg, { "nextnum": { "mdm1": 2 }})
-        self.dbcli = self.fact.create_client(base.DMP_PROJECTS, nistr.actor)
+        self.fact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdm1": 2 }})
+        self.dbcli = self.fact.create_client(base.DMP_PROJECTS, self.cfg, nistr.actor)
         self.resp = []
 
     def create_broker(self, request=None):

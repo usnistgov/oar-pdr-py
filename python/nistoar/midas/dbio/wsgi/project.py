@@ -35,7 +35,9 @@ class MIDASProjectApp(SubApp):
         super(MIDASProjectApp, self).__init__(projname, log, config)
 
         ## create dbio client from config
-        self._prjbrkr_cls = self.cfg.get('project_handler_class', self.def_project_broker_class)
+        if not project_broker_cls:
+            project_broker_cls = self.def_project_broker_class
+        self._prjbrkr_cls = project_broker_cls
         self._dbfact = dbcli_factory
 
     def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:
@@ -50,8 +52,8 @@ class MIDASProjectApp(SubApp):
         """
 
         # set up dbio client and the request handler that will mediate with it
-        dbcli = self._dbfact.create_client(self._name, who.actor)
-        pbroker = self._prjbrkr_cls(dbcli, self.cfg, who, env, self.log)
+        dbcli = self._dbfact.create_client(self._name, self.cfg.get('dbio'), who.actor)
+        pbroker = self._prjbrkr_cls(dbcli, self.cfg.get('broker'), who, env, self.log)
 
         # now parse the requested path; we have different handlers for different types of paths
         path = path.strip('/')
