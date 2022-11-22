@@ -15,7 +15,9 @@ true ${OAR_BUILD_DIR:=$codedir/oar-build}
 true ${OAR_DOCKER_DIR:=$codedir/docker}
 true ${PACKAGE_NAME:=`basename $codedir`}
 
-[ -z "$DOCKER_IMAGE_DIRS" ] && {
+[ -n "$DOCKER_IMAGE_DIRS" ] || \
+    DOCKER_IMAGE_DIRS=`echo $DEP_DOCKER_IMAGE_DIRS $EXEC_DOCKER_IMAGE_DIRS`
+[ -n "$DOCKER_IMAGE_DIRS" ] || {
     for item in `ls $OAR_DOCKER_DIR`; do
         [ -d "$item" -a -f "$item/Dockerfile" ] && \
             DOCKER_IMAGE_DIRS="$DOCKER_IMAGE_DIRS $item"
@@ -32,22 +34,70 @@ function sort_build_images {
     # Input:  list of the requested images (on the command line)
     #
     
-    if [ -z "$@" -o "$@" = ":" ]; then
+    if [ "$#" -eq 0 ]; then
         # no images are mentioned on the command line, build them all
         # 
         out=$DOCKER_IMAGE_DIRS
 
     else
         # make sure we build them in the right order
-        # 
+        #
+        imgs=:`echo $@ | tr ' ' :`:
         out=
         for img in $DOCKER_IMAGE_DIRS; do
-            (echo $@ | grep -qs ":${img}:") && \
+            (echo $imgs | grep -qs ":${img}:") && \
                 out="$out $img"
         done
     fi
 
     echo $out
+}
+
+function index_of_word {
+    args=(`echo $@`)
+    find=${args[0]}
+    words=(${args[@]:1})
+    for i in "${!words[@]}"; do
+        if [ "${words[$i]}" == "$find" ]; then
+            echo $i
+            return 0
+        fi
+    done
+}
+
+function word_is_in {
+    words=:`echo $@ | sed -e 's/^.* //' -e 's/ /:/'`:
+    echo $words | grep -qs :$1:
+}
+
+function dependency_images {
+    # check for exec image request; include all dependency image if match found
+    out=
+    for img in $@; do
+        i=`index_of_word $img $EXEC_DOCKER_IMAGE_DIRS`
+        [ -z "$i" ] || {
+            echo $DEP_DOCKER_IMAGE_DIRS
+            return 0
+        }
+    done
+
+    max=
+    for im in $@; do
+        i=`index_of_word $im $DEP_DOCKER_IMAGE_DIRS`
+        [ -z "$i" ] || ([ -n "$max" ] && [ "$i" -le "$max" ]) || max=$i
+    done
+    deps=($DEP_DOCKER_IMAGE_DIRS)
+    [ -z "$max" ] || out="${deps[@]:0:$max}"
+    echo $out
+}
+
+function get_build_images_with_deps {
+    deps=`dependency_images $@`
+    out=:`echo $deps | tr ' ' :`:
+    for img in $@; do
+        (echo $out | grep -sq ":$img:") || out="${out}${img}:"
+    done
+    echo $out | tr : ' '
 }
 
 function collect_build_opts {
@@ -56,7 +106,11 @@ function collect_build_opts {
 }
 
 function setup_build {
-    BUILD_IMAGES=`sort_build_images $do_BUILD_IMAGES`
+    if [ -n "$DODEPS" ]; then
+        BUILD_IMAGES=`get_build_images_with_deps $do_BUILD_IMAGES`
+    else
+        BUILD_IMAGES=`sort_build_images $do_BUILD_IMAGES`
+    fi
     BUILD_OPTS=`collect_build_opts`
 }
 
@@ -69,7 +123,7 @@ function help {
 
 CL4LOG=$@
 
-do_BUILD_IMAGES=":"
+do_BUILD_IMAGES=
 while [ "$1" != "" ]; do
     case "$1" in
         --logfile=*)
@@ -78,6 +132,9 @@ while [ "$1" != "" ]; do
         -l)
             shift
             LOGPATH=$1
+            ;;
+        --build-dependencies|-d)
+            DODEPS=-d
             ;;
         --quiet|-q)
             QUIET=-q
@@ -91,7 +148,7 @@ while [ "$1" != "" ]; do
             false
             ;;
         *)
-            do_BUILD_IMAGES="${do_BUILD_IMAGES}${1}:"
+            do_BUILD_IMAGES=`echo ${do_BUILD_IMAGES} ${1}`
             ;;
     esac
     shift

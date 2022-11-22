@@ -196,8 +196,10 @@ other implementations are available:
    fact = fsbased.FSBasedDBClientFactory(config, "./db")
 
 """
-from .base import *
-from . import mongo
+from .base    import *
+from .mongo   import MongoDBClientFactory
+from .inmem   import InMemoryDBClientFactory
+from .fsbased import FSBasedDBClientFactory
 
-MIDASDBClientFactory = mongo.MongoDBClientFactory
+MIDASDBClientFactory = MongoDBClientFactory
 

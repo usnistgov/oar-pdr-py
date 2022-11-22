@@ -42,6 +42,11 @@ The configuration that is expected by ``MIDASApp`` is a (JSON) object with the f
 ``services``
     (object) _required_.  an object in which each property is a service name (as referred to above in 
     the API endpoint pattern--e.g., "dmp" or "dap"), and its value is the configuration for that service.
+``dbio``
+    (object) _recommended_.  an object that provides configuration for the DBIO client; typically, this 
+                          includes a ``factory`` property whose string value identifies the type of 
+                          backend storage to use ("mongo", "fsbased", or "inmem").  The other properties
+                          are the parameters that are specific to the backend storage.
 
 Most of the properties in a service configuration object will be treated as default configuration 
 parameters for configuring a particular version, or _convention_, of the service.  Convention-level 
@@ -66,6 +71,10 @@ supported:
     ``conventions`` field described above) that should be considered the default convention.  If a client
     requests the special convention name "def", the request will be routed to the version of the service 
     with that name.  
+``dbio``
+    (object) _recommended_.  the configuration parameters for the DBIO client which are specific to the 
+    project service type (see below).  In particular, this includes the authorization configurations;
+    see the :py:module:`dbio module documentation <nistoar.midas.dbio>` for this schema. 
 
 There are two common properties that can appear in either the service or convention level (or both, where 
 the convention level takes precedence): ``project_name`` and ``type``.  These optional properties are 

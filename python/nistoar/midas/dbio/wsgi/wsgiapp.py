@@ -36,6 +36,8 @@ from ... import system
 from . import project as prj, SubApp, Handler, DBIOHandler
 from ..base import DBClientFactory
 from ..inmem import InMemoryDBClientFactory
+from ..fsbased import FSBasedDBClientFactory
+from ..mongo import MongoDBClientFactory
 from nistoar.pdr.publish.prov import PubAgent
 from nistoar.base.config import ConfigurationException, merge_config
 
@@ -45,6 +47,7 @@ log = logging.getLogger(system.system_abbrev)   \
 
 DEF_BASE_PATH = "/midas/"
 DEF_DBIO_CLIENT_FACTORY_CLASS = InMemoryDBClientFactory
+DEF_DBIO_CLIENT_FACTORY_NAME  = "inmem"
 
 class SubAppFactory:
     """
@@ -351,6 +354,12 @@ class MIDASApp:
     included. 
     """
 
+    DB_FACTORY_CLASSES = {
+        "inmem":    InMemoryDBClientFactory,
+        "fsbased":  FSBasedDBClientFactory,
+        "mongo":    MongoDBClientFactory
+    }
+
     def __init__(self, config: Mapping, dbio_client_factory: DBClientFactory=None,
                  base_ep: str=None, subapp_factory_funcs: Mapping=None):
         """
@@ -384,7 +393,13 @@ class MIDASApp:
             subapp_factory_funcs = _MIDASSubApps
 
         if not dbio_client_factory:
-            dbio_client_factory = DEF_DBIO_CLIENT_FACTORY_CLASS(self.cfg.get('dbio', {}))
+            dbclsnm = self.cfg.get('dbio', {}).get('factory')
+            if not dbclsnm:
+                dbclsnm = DEF_DBIO_CLIENT_FACTORY_NAME
+            dbcls = self.DB_FACTORY_CLASSES.get(dbclsnm)
+            if dbcls:
+                dbcls = DEF_DBIO_CLIENT_FACTORY_CLASS
+            dbio_client_factory = dbcls(self.cfg.get('dbio', {}))
 
         factory = SubAppFactory(self.cfg, subapp_factory_funcs)
         self.subapps = factory.create_suite(log, dbio_client_factory)
@@ -421,7 +436,7 @@ class MIDASApp:
         if self.base_ep:
             if len(path) < len(self.base_ep) or path[:len(self.base_ep)] != self.base_ep:
                 # path does not match the required base endpoint path
-                return Handler(path, env, start_resp).send_error(404, "Not Found", ashead=ashead)
+                return Handler(path, env, start_resp).send_error(404, "Not Found")
 
             # lop off the base endpoint path
             path = path[len(self.base_ep):] 

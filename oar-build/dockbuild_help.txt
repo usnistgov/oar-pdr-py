@@ -5,8 +5,9 @@ Usage: %PROG% [-lq] [image_dir ...]
 
 Options:
    --logfile=FILEPATH, -l FILEPATH   Log file to record build output to
+   --build-dependencies, -d          Build all dependencies of the listed images as well
    --quiet, -q                       Suppress messages to terminal
 
 Arguments:
-   image_dir ...      names of docker directories for the images that should 
-                      (re-)build; only these will be built.
+   image_dir ...      names of docker directories for the images that should (re-)build
+
