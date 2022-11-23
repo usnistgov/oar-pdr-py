@@ -18,12 +18,12 @@ services:
              midas: 
                 default_shoulder: mdm1
              default: 
-                default_shoulder: mdm0
+                default_shoulder: mdm1
 
       dbio: 
-         superusers:                [ "rlp" ]
-         allowed_project_shoulders: ["mdm1", "spc1"]
-         default_shoulder:          mdm0
+         superusers:                [ "rlp3" ]
+         allowed_project_shoulders: ["mdm0", "mdm1"]
+         default_shoulder:          mdm1
 
       default_convention: mdm1
       conventions: 
