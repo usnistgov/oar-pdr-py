@@ -23,7 +23,7 @@ function usage {
 $prog - launch a docker container running the midas web server
 
 SYNOPSIS
-  $prog [-b|--build] [-D|--docker-build] [-c|--config-file FILE] [-M|--use-mongodb] [DIR] 
+  $prog [-b|--build] [-D|--docker-build] [-c|--config-file FILE] [-M|--use-mongodb] [DIR] [start|stop]
 
 EOF
 }
@@ -70,6 +70,13 @@ while [ "$1" != "" ]; do
             echo "${prog}: unsupported option:" $1
             false
             ;;
+        start|stop)
+            [ -z "$ACTION" ] || {
+                echo "${prog}: Action $ACTION already set; provide only one"
+                false
+            }
+            ACTION=`echo $1 | tr A-Z a-z`
+            ;;
         *)
             [ -z "$STOREDIR" ] || {
                 echo "${prog}: DIR already set to $STOREDIR; unsupported extra argument:" $1
@@ -80,6 +87,7 @@ while [ "$1" != "" ]; do
     esac
     shift
 done
+[ -n "$ACTION" ] || ACTION=start
 
 ([ -z "$DOPYBUILD" ] && [ -e "$repodir/dist" ]) || {
     echo '+' scripts/install.sh --prefix=$repodir/dist/pdr
@@ -134,33 +142,38 @@ if [ "$DBTYPE" = "mongo" ]; then
         echo ${prog}: docker compose required for -M
         false
     }
-
     
     dc_vol_file=`mktemp --tmpdir --suffix=.yml docker-compose.volumes.XXXXXX`
     cat > $dc_vol_file <<EOF
 version: "3"
 volumes: 
   mongo_data:
+    driver: local
+    driver_opts:
+      o: bind
 EOF
     [ -z "$STOREDIR" ] || {
         sdir=`(cd $STOREDIR; pwd)`
-        echo "    type: bind"    >> $dc_vol_file
-        echo "    source: $sdir" >> $dc_vol_file
+        echo "      device: $sdir" >> $dc_vol_file
+    }
+    source $dockerdir/midasserver/mongo/mongo.env
+
+    [ "$ACTION" = "stop" ] || {
+        # now launch the database in its own containers
+        echo '+' $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml -f $dc_vol_file up -d
+        $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml -f $dc_vol_file up -d
+
+        echo 
+        echo NOTE:  Visit http://localhost:8081/ to view MongoDB contents
+        echo 
     }
 
-    # now launch the database in its own containers
-    echo '+' $DOCKER_COMPOSE -f $dockerdir/mongo/docker-compose.mongo.yml -f $dc_vol_file up -d
-    $DOCKER_COMPOSE -f $dockerdir/mongo/docker-compose.mongo.yml -f $dc_vol_file up -d
-
     function stop_mongo {
-        $DOCKER_COMPOSE -f $dockerdir/mongo/docker-compose.mongo.yml -f $dc_vol_file
+        echo '+' $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml -f $dc_vol_file down
+        $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml -f $dc_vol_file down
         [ -f "$dc_vol_file" ] || rm $dc_vol_file;
     }
     STOP_MONGO=stop_mongo
-
-    echo 
-    echo NOTE:  Visit http://localhost:8081/ to view MongoDB contents
-    echo 
 fi
 
 CONTAINER_NAME="midasserver"
@@ -168,14 +181,14 @@ function stop_server {
     echo '+' docker kill $CONTAINER_NAME
     docker kill $CONTAINER_NAME
 }
-trap "{ stop_server; $STOP_MONGO; }" EXIT TERM STOP
+trap "{ stop_server; $STOP_MONGO; }" TERM STOP
 
-echo '+' docker run $ENVOPTS $VOLOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
-docker run $ENVOPTS $VOLOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
-
-
-[ "$DBTYPE" != "mongo" ] || {
-    $DOCKER_COMPOSE -f $dockerdir/mongo/docker-compose.mongo.yml -f $dc_vol_file down
-    [ ! -f "$dc_vol_file" ] || rm $dc_vol_file
-}
+if [ "$ACTION" = "stop" ]; then
+    echo Shutting down the midas server...
+    stop_server || true
+    $STOP_MONGO
+else
+    echo '+' docker run $ENVOPTS $VOLOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
+    docker run $ENVOPTS $VOLOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
+fi
 
