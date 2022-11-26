@@ -23,7 +23,32 @@ function usage {
 $prog - launch a docker container running the midas web server
 
 SYNOPSIS
-  $prog [-b|--build] [-D|--docker-build] [-c|--config-file FILE] [-M|--use-mongodb] [DIR] [start|stop]
+  $prog [-b|--build] [-D|--docker-build] [-c|--config-file FILE] 
+              [-M|--use-mongodb] [DIR] [start|stop]
+
+ARGUMENTS
+  start                         Start the service; this is the default if the 
+                                start|stop argument is not provided.  
+  stop                          Stop the running service.  If -M was used to 
+                                start the service, it must also provided when
+                                stopping it.  
+  DIR                           a directory where the database data backing the 
+                                server will be stored.  If not provided, a 
+                                temporary directory within the midasserver 
+                                container will be used.  Provide this if you want
+                                look at the database contents directly.
+  -b, --build                   Rebuild the python library and install into dist;
+                                This is done automatically if the dist directory 
+                                does not exist.
+  -D, --docker-build            Rebuild the midasserver docker image; this is 
+                                done automatically if the midasserver image 
+                                does not exist.
+  -c FILE, --config-file FILE   Use a custom service configuration given in FILE.
+                                This file must be in YAML or JSON format.
+                                Defaut: docker/midasserver/midas-dmp_config.yml
+  -M, --use-mongodb             Use a MongoDB backend; DIR must also be provided.
+                                If not set, a file-based database (using JSON 
+                                files) will be used, stored under DIR/dbfiles.
 
 EOF
 }
@@ -66,6 +91,10 @@ while [ "$1" != "" ]; do
         -M|--use-mongo)
             DBTYPE="mongo"
             ;;
+        -h|--help)
+            usage
+            exit
+            ;;
         -*)
             echo "${prog}: unsupported option:" $1
             false
@@ -89,7 +118,7 @@ while [ "$1" != "" ]; do
 done
 [ -n "$ACTION" ] || ACTION=start
 
-([ -z "$DOPYBUILD" ] && [ -e "$repodir/dist" ]) || {
+([ -z "$DOPYBUILD" ] && [ -e "$repodir/dist/pdr" ]) || {
     echo '+' scripts/install.sh --prefix=$repodir/dist/pdr
     $repodir/scripts/install.sh --prefix=$repodir/dist/pdr
 }
