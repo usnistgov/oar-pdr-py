@@ -1,0 +1,346 @@
+openapi: 3.1.0
+info:
+  title: MIDAS Data Management Plan Service (DMPS) Interface, Convention MDM1 
+  summary: A service allows the creation, updating, and publishing of Data Management Plans (DMPs)
+  description: |-
+    A client uses the DMPS interface to create and edit metadata that describe a Data Management
+    Plan.  Clients are expected to be either automated systems or user-driven, interactive tools. 
+
+  contact:
+    name:  MIDAS support office
+    email: datasupport@nist.gov
+
+  version: 0.1
+
+servers:
+  - url: https://localhost/midas/dmp
+
+paths:
+  /mdm1:
+    summary: the resource representing the full collection of DMPs
+    get:
+      summary: return all or subset of DMP records readable by the requesting user
+      responses:
+        "200":
+          description:
+            A list of the matched DMP records.  See the DMP record description for details.
+          content:
+            "application/json":
+              schema:
+                description:  a list of matched DMP records.
+                type:  array
+                items: { "type": { "$ref": "#/components/schemas/ProjectRecord" } }
+              examples:
+                "empty":
+                  summary: no matching DMPs found
+                  value: '[]'
+    post:
+      summary: create a new DMP record
+      description:
+        The client provides a name and initial data to be used to create the new record.  The
+        server will assign a new identifier to the newly created record, and returns the actual
+        ProjectRecord saved as a result of the request.
+      parameters: [ ]    # parameters for selecting matching records.
+
+      requestBody:
+        summary:  the data that should be used to initialize the newly created record
+        description:
+          This body contains the initial data for the record.  It must include the human-oriented
+          name to assign to the record.  The data field is optionaly, but if given, it must only 
+          include properties that are part of the DMP schema.  Properties provide within the optional
+          meta field are advisory, only.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CreateRecordRequest"
+      responses:
+        "201":
+          description:
+            The request was accepted and a DMP record was created.  The response will include the
+            identifier assigned to the DMP.
+          content:
+            "applicaiton/json":
+              schema:
+                "$ref": "#/components/schemas/ProjectRecord"
+        "400":
+          description: |-
+            The client sent bad or unusabe input of one of the following forms:
+              * The input request body is not parsable as JSON
+              * The JSON document in the request body was not compliant with the CreateRecordRequest
+                schema, such as not including the name field, or including unrecognized properties as
+                part of the data or meta fields.  
+              * The requested name is already applied to another record owned by the user
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The client did not submit recognized credentials and thus is not authorized
+            to create DMP records.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+                
+  /mdm1/{projid}:
+    summary: access to a specific DMP record
+    parameters:
+      "$ref": "#/components/parameters/projid"
+      summary:  the identifier assigned to the desired DMP record
+    get:
+      summary: Return the DMP record with the specified identifier.  
+      description:
+        The returns the DMP porject record where the data property contains the data consituting the
+        contents of the plan.
+      responses:
+        "200":
+          description:  The DMP draft record with the given identifier was found and returned
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ProjectRecord"
+        "404":
+          description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+                
+  /mdm1/{projid}/data:
+    summary:  the data describing the contents of a Data Management Plan (DMP)
+    parameters:
+      "$ref": "#/components/parameters/projid"
+      summary:  the identifier assigned to the desired DMP record
+    get:
+      summary: return the DMP record contents
+      description:
+        this returns the contents of the "data" property that is returned by the "/mdm1/{projid}"
+        endpoint.
+      responses:
+        "200":
+          description:  The DMP record with the given identifier was found and it data content was returned
+          content:
+            "application/json":
+              schema:
+                "type": object
+        "404":
+          description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    put:
+      summary: replace the DMP record data contents
+      description:
+        This replaces the contents of the "data" property of the DMP record with the given JSON object.
+        All sub-properties that were previously stored under "data" will be removed (see also PATCH).  
+      requestBody:
+        summary:  the data that should replace the currently stored data content
+        description:
+          The request message body is a JSON object whose properties represent the content of the
+          data management plan.  This JSON object will completely replace the data object previously
+          saved for this record.  
+        content:
+          "application/json":
+            schema:
+              type: object
+      responses:
+        "200":
+          description:  The DMP record with the given identifier was found and it data content was updated and returned
+          content:
+            "application/json":
+              schema:
+                "type": object
+        "404":
+          description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    patch:
+      summary: update the DMP record data contents
+      description:
+        This merges the input data representing a partial update to the contents of the "data" property
+        into the data already stored.  Any sub-properties that match those in the input object will
+        updated with the given values; any previously stored properties not provided in the input will
+        remain unchanged.  Input subproperty object values can also be partially complete; these will be
+        correspondingly merged hierarchically.
+      requestBody:
+        summary:  the data that should be used to initialize the newly created record
+        description:
+          The request message body is a JSON object whose properties represent some portion of the content 
+          of the data management plan.  This JSON object will merged in with the data object previously
+          saved for this record.  
+        content:
+          "application/json":
+            schema:
+              type: object
+      responses:
+        "200":
+          description:  The DMP record with the given identifier was found and it data content was updated and returned
+          content:
+            "application/json":
+              schema:
+                "type": object
+        "404":
+          description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+  /mdm1/{projid}/name:
+    summary:  the mnemonic name for the DMP record with the given identifier
+    parameters:
+      "$ref": "#/components/parameters/projid"
+      summary:  the identifier assigned to the desired DMP record
+    get:
+      summary: "return the DMP record's mnemonic name"
+      description:
+        this returns the value of the "name" property that is returned by the "/mdm1/{projid}"
+        endpoint.
+      responses:
+        "200":
+          description:  The DMP record was found and its name was returned.
+          content:
+            "application/json":
+              schema:
+                "type": string
+        "404":
+          description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    put:
+      summary: Change the name of the DMP record with the given identifier
+      description: This endpoint method is used to change the mnemonic name assigned to the record.
+      requestBody:
+        summary:  the new name to assign to the DMP
+        content:
+          "application/json":
+            schema:
+              type: string
+      responses:
+        "200":
+          description:  the record was found, the name was successfully changed and the new name returned
+          content:
+            "application":
+              "type": string
+        "404":
+          description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+      
+
+components:
+  parameters:
+    projid:
+      name:  projid
+      in: path
+      description:
+        The identifer used to refer to a DMP
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    ErrorResponse:
+      title: a JSON-encoded error response
+      description:
+        This is a JSON-encoded description of an error detected by the service while processing
+        a service request.
+      properties:
+        "http:code":
+          description: the HTTP status code response
+          type: integer
+          minimum: 400
+          exclusiveMaximum: 600
+        "http:reason":
+          description: the (brief) HTTP status message associated with the code
+          type: string
+        "pdr:message":
+          description:
+            a more detailed explanation of the error detected.  This message may be quite lengthy.
+          type: string
+        "pdr:sipid":
+          description:
+            the identifier for the SIP being accessed, if known and exists.
+      required: [ 'http:code', 'http:reason', 'pdr:message' ]
+
+    ProjectRecord:
+      title: a JSON-encoded DBIO project record
+      description:
+        This record describes a project record being drafted by a client
+      properties:
+        "name":
+          description: the mnemonic, user-chosen name for the record
+          type: string
+          minimum: 1
+          required: true
+        "id":
+          description: the unique identifier assigned to the record by the system at its creation
+          type: string
+          minimum: 3
+          required: true
+        "owner":
+          description: the identifier of the user that is primarily responsible for maintaining this record
+          type: string
+          minimum: 1
+          required: true
+        "created":
+          description: the epoch date-time that this record was created
+          type: integer
+          required: true
+        "created_date":
+          description: the ISO 8601-formatted data-time that this record was created
+          type: string
+        "curators":
+          description:
+            the list of IDs for people who have been assigned as curators for this record; it will be empty
+            if no curators are currently assigned.
+          type: array
+          items: { type: string }
+        "deactivated":
+          description:
+            a boolean set to True if this record has been deactivated, preventing any further editing or
+            listing
+          type: boolean
+        "acl":
+          description:  the access control lists associated with this record
+          type: { $ref: ACLs }
+        "data":
+          description:  the actual DMP record data set by the client
+          type:  object
+        "meta":
+          description:  metadata associated with the client, managed by the service
+          type:  object
+
+    CreateRecordRequest:
+      title: a form of a ProjectRecord that is used as a request to create a new one
+      description:
+        This record describes a project record being drafted by a client
+      properties:
+        "name":
+          description: the mnemonic, user-chosen name to give to the record
+          type: string
+          minimum: 1
+          required: true
+        "data":
+          description:  the initial DMP record data to set
+          type:  object
+        "meta":
+          description:
+            initial meta-information to associate with the record.  This will be considered
+            advisory only; the server may override some or all of this data based on policy.
+          type:  object
+          
+          
+          
+        

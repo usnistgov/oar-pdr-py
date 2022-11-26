@@ -23,7 +23,7 @@ function usage {
 $prog - launch a docker container running the midas web server
 
 SYNOPSIS
-  $prog [-b|--build] [-D|--docker-build] [-c|--config-file FILE] 
+  $prog [-h|--help] [-b|--build] [-D|--docker-build] [-c|--config-file FILE] 
               [-M|--use-mongodb] [DIR] [start|stop]
 
 ARGUMENTS
@@ -49,6 +49,7 @@ ARGUMENTS
   -M, --use-mongodb             Use a MongoDB backend; DIR must also be provided.
                                 If not set, a file-based database (using JSON 
                                 files) will be used, stored under DIR/dbfiles.
+  -h, --help                    Print this text to the terminal and then exit
 
 EOF
 }

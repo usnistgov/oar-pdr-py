@@ -4,15 +4,15 @@ dbio:
    factory:  fsbased
 about: 
    title: "MIDAS Authoring Services"
-   describedBy: "https://midas3.nist.gov/midas/apidocs"
-   href: "http://midas3.nist.gov/midas/dmp"
+   describedBy: "http://localhost:9091/midas/docs"
+   href: "http://localhost:9091/midas/"
 services: 
    dmp: 
       about: 
          message:     "DMP Service is available"
          title:       "Data Management Plan (DMP) Authoring API"
-         describedBy: "https://midas3.nist.gov/midas/apidocs"
-         href:        "http://midas3.nist.gov/midas/dmp"
+         describedBy: "http://localhost:9091/docs/dmpsvc-elements.html"
+         href:        "http://localhost:9091/midas/dmp"
 
       broker: 
          clients: 
@@ -31,6 +31,6 @@ services:
          mdm1: 
             about: 
                 title:       "Data Management Plan (DMP) Authoring API (mdm1 convention)"
-                describedBy: "https://midas3.nist.gov/midas/apidocs/dmp/mdm1"
-                href:        "http://midas3.nist.gov/midas/dmp/mdm1"
+                describedBy: "http://localhost:9091/docs/dmpsvc-elements.html"
+                href:        "http://localhost:9091/midas/dmp/mdm1"
                 version:     mdm1
