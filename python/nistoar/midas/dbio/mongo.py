@@ -63,7 +63,7 @@ class MongoDBClient(base.DBClient):
         the native pymongo database object that contains the DBIO collections.  Accessing this property
         will implicitly connect this client to the underlying MongoDB database.
         """
-        if not self._native:
+        if self._native is None:
             self.connect()
         return self._native
 
@@ -71,7 +71,7 @@ class MongoDBClient(base.DBClient):
         try:
             id = recdata['id']
         except KeyError as ex:
-            raise DBIOException("_upsert(): record is missing required 'id' property")
+            raise base.DBIOException("_upsert(): record is missing required 'id' property")
         key = {"id": id}
 
         try:
@@ -81,10 +81,10 @@ class MongoDBClient(base.DBClient):
             result = coll.replace_one(key, recdata, upsert=True)
             return result.matched_count == 0
 
-        except DBIOException as ex:
+        except base.DBIOException as ex:
             raise
         except Exception as ex:
-            raise DBIOException("Failed to load record with id=%s: %s" % (id, str(ex)))
+            raise base.DBIOException("Failed to load record with id=%s: %s" % (id, str(ex)))
 
     def _next_recnum(self, shoulder):
         key = {"slot": shoulder}
@@ -102,10 +102,10 @@ class MongoDBClient(base.DBClient):
             result = coll.find_one_and_update(key, {"$inc": {"next": 1}})
             return result["next"]
 
-        except DBIOException as ex:
+        except base.DBIOException as ex:
             raise
         except Exception as ex:
-            raise DBIOException("Failed to access named sequence, =%s: %s" % (shoulder, str(ex)))
+            raise base.DBIOException("Failed to access named sequence, =%s: %s" % (shoulder, str(ex)))
 
     def _get_from_coll(self, collname, id) -> MutableMapping:
         key = {"id": id}
@@ -117,7 +117,7 @@ class MongoDBClient(base.DBClient):
             return coll.find_one(key, {'_id': False})
 
         except Exception as ex:
-            raise DBIOException("Failed to access record with id=%s: %s" % (id, str(ex)))
+            raise base.DBIOException("Failed to access record with id=%s: %s" % (id, str(ex)))
 
     def _select_from_coll(self, collname, **constraints) -> Iterator[MutableMapping]:
         try:
@@ -128,7 +128,7 @@ class MongoDBClient(base.DBClient):
                 yield rec
 
         except Exception as ex:
-            raise DBIOException("Failed while selecting records: " + str(ex))
+            raise base.DBIOException("Failed while selecting records: " + str(ex))
 
     def _select_prop_contains(self, collname, prop, target) -> Iterator[MutableMapping]:
         try:
@@ -139,7 +139,7 @@ class MongoDBClient(base.DBClient):
                 yield rec
 
         except Exception as ex:
-            raise DBIOException("Failed while selecting records: " + str(ex))
+            raise base.DBIOException("Failed while selecting records: " + str(ex))
 
     def _delete_from(self, collname, id):
         key = {"id": id}
@@ -151,7 +151,7 @@ class MongoDBClient(base.DBClient):
             return results.deleted_count > 0
 
         except Exception as ex:
-            raise DBIOException("Failed while deleting record with id=%s: %s" % (id, str(ex)))
+            raise base.DBIOException("Failed while deleting record with id=%s: %s" % (id, str(ex)))
 
     def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
@@ -174,7 +174,7 @@ class MongoDBClient(base.DBClient):
                 yield base.ProjectRecord(self._projcoll, rec)
 
         except Exception as ex:
-            raise base.DBIOException("Failed while selecting records: " + str(ex))
+            raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
 
 class MongoDBClientFactory(base.DBClientFactory):
     """
@@ -213,6 +213,7 @@ class MongoDBClientFactory(base.DBClientFactory):
                              dburl)
         self._dburl = dburl
 
-    def create_client(self, servicetype: str, foruser: str = base.ANONYMOUS):
-        return MongoDBClient(self._dburl, self._cfg, servicetype, foruser)
+    def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
+        cfg = merge_config(config, deepcopy(self._cfg))
+        return MongoDBClient(self._dburl, cfg, servicetype, foruser)
 

@@ -134,6 +134,7 @@ fi
     ENVOPTS="$ENVOPTS -e OAR_WORKING_DIR=/data/midas"
 }
 
+NETOPTS=
 STOP_MONGO=true
 if [ "$DBTYPE" = "mongo" ]; then
     DOCKER_COMPOSE="docker compose"
@@ -142,26 +143,23 @@ if [ "$DBTYPE" = "mongo" ]; then
         echo ${prog}: docker compose required for -M
         false
     }
-    
-    dc_vol_file=`mktemp --tmpdir --suffix=.yml docker-compose.volumes.XXXXXX`
-    cat > $dc_vol_file <<EOF
-version: "3"
-volumes: 
-  mongo_data:
-    driver: local
-    driver_opts:
-      o: bind
-EOF
-    [ -z "$STOREDIR" ] || {
-        sdir=`(cd $STOREDIR; pwd)`
-        echo "      device: $sdir" >> $dc_vol_file
-    }
+
+    echo '+' source $dockerdir/midasserver/mongo/mongo.env
     source $dockerdir/midasserver/mongo/mongo.env
+
+    [ -n "$STOREDIR" -o "$ACTION" = "stop" ] || {
+        echo ${prog}: DIR argument must be provided with -M/--use-mongo
+        false
+    }
+    export OAR_MONGODB_DBDIR=`cd $STOREDIR; pwd`/mongo
+
+    NETOPTS="--network=mongo_default --link midas_mongodb:mongodb"
+    ENVOPTS="$ENVOPTS -e OAR_MONGODB_HOST=mongodb -e OAR_MONGODB_USER=oarop"
 
     [ "$ACTION" = "stop" ] || {
         # now launch the database in its own containers
-        echo '+' $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml -f $dc_vol_file up -d
-        $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml -f $dc_vol_file up -d
+        echo '+' $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml up -d
+        $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml up -d
 
         echo 
         echo NOTE:  Visit http://localhost:8081/ to view MongoDB contents
@@ -169,9 +167,8 @@ EOF
     }
 
     function stop_mongo {
-        echo '+' $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml -f $dc_vol_file down
-        $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml -f $dc_vol_file down
-        [ -f "$dc_vol_file" ] || rm $dc_vol_file;
+        echo '+' $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml down
+        $DOCKER_COMPOSE -f $dockerdir/midasserver/mongo/docker-compose.mongo.yml down
     }
     STOP_MONGO=stop_mongo
 fi
@@ -188,7 +185,7 @@ if [ "$ACTION" = "stop" ]; then
     stop_server || true
     $STOP_MONGO
 else
-    echo '+' docker run $ENVOPTS $VOLOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
-    docker run $ENVOPTS $VOLOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
+    echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
+    docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
 fi
 

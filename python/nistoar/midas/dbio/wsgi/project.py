@@ -455,6 +455,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         try:
             prec = self._pbrkr.create_record(newdata['name'], newdata.get("data"), newdata.get("meta"))
         except dbio.NotAuthorized as ex:
+            self.log.debug("Authorization failure: "+str(ex))
             return self.send_unauthorized()
         except dbio.AlreadyExists as ex:
             return self.send_error_resp(400, "Name already in use", str(ex))

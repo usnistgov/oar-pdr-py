@@ -310,7 +310,7 @@ class TestMongoDBGroups(test.TestCase):
         self.cfg = { "default_shoulder": "pdr0" }
         self.fact = mongo.MongoDBClientFactory(self.cfg, dburl)
         self.user = "nist0:ava1"
-        self.cli = self.fact.create_client(base.DMP_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
         self.dbg = self.cli.groups
         
     def tearDown(self):

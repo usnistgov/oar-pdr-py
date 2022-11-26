@@ -1,4 +1,5 @@
 logfile: midas-dmp.log
+loglevel: DEBUG
 dbio:
    factory:  fsbased
 about: 

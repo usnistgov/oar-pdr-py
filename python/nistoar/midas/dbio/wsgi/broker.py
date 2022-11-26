@@ -75,12 +75,13 @@ class ProjectRecordBroker:
         if client_ctl is None:
             client_ctl = self.cfg.get('clients', {}).get("default")
         if client_ctl is None:
-            self.log.info("No default ID shoulder configured for client group, %s", user.group)
+            self.log.debug("Unrecognized client group, %s", user.group)
             raise NotAuthorized(user.actor, "create record",
                                 "Client group, %s, not recognized" % user.group)
 
         out = client_ctl.get('default_shoulder')
         if not out:
+            self.log.info("No default ID shoulder configured for client group, %s", user.group)
             raise NotAuthorized(user.actor, "create record",
                                 "No default shoulder defined for client group, "+user.group)
         return out
