@@ -20,6 +20,7 @@ class TestProjectRecord(test.TestCase):
         self.assertEqual(self.rec.name, "brains")
         self.assertEqual(self.rec.owner, self.user)
         self.assertGreater(self.rec.created, 0)
+        self.assertEqual(self.rec.modified, self.rec.created)
         self.assertTrue(self.rec.created_date.startswith("20"))
         self.assertNotIn('.', self.rec.created_date)
         self.assertEqual(self.rec.data, {})
@@ -43,6 +44,8 @@ class TestProjectRecord(test.TestCase):
         self.assertNotIn("pdr0:2222", self.cli._db[base.DRAFT_PROJECTS])
         
         self.rec.save()
+        self.assertGreater(self.rec.modified, self.rec.created)
+        oldmod = self.rec.modified
         self.assertIn("pdr0:2222", self.cli._db[base.DRAFT_PROJECTS])
         self.assertEqual(self.cli._db[base.DRAFT_PROJECTS]["pdr0:2222"]['name'], "brains")
         self.assertEqual(self.cli._db[base.DRAFT_PROJECTS]["pdr0:2222"]['data'], {})
@@ -53,6 +56,7 @@ class TestProjectRecord(test.TestCase):
         self.rec.meta['type'] = 'software'
         self.rec.acls.grant_perm_to(base.ACLs.READ, "alice")
         self.rec.save()
+        self.assertGreater(self.rec.modified, oldmod)
         self.assertEqual(self.cli._db[base.DRAFT_PROJECTS]["pdr0:2222"]['meta'], {"type": "software"})
         self.assertEqual(self.cli._db[base.DRAFT_PROJECTS]["pdr0:2222"]['acls'][base.ACLs.READ],
                          [self.user, "alice"])

@@ -1,4 +1,4 @@
-import os, json, pdb, logging
+import os, json, pdb, logging, time
 from pathlib import Path
 import unittest as test
 
@@ -105,6 +105,9 @@ class TestDBGroups(test.TestCase):
         self.assertEqual(grp.owner, self.user)
         self.assertEqual(grp.id, id)
         self.assertTrue(grp.is_member(self.user))
+        self.assertGreater(grp.created, 0)
+        self.assertLess(grp.created, time.time())
+        self.assertEqual(grp.modified, grp.created)
 
         self.assertTrue(grp.authorized(base.ACLs.OWN))
 
@@ -166,6 +169,8 @@ class TestDBGroups(test.TestCase):
         self.assertEqual(grp.id, "grp0:nist0:ava1:enemies")
         self.assertEqual(grp.name, "enemies")
         self.assertEqual(grp.owner, "nist0:ava1")
+        self.assertGreater(grp.created, 0)
+        self.assertGreaterEqual(grp.modified, grp.created)
 
         self.assertIsNone(self.dbg.get_by_name("friends", "alice"))
 
@@ -202,6 +207,7 @@ class TestDBGroups(test.TestCase):
         grp.save()
         self.assertTrue(self.dbg.exists("grp0:nist0:ava1:enemies"))
         self.assertTrue(self.dbg.exists("grp0:nist0:ava1:friends"))
+        self.assertGreater(grp.modified, grp.created)
 
     def test_select_ids_for_user(self):
         for s in "abcdefghijklmnopqrstuvwxyz":

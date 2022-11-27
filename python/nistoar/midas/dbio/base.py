@@ -168,6 +168,12 @@ class ProtectedRecord(ABC):
         :return: an combination of the given data and defaults
                  :rtype: MutableMapping
         """
+        now = time.time()
+
+        if 'created' not in recdata:
+            recdata['created'] = now
+        if 'modified' not in recdata:
+            recdata['modified'] = recdata['created']
         if not recdata.get('acls'):
             recdata['acls'] = {}
         if not recdata.get('owner'):
@@ -188,6 +194,33 @@ class ProtectedRecord(ABC):
     def owner(self):
         return self._data.get('owner', "")
 
+    @property
+    def created(self) -> float:
+        """
+        the epoch timestamp indicating when this record was first corrected
+        """
+        return self._data.get('created', 0)
+
+    @property
+    def created_date(self) -> str:
+        """
+        the creation timestamp formatted as an ISO string
+        """
+        return datetime.fromtimestamp(math.floor(self.created)).isoformat()
+
+    @property
+    def modified(self) -> float:
+        """
+        the epoch timestamp indicating when this record was last updated
+        """
+        return self._data.get('modified', self._data.get('created', 0))
+
+    @property
+    def modified_date(self) -> str:
+        """
+        the timestamp for the last modification, formatted as an ISO string
+        """
+        return datetime.fromtimestamp(math.floor(self.modified)).isoformat()
 
     @property
     def acls(self) -> ACLs:
@@ -205,7 +238,13 @@ class ProtectedRecord(ABC):
         """
         if not self.authorized(ACLs.WRITE):
             raise NotAuthorized(self._cli.user_id, "update record")
-        self._cli._upsert(self._coll, self._data)
+        oldmod = self.modified
+        self._data['modified'] = time.time()
+        try: 
+            self._cli._upsert(self._coll, self._data)
+        except Exception as ex:
+            self._data['modified'] = oldmod
+            raise
 
     def authorized(self, perm: Permissions, who: str = None):
         """
@@ -267,9 +306,12 @@ class ProtectedRecord(ABC):
         return errs
 
     def to_dict(self):
-        self._data['acls'] = self.acls._perms
-        self._data['type'] = self._coll
-        return deepcopy(self._data)
+        out = deepcopy(self._data)
+        out['acls'] = self.acls._perms
+        out['type'] = self._coll
+        out['createdDate'] = self.created_date
+        out['modifiedDate'] = self.modified_date
+        return out
 
 class Group(ProtectedRecord):
     """
@@ -551,8 +593,6 @@ class ProjectRecord(ProtectedRecord):
             rec['meta'] = OrderedDict()
         if 'curators' not in rec:
             rec['curators'] = []
-        if 'created' not in rec:
-            rec['created'] = time.time()
         if 'deactivated' not in rec:
             # Should be None or a date
             rec['deactivated'] = None
@@ -588,20 +628,6 @@ class ProjectRecord(ProtectedRecord):
         self._data['name'] = val
         
     @property
-    def created(self) -> float:
-        """
-        the epoch timestamp indicating when this record was first corrected
-        """
-        return self._data.get('created', 0)
-
-    @property
-    def created_date(self) -> str:
-        """
-        the creation timestamp formatted as an ISO string
-        """
-        return datetime.fromtimestamp(math.floor(self.created)).isoformat()
-
-    @property
     def data(self) -> MutableMapping:
         """
         the application-specific data for this record.  This dictionary contains data that is generally 
@@ -630,7 +656,6 @@ class ProjectRecord(ProtectedRecord):
     def __str__(self):
         return "<{} ProjectRecord: {} ({}) owner={}>".format(self._coll.rstrip("s"), self.id,
                                                              self.name, self.owner)
-        
         
 class DBClient(ABC):
     """
