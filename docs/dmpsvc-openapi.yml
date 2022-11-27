@@ -19,7 +19,7 @@ paths:
   /mdm1:
     summary: the resource representing the full collection of DMPs
     get:
-      summary: return all or subset of DMP records readable by the requesting user
+      summary: return all or a subset of DMP records that the requesting user is authorized to read
       responses:
         "200":
           description:
@@ -91,7 +91,7 @@ paths:
     get:
       summary: Return the DMP record with the specified identifier.  
       description:
-        The returns the DMP porject record where the data property contains the data consituting the
+        The returns the DMP project record where the data property contains the data consituting the
         contents of the plan.
       responses:
         "200":
@@ -102,6 +102,13 @@ paths:
                 "$ref": "#/components/schemas/ProjectRecord"
         "404":
           description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to read this record.
           content:
             "application/json":
               schema:
@@ -130,6 +137,13 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
 
     put:
       summary: replace the DMP record data contents
@@ -153,8 +167,25 @@ paths:
             "application/json":
               schema:
                 "type": object
+        "400":
+          description: |-
+            The client sent bad or unusabe input of one of the following forms:
+              * The input request body is not parsable as a JSON object
+              * The JSON document in the request body was not compliant with the data schema
+                expected by the DMP service
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
         "404":
           description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to update this record.
           content:
             "application/json":
               schema:
@@ -185,8 +216,25 @@ paths:
             "application/json":
               schema:
                 "type": object
+        "400":
+          description: |-
+            The client sent bad or unusabe input of one of the following forms:
+              * The input request body is not parsable as a JSON object
+              * The JSON object in the request body contains unrecognized or invalid properties as
+                expected by the DMP service
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
         "404":
           description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to update this record.
           content:
             "application/json":
               schema:
@@ -215,6 +263,13 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
 
     put:
       summary: Change the name of the DMP record with the given identifier
@@ -231,13 +286,29 @@ paths:
           content:
             "application":
               "type": string
+        "400":
+          description: |-
+            The client sent bad or unusabe input of one of the following forms:
+              * The input request body is not parsable as a JSON string
+              * The string represents a name that is already attached to another record owned by the 
+                user.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
         "404":
           description:  The DMP draft record with the given identifier was not found
           content:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
-      
+        "401":
+          description:
+            The authenticated user is not authorized to change its name.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
 
 components:
   parameters:
@@ -298,8 +369,15 @@ components:
           description: the epoch date-time that this record was created
           type: integer
           required: true
-        "created_date":
+        "createdDate":
           description: the ISO 8601-formatted data-time that this record was created
+          type: string
+        "lastModified":
+          description: the epoch date-time that this record was last updated via the API
+          type: integer
+          required: true
+        "lastModifiedDate":
+          description: the ISO 8601-formatted data-time that this record was last updated via the API
           type: string
         "curators":
           description:
