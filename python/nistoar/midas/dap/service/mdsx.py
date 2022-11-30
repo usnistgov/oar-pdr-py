@@ -51,9 +51,9 @@ class DAPBroker(ProjectRecordBroker):
         out = OrderedDict([
             ("_schema", NERDM_SCH_ID),
             ("@context", NERDM_CONTEXT),
-            ("_extensionSchemas", [NERDPUB_DEF + "PublicDataResource"])
+            ("_extensionSchemas", [NERDPUB_DEF + "PublicDataResource"]),
             ("@id", self._arkid_for(recid)),
-            ("@type", [":".join([NERDPUB_PRE, "PublicDataResource"]), "dcat:Resource"]),
+            ("@type", [":".join([NERDPUB_PRE, "PublicDataResource"]), "dcat:Resource"])
         ])
 
         if self.cfg.get('assign_doi') == ASSIGN_DOI_ALWAYS:
@@ -92,7 +92,7 @@ class DAPBroker(ProjectRecordBroker):
         naan = self.cfg.get('doi_naan')
         if not naan:
             raise PublishingStateException("DOI NAAN not set in configuration")
-        return "%s/%s" % (naan, self._aipid_for(recid))
+        return "doi:%s/%s" % (naan, self._aipid_for(recid))
 
     def _arkid_for(self, recid):
         return "ark:/%s/%s" % (const.ARK_NAAN, self._aipid_for(recid))
