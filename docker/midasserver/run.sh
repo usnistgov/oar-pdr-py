@@ -142,7 +142,9 @@ configext=`echo $CONFIGFILE | sed -e 's/^.*\.//' | tr A-Z a-z`
     echo "${prog}:" Config file type not recognized by extension: $configext
     false
 }
-VOLOPTS="$VOLOPTS -v ${CONFIGFILE}:/app/midas-config.${configext}:ro"
+configparent=`dirname $CONFIGFILE`
+configfile=`(cd $configparent; pwd)`/`basename $CONFIGFILE`
+VOLOPTS="$VOLOPTS -v ${configfile}:/app/midas-config.${configext}:ro"
 ENVOPTS="-e OAR_MIDASSERVER_CONFIG=/app/midas-config.${configext}"
 
 if [ -d "$repodir/docs" ]; then

@@ -54,12 +54,18 @@ class ProjectRecordBroker:
         shoulder = self._get_id_shoulder(self.who)
         prec = self.dbcli.create_record(name, shoulder)
 
-        prec.data = self._new_data_for(prec.id)
         if meta:
-            self._merge_into(self._moderate_metadata(meta), prec.meta)
+            meta = self._moderate_metadata(meta, shoulder)
+            if prec.meta:
+                self._merge_into(meta, prec.meta)
+            else:
+                prec.meta = meta
+        elif not prec.meta:
+            prec.meta = self._new_metadata_for(shoulder)
+        prec.data = self._new_data_for(prec.id, prec.meta)
         if data:
             self.update_data(prec.id, data, prec=prec)  # this will call prec.save()
-        elif meta:
+        else:
             prec.save()
 
         return prec
@@ -193,7 +199,7 @@ class ProjectRecordBroker:
             else:
                 base[prop] = update[prop]
 
-    def _new_data_for(self, recid):
+    def _new_data_for(self, recid, meta=None):
         """
         return an "empty" data object set for a record with the given identifier.  The returned 
         dictionary can contain some minimal or default properties (which may or may not include
@@ -201,7 +207,7 @@ class ProjectRecordBroker:
         """
         return OrderedDict()
 
-    def _new_metadata_for(self, recid):
+    def _new_metadata_for(self, shoulder=None):
         """
         return an "empty" metadata object set for a record with the given identifier.  The returned 
         dictionary can contain some minimal or default properties (which may or may not include
@@ -214,7 +220,7 @@ class ProjectRecordBroker:
         """
         return OrderedDict()
 
-    def _moderate_metadata(self, mdata: MutableMapping):
+    def _moderate_metadata(self, mdata: MutableMapping, shoulder=None):
         """
         massage and validate the given record metadata provided by the user client, returning a 
         valid version of the metadata.  The implementation may modify the given dictionary in place. 
@@ -224,7 +230,9 @@ class ProjectRecordBroker:
         otherwise should not be settable by the client.  
         :raises ValueError:   if the mdata is disallowed in a way that should abort the entire request.
         """
-        return OrderedDict()
+        out = self._new_metadata_for(shoulder)
+        out.update(mdata)
+        return out
 
     def replace_data(self, id, newdata, part=None, prec=None):
         """

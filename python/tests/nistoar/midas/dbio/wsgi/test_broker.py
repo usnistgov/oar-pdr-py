@@ -125,7 +125,7 @@ class TestProjectRecordBroker(test.TestCase):
         self.assertEqual(prec.name, "gurn")
         self.assertEqual(prec.id, "mdm1:0003")
         self.assertEqual(prec.data, {"color": "red"})
-        self.assertEqual(prec.meta, {})
+        self.assertEqual(prec.meta, {"temper": "dark"})
 
     def test_get_data(self):
         self.create_broker()

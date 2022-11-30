@@ -34,6 +34,7 @@ from copy import deepcopy
 
 from ... import system
 from . import project as prj, SubApp, Handler, DBIOHandler
+from ...dap.service import mdsx 
 from ..base import DBClientFactory
 from ..inmem import InMemoryDBClientFactory
 from ..fsbased import FSBasedDBClientFactory
@@ -344,7 +345,8 @@ class About(SubApp):
 
 
 _MIDASSubApps = {
-    "dmp/mdm1":  prj.MIDASProjectApp
+    "dmp/mdm1":  prj.MIDASProjectApp,
+    "dap/mdsx":  mdsx.DAPApp
 }
 
 class MIDASApp:

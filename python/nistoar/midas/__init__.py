@@ -1,5 +1,14 @@
 """
 midas:  A module providing infrastructure support for MIDAS applications.
+
+MIDAS, historically, stands for Manag... Invent... Digital Assets ....  In its first generation,
+the system collectively provided a Data Management Plan (DMP) generation tool, an Enterprise Data
+Inventory (EDI) record generation tool, reporting functionality, and the generation of the NIST 
+Public Data Listing (PDL), the publicly viewable portion of the EDI (which is exported to data.gov).
+
+This module represents a successor implementation of the first generation system.  It notably includes 
+implementations of a DMP Authoring service and a Digital Asset Publication (DAP) Authoring service 
+(successor to the EDI tool).
 """
 from nistoar.base import OARException, SystemInfoMixin, config
 
