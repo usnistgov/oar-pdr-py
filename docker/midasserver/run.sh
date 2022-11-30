@@ -14,7 +14,7 @@ SED_RE_OPT=r
 [ "$os" != "Darwin" ] || SED_RE_OPT=E
 
 PACKAGE_NAME=oar-pdr-py
-DEFAULT_CONFIGFILE=$dockerdir/midasserver/midas-dmp_conf.yml
+DEFAULT_CONFIGFILE=$dockerdir/midasserver/midas-dmpdap_conf.yml
 
 set -e
 
