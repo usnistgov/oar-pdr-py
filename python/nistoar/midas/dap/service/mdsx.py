@@ -101,16 +101,15 @@ class DAPBroker(ProjectRecordBroker):
         return '-'.join(recid.split(':', 1))
 
     def _moderate_metadata(self, mdata: MutableMapping, shoulder=None):
+        # only accept expected keys
+        allowed = "resourceType creatorisContact contactName willUpload provideLink softwareLink assocPageType".split()
+        mdata = OrderedDict([p for p in mdata.items() if p[0] in allowed])
+
         out = super()._moderate_metadata(mdata, shoulder)
         if isinstance(out.get('creatorisContact'), str):
             out['creatorisContact'] = out['creatorisContact'].lower() == "true"
         elif out.get('creatorisContact') is None:
             out['creatorisContact'] = true
-
-        allowed = "resourceType creatorisContact contactName willUpload provideLink softwareLink assocPageType".split()
-        for key in out:
-            if key not in allowed:
-                del out[key]
 
         return out
         

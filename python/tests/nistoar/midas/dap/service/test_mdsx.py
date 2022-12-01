@@ -77,7 +77,7 @@ class TestProjectRecordBroker(test.TestCase):
         self.assertEqual(prec.owner, "nstr1")
         for key in "_schema @context _extensionSchemas".split():
             self.assertIn(key, prec.data)
-        self.assertEqual(prec.data['doi'], "88888/mdsx-0003")
+        self.assertEqual(prec.data['doi'], "doi:88888/mdsx-0003")
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsx-0003")
 
         self.assertTrue(self.broker.dbcli.name_exists("goob"))
@@ -85,7 +85,7 @@ class TestProjectRecordBroker(test.TestCase):
         self.assertEqual(prec2.name, "goob")
         self.assertEqual(prec2.id, "mdsx:0003")
         self.assertEqual(prec2.data['@id'], "ark:/88434/mdsx-0003")
-        self.assertEqual(prec2.data['doi'], "88888/mdsx-0003")
+        self.assertEqual(prec2.data['doi'], "doi:88888/mdsx-0003")
         self.assertEqual(prec2.meta, {"creatorisContact": True, "resourceType": "data"})
         self.assertEqual(prec2.owner, "nstr1")
 
@@ -97,14 +97,15 @@ class TestProjectRecordBroker(test.TestCase):
         self.assertTrue(not self.broker.dbcli.name_exists("gurn"))
         
         prec = self.broker.create_record("gurn", {"color": "red"},
-                                         {"temper": "dark", "creatorisContact": "goob"})
+                                         {"temper": "dark", "creatorisContact": "goob",
+                                          "softwarelink": "http://..." })  # misspelled key
         self.assertEqual(prec.name, "gurn")
         self.assertEqual(prec.id, "mdsx:0003")
         self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data"})
         for key in "_schema @context _extensionSchemas".split():
             self.assertIn(key, prec.data)
         self.assertEqual(prec.data['color'], "red")
-        self.assertEqual(prec.data['doi'], "88888/mdsx-0003")
+        self.assertEqual(prec.data['doi'], "doi:88888/mdsx-0003")
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsx-0003")
 
 
