@@ -48,7 +48,7 @@ class InMemoryObjectList(_NERDOrderedObjectList):
             if not itm.get('@id'):
                 itm = copy.deepcopy(itm)
                 itm['@id'] = self._get_default_id_for(itm)
-                self._data[itm['@id']] = itm
+            self._data[itm['@id']] = itm
             self._order.append(itm['@id'])
 
     def _new_id(self):

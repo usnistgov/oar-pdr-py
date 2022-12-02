@@ -2,11 +2,11 @@ import os, json, pdb, tempfile
 from pathlib import Path
 import unittest as test
 
-import nistoar.pdr.draft.nerdstore as ns
-from nistoar.pdr.draft.nerdstore import fsbased, inmem
+import nistoar.midas.dap.nerdstore as ns
+from nistoar.midas.dap.nerdstore import fsbased, inmem
 from nistoar.pdr.utils import read_json, write_json
 
-testdir = Path(__file__).parents[2] / 'preserve' / 'data' / 'simplesip'
+testdir = Path(__file__).parents[3] / 'pdr' / 'preserve' / 'data' / 'simplesip'
 sipnerd = testdir / '_nerdm.json'
 
 def load_simple():
@@ -336,6 +336,9 @@ class TestFSBasedRefList(test.TestCase):
 
     def test_load_references(self):
         nerd = load_simple()
+        for r in nerd.get('references', []):
+            if '@id' in r:
+                del r['@id']
         self.refs.load_references(nerd['references'])
         
         self.assertEqual(self.refs._order, "ref_0".split())
@@ -356,15 +359,15 @@ class TestFSBasedRefList(test.TestCase):
         nerd = load_simple()
         self.refs.load_references(nerd['references'])
         
-        self.assertIn("ref_0", self.refs)
-        self.assertNotIn("ref_2", self.refs)
+        self.assertIn("pdr:ref/doi:10.1364/OE.24.014100", self.refs)
+        self.assertNotIn("ref_0", self.refs)
 
     def test_getsetpop(self):
         nerd = load_simple()
         self.refs.load_references(nerd['references'])
         
         # test access by id or position
-        ref = self.refs.get("ref_0")
+        ref = self.refs.get("pdr:ref/doi:10.1364/OE.24.014100")
         self.assertEqual(ref['refType'], "IsReferencedBy")
 
         # add a reference
@@ -372,8 +375,17 @@ class TestFSBasedRefList(test.TestCase):
         self.refs.append(ref)
         ref = self.refs.get(-1)
         self.assertEqual(ref['refType'], "IsSupplementTo")
+        self.assertEqual(ref['@id'], "ref_0")
+        self.assertEqual(self.refs.get(0)['refType'], "IsReferencedBy")
+
+        # and another
+        ref['refType'] = "Documents"
+        self.refs.append(ref)
+        ref = self.refs.get(-1)
+        self.assertEqual(ref['refType'], "Documents")
         self.assertEqual(ref['@id'], "ref_1")
         self.assertEqual(self.refs.get(0)['refType'], "IsReferencedBy")
+        self.assertEqual(self.refs.get(1)['refType'], "IsSupplementTo")
 
 class TestFSBasedNonFileComps(test.TestCase):
 

@@ -2,11 +2,11 @@ import os, json, pdb, logging
 from pathlib import Path
 import unittest as test
 
-import nistoar.pdr.draft.nerdstore as ns
-from nistoar.pdr.draft.nerdstore import inmem
+import nistoar.midas.dap.nerdstore as ns
+from nistoar.midas.dap.nerdstore import inmem
 from nistoar.pdr.utils import read_json
 
-testdir = Path(__file__).parents[2] / 'preserve' / 'data' / 'simplesip'
+testdir = Path(__file__).parents[3] / 'pdr' / 'preserve' / 'data' / 'simplesip'
 sipnerd = testdir / '_nerdm.json'
 
 def load_simple():
@@ -722,6 +722,9 @@ class TestInMemoryRefList(test.TestCase):
 
     def setUp(self):
         nerd = load_simple()
+        for r in nerd.get('references', []):
+            if '@id' in r:
+                del r['@id']
         self.refs = inmem.InMemoryRefList(nerd, nerd['references'])
 
     def test_ctor(self):
