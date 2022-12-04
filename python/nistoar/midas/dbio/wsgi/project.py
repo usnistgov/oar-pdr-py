@@ -19,26 +19,18 @@ from nistoar.pdr.publish.service.wsgi import SubApp, Handler  # same infrastruct
 from nistoar.pdr.publish.prov import PubAgent
 from nistoar.pdr.utils.webrecord import WebRecorder
 from ... import dbio
-from ...dbio import ProjectRecord, DBClientFactory
+from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
-from .broker import ProjectRecordBroker
 
 
 class MIDASProjectApp(SubApp):
     """
     a base web app for an interface handling project record
     """
-    def_project_broker_class = ProjectRecordBroker
 
-    def __init__(self, projname, log: Logger, dbcli_factory: DBClientFactory,
-                 config: dict={}, project_broker_cls=None):
-        super(MIDASProjectApp, self).__init__(projname, log, config)
-
-        ## create dbio client from config
-        if not project_broker_cls:
-            project_broker_cls = self.def_project_broker_class
-        self._prjbrkr_cls = project_broker_cls
-        self._dbfact = dbcli_factory
+    def __init__(self, service_factory: ProjectServiceFactory, log: Logger, config: dict={}):
+        super(MIDASProjectApp, self).__init__(service_factory._prjtype, log, config)
+        self.svcfact = service_factory
 
     def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:
         """
@@ -51,9 +43,8 @@ class MIDASProjectApp(SubApp):
         :param PubAgent who  the authenticated user agent making the request
         """
 
-        # set up dbio client and the request handler that will mediate with it
-        dbcli = self._dbfact.create_client(self._name, self.cfg.get('dbio'), who.actor)
-        pbroker = self._prjbrkr_cls(dbcli, self.cfg.get('broker'), who, env, self.log)
+        # create a service on attached to the user
+        service = self.svcfact.create_service_for(who)
 
         # now parse the requested path; we have different handlers for different types of paths
         path = path.strip('/')
@@ -61,42 +52,41 @@ class MIDASProjectApp(SubApp):
         if len(idattrpart) < 2:
             if not idattrpart[0]:
                 # path is empty: this is used to list all available projects or create a new one
-                return ProjectSelectionHandler(pbroker, self, env, start_resp, who)
+                return ProjectSelectionHandler(service, self, env, start_resp, who)
             else:
                 # path is just an ID: 
-                return ProjectHandler(pbroker, self, env, start_resp, who, idattrpart[0])
+                return ProjectHandler(service, self, env, start_resp, who, idattrpart[0])
             
         elif idattrpart[1] == "name":
             # path=ID/name: get/change the mnumonic name of record ID
-            return ProjectNameHandler(pbroker, self, env, start_resp, who, idattrpart[0])
+            return ProjectNameHandler(service, self, env, start_resp, who, idattrpart[0])
         elif idattrpart[1] == "data":
             # path=ID/data[/...]: get/change the content of record ID
             if len(idattrpart) == 2:
                 idattrpart.append("")
-            return ProjectDataHandler(pbroker, self, env, start_resp, who, idattrpart[0], idattrpart[2])
+            return ProjectDataHandler(service, self, env, start_resp, who, idattrpart[0], idattrpart[2])
         elif idattrpart[1] == "acls":
             # path=ID/acls: get/update the access control on record ID
             if len(idattrpart) < 3:
                 idattrpart.append("")
-            return ProjectACLsHandler(pbroker, self, env, start_resp, who, idattrpart[0], idattrpart[2])
+            return ProjectACLsHandler(service, self, env, start_resp, who, idattrpart[0], idattrpart[2])
 
         # the fallback handler will return some arbitrary part of the record
         if len(idattrpart) > 2:
             idattrpart[1] = "/".join(idattrpart[1:])
-        return ProjectInfoHandler(pbroker, self, env, start_resp, who, idattrpart[0], idattrpart[1])
+        return ProjectInfoHandler(service, self, env, start_resp, who, idattrpart[0], idattrpart[1])
 
 class ProjectRecordHandler(DBIOHandler):
     """
-    base handler class for all requests on project records.  This base allows requests to be funneled 
-    through a :py:class:`~nistoar.midas.dbio.wsgi.project.ProjectRecordBroker` instance.  
+    base handler class for all requests on project records.  
     """
-    def __init__(self, broker: ProjectRecordBroker, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
+    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
                  who: PubAgent, path: str="", config: dict=None, log: Logger=None):
         """
         Initialize this handler with the request particulars.  
 
-        :param ProjectRecordBroker broker:  the ProjectRecordBroker instance to use to get and update
-                               the project data through.
+        :param ProjectService service:  the ProjectService instance to use to get and update
+                               the project data.
         :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
@@ -111,23 +101,23 @@ class ProjectRecordHandler(DBIOHandler):
                                logger attached to the SubApp will be used.  
         """
 
-        super(ProjectRecordHandler, self).__init__(subapp, broker.dbcli, wsgienv, start_resp, who,
+        super(ProjectRecordHandler, self).__init__(subapp, service.dbcli, wsgienv, start_resp, who,
                                                    path, config, log)
-        self._pbrkr =  broker
+        self.svc = service
 
 class ProjectHandler(ProjectRecordHandler):
     """
     handle access to the whole project record
     """
 
-    def __init__(self, broker: ProjectRecordBroker, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
+    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
                  who: PubAgent, id: str, config: dict=None, log: Logger=None):
         """
         Initialize this handler with the request particulars.  This constructor is called 
         by the webs service SubApp.  
 
-        :param ProjectRecordBroker broker:  the ProjectRecordBroker instance to use to get and update
-                               the project data through.
+        :param ProjectService service:  the ProjectService instance to use to get and update
+                               the project data.
         :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
@@ -140,7 +130,7 @@ class ProjectHandler(ProjectRecordHandler):
                                logger attached to the SubApp will be used.  
         """
 
-        super(ProjectHandler, self).__init__(broker, subapp, wsgienv, start_resp, who, "", config, log)
+        super(ProjectHandler, self).__init__(service, subapp, wsgienv, start_resp, who, "", config, log)
 
         self._id = id
         if not id:
@@ -149,7 +139,7 @@ class ProjectHandler(ProjectRecordHandler):
 
     def do_GET(self, path, ashead=False):
         try:
-            prec = self._pbrkr.get_record(self._id)
+            prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
@@ -164,14 +154,14 @@ class ProjectInfoHandler(ProjectRecordHandler):
     handle retrieval of simple parts of a project record.  Only GET requests are allowed via this handler.
     """
 
-    def __init__(self, broker: ProjectRecordBroker, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
+    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
                  who: PubAgent, id: str, attribute: str, config: dict={}, log: Logger=None):
         """
         Initialize this handler with the request particulars.  This constructor is called 
         by the webs service SubApp.  
 
-        :param ProjectRecordBroker broker:  the ProjectRecordBroker instance to use to get and update
-                               the project data through.
+        :param ProjectService service:  the ProjectService instance to use to get and update
+                               the project data.
         :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
@@ -185,7 +175,7 @@ class ProjectInfoHandler(ProjectRecordHandler):
                                logger attached to the SubApp will be used.  
         """
 
-        super(ProjectInfoHandler, self).__init__(broker, subapp, wsgienv, start_resp, who, attribute,
+        super(ProjectInfoHandler, self).__init__(service, subapp, wsgienv, start_resp, who, attribute,
                                                  config, log)
         self._id = id
         if not id:
@@ -197,7 +187,7 @@ class ProjectInfoHandler(ProjectRecordHandler):
             # programming error
             raise ValueError("Missing ProjectRecord attribute")
         try:
-            prec = self._pbrkr.get_record(self._id)
+            prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
@@ -221,14 +211,14 @@ class ProjectNameHandler(ProjectRecordHandler):
     handle retrieval/update of a project records mnumonic name
     """
 
-    def __init__(self, broker: ProjectRecordBroker, subapp: SubApp, wsgienv: dict, start_resp: Callable,
+    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable,
                  who: PubAgent, id: str, config: dict=None, log: Logger=None):
         """
         Initialize this handler with the request particulars.  This constructor is called 
         by the webs service SubApp.  
 
-        :param ProjectRecordBroker broker:  the ProjectRecordBroker instance to use to get and update
-                               the project data through.
+        :param ProjectService service:  the ProjectService instance to use to get and update
+                               the project data.
         :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
@@ -241,7 +231,7 @@ class ProjectNameHandler(ProjectRecordHandler):
                                logger attached to the SubApp will be used.  
         """
         
-        super(ProjectNameHandler, self).__init__(broker, subapp, wsgienv, start_resp, who, "", config, log)
+        super(ProjectNameHandler, self).__init__(service, subapp, wsgienv, start_resp, who, "", config, log)
                                                    
         self._id = id
         if not id:
@@ -250,7 +240,7 @@ class ProjectNameHandler(ProjectRecordHandler):
 
     def do_GET(self, path, ashead=False):
         try:
-            prec = self._pbrkr.get_record(self._id)
+            prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
@@ -266,7 +256,7 @@ class ProjectNameHandler(ProjectRecordHandler):
             return self.send_fatal_error(ex)
 
         try:
-            prec = self._dbcli.get_record_for(self._id)
+            prec = self.svc.get_record(self._id)
             prec.name = name
             if not prec.authorized(dbio.ACLs.ADMIN):
                 raise dbio.NotAuthorized(self._dbcli.user_id, "change record name")
@@ -283,14 +273,14 @@ class ProjectDataHandler(ProjectRecordHandler):
     handle retrieval/update of a project record's data content
     """
 
-    def __init__(self, broker: ProjectRecordBroker, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
+    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
                  who: PubAgent, id: str, datapath: str, config: dict=None, log: Logger=None):
         """
         Initialize this data request handler with the request particulars.  This constructor is called 
         by the webs service SubApp in charge of the project record interface.  
 
-        :param ProjectRecordBroker broker:  the ProjectRecordBroker instance to use to get and update
-                               the project data through.
+        :param ProjectService service:  the ProjectService instance to use to get and update
+                               the project data.
         :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
@@ -306,7 +296,7 @@ class ProjectDataHandler(ProjectRecordHandler):
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
                                logger attached to the SubApp will be used.  
         """
-        super(ProjectDataHandler, self).__init__(broker, subapp, wsgienv, start_resp, who, datapath,
+        super(ProjectDataHandler, self).__init__(service, subapp, wsgienv, start_resp, who, datapath,
                                                  config, log)
         self._id = id
         if not id:
@@ -322,7 +312,7 @@ class ProjectDataHandler(ProjectRecordHandler):
         :param bool ashead:  if True, the request is actually a HEAD request for the data
         """
         try:
-            out = self._pbrkr.get_data(self._id, path)
+            out = self.svc.get_data(self._id, path)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
@@ -340,7 +330,7 @@ class ProjectDataHandler(ProjectRecordHandler):
             return self.send_fatal_error(ex)
 
         try:
-            data = self._pbrkr.replace_data(self._id, newdata, path)  
+            data = self.svc.replace_data(self._id, newdata, path)  
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
@@ -361,7 +351,7 @@ class ProjectDataHandler(ProjectRecordHandler):
             return self.send_fatal_error(ex)
 
         try:
-            data = self._pbrkr.update_data(self._id, newdata, path)
+            data = self.svc.update_data(self._id, newdata, path)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
@@ -381,7 +371,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
     handle collection-level access searching for project records and creating new ones
     """
 
-    def __init__(self, broker: ProjectRecordBroker, subapp: SubApp, wsgienv: dict, start_resp: Callable,
+    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable,
                  who: PubAgent, config: dict=None, log: Logger=None):
         """
         Initialize this record request handler with the request particulars.  This constructor is called 
@@ -397,7 +387,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
                                logger attached to the SubApp will be used.  
         """
-        super(ProjectSelectionHandler, self).__init__(broker, subapp, wsgienv, start_resp, who, "",
+        super(ProjectSelectionHandler, self).__init__(service, subapp, wsgienv, start_resp, who, "",
                                                       config, log)
 
     def do_GET(self, path, ashead=False):
@@ -453,7 +443,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             return self.send_error_resp(400, "Bad POST input", "No mneumonic name provided")
 
         try:
-            prec = self._pbrkr.create_record(newdata['name'], newdata.get("data"), newdata.get("meta"))
+            prec = self.svc.create_record(newdata['name'], newdata.get("data"), newdata.get("meta"))
         except dbio.NotAuthorized as ex:
             self.log.debug("Authorization failure: "+str(ex))
             return self.send_unauthorized()
@@ -468,14 +458,14 @@ class ProjectACLsHandler(ProjectRecordHandler):
     handle retrieval/update of a project record's data content
     """
 
-    def __init__(self, broker: ProjectRecordBroker, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
+    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
                  who: PubAgent, id: str, datapath: str="", config: dict=None, log: Logger=None):
         """
         Initialize this data request handler with the request particulars.  This constructor is called 
         by the webs service SubApp in charge of the project record interface.  
 
-        :param ProjectRecordBroker broker:  the ProjectRecordBroker instance to use to get and update
-                               the project data through.
+        :param ProjectService service:  the ProjectService instance to use to get and update
+                               the project data.
         :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
@@ -492,7 +482,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
                                logger attached to the SubApp will be used.  
         """
-        super(ProjectACLsHandler, self).__init__(broker, subapp, wsgienv, start_resp, who, datapath,
+        super(ProjectACLsHandler, self).__init__(service, subapp, wsgienv, start_resp, who, datapath,
                                                  config, log)
         self._id = id
         if not id:
@@ -502,7 +492,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
         
     def do_GET(self, path, ashead=False):
         try:
-            prec = self._pbrkr.get_record(self._id)
+            prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
@@ -551,7 +541,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
         # TODO: ensure input value is a bona fide user or group name
 
         try:
-            prec = self._pbrkr.get_record(self._id)
+            prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
@@ -590,7 +580,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
         # TODO: ensure input value is a bona fide user or group name
 
         try:
-            prec = self._pbrkr.get_record(self._id)
+            prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
@@ -636,7 +626,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
         # TODO: ensure input value is a bona fide user or group name
 
         try:
-            prec = self._pbrkr.get_record(self._id)
+            prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
@@ -672,7 +662,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
         # retrieve the record
         try:
-            prec = self._pbrkr.get_record(self._id)
+            prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:

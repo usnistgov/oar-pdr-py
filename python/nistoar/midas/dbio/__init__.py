@@ -46,9 +46,9 @@ Database Model
 The database is made up of various *collections* to hold the different types of records.  (The nature 
 of the collections depends on the implementation of the database backend; for example, if the backend 
 is an SQL relational database, then a collection would be represented by a table or interlinked tables.)
-In particular, each *key* (or *project*) record type (dmp or draft) has its own collection associated 
+In particular, each *key* (or *project*) record type (dmp or dap) has its own collection associated 
 with it; these collections have logical names (accessible via ``dbio.DMP_PROJECTS`` and 
-``dbio.DRAFT_PROJECTS``).  Other collections are supported as well, including one that tracks 
+``dbio.DAP_PROJECTS``).  Other collections are supported as well, including one that tracks 
 user-defined user groups and another capturing people that can servce as authors or collaborators in a 
 project.
 
@@ -203,3 +203,4 @@ from .fsbased import FSBasedDBClientFactory
 
 MIDASDBClientFactory = MongoDBClientFactory
 
+from .project import ProjectService, ProjectServiceFactory

@@ -1,47 +1,86 @@
 """
-a module providing the :py:class:`ProjectRecordBroker` class, a base for classes that hold the business 
-logic for creating and updating MIDAS DBIO project records.  `ProjectRecordBroker` classes mediate 
-between a RESTful web interface and the :py:module:`~nistoar.midas.dbio<DBIO>` layer.  Broker classes 
-can be subclassed to provide specialized logic for a particular project record type (e.g. DMP, 
-EDI draft).  
+a module providing a service for creating and manipulating MIDAS _projects_ stored in a DBIO
+backend.  
+
+A _project_ represents a draft description of a digital asset stored in the MIDAS database; it 
+is represented by a _project record_ that is compliant with the MIDAS Common Database project
+data model.  Different project types include DMP and Digital Asset Publication (DAP).  This 
+module provides a base service class for manipulating such records.  It is intended to be 
+subclassed to handle the creation of the different types of projects and conventions, policies,
+and interaction models for manipulating them.
 """
-from logging import Logger
+from logging import Logger, getLogger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
 
-from .. import DBClient, ProjectRecord
-from ..base import AlreadyExists, NotAuthorized, ObjectNotFound
-from ... import MIDASException
+from .base import DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ObjectNotFound
+from .. import MIDASException, MIDASSystem
 from nistoar.pdr.publish.prov import PubAgent
 
-
-class ProjectRecordBroker:
+class ProjectService(MIDASSystem):
     """
-    A base class for handling requests to create, access, or update a project record.  This generic 
+    A base class for a service to create, access, or update a project.  This generic 
     base can be used as is or extended and overridden to specialize the business logic for updating 
-    a particular type of project.  
+    a particular type of project under particular conventions or policies.  The service is attached 
+    to a particular user at construction time (as given by a :py:class:`~nistoar.pdr.publish.prov.PubAgent`
+    instance); thus, requests to this service are subject to internal Authorization checks.
+
+    This base service supports a single parameter, ``clients``, that places restrictions on the 
+    creation of records based on which group the user is part of.  The value is an object whose keys
+    are user group name that are authorized to use this service, and whose values are themselves objects
+    that restrict the requests by that user group; for example:
+
+    .. code-block::
+
+       "clients": {
+           "midas": {
+               "default_shoulder": "mdm1"
+           },
+           "default": {
+               "default_shoulder": "mdm0"
+           }
+       }
+
+    The special group name "default" will (if present) be applied to users whose group does not match
+    any of the other names.  If not present the user will not be allowed to create new records.  
+
+    This implementation only supports one parameter as part of the group configuration: ``default_shoulder``.
+    This parameter gives the identifier shoulder that should be used the identifier for a new record 
+    created under the user group.  Subclasses of this service class may support other parameters. 
     """
 
-    def __init__(self, dbclient: DBClient, config: Mapping={}, who: PubAgent=None,
-                 wsgienv: dict=None, log: Logger=None):
+    def __init__(self, project_type: str, dbclient_factory: DBClient, config: Mapping={},
+                 who: PubAgent=None, log: Logger=None):
         """
-        create a request handler
+        create the service
+        :param str  project_type:  the project data type desired.  This name is usually used as the 
+                                   name of the collection in the backend database.  Recognized values
+                                   include ``dbio.DAP_PROJECTS`` and ``dbio.DMP_PROJECTS``
         :param DBClient dbclient:  the DBIO client instance to use to access and save project records
         :param dict       config:  the handler configuration tuned for the current type of project
-        :param dict      wsgienv:  the WSGI request context 
+        :param who      PubAgent:  the representation of the user that is requesting access
         :param Logger        log:  the logger to use for log messages
         """
-        self.dbcli = dbclient
+        super(ProjectService, self).__init__("DBIO Project Service", "DBIO")
         self.cfg = config
         if not who:
-            who = PubAgent("unkwn", prov.PubAgent.USER, self.dbcli.user_id or "anonymous")
+            who = PubAgent("unkwn", prov.PubAgent.USER, "anonymous")
         self.who = who
-        if wsgienv is None:
-            wsgienv = {}
-        self.env = wsgienv
+        if not log:
+            log = getLogger(self.system_abbrev).getChild(self.subsystem_abbrev).getChild(project_type)
         self.log = log
 
-    def create_record(self, name, data=None, meta=None):
+        user = who.actor if who else None
+        self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), user)
+
+    @property
+    def user(self) -> PubAgent:
+        """
+        the PubAgent instance representing the user that this service acts on behalf of.
+        """
+        return self.who
+
+    def create_record(self, name, data=None, meta=None) -> ProjectRecord:
         """
         create a new project record with the given name.  An ID will be assigned to the new record.
         :param str  name:  the mnuemonic name to assign to the record.  This name cannot match that
@@ -92,7 +131,7 @@ class ProjectRecordBroker:
                                 "No default shoulder defined for client group, "+user.group)
         return out
 
-    def get_record(self, id):
+    def get_record(self, id) -> ProjectRecord:
         """
         fetch the project record having the given identifier
         :raises ObjectNotFound:  if a record with that ID does not exist
@@ -315,6 +354,48 @@ class ProjectRecordBroker:
 
     def _validate_data(self, data):
         pass
+
+
+class ProjectServiceFactory:
+    """
+    a factory object that creates ProjectService instances attached to the backend DB implementation
+    and which acts on behalf of a specific user.  
+
+    As this is a concrete class, it can be instantiated directly to produce generic ProjectService 
+    instances but serving a particular project type.  Instances are also attached ot a particular
+    DB backend by virtue of the DBClientFactory instance that is passed in at factory construction 
+    time.  
+
+    The configuration provided to this factory will be passed directly to the service instances 
+    it creates.  In addition parameters supported by the :py:class:`ProjectService` 
+    (i.e. ``clients``), the configuration can also include a ``dbio`` parameter.  
+    If provided, its value will be used when creating a DBClient to talk to the DB backend (see 
+    :py:class:`~nistoar.midas.dbio.base.DBClientFactory` for details).  Subclasses of this factory
+    class may support additional parameters. 
+    """
+    def __init__(self, project_type: str, dbclient_factory: DBClientFactory, config: Mapping={},
+                 log: Logger=None):
+        """
+        create a service factory associated with a particulr DB backend.
+        :param str project_type:  the project data type desired.  This name is usually used as the 
+                                  name of the collection in the backend database.  Recognized values
+                                  include ``dbio.DAP_PROJECTS`` and ``dbio.DMP_PROJECTS``
+        :param DBClientFactory dbclient_factory:  the factory instance to use to create a DBClient to 
+                                 talk to the DB backend.
+        :param Mapping  config:  the configuration for the service (see class-level documentation).  
+        :param Logger      log:  the Logger to use in the service.  
+        """
+        self._dbclifact = dbclient_factory
+        self._prjtype = project_type
+        self._cfg = config
+        self._log = log
+
+    def create_service_for(self, who: PubAgent=None):
+        """
+        create a service that acts on behalf of a specific user.  
+        :param PubAgent who:    the user that wants access to a project
+        """
+        return ProjectService(self._prjtype, self._dbclifact, self._cfg, who, self._log)
 
 
 class InvalidUpdate(MIDASException):

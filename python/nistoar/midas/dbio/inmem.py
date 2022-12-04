@@ -88,7 +88,7 @@ class InMemoryDBClientFactory(base.DBClientFactory):
         """
         super(InMemoryDBClientFactory, self).__init__(config)
         self._db = {
-            base.DRAFT_PROJECTS: {},
+            base.DAP_PROJECTS: {},
             base.DMP_PROJECTS: {},
             base.GROUPS_COLL: {},
             base.PEOPLE_COLL: {},

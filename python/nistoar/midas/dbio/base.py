@@ -20,10 +20,11 @@ from datetime import datetime
 from nistoar.base.config import ConfigurationException
 from .. import MIDASException
 
-DRAFT_PROJECTS = "draft"
-DMP_PROJECTS   = "dmp"
-GROUPS_COLL = "groups"
-PEOPLE_COLL = "people"
+DAP_PROJECTS = "dap"
+DMP_PROJECTS = "dmp"
+GROUPS_COLL  = "groups"
+PEOPLE_COLL  = "people"
+DRAFT_PROJECTS = "draft"   # this name is deprecated
 
 DEF_PEOPLE_SHOULDER = "ppl0"
 DEF_GROUPS_SHOULDER = "grp0"
@@ -32,7 +33,7 @@ PUBLIC_GROUP = DEF_GROUPS_SHOULDER + ":public"    # all users are implicitly par
 ANONYMOUS = PUBLIC_GROUP
 
 __all__ = ["DBClient", "DBClientFactory", "ProjectRecord", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP", 
-           "ANONYMOUS", "DRAFT_PROJECTS", "DMP_PROJECTS", "ObjectNotFound", "NotAuthorized", "AlreadyExists"]
+           "ANONYMOUS", "DAP_PROJECTS", "DMP_PROJECTS", "ObjectNotFound", "NotAuthorized", "AlreadyExists"]
 
 Permissions = Union[str, Sequence[str], AbstractSet[str]]
 
@@ -986,7 +987,7 @@ class DBClientFactory(ABC):
            # connect to the DMP collection
            client = dbio.MIDASDBClientFactory(configdata).create_client(dbio.DMP_PROJECTS, config, userid)
 
-        :param str servicetype:  the service data desired.  The value should be one of ``DRAFT_PROJECTS``
+        :param str servicetype:  the service data desired.  The value should be one of ``DAP_PROJECTS``
                                  or ``DMP_PROJECTS``
         :param Mapping  config:  the configuration to pass into the client.  This will be merged into and 
                                  override the configuration provided to the factory at construction time. 
