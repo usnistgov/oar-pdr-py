@@ -107,7 +107,7 @@ class TestDBGroups(test.TestCase):
         self.assertTrue(grp.is_member(self.user))
         self.assertGreater(grp.created, 0)
         self.assertLess(grp.created, time.time())
-        self.assertEqual(grp.modified, grp.created)
+        self.assertGreaterEqual(grp.modified, grp.created)
 
         self.assertTrue(grp.authorized(base.ACLs.OWN))
 

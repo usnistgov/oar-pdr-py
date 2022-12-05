@@ -4,7 +4,7 @@ from io import StringIO
 import unittest as test
 
 from nistoar.midas.dbio import inmem, base
-from nistoar.midas.dbio.wsgi import wsgiapp as app
+from nistoar.midas import wsgi as app
 from nistoar.pdr.publish import prov
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_wsgiapp.")
@@ -208,7 +208,6 @@ class TestSubAppFactory(test.TestCase):
         self.assertEqual(cfg["default_convention"], "mdm1")
         self.assertEqual(cfg["about"]["version"], "mdm1")
         self.assertEqual(cfg["type"], "dmp/mdm1")
-        self.assertEqual(cfg["project_name"], "dmp")
         self.assertNotIn("conventions", cfg)
         
         cfg = self.fact.config_for_convention("dmp", "def")
@@ -219,7 +218,7 @@ class TestSubAppFactory(test.TestCase):
         self.assertEqual(cfg["default_convention"], "mdm1")
         self.assertEqual(cfg["about"]["version"], "mdm1")
         self.assertEqual(cfg["type"], "dmp/mdm1")
-        self.assertEqual(cfg["project_name"], "dmp")
+        self.assertIsNone(cfg.get("project_name"))
         self.assertNotIn("conventions", cfg)
         
         cfg = self.fact.config_for_convention("dmp", "")
@@ -230,7 +229,7 @@ class TestSubAppFactory(test.TestCase):
         self.assertEqual(cfg["default_convention"], "mdm1")
         self.assertEqual(cfg["about"]["version"], "mdm1")
         self.assertEqual(cfg["type"], "dmp/mdm1")
-        self.assertEqual(cfg["project_name"], "dmp")
+        self.assertIsNone(cfg.get("project_name"))
         self.assertNotIn("conventions", cfg)
         
         cfg = self.fact.config_for_convention("dmp", "mdm2")
@@ -241,13 +240,13 @@ class TestSubAppFactory(test.TestCase):
         self.assertEqual(cfg["default_convention"], "mdm1")
         self.assertEqual(cfg["about"]["version"], "mdm2")
         self.assertEqual(cfg["type"], "dmp/mdm1")
-        self.assertEqual(cfg["project_name"], "dmp")
+        self.assertIsNone(cfg.get("project_name"))
         self.assertNotIn("conventions", cfg)
         
         cfg = self.fact.config_for_convention("dmp", "mdm2", "hank")
         self.assertEqual(cfg["foo"], "but")
-        self.assertEqual(cfg["project_name"], "dmp")
         self.assertEqual(cfg["type"], "hank")
+        self.assertIsNone(cfg.get("project_name"))
 
         cfg = self.fact.config_for_convention("dap", None)
         self.assertEqual(cfg["type"], "dmp/mdm1")
@@ -260,7 +259,7 @@ class TestSubAppFactory(test.TestCase):
 
         cfg = self.fact.config_for_convention("pyu", "def")
         self.assertIn("about", cfg)
-        self.assertEqual(cfg["project_name"], "pyu")
+        self.assertIsNone(cfg.get("project_name"))
         self.assertEqual(cfg["type"], "pyu/def")
         
 
@@ -325,14 +324,12 @@ class TestMIDASApp(test.TestCase):
                         "describedBy": "https://midas3.nist.gov/midas/apidocs",
                         "href": "http://midas3.nist.gov/midas/dmp"
                     },
-                    "broker": {
-                        "clients": {
-                            "midas": {
-                                "default_shoulder": "mdm1"
-                            },
-                            "default": {
-                                "default_shoulder": "mdm0"
-                            }
+                    "clients": {
+                        "midas": {
+                            "default_shoulder": "mdm1"
+                        },
+                        "default": {
+                            "default_shoulder": "mdm0"
                         }
                     },
                     "dbio": {
@@ -370,11 +367,9 @@ class TestMIDASApp(test.TestCase):
                     },
                     "project_name": "drafts",
                     "type": "dmp/mdm1",
-                    "broker": {
-                        "clients": {
-                            "default": {
-                                "default_shoulder": "mds3"
-                            }
+                    "clients": {
+                        "default": {
+                            "default_shoulder": "mds3"
                         }
                     },
                     "dbio": {
@@ -408,10 +403,10 @@ class TestMIDASApp(test.TestCase):
         self.assertNotIn("pyu/def", self.app.subapps)
         self.assertNotIn("pyu", self.app.subapps)
 
-        self.assertTrue(self.app.subapps["dmp/mdm1"]._dbfact)
+        self.assertTrue(self.app.subapps["dmp/mdm1"].svcfact)
     
         self.assertEqual(self.data["dmp"], {})
-        self.assertEqual(self.data["draft"], {})
+        self.assertEqual(self.data["dap"], {})
 
     def test_about_suite(self):
         req = {

@@ -76,6 +76,26 @@ class MIDASProjectApp(SubApp):
             idattrpart[1] = "/".join(idattrpart[1:])
         return ProjectInfoHandler(service, self, env, start_resp, who, idattrpart[0], idattrpart[1])
 
+    class _factory:
+        def __init__(self, project_coll):
+            self._prjcoll = project_coll
+        def __call__(self, dbcli_factory: dbio.DBClientFactory, log: Logger, config: dict={},
+                     prjcoll: str=None):
+            if not prjcoll:
+                prjcoll = self._prjcoll
+            service_factory = ProjectServiceFactory(prjcoll, dbcli_factory, config, log)
+            return MIDASProjectApp(service_factory, log, config)
+
+    @classmethod
+    def factory_for(cls, project_coll):
+        """
+        return a factory function that instantiates this class connected to the given DBIO collection.  
+        This is intended for plugging this SubApp into the main WSGI app as is.  
+        :param str project_coll:  the name of the DBIO project collection to use for creating and 
+                                  updating project records.
+        """
+        return cls._factory(project_coll)
+
 class ProjectRecordHandler(DBIOHandler):
     """
     base handler class for all requests on project records.  

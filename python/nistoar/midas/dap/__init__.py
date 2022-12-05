@@ -12,7 +12,7 @@ exist to serve different classes of customers.
 There can be different flavors of the Authoring service supported in this module to support
 different interaction models or conventions or evolutions of the interface (i.e. interface 
 versions).  The default flavor is targeted for the MIDAS 3 client.  The different flavors are 
-implemented within the :py:mod`service` subpackage.
+implemented within the :py:mod:`service` subpackage.
 
 This package draws on some of the infrastructure from the  :py:mod:`~nistoar.pdr.publish` package,
 including :py:mod:`provenence tracking<nistoar.pdr.publish.prov>` and 

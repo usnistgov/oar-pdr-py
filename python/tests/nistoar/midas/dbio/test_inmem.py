@@ -13,7 +13,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
     def test_ctor(self):
         self.assertEqual(self.fact._cfg, self.cfg)
         self.assertTrue(self.fact._db)
-        self.assertEqual(self.fact._db.get(base.DRAFT_PROJECTS), {})
+        self.assertEqual(self.fact._db.get(base.DAP_PROJECTS), {})
         self.assertEqual(self.fact._db.get(base.DMP_PROJECTS), {})
         self.assertEqual(self.fact._db.get(base.GROUPS_COLL), {})
         self.assertEqual(self.fact._db.get(base.PEOPLE_COLL), {})

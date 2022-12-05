@@ -1,17 +1,106 @@
 """
-A module that provides the top-level WSGI App providing access to the MIDAS services via the DBIO layer.
+A module that assembles all of the different endpoints of the MIDAS API into one WSGI App.
 
 The :ref:class:`MIDASApp` class is an WSGI application class that provides the suite of MIDAS services.  
 Which services are actually made available depends on the configuration provided at construction time.  
-See the :py:module:`nistoar.midas.dbio.wsgi` module documentation for a description of the 
-configuraiton schema.  
+See the :py:mod:`nistoar.midas.dbio.wsgi` module documentation for a description of the 
+configuraiton schema.  In particular, :ref:class:`MIDASApp` application can provide, when so configured,
+the following endpoints:
+
+  * ``/dmp/mdm1/`` -- the Data Management Plan (DMP) Authoring API, for creating and editing DMPs
+    (according to the "mdm1" convention)
+  * ``/dap/mds3/`` -- the Digital Assets Publication (DAP) Authoring API, for drafting data and 
+    software publications (according to the mds3 convention) to be submitted to the Public Data 
+    Repository (PDR)
+  * ``/groups/`` -- the API for creating and managing access permission groups for collaborative 
+    authoring.
+
+These endpoint send and receive data stored in the backend database through the common 
+:py:mod:` DBIO layer <nistoar.midas.dbio>`.  
+
+The app configuration determines which endpoints that are actually available.  The authoring API 
+endpoints follow a common pattern:
+
+   /_service_/_convention_/
+
+where _service_ is MIDAS service name (like "dmp" or "dap") and _convention_ is name that represents 
+the version of the service interface.  Usually, there is one convention available called "def", which 
+serves as a synonym for the convention that is considered the default convention.  Through the 
+configuration, it is possible, then, to create additional authoring services or conventions of services.  
+
+The configuration that is expected by ``MIDASApp`` is a (JSON) object with the following properties:
+
+``base_endpoint``
+    (str) _optional_.  the URL resource path where the base of the base of the service suite is accessed.
+    The default value is "/midas/".  An empty string is equivalent to "/", the root path.  
+``strict``
+    (bool) _optional_.  if False and if a service type (see below) given in this configuration is not 
+    recognized, a ``ConfiguraitonException`` will be raised.
+``about``
+    (object) _optional_.  an object of data describing this suite of services that should be returned 
+    when the base path is requested.  (See the :py:class:`~nistoar.midas.dbio.wsgi.wsgiapp.About` class 
+    for an example.)  There are no requirements on the properties in this object except that it should 
+    _not_ include "services" or "versions".  
+``services``
+    (object) _required_.  an object in which each property is a service name (as referred to above in 
+    the API endpoint pattern--e.g., "dmp" or "dap"), and its value is the configuration for that service.
+``dbio``
+    (object) _recommended_.  an object that provides configuration for the DBIO client; typically, this 
+                          includes a ``factory`` property whose string value identifies the type of 
+                          backend storage to use ("mongo", "fsbased", or "inmem").  The other properties
+                          are the parameters that are specific to the backend storage.
+
+Most of the properties in a service configuration object will be treated as default configuration 
+parameters for configuring a particular version, or _convention_, of the service.  Convention-level 
+configuration will be merged with these properties (overriding the defaults) to produce the configuration 
+that is passed to the service SubApp that handles the service.  The properties supported are 
+service-specific.  In addition to the service-specific properties, three special-purpose properties are 
+supported:
+
+``about``
+    (object) _optional_.  an object of data describing the service catagory that should be returned 
+    when the service name endpoint is requested.  (See the 
+    :py:class:`~nistoar.midas.dbio.wsgi.wsgiapp.About` class for an example.)  There are no requirements 
+    on the properties in this object except that it should _not_ include "services" or "versions".  
+``conventions``
+    (object) _optional_.  an object in which each property is a convention name supported for the service
+    (as referred to above in the API endpoint pattern--e.g., "mdm1" for the DMP service), and its value is 
+    the configuration for that convention (i.e. version) of the service.  Any properties given here 
+    override properties of the same name given at the service level, as discussed above.  The properties
+    can be service- or convention-specific, apart from the required property, ``type`` (defined below).  
+``default_convention``
+    (str) _optional_.  the name of the convention (one of the names specified as a property of the 
+    ``conventions`` field described above) that should be considered the default convention.  If a client
+    requests the special convention name "def", the request will be routed to the version of the service 
+    with that name.  
+
+There are a few common properties that can appear in either the service or convention level (or both, where 
+the convention level takes precedence): 
+
+``type``
+    (str) _optional_.  a name that serves as an alias for the Python ``SubApp`` class that implements 
+    the service convention.  The default value is the service and convention names combined as 
+    "_service_/_convention_".  
+``project_name``
+    (str) _optional_.  a name indicating the type of DBIO project the service manages.  This name 
+    corresponds to a DBIO project collection name.  If provided, it will override the collection used 
+    by default ``SubApp`` specified by the ``type`` parameter.  
+``clients``
+    (object) _required_.  the configuration parameters restrict the scope of the clients that connect to 
+    the web service.  This is passed to the :py:class:`~nistoar.midas.dbio.project.ProjectService` 
+    configured for the convention.
+``dbio``
+    (object) _recommended_.  the configuration parameters for the DBIO client which are specific to the 
+    project service type (see below).  In particular, this includes the authorization configurations;
+    see the :py:mod:`dbio module documentation <nistoar.midas.dbio>` for this schema. This is passed to 
+    the :py:class:`~nistoar.midas.dbio.project.ProjectService` configured for the convention.
 
 In addition to providing the :ref:class:`MIDASApp` class, this module provides a mechanism for plugging 
-addition _project_ services, particularly new conventions of services.  The class constructor takes 
+in addition _project_ services, particularly new conventions of services.  The class constructor takes 
 an optional dictionary parameter that provides in its values the 
 :ref:class:`~nistoar.pdr.publish.service.wsgi.SubApp` class that implements a particular DBIO project
 service.  The keys labels that correspond to the ``type`` parameter in the 
-:py:module:`configuration <nistoar.midas.dbio.wsgi>` and which, by default, have the form 
+:py:mod:`configuration <nistoar.midas.dbio.wsgi>` and which, by default, have the form 
 _service_/_convention_ (e.g. ``dmp/mdm1``).  If this dictionary is not provided to the constructur, an 
 default defined in this module, ``_MIDASSubApps`` is used.  Thus, the normal way to add a new service 
 implementation to the suite is to add it to the internal ``_MIDASSubApps`` dictionary.  
@@ -32,13 +121,13 @@ from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Callable
 from copy import deepcopy
 
-from ... import system
-from . import project as prj, SubApp, Handler, DBIOHandler
-from ...dap.service import mdsx 
-from ..base import DBClientFactory
-from ..inmem import InMemoryDBClientFactory
-from ..fsbased import FSBasedDBClientFactory
-from ..mongo import MongoDBClientFactory
+from . import system
+from .dbio.base import DBClientFactory
+from .dbio.wsgi import project as prj, SubApp, Handler, DBIOHandler
+from .dap.service import mdsx 
+from .dbio.inmem import InMemoryDBClientFactory
+from .dbio.fsbased import FSBasedDBClientFactory
+from .dbio.mongo import MongoDBClientFactory
 from nistoar.pdr.publish.prov import PubAgent
 from nistoar.base.config import ConfigurationException, merge_config
 
@@ -96,7 +185,7 @@ class SubAppFactory:
         return it as a complete convention-specific configuration, or None if the convention is not 
         configured.  
         :param str appname:    the name of the MIDAS app to be configured.  (Examples are "dmp",
-                               "pdr")
+                               "dap")
         :param str convention: the name of the API convention that is desired in the configuration.  A 
                                special name "def" refers to the convention that is configured as the 
                                default for the app; an empty string and None behaves in the same way.
@@ -128,7 +217,6 @@ class SubAppFactory:
             appcfg['type'] = typename
         elif not appcfg.get('type'):
             appcfg['type'] = "%s/%s" % (appname, convention)
-        appcfg.setdefault("project_name", appname)
 
         return appcfg
 
@@ -152,7 +240,7 @@ class SubAppFactory:
             raise ConfigurationException("Missing configuration parameter: type")
         factory = self.subapps[typename]
 
-        return factory(appconfig.get('project_name', typename), log, dbio_client_factory, appconfig)
+        return factory(dbio_client_factory, log, appconfig, appconfig.get('project_name'))
 
     def create_suite(self, log: Logger, dbio_client_factory: DBClientFactory) -> MutableMapping:
         """
@@ -345,7 +433,8 @@ class About(SubApp):
 
 
 _MIDASSubApps = {
-    "dmp/mdm1":  prj.MIDASProjectApp,
+#    "dmp/mdm1":  mdm1.DMPApp,
+    "dmp/mdm1":  prj.MIDASProjectApp.factory_for("dmp"),
     "dap/mdsx":  mdsx.DAPApp
 }
 
@@ -367,7 +456,7 @@ class MIDASApp:
         """
         initial the App
         :param Mapping config:  the collected configuration for the App (see the 
-                                :py:module:`wsgi module documentation <nistoar.midas.dbio.wsgi>` 
+                                :py:mod:`wsgi module documentation <nistoar.midas.dbio.wsgi>` 
                                 for the schema
         :param DBClientFactory dbio_client_factory:  the DBIO client factory to use to create
                                 clients used to access the DBIO storage backend.  If not specified,
@@ -463,5 +552,6 @@ class MIDASApp:
     def __call__(self, env, start_resp):
         return self.handle_request(env, start_resp)
 
+app = MIDASApp
 
 

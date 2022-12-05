@@ -1,8 +1,8 @@
 import os, json, pdb, logging, tempfile
 import unittest as test
 
-from nistoar.midas.dbio import inmem, base
-from nistoar.midas.dbio.wsgi import broker
+from nistoar.midas.dbio import inmem, base, AlreadyExists
+from nistoar.midas.dbio import project as prj
 from nistoar.midas.dap.service import mdsx
 from nistoar.pdr.publish import prov
 
@@ -29,7 +29,7 @@ def tearDownModule():
 
 nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
 
-class TestProjectRecordBroker(test.TestCase):
+class TestDAPService(test.TestCase):
 
     def setUp(self):
         self.cfg = {
@@ -41,36 +41,32 @@ class TestProjectRecordBroker(test.TestCase):
                     "default_shoulder": "mdsx"
                 }
             },
-            "allowed_project_shoulders": ["mdsx", "spc1"],
-            "default_shoulder": "mdsx",
+            "dbio": {
+                "allowed_project_shoulders": ["mdsx", "spc1"],
+                "default_shoulder": "mdsx",
+            },
             "assign_doi": "always",
             "doi_naan": "88888"
         }
-        self.fact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdsx": 2 }})
-        self.dbcli = self.fact.create_client(base.DMP_PROJECTS, self.cfg, nistr.actor)
-        self.resp = []
+        self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdsx": 2 }})
 
-    def create_broker(self, request=None):
-        self.resp = []
-        if not request:
-            request = {'REQUEST_METHOD': 'GRUB'}
-        self.broker = mdsx.DAPBroker(self.dbcli, self.cfg, nistr, request, rootlog.getChild("broker"))
-        return self.broker
+    def create_service(self, request=None):
+        self.service = mdsx.DAPService(self.dbfact, self.cfg, nistr, rootlog.getChild("broker"))
+        return self.service
 
     def test_ctor(self):
-        self.create_broker()
-        self.assertTrue(self.broker.dbcli)
-        self.assertEqual(self.broker.cfg, self.cfg)
-        self.assertEqual(self.broker.who.actor, "nstr1")
-        self.assertEqual(self.broker.who.group, "midas")
-        self.assertEqual(self.broker.env, {'REQUEST_METHOD': 'GRUB'})
-        self.assertTrue(self.broker.log)
+        self.create_service()
+        self.assertTrue(self.service.dbcli)
+        self.assertEqual(self.service.cfg, self.cfg)
+        self.assertEqual(self.service.who.actor, "nstr1")
+        self.assertEqual(self.service.who.group, "midas")
+        self.assertTrue(self.service.log)
 
     def test_create_record(self):
-        self.create_broker()
-        self.assertTrue(not self.broker.dbcli.name_exists("goob"))
+        self.create_service()
+        self.assertTrue(not self.service.dbcli.name_exists("goob"))
         
-        prec = self.broker.create_record("goob")
+        prec = self.service.create_record("goob")
         self.assertEqual(prec.name, "goob")
         self.assertEqual(prec.id, "mdsx:0003")
         self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data"})
@@ -80,8 +76,8 @@ class TestProjectRecordBroker(test.TestCase):
         self.assertEqual(prec.data['doi'], "doi:88888/mdsx-0003")
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsx-0003")
 
-        self.assertTrue(self.broker.dbcli.name_exists("goob"))
-        prec2 = self.broker.get_record(prec.id)
+        self.assertTrue(self.service.dbcli.name_exists("goob"))
+        prec2 = self.service.get_record(prec.id)
         self.assertEqual(prec2.name, "goob")
         self.assertEqual(prec2.id, "mdsx:0003")
         self.assertEqual(prec2.data['@id'], "ark:/88434/mdsx-0003")
@@ -89,16 +85,16 @@ class TestProjectRecordBroker(test.TestCase):
         self.assertEqual(prec2.meta, {"creatorisContact": True, "resourceType": "data"})
         self.assertEqual(prec2.owner, "nstr1")
 
-        with self.assertRaises(broker.AlreadyExists):
-            self.broker.create_record("goob")
+        with self.assertRaises(AlreadyExists):
+            self.service.create_record("goob")
 
     def test_create_record_withdata(self):
-        self.create_broker()
-        self.assertTrue(not self.broker.dbcli.name_exists("gurn"))
+        self.create_service()
+        self.assertTrue(not self.service.dbcli.name_exists("gurn"))
         
-        prec = self.broker.create_record("gurn", {"color": "red"},
-                                         {"temper": "dark", "creatorisContact": "goob",
-                                          "softwarelink": "http://..." })  # misspelled key
+        prec = self.service.create_record("gurn", {"color": "red"},
+                                          {"temper": "dark", "creatorisContact": "goob",
+                                           "softwarelink": "http://..." })  # misspelled key
         self.assertEqual(prec.name, "gurn")
         self.assertEqual(prec.id, "mdsx:0003")
         self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data"})

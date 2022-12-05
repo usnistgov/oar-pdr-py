@@ -25,9 +25,13 @@ class ProjectService(MIDASSystem):
     to a particular user at construction time (as given by a :py:class:`~nistoar.pdr.publish.prov.PubAgent`
     instance); thus, requests to this service are subject to internal Authorization checks.
 
-    This base service supports a single parameter, ``clients``, that places restrictions on the 
-    creation of records based on which group the user is part of.  The value is an object whose keys
-    are user group name that are authorized to use this service, and whose values are themselves objects
+    This base service supports a two parameters, ``dbio`` and ``clients``.  The optional ``dbio`` 
+    parameter will be passed to the :py:class:`~nistoar.midas.dbio.base.DBClientFactory`'s 
+    ``create_client()`` function to create the :py:class:`~nistoar.midas.dbio.base.DBClient`. 
+
+    The ``clients`` parameter is an object that places restrictions on the 
+    creation of records based on which group the user is part of.  The keys of the object
+    are user group names that are authorized to use this service, and whose values are themselves objects
     that restrict the requests by that user group; for example:
 
     .. code-block::
@@ -64,7 +68,7 @@ class ProjectService(MIDASSystem):
         super(ProjectService, self).__init__("DBIO Project Service", "DBIO")
         self.cfg = config
         if not who:
-            who = PubAgent("unkwn", prov.PubAgent.USER, "anonymous")
+            who = PubAgent("unkwn", PubAgent.USER, "anonymous")
         self.who = who
         if not log:
             log = getLogger(self.system_abbrev).getChild(self.subsystem_abbrev).getChild(project_type)
@@ -359,7 +363,7 @@ class ProjectService(MIDASSystem):
 class ProjectServiceFactory:
     """
     a factory object that creates ProjectService instances attached to the backend DB implementation
-    and which acts on behalf of a specific user.  
+    and which act on behalf of a specific user.  
 
     As this is a concrete class, it can be instantiated directly to produce generic ProjectService 
     instances but serving a particular project type.  Instances are also attached ot a particular
@@ -367,11 +371,8 @@ class ProjectServiceFactory:
     time.  
 
     The configuration provided to this factory will be passed directly to the service instances 
-    it creates.  In addition parameters supported by the :py:class:`ProjectService` 
-    (i.e. ``clients``), the configuration can also include a ``dbio`` parameter.  
-    If provided, its value will be used when creating a DBClient to talk to the DB backend (see 
-    :py:class:`~nistoar.midas.dbio.base.DBClientFactory` for details).  Subclasses of this factory
-    class may support additional parameters. 
+    it creates.  See the :py:class:`ProjectService` documentation for the configuration 
+    parameters supported by this implementation.
     """
     def __init__(self, project_type: str, dbclient_factory: DBClientFactory, config: Mapping={},
                  log: Logger=None):
