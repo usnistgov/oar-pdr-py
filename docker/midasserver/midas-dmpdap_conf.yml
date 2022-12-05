@@ -14,14 +14,11 @@ services:
          describedBy: "http://localhost:9091/docs/dapsvc-elements.html"
          href:        "http://localhost:9091/midas/dap"
 
-      broker: 
-         assign_doi: always
-         doi_naan:   "18434"
-         clients: 
-             midas: 
-                default_shoulder: mdsx
-             default: 
-                default_shoulder: mdsx
+      clients: 
+         midas: 
+            default_shoulder: mdsx
+         default: 
+            default_shoulder: mdsx
 
       dbio: 
          superusers:                [ "rlp3" ]
@@ -36,6 +33,8 @@ services:
                 describedBy: "http://localhost:9091/docs/dapsvc-elements.html"
                 href:        "http://localhost:9091/midas/dap/mdsx"
                 version:     mdsx
+            assign_doi: always
+            doi_naan:   "18434"
 
    dmp: 
       about: 
@@ -44,12 +43,11 @@ services:
          describedBy: "http://localhost:9091/docs/dmpsvc-elements.html"
          href:        "http://localhost:9091/midas/dmp"
 
-      broker: 
-         clients: 
-             midas: 
-                default_shoulder: mdm1
-             default: 
-                default_shoulder: mdm1
+      clients: 
+          midas: 
+             default_shoulder: mdm1
+          default: 
+             default_shoulder: mdm1
 
       dbio: 
          superusers:                [ "rlp3" ]

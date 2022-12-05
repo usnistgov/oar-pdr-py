@@ -285,10 +285,17 @@ class SubAppFactory:
                         aboutapp.add_version(conv, cnvcfg.get("about", {}))
 
                         # if so configured, set as default
+                        defdesc = None
                         if appcfg.get("default_convention") == conv:
-                            out["%s/def" % appname] = out[path]
+                            defdesc = out[path]
                         elif not appcfg.get("default_convention") and len(appcfg["conventions"]) == 1:
-                            out["%s/def" % appname] = out[path]
+                            defdesc = out[path]
+                        if defdesc:
+                            out["%s/def" % appname] = defdesc
+                            aboutdesc = deepcopy(cnvcfg.get("about", {}))
+                            if aboutdesc.get('href') and isinstance(aboutdesc['href'], str):
+                                aboutdesc['href'] = re.sub(r'/%s/?$' % conv, '/def', aboutdesc['href'])
+                            aboutapp.add_version("def", aboutdesc)
 
             else:
                 # No conventions configured for this app name; try to create an app from the defaults

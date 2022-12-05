@@ -43,7 +43,8 @@ except ImportError:
     import nistoar
 
 from nistoar.base import config
-from nistoar.midas.dbio import wsgi, MongoDBClientFactory, InMemoryDBClientFactory, FSBasedDBClientFactory
+from nistoar.midas.dbio import MongoDBClientFactory, InMemoryDBClientFactory, FSBasedDBClientFactory
+from nistoar.midas import wsgi
 
 try:
     import uwsgi

@@ -14,12 +14,11 @@ services:
          describedBy: "http://localhost:9091/docs/dmpsvc-elements.html"
          href:        "http://localhost:9091/midas/dmp"
 
-      broker: 
-         clients: 
-             midas: 
-                default_shoulder: mdm1
-             default: 
-                default_shoulder: mdm1
+      clients: 
+          midas: 
+             default_shoulder: mdm1
+          default: 
+             default_shoulder: mdm1
 
       dbio: 
          superusers:                [ "rlp3" ]

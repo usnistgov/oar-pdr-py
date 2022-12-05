@@ -176,5 +176,5 @@ class DAPApp(MIDASProjectApp):
     
     def __init__(self, dbcli_factory: DBClientFactory, log: Logger, config: dict={}, project_coll: str=None):
         service_factory = DAPServiceFactory(dbcli_factory, config, project_coll)
-        super(DAPApp, self).__init__(service_factory, log.getChild(DAP_PROJECTS), dbcli_factory, config)
+        super(DAPApp, self).__init__(service_factory, log.getChild(DAP_PROJECTS), config)
 
