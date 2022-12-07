@@ -179,6 +179,9 @@ class ProtectedRecord(ABC):
             recdata['acls'] = {}
         if not recdata.get('owner'):
             recdata['owner'] = self._cli.user_id if self._cli else ""
+        if 'deactivated' not in recdata:
+            # Should be None or a date
+            recdata['deactivated'] = None
         for perm in ACLs.OWN:
             if perm not in recdata['acls']:
                 recdata['acls'][perm] = [recdata['owner']] if recdata['owner'] else []
@@ -222,6 +225,51 @@ class ProtectedRecord(ABC):
         the timestamp for the last modification, formatted as an ISO string
         """
         return datetime.fromtimestamp(math.floor(self.modified)).isoformat()
+
+    @property
+    def deactivated(self) -> bool:
+        """
+        True if this record has been deactivated.  Record that are deactivated are generally
+        skipped over when being accessed or used.  A deactivated record can only be retrieved 
+        via its identifier.
+        """
+        return bool(self._data.get('deactivated'))
+
+    @property
+    def deactivated_date(self) -> str:
+        """
+        the timestamp when this record was deactivated, formatted as an ISO string.  An empty
+        string is returned if the record is not currently deactivated.
+        """
+        if not self._data.get('deactivated'):
+            return ""
+        return datetime.fromtimestamp(math.floor(self._data.get('deactivated'))).isoformat()
+
+    def deactivate(self) -> bool:
+        """
+        mark this record as "deactivated".  :py:meth:`deactivated` will now return True.
+        The :py:meth:`save` method should be called to commit this change.
+        :return:  False if the state was not changed for any reason, including because the record
+                  was already deactivated.
+                  :rtype: True
+        """
+        if self.deactivated:
+            return False
+        self._data['deactivated'] = time.time()
+        return True
+
+    def reactivate(self) -> bool:
+        """
+        reactivate this record; :py:meth:`deactivated` will now return False.
+        The :py:meth:`save` method should be called to commit this change.
+        :return:  False if the state was not changed for any reason, including because the record
+                  was already activated.
+                  :rtype: True
+        """
+        if not self.deactivated:
+            return False
+        self._data['deactivated'] = None
+        return True
 
     @property
     def acls(self) -> ACLs:
@@ -495,8 +543,8 @@ class DBGroups(object):
                           user ID attached to the `DBClient` is assumed.
         """
         if not owner:
-            owner = self.user_id
-        it = self._cli._select_from_coll(GROUPS_COLL, name=name, owner=owner)
+            owner = self._cli.user_id
+        it = self._cli._select_from_coll(GROUPS_COLL, incl_deact=True, name=name, owner=owner)
         try:
             return bool(next(it))
         except StopIteration:
@@ -527,7 +575,7 @@ class DBGroups(object):
         """
         if not owner:
             owner = self._cli.user_id
-        matches = self._cli._select_from_coll(GROUPS_COLL, name=name, owner=owner)
+        matches = self._cli._select_from_coll(GROUPS_COLL, incl_deact=True, name=name, owner=owner)
         for m in matches:
             m = Group(m, self._cli)
             if m.authorized(ACLs.READ):
@@ -538,10 +586,11 @@ class DBGroups(object):
         """
         return all the groups that a user (or a group) is a member of.  This implementation will 
         resolve the groups that the user is indirectly a member of--i.e. a user's group itself is a 
-        member of another group.  
+        member of another group.  Deactivated groups are not included.
         """
         checked = set()
         out = set(g['id'] for g in self._cli._select_prop_contains(GROUPS_COLL, 'members', id))
+
         follow = list(out)
         while len(follow) > 0:
             g = follow.pop(0)
@@ -594,9 +643,6 @@ class ProjectRecord(ProtectedRecord):
             rec['meta'] = OrderedDict()
         if 'curators' not in rec:
             rec['curators'] = []
-        if 'deactivated' not in rec:
-            # Should be None or a date
-            rec['deactivated'] = None
 
         self._initialize_data(rec)
         self._initialize_meta(rec)
@@ -815,7 +861,7 @@ class DBClient(ABC):
         """
         if not owner:
             owner = self.user_id
-        it = self._select_from_coll(self._projcoll, name=name, owner=owner)
+        it = self._select_from_coll(self._projcoll, incl_deact=True, name=name, owner=owner)
         try:
             return bool(next(it))
         except StopIteration:
@@ -828,7 +874,7 @@ class DBClient(ABC):
         """
         if not owner:
             owner = self.user_id
-        matches = self._select_from_coll(self._projcoll, name=name, owner=owner)
+        matches = self._select_from_coll(self._projcoll, incl_deact=True, name=name, owner=owner)
         for m in matches:
             m = ProjectRecord(self._projcoll, m, self)
             if m.authorized(ACLs.READ):
@@ -921,7 +967,7 @@ class DBClient(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def _select_from_coll(self, collname, **constraints) -> Iterator[MutableMapping]:
+    def _select_from_coll(self, collname, incl_deact=False, **constraints) -> Iterator[MutableMapping]:
         """
         return an iterator to the records from a specified collection that match the set of 
         given constraints.
@@ -935,7 +981,7 @@ class DBClient(ABC):
         raise NotImplementedError()
     
     @abstractmethod
-    def _select_prop_contains(self, collname, prop, target) -> Iterator[MutableMapping]:
+    def _select_prop_contains(self, collname, prop, target, incl_deact=False) -> Iterator[MutableMapping]:
         """
         return an iterator to the records from a specified collection in which the named list property
         contains a given target value.
@@ -1009,7 +1055,7 @@ class NotAuthorized(DBIOException):
     an exception indicating that the user attempted an operation that they are not authorized to 
     """
 
-    def __init__(self, who: str=None, op: str=None, message: str=None):
+    def __init__(self, who: str=None, op: str=None, message: str=None, sys=None):
         """
         create the exception
         :param str who:     the identifier of the user who requested the operation
@@ -1041,12 +1087,13 @@ class ObjectNotFound(DBIOException):
     """
     an exception indicating that the requested record, or a requested part of a record, does not exist.
     """
-    def __init__(self, recid, part=None, message=None):
+    def __init__(self, recid, part=None, message=None, sys=None):
         """
         initialize this exception
-        :param str recid:  the id of the record that was existed
-        :param str  part:  the part of the record that was requested.  Do not provide this parameter if 
-                           the entire record does not exist.  
+        :param str   recid: the id of the record that was existed
+        :param str    part: the part of the record that was requested.  Do not provide this parameter if 
+                            the entire record does not exist.  
+        :param str message: a brief description of the error (what object was not found)
         """
         self.record_id = recid
         self.record_part = part
@@ -1057,4 +1104,11 @@ class ObjectNotFound(DBIOException):
             else:
                 message = "Requested record with id=%s does not exist" % recid
         super(ObjectNotFound, self).__init__(message)
+
+class InvalidData(DBIOException):
+    """
+    record create or update request includes invalid input data
+    """
+    pass
+
 

@@ -59,7 +59,7 @@ class FSBasedDBClient(base.DBClient):
     def _get_from_coll(self, collname, id) -> MutableMapping:
         return self._read_rec(collname, id)
 
-    def _select_from_coll(self, collname, **constraints) -> Iterator[MutableMapping]:
+    def _select_from_coll(self, collname, incl_deact=False, **constraints) -> Iterator[MutableMapping]:
         collpath = self._root / collname
         if not collpath.is_dir():
             return
@@ -70,6 +70,9 @@ class FSBasedDBClient(base.DBClient):
                 except ValueError:
                     # skip over corrupted records
                     continue
+
+                if rec.get('deactivated') and incl_deact:
+                    continue
                 cancel = False
                 for ck, cv in constraints.items():
                     if rec.get(ck) != cv:
@@ -79,7 +82,7 @@ class FSBasedDBClient(base.DBClient):
                     continue
                 yield rec
 
-    def _select_prop_contains(self, collname, prop, target) -> Iterator[MutableMapping]:
+    def _select_prop_contains(self, collname, prop, target, incl_deact=False) -> Iterator[MutableMapping]:
         collpath = self._root / collname
         if not collpath.is_dir():
             return
@@ -93,6 +96,9 @@ class FSBasedDBClient(base.DBClient):
                     continue
                 except IOError as ex:
                     raise DBIOException(recf+": file locking error: "+str(ex))
+
+                if rec.get('deactivated') and not incl_deact:
+                    continue
                 if prop in rec and isinstance(rec[prop], (list, tuple)) and target in rec[prop]:
                     yield rec
 

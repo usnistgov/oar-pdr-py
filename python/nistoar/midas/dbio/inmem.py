@@ -28,8 +28,10 @@ class InMemoryDBClient(base.DBClient):
     def _get_from_coll(self, collname, id) -> MutableMapping:
         return deepcopy(self._db.get(collname, {}).get(id))
 
-    def _select_from_coll(self, collname, **constraints) -> Iterator[MutableMapping]:
+    def _select_from_coll(self, collname, incl_deact=False, **constraints) -> Iterator[MutableMapping]:
         for rec in self._db.get(collname, {}).values():
+            if rec.get('deactivated') and not incl_deact:
+                continue
             cancel = False
             for ck, cv in constraints.items():
                 if rec.get(ck) != cv:
@@ -39,8 +41,10 @@ class InMemoryDBClient(base.DBClient):
                 continue
             yield deepcopy(rec)
 
-    def _select_prop_contains(self, collname, prop, target) -> Iterator[MutableMapping]:
+    def _select_prop_contains(self, collname, prop, target, incl_deact=False) -> Iterator[MutableMapping]:
         for rec in self._db.get(collname, {}).values():
+            if rec.get('deactivated') and not incl_deact:
+                continue
             if prop in rec and isinstance(rec[prop], (list, tuple)) and target in rec[prop]:
                 yield deepcopy(rec)
 
