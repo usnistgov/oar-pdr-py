@@ -7,6 +7,8 @@ This interface is based on the following model:
   *  Each *record* in the collection represents a "project" that a user is working on via the service
   *  A record can be expressed as a Python dictionary which can be exported into JSON
 
+See the :py:mod:`DBIO package documentation <nistoar.midas.dbio>` for a fully description of the 
+model and how to interact with the database.
 """
 import time, math
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
@@ -142,7 +144,11 @@ class ACLs:
 
 class ProtectedRecord(ABC):
     """
-    a base class for records that have ACLs attached to them
+    a base class for records that have ACLs attached to them.
+
+    This record represents a local copy of the record that exists in the "remote" database.  The 
+    client can make changes to this record; however, those changes are not persisted in the 
+    database until the :py:meth:`save` method is called.
     """
 
     def __init__(self, servicetype: str, recdata: Mapping, dbclient: DBClient=None):
@@ -625,6 +631,10 @@ class DBGroups(object):
 class ProjectRecord(ProtectedRecord):
     """
     a single record from the project collection representing one project created by the user
+
+    This record represents a local copy of the record that exists in the "remote" database.  The 
+    client can make changes to this record; however, those changes are not persisted in the 
+    database until the :py:meth:`save` method is called.
     """
 
     def __init__(self, projcoll: str, recdata: Mapping, dbclient: DBClient=None):
@@ -891,6 +901,8 @@ class DBClient(ABC):
         :param str perm:  the permission type that the user must be authorized for in order for 
                           the record to be returned; if user is not authorized, an exception is raised.
                           Default: `ACLs.READ`
+        :raises ObjectNotFound:  if the identifier does not exist
+        :raises  NotAuthorized:  if the user does not have the permission given by ``perm``
         """
         out = self._get_from_coll(self._projcoll, id)
         if not out:
@@ -1005,6 +1017,24 @@ class DBClient(ABC):
         """
         raise NotImplementedError()
         
+    def delete_record(self, id: str) -> bool:
+        """
+        delete the specified group from the database.  The user attached to this 
+        :py:class:`DBClient` must either be the owner of the record or have `DELETE` permission
+        to carry out this option. 
+        :return:  True if the group was found and successfully deleted; False, otherwise
+                  :rtype: bool
+        """
+        try:
+            g = self.get_record_for(id, ACLs.DELETE)
+        except ObjectNotFound:
+            return False
+        if not g:
+            return False
+
+        self._delete_from(self._projcoll, id)
+        return True
+
 
 class DBClientFactory(ABC):
     """
