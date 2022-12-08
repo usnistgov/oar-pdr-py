@@ -77,6 +77,21 @@ class TestGroup(test.TestCase):
         self.assertFalse(self.rec.authorized(base.ACLs.ADMIN, "gary"))
         self.assertFalse(self.rec.authorized(base.ACLs.DELETE, "gary"))
         self.assertFalse(self.rec.authorized([base.ACLs.READ, base.ACLs.WRITE], "gary"))
+
+    def test_deactivate(self):
+        self.assertFalse(self.rec.deactivated)
+        self.rec.save()
+        self.assertTrue(self.cli.groups.name_exists("friends"))
+        self.assertTrue(self.rec.deactivate())
+        self.assertFalse(self.rec.deactivate())
+        self.rec.save()
+        self.assertFalse(not self.rec.deactivated)
+        self.assertTrue(self.cli.groups.name_exists("friends"))
+        self.assertTrue(self.rec.reactivate())
+        self.assertFalse(self.rec.reactivate())
+        self.assertFalse(self.rec.deactivated)
+        self.rec.save()
+        self.assertTrue(self.cli.groups.name_exists("friends"))
         
 class TestDBGroups(test.TestCase):
 
@@ -277,7 +292,6 @@ class TestDBGroups(test.TestCase):
         self.assertIn(ns+"t", matches)
         self.assertIn(base.PUBLIC_GROUP, matches)
         self.assertEqual(len(matches), 4)
-
 
                          
 if __name__ == '__main__':

@@ -96,6 +96,16 @@ class TestInMemoryDBClient(test.TestCase):
         recs = list(self.cli._select_from_coll(base.GROUPS_COLL, hobby="whittling"))
         self.assertEqual(len(recs), 2)
 
+        # test deactivated filter
+        self.cli._db[base.GROUPS_COLL]["p:gang"] = {"id": "p:gang", "owner": "p:bob", "deactivated": 1.2 }
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob"))
+        self.assertEqual(len(recs), 1)
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, incl_deact=True, owner="p:bob"))
+        self.assertEqual(len(recs), 2)
+        self.cli._db[base.GROUPS_COLL]["p:gang"]["deactivated"] = None
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob"))
+        self.assertEqual(len(recs), 2)
+
     def test_select_prop_contains(self):
         # test query on non-existent collection
         it = self.cli._select_prop_contains("alice", "hobbies", "whittling")
@@ -123,6 +133,16 @@ class TestInMemoryDBClient(test.TestCase):
         recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
         self.assertEqual(len(recs), 2)
         self.assertEqual(set([r.get('id') for r in recs]), set("p:bob stars".split()))
+
+        # test deactivated filter
+        self.cli._db[base.GROUPS_COLL]["p:gang"] = {"id": "p:gang", "members": ["p:bob"], "deactivated": 1.2}
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
+        self.assertEqual(len(recs), 2)
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob", incl_deact=True))
+        self.assertEqual(len(recs), 3)
+        self.cli._db[base.GROUPS_COLL]["p:gang"]["deactivated"] = None
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
+        self.assertEqual(len(recs), 3)
 
     def test_delete_from(self):
         # test query on non-existent collection

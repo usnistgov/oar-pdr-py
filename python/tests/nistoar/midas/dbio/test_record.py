@@ -23,6 +23,7 @@ class TestProjectRecord(test.TestCase):
         self.assertEqual(self.rec.modified, self.rec.created)
         self.assertTrue(self.rec.created_date.startswith("20"))
         self.assertNotIn('.', self.rec.created_date)
+        self.assertFalse(self.rec.deactivated)
         self.assertEqual(self.rec.data, {})
         self.assertEqual(self.rec.meta, {})
         # self.assertEqual(self.rec.curators, [])
@@ -77,7 +78,20 @@ class TestProjectRecord(test.TestCase):
         self.assertFalse(self.rec.authorized(base.ACLs.DELETE, "gary"))
         self.assertFalse(self.rec.authorized([base.ACLs.READ, base.ACLs.WRITE], "gary"))
 
-
+    def test_deactivate(self):
+        self.assertFalse(self.rec.deactivated)
+        self.rec.save()
+        self.assertTrue(self.cli.name_exists("brains"))
+        self.assertTrue(self.rec.deactivate())
+        self.assertFalse(self.rec.deactivate())
+        self.rec.save()
+        self.assertFalse(not self.rec.deactivated)
+        self.assertTrue(self.cli.name_exists("brains"))
+        self.assertTrue(self.rec.reactivate())
+        self.assertFalse(self.rec.reactivate())
+        self.assertFalse(self.rec.deactivated)
+        self.rec.save()
+        self.assertTrue(self.cli.name_exists("brains"))
 
                          
 if __name__ == '__main__':
