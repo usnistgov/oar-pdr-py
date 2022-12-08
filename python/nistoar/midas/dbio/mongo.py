@@ -119,10 +119,13 @@ class MongoDBClient(base.DBClient):
         except Exception as ex:
             raise base.DBIOException("Failed to access record with id=%s: %s" % (id, str(ex)))
 
-    def _select_from_coll(self, collname, **constraints) -> Iterator[MutableMapping]:
+    def _select_from_coll(self, collname, incl_deact=False, **constraints) -> Iterator[MutableMapping]:
         try:
             db = self.native
             coll = db[collname]
+
+            if not incl_deact:
+                constraints['deactivated'] = None
 
             for rec in coll.find(constraints, {'_id': False}):
                 yield rec
@@ -130,12 +133,16 @@ class MongoDBClient(base.DBClient):
         except Exception as ex:
             raise base.DBIOException("Failed while selecting records: " + str(ex))
 
-    def _select_prop_contains(self, collname, prop, target) -> Iterator[MutableMapping]:
+    def _select_prop_contains(self, collname, prop, target, incl_deact=False) -> Iterator[MutableMapping]:
         try:
             db = self.native
             coll = db[collname]
 
-            for rec in coll.find({prop: target}, {'_id': False}):
+            query = { prop: target }
+            if not incl_deact:
+                query['deactivated'] = None
+
+            for rec in coll.find(query, {'_id': False}):
                 yield rec
 
         except Exception as ex:

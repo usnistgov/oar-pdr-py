@@ -146,6 +146,18 @@ class TestMongoDBClient(test.TestCase):
         recs = list(self.cli._select_from_coll(base.GROUPS_COLL, hobby="whittling"))
         self.assertEqual(len(recs), 2)
 
+        # test deactivated filter
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:gang",
+                                                      "owner": "p:bob", "deactivated": 1.2 })
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob"))
+        self.assertEqual(len(recs), 1)
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, incl_deact=True, owner="p:bob"))
+        self.assertEqual(len(recs), 2)
+        self.cli.native[base.GROUPS_COLL].find_one_and_update({"id": "p:gang"},
+                                                              { "$set": { "deactivated": None } })
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob"))
+        self.assertEqual(len(recs), 2)
+
     def test_select_prop_contains(self):
         # test query on unrecognized collection
         it = self.cli._select_prop_contains("alice", "hobbies", "whittling")
@@ -179,6 +191,18 @@ class TestMongoDBClient(test.TestCase):
         recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
         self.assertEqual(len(recs), 2)
         self.assertEqual(set([r.get('id') for r in recs]), set("p:bob stars".split()))
+
+        # test deactivated filter
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:gang",
+                                                      "members": ["p:bob"], "deactivated": 1.2})
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
+        self.assertEqual(len(recs), 2)
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob", incl_deact=True))
+        self.assertEqual(len(recs), 3)
+        self.cli.native[base.GROUPS_COLL].find_one_and_update({"id": "p:gang"},
+                                                              { "$set": { "deactivated": None } })
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
+        self.assertEqual(len(recs), 3)
 
     def test_delete_from(self):
         # test delete on unrecognized, non-existent collection
@@ -345,7 +369,7 @@ class TestMongoDBGroups(test.TestCase):
         with self.assertRaises(base.NotAuthorized):
             grp = self.dbg.create_group("friends", "alice")
 
-        self.cfg['superusers'] = [self.user]
+        self.cli._cfg['superusers'] = [self.user]
         grp = self.dbg.create_group("friends", "alice")
         self.assertEqual(grp.name, "friends")
         self.assertEqual(grp.owner, "alice")
@@ -397,7 +421,7 @@ class TestMongoDBGroups(test.TestCase):
 
         self.assertIsNone(self.dbg.get_by_name("friends", "alice"))
 
-        self.cfg['superusers'] = [self.user]
+        self.cli._cfg['superusers'] = [self.user]
         grp = self.dbg.create_group("friends", "alice")
         grp = self.dbg.get_by_name("friends", "alice")
         self.assertEqual(grp.id, "grp0:alice:friends")
