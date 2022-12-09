@@ -80,6 +80,20 @@ class TestFSBasedDBClient(test.TestCase):
         self.assertEqual(self.cli._next_recnum("goober"), 1)
         self.assertEqual(self.cli._next_recnum("gary"), 2)
 
+        recpath = self.cli._root / "nextnum" / ("goob.json")
+        self.assertTrue(recpath.is_file())
+        self.assertEqual(self.cli._read_rec("nextnum", "goob"), 3)
+        self.cli._try_push_recnum("goob", 2)
+        self.assertEqual(self.cli._read_rec("nextnum", "goob"), 3)
+
+        recpath = self.cli._root / "nextnum" / ("hank.json")
+        self.assertTrue(not recpath.exists())
+        self.cli._try_push_recnum("hank", 2)
+        self.assertTrue(not recpath.exists())
+
+        self.cli._try_push_recnum("goob", 3)
+        self.assertEqual(self.cli._read_rec("nextnum", "goob"), 2)
+
     def test_get_from_coll(self):
         # test query on non-existent collection
         self.assertIsNone(self.cli._get_from_coll("alice", "p:bob"))

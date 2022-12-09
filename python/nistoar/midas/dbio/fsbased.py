@@ -56,6 +56,15 @@ class FSBasedDBClient(base.DBClient):
         self._write_rec("nextnum", shoulder, num)
         return num
 
+    def _try_push_recnum(self, shoulder, recnum):
+        recpath = self._root / "nextnum" / (shoulder+".json")
+        if not recpath.exists():
+            return
+        num = self._read_rec("nextnum", shoulder)
+        if num >= 0 and num == recnum:
+            num -= 1
+            self._write_rec("nextnum", shoulder, num)
+
     def _get_from_coll(self, collname, id) -> MutableMapping:
         return self._read_rec(collname, id)
 
@@ -106,6 +115,9 @@ class FSBasedDBClient(base.DBClient):
         recpath = self._root / collname / (id+".json")
         if recpath.is_file():
             recpath.unlink()
+            shldr, num = self._parse_id(id)
+            if shldr:
+                self._try_push_recnum(shldr, num)
             return True
         return False
 

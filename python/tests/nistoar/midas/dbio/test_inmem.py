@@ -45,6 +45,15 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(self.cli._next_recnum("goober"), 1)
         self.assertEqual(self.cli._next_recnum("gary"), 2)
 
+        self.assertEqual(self.cli._db["nextnum"]["goob"], 3)
+        self.cli._try_push_recnum("goob", 2)
+        self.assertEqual(self.cli._db["nextnum"]["goob"], 3)
+        self.assertNotIn("hank", self.cli._db["nextnum"])
+        self.cli._try_push_recnum("hank", 2)
+        self.assertNotIn("hank", self.cli._db["nextnum"])
+        self.cli._try_push_recnum("goob", 3)
+        self.assertEqual(self.cli._db["nextnum"]["goob"], 2)
+
     def test_get_from_coll(self):
         # test query on non-existent collection
         self.assertIsNone(self.cli._get_from_coll("alice", "p:bob"))

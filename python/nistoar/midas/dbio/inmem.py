@@ -25,6 +25,11 @@ class InMemoryDBClient(base.DBClient):
         self._db['nextnum'][shoulder] += 1
         return self._db['nextnum'][shoulder]
 
+    def _try_push_recnum(self, shoulder, recnum):
+        n = self._db['nextnum'].get(shoulder, -1)
+        if n >= 0 and n == recnum:
+            self._db['nextnum'][shoulder] -= 1
+
     def _get_from_coll(self, collname, id) -> MutableMapping:
         return deepcopy(self._db.get(collname, {}).get(id))
 
@@ -51,6 +56,9 @@ class InMemoryDBClient(base.DBClient):
     def _delete_from(self, collname, id):
         if collname in self._db and id in self._db[collname]:
             del self._db[collname][id]
+            shldr, num = self._parse_id(id)
+            if shldr:
+                self._try_push_recnum(shldr, num)
             return True
         return False
 

@@ -34,7 +34,15 @@ class TestDBClient(test.TestCase):
         self.cli._db["nextnum"]["go0"] = 22
         self.assertEqual(self.cli._mint_id("go0"), "go0:0023")
         self.cli._db["nextnum"]["go0"] = 22222
+
+        # testing unminting
+        id = self.cli._mint_id("go0")
+        self.assertEqual(id, "go0:22223")
+        self.assertEqual(self.cli._parse_id(id), ("go0", 22223))
+        self.cli._try_push_recnum("go0", 22223)   # unmints 22223
         self.assertEqual(self.cli._mint_id("go0"), "go0:22223")
+        self.cli._try_push_recnum("go0", 22222)   # has no effect
+        self.assertEqual(self.cli._mint_id("go0"), "go0:22224")
 
         self.assertEqual(self.cli._mint_id("ncnr5"), "ncnr5:0001")
     
@@ -73,6 +81,18 @@ class TestDBClient(test.TestCase):
         self.assertEqual(rec.name, "test")
         self.assertTrue(self.cli.exists("mds3:0001"))
         self.assertTrue(self.cli.name_exists("test", self.user))
+
+        self.assertTrue(self.cli.delete_record("mds3:0001"))
+        self.assertTrue(not self.cli.exists("mds3:0001"))
+        rec = self.cli.create_record("test", "mds3")
+        self.assertEqual(rec.id, "mds3:0001")
+        rec = self.cli.create_record("test2", "mds3")
+        self.assertEqual(rec.id, "mds3:0002")
+        self.assertTrue(self.cli.exists("mds3:0001"))
+        self.assertTrue(self.cli.delete_record("mds3:0001"))
+        self.assertTrue(not self.cli.exists("mds3:0001"))
+        rec = self.cli.create_record("test", "mds3")
+        self.assertEqual(rec.id, "mds3:0003")
 
     def test_get_record(self):
         with self.assertRaises(base.ObjectNotFound):

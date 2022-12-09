@@ -837,6 +837,15 @@ class DBClient(ABC):
         """
         return "{0}:{1:04}".format(shoulder, self._next_recnum(shoulder))
 
+    def _parse_id(self, id):
+        pair = id.rsplit(':', 1)
+        if len(pair) != 2:
+            return None, None
+        try:
+            return pair[0], int(pair[1])
+        except ValueError:
+            return None, None
+
     @abstractmethod
     def _next_recnum(self, shoulder):
         """

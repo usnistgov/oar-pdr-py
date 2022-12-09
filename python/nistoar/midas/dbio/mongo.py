@@ -107,6 +107,25 @@ class MongoDBClient(base.DBClient):
         except Exception as ex:
             raise base.DBIOException("Failed to access named sequence, =%s: %s" % (shoulder, str(ex)))
 
+    def _try_push_recnum(self, shoulder, recnum):
+        key = {"slot": shoulder}
+        try:
+            db = self.native
+            coll = db["nextnum"]
+
+            with self._mngocli.start_session() as session:
+                if coll.count_documents(key) == 0:
+                    return
+                slot = coll.find_one(key)
+                if slot["next"] == recnum+1:
+                    coll.update_one(key, {"$inc": {"next": -1}})
+
+        except base.DBIOException as ex:
+            raise
+        except Exception as ex:
+            # ignore database errors
+            pass
+
     def _get_from_coll(self, collname, id) -> MutableMapping:
         key = {"id": id}
 

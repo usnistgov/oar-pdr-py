@@ -94,6 +94,20 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(self.cli._next_recnum("goober"), 1)
         self.assertEqual(self.cli._next_recnum("gary"), 2)
 
+        slot = self.cli.native.nextnum.find_one({"slot": "goob"})
+        self.assertEqual(slot["next"], 4)
+        self.cli._try_push_recnum("goob", 2)
+        slot = self.cli.native.nextnum.find_one({"slot": "goob"})
+        self.assertEqual(slot["next"], 4)
+
+        self.assertEqual(self.cli.native.nextnum.count_documents({"slot": "hank"}), 0)
+        self.cli._try_push_recnum("hank", 2)
+        self.assertEqual(self.cli.native.nextnum.count_documents({"slot": "hank"}), 0)
+
+        self.cli._try_push_recnum("goob", 3)
+        slot = self.cli.native.nextnum.find_one({"slot": "goob"})
+        self.assertEqual(slot["next"], 3)
+
     def test_get_from_coll(self):
         # test query on unrecognized collection
         self.assertIsNone(self.cli._get_from_coll("alice", "p:bob"))
