@@ -1144,10 +1144,5 @@ class ObjectNotFound(DBIOException):
                 message = "Requested record with id=%s does not exist" % recid
         super(ObjectNotFound, self).__init__(message)
 
-class InvalidData(DBIOException):
-    """
-    record create or update request includes invalid input data
-    """
-    pass
 
 

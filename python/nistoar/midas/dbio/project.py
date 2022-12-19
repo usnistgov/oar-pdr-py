@@ -12,8 +12,10 @@ and interaction models for manipulating them.
 from logging import Logger, getLogger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
+from typing import List
 
-from .base import DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ObjectNotFound
+from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs,
+                   AlreadyExists, NotAuthorized, ObjectNotFound, DBIOException)
 from .. import MIDASException, MIDASSystem
 from nistoar.pdr.publish.prov import PubAgent
 
@@ -54,7 +56,7 @@ class ProjectService(MIDASSystem):
     """
 
     def __init__(self, project_type: str, dbclient_factory: DBClient, config: Mapping={},
-                 who: PubAgent=None, log: Logger=None):
+                 who: PubAgent=None, log: Logger=None, _subsys=None, _subsysabbrev=None):
         """
         create the service
         :param str  project_type:  the project data type desired.  This name is usually used as the 
@@ -65,7 +67,11 @@ class ProjectService(MIDASSystem):
         :param who      PubAgent:  the representation of the user that is requesting access
         :param Logger        log:  the logger to use for log messages
         """
-        super(ProjectService, self).__init__("DBIO Project Service", "DBIO")
+        if not _subsys:
+            _subsys = "DBIO Project Service"
+        if not _subsysabbrev:
+            _subsysabbrev = "DBIO"
+        super(ProjectService, self).__init__(_subsys, _subsysabbrev)
         self.cfg = config
         if not who:
             who = PubAgent("unkwn", PubAgent.USER, "anonymous")
@@ -193,14 +199,14 @@ class ProjectService(MIDASSystem):
                              would otherwise result in invalid data content.
         """
         if not prec:
-            prec = self.dbcli.get_record_for(id)   # may raise ObjectNotFound/NotAuthorized
+            prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
         if not part:
-            # this is a complete replacement; merge it with a starter record
+            # updating data as a whole: merge given data into previously saved data
             self._merge_into(newdata, prec.data)
 
         else:
-            # replacing just a part of the data
+            # updating just a part of the data
             steps = part.split('/')
             data = prec.data
             while steps:
@@ -297,7 +303,7 @@ class ProjectService(MIDASSystem):
                              would otherwise result in invalid data content.
         """
         if not prec:
-            prec = self.dbcli.get_record_for(id)   # may raise ObjectNotFound/NotAuthorized
+            prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
         if not part:
             # this is a complete replacement; merge it with a starter record
@@ -359,6 +365,48 @@ class ProjectService(MIDASSystem):
     def _validate_data(self, data):
         pass
 
+    def clear_data(self, id, part=None, prec=None):
+        """
+        remove the stored data content of the record and reset it to its defaults.  
+        :param str      id:  the identifier for the record whose data should be cleared.
+        :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
+                             only that property will be cleared (either removed or set to an initial
+                             default).
+        :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to `id`.
+                             If this is not provided, the record will by fetched anew based on the `id`.  
+        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+                             an undefined or unrecognized part of the data
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
+                             given by `id`.  
+        :raises PartNotAccessible:  if clearing of the part of the data specified by `part` is not allowed.
+        """
+        if not prec:
+            prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+
+        initdata = self._new_data_for(prec.id, prec.meta)
+        if not part:
+            # clearing everything: return record to its initial defaults 
+            prec.data = initdata
+
+        else:
+            # clearing only part of the data
+            steps = part.split('/')
+            data = prec.data
+            while steps:
+                prop = steps.pop(0)
+                if prop in initdata:
+                    if not steps:
+                        data[prop] = initdata[prop]
+                    elif prop not in data:
+                        data[prop] = {}
+                elif prop not in data:
+                    break
+                elif not steps:
+                    del data[prop]
+                    break
+                data = data[prop]
+                initdata = initdata.get(prop, {})
+                    
 
 class ProjectServiceFactory:
     """
@@ -399,28 +447,76 @@ class ProjectServiceFactory:
         return ProjectService(self._prjtype, self._dbclifact, self._cfg, who, self._log)
 
 
-class InvalidUpdate(MIDASException):
+class InvalidUpdate(DBIOException):
     """
     an exception indicating that the user-provided data is invalid or otherwise would result in 
     invalid data content for a record. 
+
+    The determination of invalid data may result from detailed data validation which may uncover 
+    multiple errors.  The ``errors`` property will contain a list of messages, each describing a
+    validation error encounted.  The :py:meth:`format_errors` will format all these messages into 
+    a single string for a (text-based) display. 
     """
-    def __init__(self, message, recid=None, part=None):
+    def __init__(self, message: str=None, recid=None, part=None, errors: List[str]=None, sys=None):
         """
         initialize the exception
-        :param str recid:  the id of the record that was existed
-        :param str  part:  the part of the record that was requested.  Do not provide this parameter if 
-                           the entire record does not exist.  
+        :param str message:  a brief description of the problem with the user input
+        :param str   recid:  the id of the record that was existed
+        :param str    part:  the part of the record that was requested.  Do not provide this parameter if 
+                             the entire record does not exist.  
+        :param [str] errors: a listing of the individual errors uncovered in the data
         """
+        if errors:
+            if not message:
+                if len(errors) == 1:
+                    message = "Validation Error: " + errors[0]
+                elif len(errors) == 0:
+                    message = "Unknown validation errors encountered"
+                else:
+                    message = "Encountered %d validation errors, including: %s" % (len(errors), errors[0])
+        elif message:
+            errors = [message]
+        else:
+            message = "Unknown validation errors encountered while updating data"
+            errors = []
+        
         super(InvalidUpdate, self).__init__(message)
         self.record_id = recid
         self.record_part = part
+
+    def __str__(self):
+        out = ""
+        if self.record_id:
+            out += "%s: " % self.record_id
+        if self.record_part:
+            out += "%s: " % self.record_part
+        return out + super().__str__()
+
+    def format_errors(self):
+        """
+        format into a string the listing of the validation errors encountered that resulted in 
+        this exception.  The returned string will have embedded newline characters for multi-line
+        text-based display.
+        """
+        if not self.errors:
+            return str(self)
+
+        out = ""
+        if self.record_id:
+            out += "%s: " % self.record_id
+        out += "Validation errors encountered"
+        if self.record_part:
+            out += " in data submitted to update %s" % self.record_part
+        out += ":\n  * "
+        out += "\n  * ".join(self.errors)
+        return out
     
-class PartNotAccessible(MIDASException):
+class PartNotAccessible(DBIOException):
     """
     an exception indicating that the user-provided data is invalid or otherwise would result in 
     invalid data content for a record. 
     """
-    def __init__(self, recid, part, message=None):
+    def __init__(self, recid, part, message=None, sys=None):
         """
         initialize the exception
         :param str recid:  the id of the record that was existed
@@ -432,7 +528,7 @@ class PartNotAccessible(MIDASException):
 
         if not message:
             message = "%s: data property, %s, is not in an updateable state" % (recid, part)
-        super(PartNotAccessible, self).__init__(message)
+        super(PartNotAccessible, self).__init__(message, sys=sys)
 
 
     

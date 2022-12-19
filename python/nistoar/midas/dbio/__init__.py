@@ -203,4 +203,4 @@ from .fsbased import FSBasedDBClientFactory
 
 MIDASDBClientFactory = MongoDBClientFactory
 
-from .project import ProjectService, ProjectServiceFactory
+from .project import ProjectService, ProjectServiceFactory, InvalidUpdate
