@@ -936,6 +936,28 @@ class FSBasedResourceStorage(NERDResourceStorage):
     _seqfile = "_seq.json"
     _idre = re.compile(r'^\w+\d*:0*(\d+)$')
 
+    @classmethod
+    def from_config(cls, config: Mapping, logger: Logger):
+        """
+        an class method for creatng an FSBasedResourceStorage instance from configuration data.
+
+        Recognized configuration paramters include:
+
+        ``store_dir``
+             (str) _required_. The root directory under which all resource data will be stored.
+        ``default_shoulder``
+             (str) _optional_. The shoulder that new identifiers are minted under.  This is not 
+             normally used as direct clients of this class typically choose the shoulder on a 
+             per-call basis.  The default is "nrd".
+
+        :param dict config:  the configuraiton for the specific type of storage
+        :param Logger logger:  the logger to use to capture messages
+        """
+        if not config.get('store_dir'):
+            raise ConfigurationException("Missing required configuration parameter: store_dir")
+        
+        return cls(config['store_dir'], config.get("default_shoulder", "nrd"), logger)
+        
     def __init__(self, storeroot: str, newidprefix: str="nrd", logger: Logger=None):
         """
         initialize a factory with with the resource data storage rooted at a given directory

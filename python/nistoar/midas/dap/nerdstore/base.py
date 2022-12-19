@@ -5,6 +5,7 @@ import logging
 from abc import ABC, ABCMeta, abstractproperty, abstractmethod
 from collections.abc import MutableMapping, Mapping, MutableSequence
 from typing import Iterable, Iterator, NewType
+from logging import Logger
 
 import nistoar.nerdm.utils as nerdmutils
 from nistoar.pdr.preserve.bagit.builder import (DATAFILE_TYPE, SUBCOLL_TYPE, DOWNLOADABLEFILE_TYPE)
@@ -812,6 +813,16 @@ class NERDResourceStorage(ABC):
     """
     a factory function that creates or opens existing stored NERDm Resource records
     """
+
+    @classmethod
+    def from_config(cls, config: Mapping, logger: Logger):
+        """
+        an abstract class method for creatng NERDResourceStorage instances
+        :param dict config:  the configuraiton for the specific type of storage
+        :param Logger logger:  the logger to use to capture messages
+        """
+        raise NotImplementedError()
+        
     @abstractmethod
     def open(self, id: str=None) -> NERDResource:
         """

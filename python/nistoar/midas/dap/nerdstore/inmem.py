@@ -11,7 +11,7 @@ import os, copy, re, math
 from collections import OrderedDict
 from collections.abc import Mapping
 from logging import Logger
-from typing import Iterable, Iterator
+from typing import Iterable, Iterator, List
 
 from .base import *
 from .base import _NERDOrderedObjectList, DATAFILE_TYPE, SUBCOLL_TYPE, DOWNLOADABLEFILE_TYPE
@@ -691,12 +691,28 @@ class InMemoryResourceStorage(NERDResourceStorage):
     a factory for opening records stored in memory
     """
 
-    def __init__(self, newidprefix: str="nrd", existing: [Mapping]=[], logger: Logger=None):
+    @classmethod
+    def from_config(cls, config: Mapping, logger: Logger):
+        """
+        an class method for creatng an FSBasedResourceStorage instance from configuration data.
+
+        Recognized configuration paramters include:
+        ``default_shoulder``
+             (str) _optional_. The shoulder that new identifiers are minted under.  This is not 
+             normally used as direct clients of this class typically choose the shoulder on a 
+             per-call basis.  The default is "nrd".
+
+        :param dict config:  the configuraiton for the specific type of storage
+        :param Logger logger:  the logger to use to capture messages
+        """
+        return cls(config.get("default_shoulder", "nrd"), logger=logger)
+        
+    def __init__(self, newidprefix: str="nrd", existing: List[Mapping]=[], logger: Logger=None):
         """
         initialize a factory with some existing in-memory NERDm records
         :param str  newidprefix:  a prefix to use when minting new identifiers
-        :param Mapping existing:  a list of NERDm records that should be made available via 
-                                  :py:method:`open`.
+        :param [Mapping] existing:  a list of NERDm records that should be made available via 
+                                    :py:method:`open`.
         """
         self.log = logger
         self._pfx = newidprefix
@@ -716,14 +732,14 @@ class InMemoryResourceStorage(NERDResourceStorage):
         """
         if not id:
             id = rec.get('@id')
-            m = _idre.search(id)
+            m = _idre.search(id) if id else None
             if m:
                 n = int(m.group(1))
                 if n >= self._ididx:
                     self._ididx = n + 1
         if not id:
             id = self._new_id()
-        if id in self._res:
+        if id in self._recs:
             self._recs[id].replace_all_data(rec)
         else:
             self._recs[id] = InMemoryResource(id, rec, self.log)
@@ -744,7 +760,7 @@ class InMemoryResourceStorage(NERDResourceStorage):
         if not id:
             id = self._new_id()
         if id not in self._recs:
-            self._recs[id] = InMemoryResource(id, None, self.log)
+            self._recs[id] = InMemoryResource(id, OrderedDict(), self.log)
         return self._recs[id]
 
     def exists(self, id: str) -> bool:

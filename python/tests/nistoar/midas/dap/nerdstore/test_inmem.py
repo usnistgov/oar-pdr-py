@@ -791,6 +791,83 @@ class TestInMemoryNonFileList(test.TestCase):
         self.assertEqual(self.cmps.get(0)['mediaType'], "application/zip")
 
 
+class TestInMemoryResourceStorage(test.TestCase):
+
+    def setUp(self):
+        self.recs = [
+            {"@id": "pdr:001", "title": "Gurns I've known"},
+            {"title": "Goobers!", "references": [ {"title": "All About Goobers"}]}
+        ]
+        self.store = inmem.InMemoryResourceStorage()
+
+    def test_ctor(self):
+        self.assertEqual(self.store._recs, {})
+
+    def test_load_from(self):
+        self.store.load_from(self.recs[0])
+        self.assertEqual(len(self.store._recs), 1)
+        self.assertIn("pdr:001", self.store._recs)
+
+        self.store.load_from(self.recs[1])
+        self.assertEqual(len(self.store._recs), 2)
+        self.assertIn("pdr:001", self.store._recs)
+        self.assertIn("nrd_0", self.store._recs)
+
+        self.assertEqual(self.store._recs["pdr:001"].get_res_data(),
+                         {"@id": "pdr:001", "title": "Gurns I've known"})
+        self.assertEqual(self.store._recs["nrd_0"].get_res_data(),
+                         {"@id": "nrd_0", "title": "Goobers!"})
+
+    def test_ctor_existing(self):
+        self.store = inmem.InMemoryResourceStorage(existing=self.recs)
+
+        self.assertEqual(len(self.store._recs), 2)
+        self.assertIn("pdr:001", self.store._recs)
+        self.assertIn("nrd_0", self.store._recs)
+
+        self.assertEqual(self.store._recs["pdr:001"].get_res_data(),
+                         {"@id": "pdr:001", "title": "Gurns I've known"})
+        self.assertEqual(self.store._recs["nrd_0"].get_res_data(),
+                         {"@id": "nrd_0", "title": "Goobers!"})
+
+    def test_open(self):
+        self.store = inmem.InMemoryResourceStorage(existing=self.recs)
+        self.assertEqual(len(self.store._recs), 2)
+        self.assertTrue(self.store.exists("nrd_0"))
+        nerd = self.store.open("nrd_0")
+        self.assertEqual(nerd.get_res_data(), {"@id": "nrd_0", "title": "Goobers!"})
+        self.assertEqual(nerd.references.count, 1)
+        self.assertTrue(self.store.exists("nrd_0"))
+        
+        self.assertTrue(not self.store.exists("gary7"))
+        nerd = self.store.open("gary7")
+        self.assertEqual(len(self.store._recs), 3)
+        self.assertTrue(self.store.exists("gary7"))
+        self.assertEqual(nerd.get_res_data(), {"@id": "gary7"})
+
+        nerd = self.store.open()
+        self.assertEqual(nerd.id, "nrd_1")
+        self.assertEqual(len(self.store._recs), 4)
+        self.assertTrue(self.store.exists("nrd_1"))
+        
+    def test_delete(self):
+        self.store.load_from(self.recs[1])
+        self.assertEqual(len(self.store._recs), 1)
+        nerd = self.store.open("gary7")
+        self.assertEqual(len(self.store._recs), 2)
+
+        self.assertFalse(self.store.delete("nobody"))
+        self.assertEqual(len(self.store._recs), 2)
+        self.assertTrue(self.store.delete("nrd_0"))
+        self.assertEqual(len(self.store._recs), 1)
+        self.assertTrue(self.store.delete("gary7"))
+        self.assertEqual(len(self.store._recs), 0)
+
+    def test_from_config(self):
+        self.store = inmem.InMemoryResourceStorage.from_config({"default_shoulder": "gary", "foo": "bar"},
+                                                               None)
+        nerd = self.store.open()
+        self.assertEqual(nerd.id, "gary_0")
 
 if __name__ == '__main__':
     test.main()

@@ -931,6 +931,17 @@ class TestFSBasedResourceStorage(test.TestCase):
         self.assertEqual(res.nonfiles.count, 1)
         self.assertEqual(res.files.count, 4)
         
+    def test_delete(self):
+        self.assertTrue(not self.fact.exists("pdr02p1s"))
+        nerd = load_simple()
+        self.fact.load_from(nerd)
+        self.assertTrue(self.fact.exists("pdr02p1s"))
+
+        self.assertFalse(self.fact.delete("nobody"))
+        self.assertTrue(self.fact.exists("pdr02p1s"))
+        self.assertTrue(self.fact.delete("pdr02p1s"))
+        self.assertTrue(not self.fact.exists("pdr02p1s"))
+
         
 
 
