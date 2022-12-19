@@ -597,7 +597,7 @@ class InMemoryResource(NERDResource):
     """
     an in-memory implementation of the NERDResource interface
     """
-    _subprops = "authors references components @id".split()
+    _subprops = "authors references components".split()
 
     def __init__(self, id: str, rec: Mapping={}, parentlog: Logger=None):
         super(InMemoryResource, self).__init__(id, parentlog)
@@ -666,7 +666,8 @@ class InMemoryResource(NERDResource):
         if self._data is None:
             return None
         out = copy.deepcopy(self._data)
-        out['@id'] = self.id
+        if '@id' not in out:
+            out['@id'] = self.id
         return out
         
     def get_data(self, inclfiles=True) -> Mapping:
