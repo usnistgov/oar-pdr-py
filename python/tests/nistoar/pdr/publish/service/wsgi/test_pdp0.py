@@ -10,6 +10,7 @@ from nistoar.pdr.publish import prov
 from nistoar.pdr import utils
 
 datadir = Path(__file__).parents[3] / 'preserve' / 'data'
+simplenerd = datadir / '1491nerdm.json'
 
 loghdlr = None
 rootlog = None
@@ -258,7 +259,7 @@ class TestPDP0App(test.TestCase):
     def test_create_res(self):
         self.assertFalse((self.bagparent / "pdp0-0017").is_dir())
 
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
         del nerd['@id']
         
         req = {
@@ -343,7 +344,7 @@ class TestPDP0App(test.TestCase):
     def test_create_publish(self):
         self.assertFalse((self.bagparent / "pdp0-0017").is_dir())
 
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
         del nerd['@id']
         
         req = {
@@ -368,7 +369,7 @@ class TestPDP0App(test.TestCase):
     def test_create_finalize(self):
         self.assertFalse((self.bagparent / "pdp0-0017").is_dir())
 
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
         del nerd['@id']
         
         req = {
@@ -393,7 +394,7 @@ class TestPDP0App(test.TestCase):
     def test_update(self):
         self.assertFalse((self.bagparent / "pdp0-0017").is_dir())
 
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
         del nerd['@id']
         
         req = {

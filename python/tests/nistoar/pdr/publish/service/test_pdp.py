@@ -20,6 +20,7 @@ from nistoar.pdr.publish.service import status
 # datadir = nistoar/preserve/data
 datadir = Path(__file__).parents[2] / 'preserve' / 'data'
 datadir2 = Path(__file__).parents[1] / 'data'
+simplenerd = datadir / '1491nerdm.json'
 
 loghdlr = None
 rootlog = None
@@ -287,7 +288,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
         # nerdm record has some arbitrary value for '@id'
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
         with self.assertRaises(pdp.UnauthorizedPublishingRequest):
             sipid = self.pubsvc.accept_resource_metadata(nerd, tstag, create=True)
 
@@ -340,7 +341,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(bnerd['components'], [])
 
     def test_upsert_component_metadata(self):
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
         comps = nerd['components']
         del nerd['@id']
         del nerd['components']
@@ -402,7 +403,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(comp['mediaType'], "text/html")
         
     def test_describe(self):
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
 
         sipid = self.pubsvc.accept_resource_metadata(nerd, ncnrag, sipid="ncnr0:hello", create=True)
         self.assertEqual(sipid, "ncnr0:hello")
@@ -466,7 +467,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(self.pubsvc.describe("ncnr0:hello/goober"), {})
         
     def test_remove_component(self):
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
 
         sipid = self.pubsvc.accept_resource_metadata(nerd, ncnrag, sipid="ncnr0:hello", create=True)
         self.assertEqual(sipid, "ncnr0:hello")
@@ -499,7 +500,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(len(cmp), 0)
 
     def test_delete(self):
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
 
         self.assertEqual(self.pubsvc.status_of("ncnr0:hello").state, status.NOT_FOUND)
 
@@ -523,7 +524,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertFalse(bagdir.exists())
 
     def test_finalized(self):
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
         nerd['version'] = "1.0.0+ (in edit)"
 
         self.assertEqual(self.pubsvc.status_of("ncnr0:hello").state, status.NOT_FOUND)
@@ -560,7 +561,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(bnerd['version'], '1.0.0')
 
     def test_publish(self):
-        nerd = utils.read_json(str(datadir / 'simplesip' / '_nerdm.json'))
+        nerd = utils.read_json(str(simplenerd))
         nerd['version'] = "1.0.0+ (in edit)"
 
         self.assertEqual(self.pubsvc.status_of("ncnr0:hello").state, status.NOT_FOUND)
