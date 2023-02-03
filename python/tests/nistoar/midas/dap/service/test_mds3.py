@@ -380,6 +380,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(cmp, {"filepath": "data.zip", "downloadURL": "pdr:file",
                                "@type": ["nrdp:DataFile", "nrdp:DownloadableFile"],
                                "mediaType": "application/octet-stream",
+                               "format": {"description": "compressed file archive"},
                                "_extensionSchemas": [ mds3.NERDMPUB_DEF+"DataFile" ]})
 
         try:
@@ -390,6 +391,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(cmp, {"filepath": "data.zip", "downloadURL": "pdr:file",
                                "@type": ["nrdp:DataFile", "nrdp:DownloadableFile", "dcat:Distribution"],
                                "mediaType": "application/octet-stream",
+                               "format": {"description": "compressed file archive"},
                                "_extensionSchemas": [ mds3.NERDMPUB_DEF+"DataFile" ]})
 
         try:
@@ -400,6 +402,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(cmp, {"filepath": "data.zip.md5", "downloadURL": "pdr:file",
                                "mediaType": "text/plain",
                                "@type": ["nrdp:ChecksumFile", "nrdp:DownloadableFile"],
+                               "format": {"description": "MD5 hash"},
                                "_extensionSchemas": [ mds3.NERDMPUB_DEF+"ChecksumFile" ]})
 
         try:
@@ -409,7 +412,8 @@ class TestMDS3DAPService(test.TestCase):
             self.fail("Validation Error: "+ex.format_errors())
         self.assertEqual(cmp, {"filepath": "data.zip.md5", "downloadURL": "pdr:file",
                                "@type": ["MagicFile", "nrdp:DataFile", "nrdp:DownloadableFile"],
-                               "mediaType": "text/plain",
+                               "mediaType": "text/plain", 
+                               "format": {"description": "MD5 hash"},
                                "_extensionSchemas": [ mds3.NERDMPUB_DEF+"DataFile" ]})
 
         try:

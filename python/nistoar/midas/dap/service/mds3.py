@@ -16,8 +16,8 @@ from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, No
 from ...dbio.wsgi.project import MIDASProjectApp
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
-from nistoar.pdr import def_schema_dir, constants as const
-from nistoar.pdr.utils import build_mime_type_map
+from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
+from nistoar.pdr.utils import build_mime_type_map, read_json
 from nistoar.pdr.publish.prov import PubAgent
 
 from . import validate
@@ -130,12 +130,32 @@ class DAPService(ProjectService):
             mimefiles = [mimefiles]
         if mimefiles:
             self._mediatypes = build_mime_type_map(mimefiles)
+            
+        self._formatbyext = {}
+        if 'file_format_maps' in self.cfg:
+            mimefiles = self.cfg.get('file_format_maps', [])
+        else:
+            mimefiles = os.path.join(def_etc_dir, "fext2format.json")
+        if not isinstance(mimefiles, list):
+            mimefiles = [mimefiles]
+        for ffile in mimefiles:
+            try:
+                fmp = read_json(ffile)
+                if not isinstance(fmp, Mapping):
+                    raise ValueError("wrong format for format-map file: contains "+type(fmp))
+                if fmp:
+                    self._formatbyext.update(fmp)
+            except Exception as ex:
+                self.log.warning("Unable to read format-map file, %s: %s", ffile, str(ex))
 
         self._minnerdmver = minnerdmver
 
     def _guess_format(self, file_ext, mimetype=None):
         if not mimetype:
             mimetype = self._mediatypes.get(file_ext)
+        fmtd = self._formatbyext.get(file_ext)
+        if fmtd:
+            return { "description": fmtd }
         return None
 
     def create_record(self, name, data=None, meta=None) -> ProjectRecord:
