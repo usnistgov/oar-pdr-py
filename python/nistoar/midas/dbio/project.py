@@ -248,6 +248,8 @@ class ProjectService(MIDASSystem):
             else:
                 base[prop] = update[prop]
 
+        return base
+
     def _new_data_for(self, recid, meta=None):
         """
         return an "empty" data object set for a record with the given identifier.  The returned 
@@ -483,6 +485,7 @@ class InvalidUpdate(DBIOException):
         super(InvalidUpdate, self).__init__(message)
         self.record_id = recid
         self.record_part = part
+        self.errors = errors
 
     def __str__(self):
         out = ""
@@ -508,7 +511,7 @@ class InvalidUpdate(DBIOException):
         if self.record_part:
             out += " in data submitted to update %s" % self.record_part
         out += ":\n  * "
-        out += "\n  * ".join(self.errors)
+        out += "\n  * ".join([str(e) for e in self.errors])
         return out
     
 class PartNotAccessible(DBIOException):

@@ -22,6 +22,12 @@ class LenientSchemaLoader(ejs.SchemaLoader):
                 if "required" in sch:
                     del sch["required"]
 
+                sch = out.get("definitions",{}).get("BibliographicReference",{}).get("allOf", [{},{}])
+                if len(sch) > 1 and "required" in sch[1] and "@id" in sch[1]["required"]:
+                    sch[1]["required"] = [p for p in sch[1]["required"] if p != "@id"]
+                    if not sch[1]["required"]:
+                        del sch[1]["required"]
+
             elif out["id"].startswith(CORE_SCHEMA_BASE+"rls/"):
                 # this is the pub NERDm extension schema: drop the "required" property from the
                 # PublicDataResource schema definition
@@ -36,9 +42,14 @@ class LenientSchemaLoader(ejs.SchemaLoader):
                 if len(sch) > 1 and "required" in sch[1]:
                     del sch[1]["required"]
 
+                # and from Person
+                sch = out.get("definitions",{}).get("Person",{})
+                if "required" in sch:
+                    del sch["required"]
+
         return out
 
-def create_lenient_validator(schemadir, ejsprefix="_"):
+def create_lenient_validator(schemadir, forprefix="_"):
     """
     return a validator instance (ejsonschema.ExtValidator) that can validate
     NERDm records, but which is slightly more lenient for NERDm schemas.  
@@ -60,12 +71,12 @@ def create_lenient_validator(schemadir, ejsprefix="_"):
     """
     if isinstance(forprefix, Mapping):
         forprefix = get_mdval_flavor(forprefix) or "_"
-    if not isinstance(forprefix, (str, unicode)):
+    if not isinstance(forprefix, str):
         raise TypeError("create_validator: forprefix: not a str or dict")
 
     loader = LenientSchemaLoader.from_directory(schemadir)
 
-    return ejs.ExtValidator.with_schema_dir(loader, forprefix)
+    return ejs.ExtValidator(loader, forprefix)
 
 
     
