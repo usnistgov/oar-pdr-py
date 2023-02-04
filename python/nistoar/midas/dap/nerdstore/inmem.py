@@ -273,7 +273,7 @@ class InMemoryFileComps(NERDFileComps):
         for cmp in subcolls:
             if cmp.get('filepath') in children:
                 if '_children' not in cmp:
-                    cmp['_children'] = OrderedDict()
+                    cmp['__children'] = OrderedDict()
 
                 # base subcollection contents first on 'has_member' list as this captures order info
                 if cmp.get('has_member'):
@@ -281,12 +281,12 @@ class InMemoryFileComps(NERDFileComps):
                         cmp['has_member'] = [cmp['has_member']]
                     for child in cmp['has_member']:
                         if child.get('@id') in self._files and child.get('name'):
-                            cmp['_children'][child['name']] = child.get('@id')
+                            cmp['__children'][child['name']] = child.get('@id')
 
                 # capture any that got missed by 'has_member'
                 for child in children[cmp['filepath']]:
-                    if child[0] not in cmp['_children']:
-                        cmp['_children'][child[0]] = child[1]
+                    if child[0] not in cmp['__children']:
+                        cmp['__children'][child[0]] = child[1]
                             
 
     def get_file_by_id(self, id: str) -> Mapping:
@@ -300,14 +300,14 @@ class InMemoryFileComps(NERDFileComps):
 
     def get_file_by_path(self, path: str) -> Mapping:
         if not path:
-            raise ValueError("get_file__path(): No path specified")
+            raise ValueError("get_file_path(): No path specified")
         return self._export_file(self._get_file_by_path(path))
 
     def _export_file(self, fmd):
-        out = OrderedDict([copy.deepcopy(m) for m in fmd.items() if not m[0].startswith("_")])
+        out = OrderedDict([copy.deepcopy(m) for m in fmd.items() if not m[0].startswith("__")])
         if self.is_collection(out):
             out['has_member'] = [OrderedDict([('@id', m[1]), ('name', m[0])])
-                                 for m in fmd.get("_children",{}).items()]
+                                 for m in fmd.get("__children",{}).items()]
         return out
 
     def _get_file_by_path(self, path: str) -> Mapping:
@@ -323,7 +323,7 @@ class InMemoryFileComps(NERDFileComps):
         
         if not self.is_collection(child):
             raise ObjectNotFound(origpath)
-        return self._get_file_by_relpath(child.get('_children',{}), steps, origpath)
+        return self._get_file_by_relpath(child.get('__children',{}), steps, origpath)
 
     @property
     def ids(self):
@@ -350,8 +350,8 @@ class InMemoryFileComps(NERDFileComps):
         def __next__(self):
             if self.descendents:
                 desc = self._fs._get_file_by_id(self.descendents.pop(0))
-                if desc.get('_children'):
-                    self.descendents.extend(desc.get('_children', {}).values())
+                if desc.get('__children'):
+                    self.descendents.extend(desc.get('__children', {}).values())
                 return desc
             raise StopIteration()
             
@@ -363,7 +363,7 @@ class InMemoryFileComps(NERDFileComps):
             except ObjectNotFound:
                 return []
             else:
-                children = coll.get('_children', [])
+                children = coll.get('__children', [])
 
         return list(children.values())
 
@@ -385,9 +385,9 @@ class InMemoryFileComps(NERDFileComps):
             coll = self._get_file_by_path(collpath)
             if not self.is_collection(coll):
                 raise ObjectNotFound(collpath, message=collpath+": not a subcollection component")
-            if '_children' not in coll:
-                coll['_children'] = OrderedDict()
-            children = coll['_children']
+            if '__children' not in coll:
+                coll['__children'] = OrderedDict()
+            children = coll['__children']
 
         # create an inverted child map
         byid = OrderedDict( [(itm[1], itm[0]) for itm in children.items()] )
@@ -423,8 +423,8 @@ class InMemoryFileComps(NERDFileComps):
             try:
                 parent = self._get_file_by_path(self._dirname(filepath))
                 name = self._basename(filepath)
-                if name in parent.get('_children',{}):
-                    del parent['_children'][name]
+                if name in parent.get('__children',{}):
+                    del parent['__children'][name]
             except ObjectNotFound:
                 pass
         else:
@@ -439,9 +439,9 @@ class InMemoryFileComps(NERDFileComps):
             name = self._basename(filepath)
             if not self.is_collection(parent):
                 raise  ObjectNotFound(parent, message=self._dirname(filepath)+": Not a subcollection")
-            if '_children' not in parent:
-                parent['_children'] = OrderedDict()
-            children = parent['_children']
+            if '__children' not in parent:
+                parent['__children'] = OrderedDict()
+            children = parent['__children']
 
         children[name] = id
         
@@ -510,7 +510,7 @@ class InMemoryFileComps(NERDFileComps):
         deldestfile = False
         if destfile and self.is_collection(destfile) and \
            (destfile['@id'] != md['@id'] or not self.is_collection(md)):
-            if destfile.get('_children'):
+            if destfile.get('__children'):
                 # destination is a non-empty collection: don't clobber collections
                 raise CollectionRemovalDissallowed(destfile['filepath'], "collection is not empty")
             deldestfile = True
@@ -518,9 +518,9 @@ class InMemoryFileComps(NERDFileComps):
         if oldfile:
             if self.is_collection(oldfile) and self.is_collection(md):
                 # updating a collection; preserve its contents
-                md['_children'] = oldfile.get('_children')
-                if md['_children'] is None:
-                    md['_children'] = OrderedDict()
+                md['__children'] = oldfile.get('__children')
+                if md['__children'] is None:
+                    md['__children'] = OrderedDict()
 
             if filepath != oldfile.get('filepath'):
                 # this is a file move; deregister it from its old parent
@@ -586,11 +586,11 @@ class InMemoryFileComps(NERDFileComps):
             out['@type'] = [DATAFILE_TYPE, DOWNLOADABLEFILE_TYPE]
                 
         # if self.is_collection(fmd) and 'has_member' in fmd:
-        #     # convert 'has_member' to '_children'
-        #     out['_children'] = OrderedDict()
+        #     # convert 'has_member' to '__children'
+        #     out['__children'] = OrderedDict()
         #     for child in fmd['has_member']:
         #         if '@id' in child and 'filepath' in child:
-        #             out['_children'][self._basename(child['filepath'])] = child['@id']
+        #             out['__children'][self._basename(child['filepath'])] = child['@id']
         return out
 
 class InMemoryResource(NERDResource):

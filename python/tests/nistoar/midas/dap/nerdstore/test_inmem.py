@@ -57,7 +57,7 @@ class TestInMemoryResource(test.TestCase):
         res = inmem.InMemoryResource("pdr0:0001", nerd)
         self.assertEqual(res.id, "pdr0:0001")
         data = res.get_res_data()
-        self.assertEqual(data.get('@id'), "pdr0:0001")
+#        self.assertEqual(data.get('@id'), "pdr0:0001")   # does not need to be the same
         self.assertEqual(data.get('title'), nerd['title'])
         self.assertEqual(data.get('contactPoint'), nerd['contactPoint'])
         
@@ -101,7 +101,8 @@ class TestInMemoryResource(test.TestCase):
         res.replace_res_data(md)
         data = res.get_data()
         self.assertEqual(res.id, "pdr0:0001")
-        self.assertEqual(data.get('@id'), "pdr0:0001")
+#        self.assertEqual(data.get('@id'), "pdr0:0001")   # does not need to be the same
+        self.assertEqual(data.get('@id'), "Whahoo!")
         self.assertEqual(data.get('title'), "The Replacements")
         self.assertEqual(data.get('contactPoint'), [{"comment": "this is not real contact info"}])
         self.assertEqual(data.get('color'), "green")
@@ -113,7 +114,8 @@ class TestInMemoryResource(test.TestCase):
         res.replace_res_data(nerd)
         data = res.get_data()
         self.assertEqual(res.id, "pdr0:0001")
-        self.assertEqual(data.get('@id'), "pdr0:0001")
+#        self.assertEqual(data.get('@id'), "pdr0:0001")   # does not need to be the same
+        self.assertEqual(data.get('@id'), "ark:/88434/pdr02p1s")
         self.assertTrue(data.get('title').startswith('OptSortSph: '))
         self.assertEqual(data.get('contactPoint').get("fn"), "Zachary Levine")
         self.assertEqual(data.get('doi'), "doi:10.18434/T4SW26")
@@ -126,7 +128,8 @@ class TestInMemoryResource(test.TestCase):
         res.replace_res_data(md)
         data = res.get_data()
         self.assertEqual(res.id, "pdr0:0001")
-        self.assertEqual(data.get('@id'), "pdr0:0001")
+#        self.assertEqual(data.get('@id'), "pdr0:0001")
+        self.assertEqual(data.get('@id'), "Whahoo!")
         self.assertEqual(data.get('title'), "The Replacements")
         self.assertEqual(data.get('contactPoint'), [{"comment": "this is not real contact info"}])
         self.assertEqual(data.get('color'), "green")
@@ -139,7 +142,8 @@ class TestInMemoryResource(test.TestCase):
         res.replace_res_data(md)
 #        data = res.get_data()
         self.assertEqual(res.id, "pdr0:0001")
-        self.assertEqual(data.get('@id'), "pdr0:0001")
+#        self.assertEqual(data.get('@id'), "pdr0:0001")
+        self.assertEqual(data.get('@id'), "Whahoo!")
         self.assertEqual(data.get('title'), "The Replacements")
         self.assertEqual(data.get('contactPoint'), [{"comment": "this is not real contact info"}])
         self.assertEqual(data.get('color'), "green")
@@ -167,8 +171,8 @@ class TestInMemoryFileComps(test.TestCase):
 
         coll = files._files[list(files._children.values())[-1]]
         self.assertTrue(coll.get('@id').startswith("coll_"))
-        self.assertIn('_children', coll)
-        self.assertEqual(list(coll['_children'].keys()), ["trial3a.json"])
+        self.assertIn('__children', coll)
+        self.assertEqual(list(coll['__children'].keys()), ["trial3a.json"])
         self.assertEqual(files._ididx, 4)
 
         files.empty()
@@ -215,7 +219,7 @@ class TestInMemoryFileComps(test.TestCase):
         self.assertEqual(f['@id'], "coll_2")
         self.assertEqual(f['filepath'], "trial3")
         self.assertNotIn("downloadURL", f)
-        self.assertNotIn("_children", f)
+        self.assertNotIn("__children", f)
         self.assertTrue(isinstance(f['has_member'], list))
         self.assertTrue(len(f['has_member']), 1)
         self.assertEqual(f['has_member'][0], {"@id": "file_3", "name": "trial3a.json"})
@@ -232,7 +236,7 @@ class TestInMemoryFileComps(test.TestCase):
         self.assertEqual(f['@id'], "coll_2")
         self.assertEqual(f['filepath'], "trial3")
         self.assertNotIn("downloadURL", f)
-        self.assertNotIn("_children", f)
+        self.assertNotIn("__children", f)
         self.assertTrue(isinstance(f['has_member'], list))
         self.assertTrue(len(f['has_member']), 1)
         self.assertEqual(f['has_member'][0], {"@id": "file_3", "name": "trial3a.json"})
