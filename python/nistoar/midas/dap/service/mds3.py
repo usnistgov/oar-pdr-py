@@ -76,6 +76,22 @@ class DAPService(ProjectService):
     """
     a project record request broker class for DAP records.  
 
+    This service allows a client to create and update DAP records in the form of NERDm Resource 
+    records.  
+
+    This service extends the generic DBIO :py:class:`~nistoar.midas.dbio.project.ProjectService` by 
+    supporting the following conventions:
+      * The data record being created/updated through the service is a NERDm Resource
+      * The NERDm Resource record is stored separately from the DBIO 
+        :py:class:`~nistoar.midas.dbio.base.ProjectRecord` (via the 
+        :py:mod:`~nistoar.midas.dap.nerdstore` module).  The ``data`` property of the 
+        :py:class:`~nistoar.midas.dbio.base.ProjectRecord` contains a summary (i.e. a subset of 
+        properties) of the NERDm record.  
+      * Conventions and heuristics are applied for setting default values for various NERDm 
+        properties based on the potentially limited properties provided by the client during the 
+        editing process.  (These conventions and hueristics are implemented the in various 
+        ``_moderate_*`` functions in this class.
+
     In addition to the configuration parameters supported by the parent class, this specialization
     also supports the following parameters:
 
@@ -89,6 +105,19 @@ class DAPService(ProjectService):
     ``validate_nerdm``
         if True (default), validate the updates to NERDm metadata.  Incomplete NERDm records are 
         permitted.
+    ``mimetype_files``
+        a list of paths to files containing MIME-type to file extension maps used to assign a MIME-type
+        (i.e. ``mediaType``) to a file component.  Any path given as a relative path will be assumed to 
+        be relative to OAR_ETC_DIR.  If this parameter not set, a default map is loaded as a package 
+        resource, ``data/mime.types``, under ``nistoar.pdr``.  The format is that supported by the Apache 
+        and Nginx web servers.
+    ``file_format_maps``
+        a list of paths to files containing file extension to file format maps used to attach a file 
+        format description to to a file component.  Any path given as a relative path will be assumed to 
+        be relative to OAR_ETC_DIR.  If this parameter not set, a default map is loaded as a package 
+        resource, ``data/fext2format.json``, under ``nistoar.pdr``.  The format of such files is a 
+        JSON-encoded object with file extensions as the keys, and string descriptions of formats
+        as values.  
 
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
@@ -376,16 +405,18 @@ class DAPService(ProjectService):
         :param str      id:  the identifier for the record whose data should be updated.
         :param str newdata:  the data to save as the new content.  
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
-                             the given `newdata` is a value that should be set to the property pointed 
-                             to by `part`.  
-        :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to `id`.
-                             If this is not provided, the record will by fetched anew based on the `id`.  
-        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
-                             an undefined or unrecognized part of the data
+                             the given ``newdata`` is a value that should be set to the property pointed 
+                             to by ``part``.  
+        :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to 
+                             ``id``.  If this is not provided, the record will by fetched anew based on 
+                             the ``id``.
+        :raises ObjectNotFound:  if no record with the given ID exists or the ``part`` parameter points 
+                             to an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
-                             given by `id`.  
-        :raises PartNotAccessible:  if replacement of the part of the data specified by `part` is not allowed.
-        :raises InvalidUpdate:  if the provided `newdata` represents an illegal or forbidden update or 
+                             given by ``id``.
+        :raises PartNotAccessible:  if replacement of the part of the data specified by ``part`` is not 
+                             allowed.
+        :raises InvalidUpdate:  if the provided ``newdata`` represents an illegal or forbidden update or 
                              would otherwise result in invalid data content.
         """
         return self._update_data(id, newdata, part, replace=True)
@@ -396,16 +427,18 @@ class DAPService(ProjectService):
         :param str      id:  the identifier for the record whose data should be updated.
         :param str newdata:  the data to save as the new content.  
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
-                             the given `newdata` is a value that should be set to the property pointed 
-                             to by `part`.  
-        :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to `id`.
-                             If this is not provided, the record will by fetched anew based on the `id`.  
-        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+                             the given ``newdata`` is a value that should be set to the property pointed 
+                             to by ``part``.  
+        :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to 
+                             ``id``.  If this is not provided, the record will by fetched anew based on 
+                             the ``id``.  
+        :raises ObjectNotFound:  if no record with the given ID exists or the ``part`` parameter points to 
                              an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
-                             given by `id`.  
-        :raises PartNotAccessible:  if replacement of the part of the data specified by `part` is not allowed.
-        :raises InvalidUpdate:  if the provided `newdata` represents an illegal or forbidden update or 
+                             given by ``id``.  
+        :raises PartNotAccessible:  if replacement of the part of the data specified by ``part`` is not 
+                             allowed.
+        :raises InvalidUpdate:  if the provided ``newdata`` represents an illegal or forbidden update or 
                              would otherwise result in invalid data content.
         """
         return self._update_data(id, newdata, part, replace=False)
@@ -417,13 +450,15 @@ class DAPService(ProjectService):
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
                              only that property will be cleared (either removed or set to an initial
                              default).
-        :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to `id`.
-                             If this is not provided, the record will by fetched anew based on the `id`.  
-        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+        :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to 
+                             ``id``.  If this is not provided, the record will by fetched anew based on 
+                             the ``id``.  
+        :raises ObjectNotFound:  if no record with the given ID exists or the ``part`` parameter points to 
                              an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
-                             given by `id`.  
-        :raises PartNotAccessible:  if clearing of the part of the data specified by `part` is not allowed.
+                             given by ``id``.  
+        :raises PartNotAccessible:  if clearing of the part of the data specified by ``part`` is not 
+                             allowed.
         """
         if not _prec:
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
@@ -712,8 +747,8 @@ class DAPService(ProjectService):
         :param dict  filemd:  the NERDm file metadata describing the new file to add.  If
                               the "@id" property is set, it will be ignored.
         :param str filepath:  the path within the dataset to assign to the file.  If provided,
-                              it will override the corresponding value in `filemd`; if not 
-                              provided, the filepath must be set within `filemd`.
+                              it will override the corresponding value in ``filemd``; if not 
+                              provided, the filepath must be set within ``filemd``.
         """
         prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
         if filepath:
@@ -742,7 +777,7 @@ class DAPService(ProjectService):
         :param dict  filemd:  the file metadata to update 
         :param str filepath:  the path of the file within the dataset to update
         :raises ObjectNotFound:  if there does not exist a file at the given filepath
-        :raises ValueError:  if filepath is not set in either the `filepath` argument or the 
+        :raises ValueError:  if filepath is not set in either the ``filepath`` argument or the 
                              filepath property.
         """
         prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
@@ -768,8 +803,8 @@ class DAPService(ProjectService):
         :param dict  filemd:  the file metadata to update 
         :param str   fileid:  the id of the file within the dataset to update
         :raises ObjectNotFound:  if there does not exist a resource with the given id
-        :raises ValueError:  if id is not set in either the `fileid` argument or the `filemd` object's
-                             `@id` property.
+        :raises ValueError:  if id is not set in either the ``fileid`` argument or the ``filemd`` 
+                             object's ``@id`` property.
         """
         prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
         if not fileid:
@@ -788,7 +823,7 @@ class DAPService(ProjectService):
     def replace_files(self, id: str, files: List[Mapping]):
         """
         replace all currently saved files and folder components with the given list.  Each component
-        must include a `filepath` property.
+        must include a ``filepath`` property.
         :param str       id:  the identifier for the dataset containing the file
         :raises ObjectNotFound:  if there does not exist a resource with the given id
         """
