@@ -463,9 +463,9 @@ class InvalidUpdate(DBIOException):
         """
         initialize the exception
         :param str message:  a brief description of the problem with the user input
-        :param str   recid:  the id of the record that was existed
-        :param str    part:  the part of the record that was requested.  Do not provide this parameter if 
-                             the entire record does not exist.  
+        :param str   recid:  the id of the record that data was provided for
+        :param str    part:  the part of the record that was requested for update.  Do not provide 
+                             this parameter if the entire record was provided.
         :param [str] errors: a listing of the individual errors uncovered in the data
         """
         if errors:

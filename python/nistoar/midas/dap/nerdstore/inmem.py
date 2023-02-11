@@ -676,15 +676,15 @@ class InMemoryResource(NERDResource):
             return None
 
         if self._auths.count > 0:
-            out['authors'] = self._auths.data()
+            out['authors'] = self._auths.get_data()
         if self._refs.count > 0:
-            out['references'] = self._auths.data()
+            out['references'] = self._refs.get_data()
         if self._nonfiles.count > 0 or self._files.count > 0:
             out['components'] = []
             if self._nonfiles.count > 0:
-                out['components'].extend(self._nonfiles.data())
+                out['components'].extend(self._nonfiles.get_data())
             if self._files.count > 0:
-                out['components'].extend(self._files.data())
+                out['components'].extend(self._files.get_files())
         return out
         
 class InMemoryResourceStorage(NERDResourceStorage):

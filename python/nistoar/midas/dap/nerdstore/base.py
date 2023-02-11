@@ -1,10 +1,10 @@
 """
 Abstract base classes providing the interface to metadata storage.
 """
-import logging
+import logging, re
 from abc import ABC, ABCMeta, abstractproperty, abstractmethod
 from collections.abc import MutableMapping, Mapping, MutableSequence
-from typing import Iterable, Iterator, NewType
+from typing import Iterable, Iterator, NewType, List
 from logging import Logger
 
 import nistoar.nerdm.utils as nerdmutils
@@ -318,6 +318,17 @@ class _NERDOrderedObjectList(metaclass=ABCMeta):
         :return:  string giving the identifier assigned to this item.
         """
         return self.insert(self.count, md)
+
+    def replace_all_with(self, md: List[Mapping]):
+        """
+        replace the current list of items with the given list.  The currently saved items will 
+        first be removed, and then the given items will be added in order.
+        """
+        if not isinstance(md, list):
+            raise TypeError("replace_all_with(): md is not a list")
+        self.empty()
+        for item in md:
+            self.append(item)
 
     def pop(self, key):
         """
@@ -679,6 +690,13 @@ class NERDFileComps(metaclass=ABCMeta):
         :returns:  False if the file was not found in this collection; True, otherwise
                    :rtype: bool
         :raises CollectionRemovalDissallowed:  if the id points to a non-empty collection
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def empty(self):
+        """
+        remove all files and folders from this collection of file components
         """
         raise NotImplementedError()
 

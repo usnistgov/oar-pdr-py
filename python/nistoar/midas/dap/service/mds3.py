@@ -5,14 +5,16 @@ first DAP convention powered by the DBIO APIs.
 Support for the web service frontend is provided as a 
 WSGI :ref:class:`~nistoar.pdr.publish.service.wsgi.SubApp` implementation.
 """
-import os
+import os, re
 from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence, Callable
 from typing import List
+from copy import deepcopy
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
-                     InvalidUpdate, ProjectService, ProjectServiceFactory, DAP_PROJECTS)
+                     InvalidUpdate, ObjectNotFound, PartNotAccessible,
+                     ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import MIDASProjectApp
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
@@ -306,10 +308,66 @@ class DAPService(ProjectService):
             ("creatorisContact", True)
         ])
 
-    def replace_data(self, id, newdata, part=None, prec=None, nerd=None):
+    def get_nerdm_data(self, id: str, part: str=None):
+        """
+        return the full NERDm metadata.  This differs from the :py:method:`get_data` method which (in
+        this implementation) only returns a summary of hte NERDm metadata.  
+        :param str id:    the identifier for the record whose NERDm data should be returned. 
+        :param str part:  a path to the part of the record that should be returned
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.READ)   # may raise ObjectNotFound/NotAuthorized
+        nerd = self._store.open(prec.id)
+
+        if not part:
+            out = nerd.get_data()
+
+        else:
+            m = re.search(r'^([a-z]+s)\[([\w\d]+)\]$', path)
+            if m:
+                # path is of the form xxx[k] and refers to an item in a list
+                key = m.group(3)
+                try:
+                    key = int(key)
+                except ValueError:
+                    pass
+
+                if m.group(1) == "authors":
+                    out = nerd.authors.get(key)
+                elif m.group(1) == "references":
+                    out = nerd.reference.get(key)
+                elif m.group(1) == "components":
+                    out = None
+                    try:
+                        out = nerd.nonfiles.get(key)
+                    except (KeyError, IndexError) as ex:
+                        pass
+                    if not out:
+                        try:
+                            out = nerd.files.get_file_by_id(key)
+                        except ObjectNotFound as ex:
+                            pass
+                    if not out:
+                        out = nerd.files.get_file_by_path(key)
+
+            elif part == "authors":
+                out = nerd.authors.get_data()
+            elif part == "authors":
+                out = nerd.references.get_data()
+            elif part == "components":
+                out = nerd.nonfiles.get_data() + nerd.files.get_data()
+            else:
+                out = nerd.get_res_data()
+                if part in out:
+                    out = out[part]
+                else:
+                    raise PartNotAccessible(prec.id, path, "Accessing %s not supported" % path)
+
+        return out
+
+    def replace_data(self, id, newdata, part=None):
         """
         Replace the currently stored data content of a record with the given data.  It is expected that 
-        the new data will be filtered/cleansed via an internal call to :py:method:`dress_data`.  
+        the new data will be filtered/cleansed via an internal call to :py:method:`moderate_data`.  
         :param str      id:  the identifier for the record whose data should be updated.
         :param str newdata:  the data to save as the new content.  
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
@@ -325,9 +383,9 @@ class DAPService(ProjectService):
         :raises InvalidUpdate:  if the provided `newdata` represents an illegal or forbidden update or 
                              would otherwise result in invalid data content.
         """
-        return self._update_data(id, ndwdata, part, prec, nerd, True)
+        return self._update_data(id, newdata, part, replace=True)
 
-    def update_data(self, id, newdata, part=None, prec=None, nerd=None):
+    def update_data(self, id, newdata, part=None):
         """
         merge the given data into the currently save data content for the record with the given identifier.
         :param str      id:  the identifier for the record whose data should be updated.
@@ -345,9 +403,9 @@ class DAPService(ProjectService):
         :raises InvalidUpdate:  if the provided `newdata` represents an illegal or forbidden update or 
                              would otherwise result in invalid data content.
         """
-        return self._update_data(id, newdata, part, prec, nerd, False)
+        return self._update_data(id, newdata, part, replace=False)
 
-    def clear_data(self, id, part=None, prec=None):
+    def clear_data(self, id, part=None, _prec=None):
         """
         remove the stored data content of the record and reset it to its defaults.  
         :param str      id:  the identifier for the record whose data should be cleared.
@@ -362,12 +420,12 @@ class DAPService(ProjectService):
                              given by `id`.  
         :raises PartNotAccessible:  if clearing of the part of the data specified by `part` is not allowed.
         """
-        if not prec:
-            prec = self.dbcli.get_record_for(id, ACLs.WROTE)   # may raise ObjectNotFound/NotAuthorized
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
         if not self._store.exists(id):
-            self.log.warning("NERDm data for id=%s not found in metadata store", prec.id)
-            nerd = self._new_data_for(prec.id, prec.meta)
+            self.log.warning("NERDm data for id=%s not found in metadata store", _prec.id)
+            nerd = self._new_data_for(_prec.id, _prec.meta)
             self._store.load_from(nerd)
         nerd = self._store.open(id)
 
@@ -384,19 +442,19 @@ class DAPService(ProjectService):
                 del resmd[part]
                 nerd.replace_res_data(resmd)
             else:
-                raise PartNotAccessible(prec.id, path, "Clearing %s not allowed" % path)
+                raise PartNotAccessible(_prec.id, path, "Clearing %s not allowed" % path)
 
         else:
             nerd.authors.empty()
             nerd.references.empty()
             nerd.files.empty()
             nerd.nonfiles.empty()
-            nerd.replace_res_data(self._new_data_for(prec.id, prec.meta))
+            nerd.replace_res_data(self._new_data_for(_prec.id, prec.meta))
 
 
     def _update_data(self, id, newdata, part=None, prec=None, nerd=None, replace=False):
         if not prec:
-            prec = self.dbcli.get_record_for(id, ACLs.WROTE)   # may raise ObjectNotFound/NotAuthorized
+            prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
         if not nerd:
             if not self._store.exists(id):
@@ -419,7 +477,7 @@ class DAPService(ProjectService):
         else:
             # replacing just a part of the data
             try:
-                data = self._update_part_nerd(prec, nerd, part, newdata, replace)
+                data = self._update_part_nerd(part, prec, nerd, newdata, replace)
             except InvalidUpdate as ex:
                 ex.record_id = prec.id
                 ex.record_part = part
@@ -445,38 +503,46 @@ class DAPService(ProjectService):
         out["reference_count"] = nerd.references.count
         return out
 
-    _handsoff = ("@id @context publisher issued firstIssued revised annotated "   + \
-                 "bureauCode programCode systemOfRecords primaryITInvestmentUII " + \
+    _handsoff = ("@id @context publisher issued firstIssued revised annotated version " + \
+                 "bureauCode programCode systemOfRecords primaryITInvestmentUII "       + \
                  "doi ediid releaseHistory status theme").split()
 
     def _update_all_nerd(self, prec: ProjectRecord, nerd: NERDResource, data: Mapping, replace=False):
         # filter out properties that the user is not allow to update
         newdata = OrderedDict()
         for prop in data:
-            if not prop.startswith("_") and prop not in self._handsoff:
+            if not prop.startswith("__") and prop not in self._handsoff:
                 newdata[prop] = data[prop]
 
         errors = []
         authors = newdata.get('authors')
         if authors:
             del newdata['authors']
-            authors = self._moderate_authors(authors, nerd, replace)
+            try:
+                authors = self._merge_objlist_for_update(nerd.authors, self._moderate_author,
+                                                         authors, replace, True)
+            except InvalidUpdate as ex:
+                errors.extend(ex.errors)
+
         refs = newdata.get('references')
         if refs:
             del newdata['references']
-            refs = self._moderate_references(refs, nerd, replace)
+            try:
+                refs = self._merge_objlist_for_update(nerd.references, self._moderate_reference,
+                                                      refs, replace, True)
+            except InvalidUpdate as ex:
+                errors.extend(ex.errors)
 
         comps = newdata.get('components')
         files = []
         nonfiles = []
         if comps:
             del newdata['components']
-            for cmp in comps:
-                if 'filepath' in cmp:
-                    files.append(self._moderate_file(cmp))
-                else:
-                    nonfiles.append(self._moderate_nonfile(cmp))
-            comps = nonfiles + files
+            try:
+                files, nonfiles = self._merge_comps_for_update(nerd, comps, replace, True)
+                comps = nonfiles + files
+            except InvalidUpdate as ex:
+                errors.extend(ex.errors)
 
         # handle resource-level data: merge the new data into the old and validate the result
         if replace:
@@ -485,20 +551,553 @@ class DAPService(ProjectService):
             oldresdata = nerd.get_data(False)
 
         # merge and validate the resource-level data
-        newdata = self._moderate_res_data(newdata, oldresdata, nerd, replace)   # may raise InvalidUpdate
+        try:
+            newdata = self._moderate_res_data(newdata, oldresdata, nerd, replace)
+        except InvalidUpdate as ex:
+            errors = ex.errors + errors
+
+        if len(errors) > 1:
+            raise InvalidUpdate("Input metadata data would create invalid record (%d errors detected)"
+                                % len(errors), prec.id, errors=errors)
+        elif len(errors) == 1:
+            raise InvalidUpdate("Input validation error: "+errors[0], prec.id, errors=errors)
 
         # all data is merged and validated; now commit
         nerd.replace_res_data(newdata)
-        if authors:
-            self._update_part_nerd("authors", prec, nerd, authors, replace, doval=False)
-        if refs:
-            self._update_part_nerd("references", prec, nerd, refs, replace, doval=False)
-        if comps:
-            self._update_part_nerd("components", prec, nerd, comps, replace, doval=False)
+        if replace:
+            nerd.authors.empty()
+            if authors:
+                nerd.authors.replace_all_with(authors)
+            nerd.references.empty()
+            if refs:
+                nerd.references.replace_all_with(refs)
+            nerd.nonfiles.empty()
+            if nonfiles:
+                nerd.nonfiles.replace_all_with(nonfiles)
+        else:
+            def put_listitem_into(item, objlist):
+                if item.get("@id"):
+                    objlist.set(item.get("@id"), item)
+                else:
+                    objlist.append(item)
+            def put_each_into(data, objlist):
+                for item in data:
+                    put_listitem_into(item, objlist)
+
+            if authors:
+                put_each_into(authors, nerd.authors)
+            if refs:
+                put_each_into(refs, nerd.references)
+            if nonfiles:
+                put_each_into(nonfiles, nerd.nonfiles)
+
+        if replace:
+            nerd.files.empty()
+        for fmd in files:
+            nerd.files.set_file_at(fmd)
 
         return nerd.get_data(True)
 
+    def _update_part_nerd(self, path: str, prec: ProjectRecord, nerd: NERDResource, data: Mapping,
+                          replace=False, doval=True):
+
+        schemabase = prec.data.get("_schema") or NERDMPUB_SCH_ID
         
+        m = re.search(r'^([a-z]+s)\[([\w\d\.\/]+)\]$', path)
+        if m:
+            # path is of the form xxx[k] and refers to an item in a list
+            key = m.group(2)
+            try:
+                key = int(key)
+            except ValueError:
+                pass
+
+            if m.group(1) == "authors":
+                data["_schema"] = schemabase+"/definitions/Person"
+                data = self._update_listitem(nerd.authors, self._moderate_author, data, key, replace, doval)
+            elif m.group(1) == "references":
+                data["_schema"] = schemabase+"/definitions/BibliographicReference"
+                data = self._update_listitem(nerd.references, self._moderate_reference, data, key,
+                                             replace, doval)
+            elif m.group(1) == "components":
+                data["_schema"] = schemabase+"/definitions/Component"
+                data = self._update_component(nerd, data, key, replace, doval=doval)
+            else:
+                raise PartNotAccessible(prec.id, path, "Updating %s not allowed" % path)
+
+        elif path == "authors":
+            if not isinstance(data, list):
+                err = "authors data is not a list"
+                raise InvalidUpdate(err, id, path, errors=[err])
+            if replace:
+                data = self._replace_objlist(nerd.authors, self._moderate_author, data, doval)
+            else:
+                data = self._update_objlist(nerd.authors, self._moderate_author, data, doval)
+
+        elif path == "references":
+            if not isinstance(data, list):
+                err = "references data is not a list"
+                raise InvalidUpdate(err, id, path, errors=[err])
+            if replace:
+                data = self._replace_objlist(nerd.references, self._moderate_reference, data, doval)
+            else:
+                data = self._update_objlist(nerd.references, self._moderate_reference, data, doval)
+
+        elif path == "components":
+            if not isinstance(data, list):
+                err = "components data is not a list"
+                raise InvalidUpdate(err, id, path, errors=[err])
+            files, nonfiles = self._merge_comps_for_update(nerd, data, replace, doval)
+            if replace:
+                nerd.nonfiles.empty()
+                nerd.files.empty()
+            for cmp in nonfiles:
+                if cmp.get("@id"):
+                    nerd.nonfiles.set(cmp['@id'])
+                else:
+                    nerd.nonfiles.append(cmp)
+            for cmp in files:
+                nerd.files.set_file_at(cmp)
+            data = nerd.nonfiles.get_data() + nerd.files.get_files()
+
+        elif path == "contactPoint":
+            if not isinstance(data, Mapping):
+                raise InvalidUpdate("contactPoint data is not an object", sys=self)
+            res = nerd.get_res_data()
+            res['contactPoint'] = self._moderate_contact(data, res, replace=replace, doval=doval)
+                # may raise InvalidUpdate
+            nerd.replace_res_data(res)
+            data = res[path]
+            
+        elif path == "@type":
+            if not isinstance(data, (list, str)):
+                raise InvalidUpdate("@type data is not a list of strings", sys=self)
+            res = nerd.get_res_data()
+            res = self._moderate_restype(data, res, nerd, replace=replace, doval=doval)
+            nerd.replace_res_data(res)
+            data = res[path]
+
+        elif path == "description":
+            if not isinstance(data, (list, str)):
+                raise InvalidUpdate("description data is not a list of strings", sys=self)
+            res = nerd.get_res_data()
+            res[path] = self._moderate_description(data, res, doval=doval)  # may raise InvalidUpdate
+            nerd.replace_res_data(res)
+            data = res[path]
+            
+        elif path in "title rights disclaimer".split():
+            if not isinstance(data, str):
+                raise InvalidUpdate("%s value is not a string" % path, sys=self)
+            res = nerd.get_res_data()
+            res[path] = self._moderate_text(data, res, doval=doval)  # may raise InvalidUpdate
+            nerd.replace_res_data(res)
+            data = res[path]
+            
+        else:
+            raise PartNotAccessible(prec.id, path, "Updating %s not allowed" % path)
+
+        return data
+
+            
+    def set_file_component(self, id, filemd, filepath=None):
+        """
+        add a file to the specified dataset as described by the given metadata.  If the dataset 
+        already has a file with the specified filepath, it will be replaced.
+        :param str       id:  the identifier for the dataset to add the file to
+        :param dict  filemd:  the NERDm file metadata describing the new file to add.  If
+                              the "@id" property is set, it will be ignored.
+        :param str filepath:  the path within the dataset to assign to the file.  If provided,
+                              it will override the corresponding value in `filemd`; if not 
+                              provided, the filepath must be set within `filemd`.
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        if filepath:
+            data = deepcopy(data)
+            data['filepath'] = filepath
+        else:
+            filepath = filemd.get("filepath")
+        if not filepath:
+            raise InvalidUpdate("filepath not set in the given file description to be added to " + id)
+        nerd = self._store.open(id)
+
+        oldfile = None
+        try:
+            oldfile = nerd.files.get_file_by_path(filepath)  # it must have na id
+        except ObjectNotFound as ex:
+            pass
+
+        return self._update_file_comp(nerd, data, oldfile, replace=True, doval=True)
+
+    def update_file_component_at(self, id: str, filemd: Mapping, filepath: str=None):
+        """
+        Update the metadata for a file component at a particular filepath.  The given metadata will 
+        be merged with that of the existing file.  If a file is not currently registered at 
+        that filepath, an exception is raised.  
+        :param str       id:  the identifier for the dataset containing the file
+        :param dict  filemd:  the file metadata to update 
+        :param str filepath:  the path of the file within the dataset to update
+        :raises ObjectNotFound:  if there does not exist a file at the given filepath
+        :raises ValueError:  if filepath is not set in either the `filepath` argument or the 
+                             filepath property.
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        if not filepath:
+            filepath = filemd.get("filepath")
+        if not filepath:
+            raise InvalidUpdate("filepath not set in the given file description to be added to " + id)
+        if filemd.get("filepath") != filepath:
+            filemd = deepcopy(filemd)
+            filemd['filepath'] = filepath
+            
+        nerd = self._store.open(id)
+        oldfile = nerd.files.get_file_by_path(filepath)  # may raise ObjectNotFound
+
+        return self._update_file_comp(nerd, filemd, oldfile, replace=False, doval=True)
+
+    def update_file_component(self, id: str, filemd: Mapping, fileid: str=None):
+        """
+        Update the metadata for a file component at a particular filepath.  The given metadata will 
+        be merged with that of the existing file.  If a file is not currently registered at 
+        that filepath, an exception is raised.  
+        :param str       id:  the identifier for the dataset containing the file
+        :param dict  filemd:  the file metadata to update 
+        :param str   fileid:  the id of the file within the dataset to update
+        :raises ObjectNotFound:  if there does not exist a resource with the given id
+        :raises ValueError:  if id is not set in either the `fileid` argument or the `filemd` object's
+                             `@id` property.
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        if not fileid:
+            fileid = filemd.get("@id")
+        if not fileid:
+            raise InvalidUpdate("file-id not set in the given file description to be added to " + id)
+        if filemd.get("@id") != fileid:
+            filemd = deepcopy(filemd)
+            filemd['@id'] = fileid
+
+        nerd = self._store.open(id)
+        oldfile = nerd.files.get_file_by_path(filepath)  # may raise ObjectNotFound
+
+        return self._update_file_comp(nerd, filemd, oldfile, replace=False, doval=True)
+
+    def replace_files(self, id: str, files: List[Mapping]):
+        """
+        replace all currently saved files and folder components with the given list.  Each component
+        must include a `filepath` property.
+        :param str       id:  the identifier for the dataset containing the file
+        :raises ObjectNotFound:  if there does not exist a resource with the given id
+        """
+        if not isinstance(files, (list, tuple)):
+            err = "components data is not a list"
+            raise InvalidUpdate(err, id, "components", errors=[err])
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        nerd = self._store.open(id)
+
+        errors = []
+        newfiles = []
+        nbad = 0
+        for cmp in files:
+            try:
+                files[i] = self._moderate_file(cmp, True)
+            except InvalidUpdate as ex:
+                nbad += 1
+                errors.extend(ex.errors)
+
+        if errors:
+            raise InvalidUpdate("%s: %d files in given list produced validation errors" % (id, nbad), 
+                                errors=ex.errors)
+
+        newfiles.sort(key=lambda cmp: cmp.get("filepath"))
+        nerd.files.empty()
+        for cmp in newfiles:
+            nerd.files.set_file_at(cmp)
+
+        
+    def _update_file_comp(self, nerd: NERDResource, md: Mapping, oldmd: Mapping = None,
+                          replace: bool=False, doval: bool=False):
+        if oldmd and not replace:
+            md = self._merge_into(md, oldmd)
+
+        md = self._moderate_file(md, doval=doval)   # may raise InvalidUpdate
+
+        id = nerd.files.set_file_at(md, md['filepath'], md.get('@id'))
+        if not md.get('@id'):
+            md['@id'] = id
+        return md
+
+    def add_nonfile_component(self, id: str, cmpmd: Mapping):
+        """
+        add a new non-file component to the specified dataset as described by the given metadata.  
+        :param str     id:  the identifier for the dataset to add a new component to
+        :param dict cmpmd:  the NERDm component metadata describing the new component to add.  If
+                              the "@id" property is set, it will be ignored.
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        nerd = self._store.open(id)
+
+        return self._add_listitem(nerd.nonfiles, self._moderate_nonfile, cmpmd, doval=True)
+
+    def update_nonfile_component(self, id: str, cmpmd: Mapping, idorpos=None, replace=False):
+        """
+        update the metadata for a non-file component in the specified dataset as identified either
+        by its ID or position in the list of non-file components.  If identified component does not 
+        exist, an exception is raised.
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        nerd = self._store.open(id)
+
+        return self._update_listitem(nerd.nonfiles, self._moderate_nonfile, cmpmd, idorpos, replace, True)
+        
+    def replace_nonfile_components(self, id: str, cmps: List[Mapping]):
+        """
+        replace all currently saved non-file components with the given list.  The order of given list 
+        will be the order in which they are saved.
+        """
+        if not isinstance(cmps, (list, tuple)):
+            err = "components data is not a list"
+            raise InvalidUpdate(err, id, "components", errors=[err])
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        nerd = self._store.open(id)
+        self._replace_objlist(nerd.nonfiles, self._moderate_nonfile, cmps, True)
+        
+    def add_author(self, id: str, authmd: Mapping):
+        """
+        add a new author to the specified dataset as described by the given metadata.  
+        :param str      id:  the identifier for the dataset to add a new author to
+        :param dict authmd:  the NERDm Person metadata describing the new author to add.  If
+                              the "@id" property is set, it will be ignored.
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        nerd = self._store.open(id)
+
+        return self._add_listitem(nerd.authors, self._moderate_author, authmd, doval=True)
+
+    def update_author(self, id: str, authmd: Mapping, idorpos=None, replace=False):
+        """
+        update the metadata for an author in the specified dataset as identified either
+        by its ID or position in the list of authors.  If identified author does not 
+        exist, an exception is raised.
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        nerd = self._store.open(id)
+
+        return self._update_listitem(nerd.authors, self._moderate_author, authmd, idorpos, replace, True)
+
+    def replace_authors(self, id: str, authors: List[Mapping]):
+        """
+        replace all currently saved authors with the given list.  The order of given list will be 
+        the order in which they are saved.
+        """
+        if not isinstance(authors, (list, tuple)):
+            err = "authors data is not a list"
+            raise InvalidUpdate(err, id, "authors", errors=[err])
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        nerd = self._store.open(id)
+        self._replace_objlist(nerd.authors, self._moderate_author, authors, True)
+        
+    def add_reference(self, id: str, refmd: Mapping):
+        """
+        add a new author to the specified dataset as described by the given metadata.  
+        :param str      id:  the identifier for the dataset to add a new reference to
+        :param dict authmd:  the NERDm Reference metadata describing the new reference to add.  If
+                              the "@id" property is set, it will be ignored.
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        nerd = self._store.open(id)
+
+        return self._add_listitem(nerd.references, self._moderate_reference, refmd, doval=True)
+
+    def update_reference(self, id: str, refmd: Mapping, idorpos=None, replace=False):
+        """
+        update the metadata for a references in the specified dataset as identified either
+        by its ID or position in the list of references.  If identified reference does not 
+        exist, an exception is raised.
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        nerd = self._store.open(id)
+
+        return self._update_listitem(nerd.references, self._moderate_reference, refmd, idorpos, replace, True)
+        
+    def replace_references(self, id: str, refs: List[Mapping]):
+        """
+        replace all currently saved references with the given list.  The order of given list will be 
+        the order in which they are saved.
+        """
+        if not isinstance(refs, (list, tuple)):
+            err = "references data is not a list"
+            raise InvalidUpdate(err, id, "references", errors=[err])
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        nerd = self._store.open(id)
+        self._replace_objlist(nerd.references, self._moderate_reference, refs, True)
+        
+    def _add_listitem(self, objlist, moderate_func, data: Mapping, doval: bool=False):
+        data = moderate_func(data)
+        id = objlist.append(data)
+        data['@id'] = id
+        return data
+
+    def _update_listitem(self, objlist, moderate_func, data: Mapping, idorpos=None,
+                         replace: bool=False, doval: bool=False):
+        try:
+            olditem = objlist.get(idorpos)
+            if not replace:
+                data = self._merge_into(data, olditem)
+        except IndexError as ex:
+            raise ObjectNotFound("Item not found at position "+str(ex)) from ex
+        except KeyError as ex:
+            raise ObjectNotFound("Item not found with id="+str(ex)) from ex
+
+        data = moderate_func(data, doval=doval)   # may raise InvalidUpdate
+        objlist.set(olditem["@id"], data)
+        if not data.get("@id"):
+            data["@id"] = olditem["@id"]
+        return data
+
+    def _merge_comps_for_update(self, nerd: NERDResource, data: List[Mapping],
+                                replace: bool=False, doval: bool=False):
+        # the point of this function is to prep the data for update, collecting as many 
+        # validation errors upfront as possible
+        nonfiles = []
+        files = []
+        errors = []
+
+        # collate the components
+        for cmp in data:
+            # is it a file or a non-file?
+            cmplist = None
+            if cmp.get("@id"):
+                if cmp['@id'] in nerd.nonfiles.ids:
+                    cmplist = nonfiles
+                elif cmp['@id'] in nerd.files.ids:
+                    cmplist = files
+
+            if cmplist is None:
+                if cmp.get('filepath'):
+                    cmplist = files
+                else:
+                    cmplist = nonfiles
+
+            cmplist.append(cmp)
+
+        try:
+            nonfiles = self._merge_objlist_for_update(nerd.nonfiles, self._moderate_nonfile, nonfiles,
+                                                      replace, doval)
+        except InvalidUpdate as ex:
+            errors.extend(ex.errors)
+
+        for i, cmp in enumerate(files):
+            oldcmp = None
+            if not replace:
+                if cmp.get("@id") in nerd.files.ids:
+                    oldcmp = nerd.files.get(cmp['@id'])
+                elif cmp.get("filepath") and nerd.files.exists(cmp["filepath"]):
+                    oldcmp = nerd.files.get(cmp['filepath'])
+
+            if oldcmp:
+                cmp = self._merge_into(cmp, oldcmp)
+            elif cmp.get("@id"):
+                cmp = deepcopy(cmp)
+                del cmp["@id"]
+
+            try:
+                files[i] = self._moderate_file(cmp, doval)
+            except InvalidUpdate as ex:
+                errors.extend(ex.errors)
+            
+        if errors:
+            raise InvalidUpdate("%d file validation errors detected" % len(ex.errors),
+                                errors=ex.errors)
+
+        files.sort(key=lambda cmp: cmp.get("filepath"))  # this places subcollections before their contents
+        return files, nonfiles
+
+    def _merge_objlist_for_update(self, objlist, moderate_func, data: List[Mapping],
+                                  replace: bool=False, doval: bool=False):
+        # the point of this function is to prep the data for update, collecting as many 
+        # validation errors upfront as possible
+        def merge_item(item):
+            olditem = None
+            if not replace and item.get("@id"):
+                try:
+                    olditem = objlist.get(item["@id"])
+                except KeyError:
+                    pass
+
+            if olditem:
+                item = self._merge_into(item, olditem)
+            elif item.get("@id"):
+                item = deepcopy(item)
+                del item["@id"]
+                
+            return moderate_func(item, doval)
+
+        out = []
+        errors = []
+        for item in data:
+            try:
+                out.append(merge_item(item))
+            except InvalidUpdate as ex:
+                errors.extend(ex.errors)
+        if errors:
+            raise InvalidUpdate("%d item validation errors detected" % len(errors), errors=errors)
+        return out
+
+    def _replace_objlist(self, objlist, moderate_func, data: List[Mapping], doval: bool=False):
+        data = [ moderate_func(a, doval=doval) for a in data ]   # may raise InvalidUpdate
+        objlist.empty()
+        for item in data:
+            objlist.append(item)
+
+    def _update_objlist(self, objlist, moderate_func, data: List[Mapping], doval: bool=False):
+        # match the items in the given list to existing items currently store by their ids; for each 
+        # match, the item metadata will be merged with the matching metadata.  If there is no
+        # match, the item will be appended.  This method attempts to ferret out all errors
+        # before updating any items
+        newitems = []
+        errors = []
+        nbad = 0
+        for item in data:
+            olditem = None
+            if item.get("@id"):
+                olditem = objlist.get(item["@id"])
+                item = self._merge_into(item, olditem)
+            try:
+                item = moderate_func(item, doval=doval)
+            except InvalidUpdate as ex:
+                errors.extend(ex.errors)
+                nbad += 1
+            newitems.append(item)
+
+        if errors:
+            raise InvalidUpdate("%d items contained validation errors" % nbad, errors=errors)
+
+        for item in newitems:
+            if item.get("@id"):
+                objlist.set(item["@id"], item)
+            else:
+                objlist.append(item)
+
+        ## This is an implementation based on position rather than id
+        # curcount = len(objlist)
+        # for i, item in enumerate(data):
+        #     olditem = None
+        #     if i < curcount:
+        #         olditem = objlist.get(i)
+        #         data[i] = self._merge_into(data[i], olditem)
+        #     data[i] = moderate_func(data[i], doval=doval)    # may raise InvalidUpdate
+        # 
+        # for i, item in enumerate(data):
+        #     if i < curcount:
+        #         objlist.set(i, item)
+        #     else:
+        #         objlist.append(item)
+            
+
+            
+            
+        
+                        
+
 #################
 
             
@@ -526,78 +1125,6 @@ class DAPService(ProjectService):
             raise InvalidUpdate("NERDm Schema validation errors found", errors=errors, sys=self)
 
 
-    def _update_part_nerd(self, path: str, prec: ProjectRecord, nerd: NERDResource, data: Mapping,
-                          replace=False, doval=True):
-        schemabase = prec.data.get("_schema") or NERDMPUB_SCH_ID
-        
-        m = re.search(r'^([a-z]+s)\[([\w\d]+)\]$', path)
-        if m:
-            # path is of the form xxx[k] and refers to an item in a list
-            key = m.group(3)
-            try:
-                key = int(key)
-            except ValueError:
-                pass
-            
-            if m.group(1) == "authors":
-                self._update_author(prec, nerd, data, replace, doval=doval)
-            elif m.group(1) == "references":
-                data["_schema"] = schemabase+"/definitions/BibliographicReference"
-                self._update_reference(prec, nerd, data, replace, doval=doval)
-            elif m.group(1) == "components":
-                data["_schema"] = schemabase+"/definitions/Component"
-                self._update_component(prec, nerd, data, replace, doval=doval)
-            else:
-                raise PartNotAccessible(prec.id, path, "Updating %s not allowed" % path)
-
-        elif path == "authors":
-            if replace:
-                self._replace_authors(prec, nerd, data, doval=doval)
-            else:
-                self._update_authors(prec, nerd, data, doval=doval)
-        elif path == "references":
-            if replace:
-                self._replace_references(prec, nerd, data, doval=doval)
-            else:
-                self._update_references(prec, nerd, data, doval=doval)
-        elif path == "components":
-            if replace:
-                self._replace_components(prec, nerd, data, doval=doval)
-            else:
-                self._update_components(prec, nerd, data, doval=doval)
-
-        elif path == "contactPoint":
-            if not isinstance(data, Mapping):
-                raise InvalidUpdate("contactPoint data is not an object", sys=self)
-            res = nerd.get_res_data()
-            res['contactPoint'] = self._moderate_contact(data, res, replace=replace, doval=doval)
-                # may raise InvalidUpdate
-            nerd.replace_res_data(res)
-            
-        elif path == "@type":
-            if not isinstance(data, (list, str)):
-                raise InvalidUpdate("@type data is not a list of strings", sys=self)
-            res = nerd.get_res_data()
-            res = self._moderate_restype(data, res, nerd, replace=replace, doval=doval)
-            nerd.replace_res_data(res)
-
-        elif path == "description":
-            if not isinstance(data, (list, str)):
-                raise InvalidUpdate("description data is not a list of strings", sys=self)
-            res = nerd.get_res_data()
-            res[path] = self._moderate_description(data, res, doval=doval)  # may raise InvalidUpdate
-            nerd.replace_res_data(res)
-            
-        elif path in "title rights disclaimer".split():
-            if not isinstance(data, str):
-                raise InvalidUpdate("%s value is not a string" % path, sys=self)
-            res = nerd.get_res_data()
-            res[path] = self._moderate_text(data, res, doval=doval)  # may raise InvalidUpdate
-            nerd.replace_res_data(res)
-            
-        else:
-            raise PartNotAccessible(prec.id, path, "Updating %s not allowed" % path)
-            
     def _moderate_text(self, val, resmd=None, doval=True):
         # make sure input value is the right type, is properly encoded, and
         # does not contain any illegal bits
@@ -712,141 +1239,40 @@ class DAPService(ProjectService):
             
         return info
 
-    def _replace_authors(self, prec: ProjectRecord, nerd: NERDResource, data: List[Mapping]):
-        if not isinstance(data, list):
-            raise InvalidUpdate("authors data is not a list", sys=self)
-        self._replace_listitems(nerd.authors, self._moderate_author, data)
-
-    def _update_author(self, nerd: NERDResource, data: Mapping, pos: int=None, replace=False):
-        if not isinstance(data, Mapping):
-            raise InvalidUpdate("author data is not an object", sys=self)
-        self._update_listitem(nerd.authors, self._moderate_author, data, pos, replace)
-
-    def _update_authors(self, prec: ProjectRecord, nerd: NERDResource, data: List[Mapping]):
-        if not isinstance(data, list):
-            raise InvalidUpdate("authors data is not a list", sys=self)
-        self._update_objlist(nerd.authors, self._moderate_author, data)
-
-    def _replace_references(self, prec: ProjectRecord, nerd: NERDResource, data: List[Mapping]):
-        if not isinstance(data, list):
-            raise InvalidUpdate("references data is not a list", sys=self)
-        self._replace_listitems(nerd.references, self._moderate_reference, data)
-
-    def _update_reference(self, nerd: NERDResource, data: Mapping, pos: int=None, replace=False):
-        if not isinstance(data, Mapping):
-            raise InvalidUpdate("reference data is not an object", sys=self)
-        self._update_listitem(nerd.references, self._moderate_reference, data, pos, replace)
-
-    def _update_references(self, prec: ProjectRecord, nerd: NERDResource, data: List[Mapping]):
-        if not isinstance(data, list):
-            raise InvalidUpdate("references data is not a list", sys=self)
-        self._update_objlist(nerd.references, self._moderate_reference, data)
-
     
-    def _replace_listitems(self, objlist, moderate_func, data: List[Mapping]):
-        data = [ moderate_func(a) for a in data ]   # may raise InvalidUpdate
-        objlist.empty()
-        for item in data:
-            objlist.append(auth)
-
-    def _update_listitem(self, objlist, moderate_func, data: Mapping, pos: int=None, replace=False):
-        key = pos
-        if key is None:
-            key = data.get("@id")
-        olditem = None
-        if key:
-            try:
-                olditem = objlist.get(key)
-                if not replace:
-                    data = self._merge_into(data, olditem)
-            except (KeyError, IndexError) as ex:
-                pass
-
-        data = moderate_func(data)   # may raise InvalidUpdate
-
-        if olditem is None:
-            objlist.append(data)
-        else:
-            objlist.set(key, data)
-
-    def _update_objlist(self, objlist, moderate_func, data: List[Mapping]):
-        # merge and validate all items before committing them
-        for i, a in enumerate(data):
-            olditem = None
-            if a.get('@id'):
-                try:
-                    olditem = objlist.get(a['@id'])
-                    data[i] = self._merge_into(a, olditem)
-                except KeyError as ex:
-                    pass
-            data[i] = moderate_func(data[i])  # may raise InvalidUpdate
-
-        # now commit
-        for a in data:
-            if a.get('@id'):
-                objlist.set(a['@id'], a)
-            else:
-                objlist.append(a)
-
-    def _replace_components(self, prec: ProjectRecord, nerd: NERDResource, data: List[Mapping]):
-        if not isinstance(data, list):
-            raise InvalidUpdate("authors data is not a list", sys=self)
-        data = [ self._moderate_comp(a) for a in data ]   # may raise InvalidUpdate
-        nerd.nonfiles.empty()
-        nerd.files.empty()
-        for cmp in data:
-            if 'filepath' in cmp:
-                nerd.files.set_file_at(cmp, cmp['filepath'])
-            else:
-                nerd.nonfiles.append(cmp)
-
-    def _update_component(self, nerd: NERDResource, data: Mapping, pos: int=None, replace=False):
+    def _update_component(self, nerd: NERDResource, data: Mapping, key=None, replace=False, doval=False):
         if not isinstance(data, Mapping):
             raise InvalidUpdate("component data is not an object", sys=self)
-        if 'filepath' in data:
-            self.update_listitem(nerd.files, self._moderate_file, pos, replace)
+        id = key if isinstance(key, str) else data.get("@id")
+        filepath = data.get('filepath')
+
+        oldfile = None
+        if id:
+            oldfile = nerd.files.get(id)
+            if not filepath and oldfile:
+                filepath = oldfile.get('filepath')
+        pos = key if isinstance(key, int) else None
+
+        if filepath:
+            data = self._update_file_comp(nerd, data, oldfile, replace=replace, doval=doval)
         else:
-            self.update_listitem(nerd.nonfiles, self._moderate_nonfile, pos, replace)
-
-    def _update_components(self, prec: ProjectRecord, nerd: NERDResource, data: List[Mapping]):
-        if not isinstance(data, list):
-            raise InvalidUpdate("references data is not a list", sys=self)
-        
-        # merge and validate all items before committing them
-        for i, cmp in enumerate(data):
-            oldcmp = None
-            if cmp.get('@id'):
-                try:
-                    oldcmp = objlist.get(a['@id'])
-                    data[i] = self._merge_into(cmp, oldcmp)
-                except KeyError as ex:
-                    pass
-            if 'filepath' in cmp:
-                data[i] = self._moderate_file(data[i])  # may raise InvalidUpdate
-            else:
-                data[i] = self._moderate_nonfile(data[i])  # may raise InvalidUpdate
-
-        # now commit
-        for a in data:
-            objlist = nerd.files if 'filepath' in cmp else nerd.nonfiles
-            if a.get('@id'):
-                objlist.set(a['@id'], a)
-            else:
-                objlist.append(a)
+            data = self._update_listitem(nerd.nonfiles, self._moderate_nonfile, data, pos, replace, doval)
+        return data
 
     def _filter_props(self, obj, props):
         delprops = [k for k in obj if k not in props or (not obj.get(k) and obj.get(k) is not False)]
         for k in delprops:
             del obj[k]
 
-    _authprops = set("_schema fn familyName givenName middleName orcid affiliation proxyFor".split())
+    _authprops = set("_schema @id fn familyName givenName middleName orcid affiliation proxyFor".split())
     _affilprops = set("@id title abbrev proxyFor location label description subunits".split())
     
     def _moderate_author(self, auth, doval=True):
         # we are assuming that merging has already occured
 
         self._filter_props(auth, self._authprops)
-        auth["@type"] = "foaf:Person"
+        if not auth.get("@type"):
+            auth["@type"] = "foaf:Person"
 # Set fn at finalization
 #        if not auth.get('fn') and auth.get('familyName') and auth.get('givenName'):
 #            auth['fn'] = auth['familyName']
@@ -874,7 +1300,8 @@ class DAPService(ProjectService):
                         if not isinstance(affil["abbrev"], list):
                             raise InvalidUpdate("Affiliate abbrev property is not a list: "+
                                                 str(affil["abbrev"]))
-                        affil["abbrev"].append(NIST_ABBREV)
+                        if NIST_ABBREV not in affil["abbrev"]:
+                            affil["abbrev"].append(NIST_ABBREV)
 
         # Finally, validate (if requested)
         schemauri = NERDMPUB_SCH_ID + "/definitions/Person"
@@ -901,16 +1328,17 @@ class DAPService(ProjectService):
             ref["refType"] = "References"
         if not ref.get(EXTSCHPROP) and ref["refType"] in self._reftypes:
             ref.setdefault(EXTSCHPROP, [])
-            try:
-                # upgrade the version of the BIB extension
-                if any(s.startswith(NERDMBIB_SCH_ID_BASE) and s != NERDMBIB_SCH_ID
-                       for s in ref[EXTSCHPROP]):
-                    ref[EXTSCHPROP] = [NERDMBIB_SCH_ID if s.startswith(NERDMBIB_SCH_ID_BASE)
-                                                                else s for s in ref[EXTSCHPROP]]
-            except AttributeError as ex:
-                raise InvalidUpdate("_extensionSchemas: value is not a list of strings", sys=self) from ex
-            if NERDMBIB_SCH_ID not in ref[EXTSCHPROP]:
-                ref[EXTSCHPROP].append(NERDMBIB_SCH_ID)
+        try:
+            # upgrade the version of the BIB extension
+            for i, uri in enumerate(ref.get(EXTSCHPROP,[])):
+                if uri.startswith(NERDMBIB_SCH_ID_BASE) and not uri.startswith(NERDMBIB_SCH_ID):
+                    parts = ref[EXTSCHPROP][i].split('#', 1)
+                    if len(parts) == 2:
+                        ref[EXTSCHPROP][i] = NERDMBIB_SCH_ID + parts[1]
+        except AttributeError as ex:
+            raise InvalidUpdate("_extensionSchemas: value is not a list of strings", sys=self) from ex
+        if ref.get("refType") in self._reftypes and NERDMBIB_DEF+"DCiteReference" not in ref[EXTSCHPROP]:
+            ref[EXTSCHPROP].append(NERDMBIB_DEF+"DCiteReference")
 
         if not ref.get("@type"):
             ref["@type"] = ["deo:BibliographicReference"]
@@ -979,15 +1407,15 @@ class DAPService(ProjectService):
 
         # make sure the _extensionSchemas list is filled out
         cmp.setdefault(EXTSCHPROP, [])
-        if nerdutils.is_type(cmp, "DataFile") and \
-           not any(s.endswith("#/definitions/DataFile") for s in cmp[EXTSCHPROP]):
-            cmp[EXTSCHPROP].append(NERDMPUB_DEF+"DataFile")
-        elif nerdutils.is_type(cmp, "ChecksumFile") and \
-           not any(s.endswith("#/definitions/ChecksumFile") for s in cmp[EXTSCHPROP]):
-            cmp[EXTSCHPROP].append(NERDMPUB_DEF+"ChecksumFile")
-        elif nerdutils.is_type(cmp, "DownloadableFile") and \
-           not any(s.endswith("#/definitions/DownloadableFile") for s in cmp[EXTSCHPROP]):
-            cmp[EXTSCHPROP].append(NERDMPUB_DEF+"DownloadableFile")
+        if nerdutils.is_type(cmp, "DataFile"):
+            if not any(s.endswith("#/definitions/DataFile") for s in cmp[EXTSCHPROP]):
+                cmp[EXTSCHPROP].append(NERDMPUB_DEF+"DataFile")
+        elif nerdutils.is_type(cmp, "ChecksumFile"):
+            if not any(s.endswith("#/definitions/ChecksumFile") for s in cmp[EXTSCHPROP]):
+                cmp[EXTSCHPROP].append(NERDMPUB_DEF+"ChecksumFile")
+        elif nerdutils.is_type(cmp, "DownloadableFile"):
+            if not any(s.endswith("#/definitions/DownloadableFile") for s in cmp[EXTSCHPROP]):
+                cmp[EXTSCHPROP].append(NERDMPUB_DEF+"DownloadableFile")
 
         if nerdutils.is_type(cmp, "Subcollection") and \
            not any(s.endswith("#/definitions/Subcollection") for s in cmp[EXTSCHPROP]):
@@ -1079,6 +1507,9 @@ class DAPService(ProjectService):
         return cmp
 
     def _moderate_res_data(self, resmd, basemd, nerd, replace=False, doval=True):
+        if not resmd.get("_schema"):
+            resmd["_schema"] = NERDM_SCH_ID
+
         restypes = resmd.get("@type", [])
         if not replace:
             restypes += basemd.get("@type", [])
@@ -1087,7 +1518,7 @@ class DAPService(ProjectService):
 
         errors = []
         if 'contactPoint' in resmd:
-            if not resmd.get("contactPoint"):
+            if "contactPoint" not in resmd and not resmd.get("contactPoint"):
                 del resmd["contactPoint"]
             else:
                 try:
@@ -1097,7 +1528,7 @@ class DAPService(ProjectService):
                     errors.extend(ex.errors)
 
         if 'description' in resmd:
-            if not resmd.get("description"):
+            if "description" not in resmd and not resmd.get("description"):
                 del resmd["description"]
             else:
                 try:
