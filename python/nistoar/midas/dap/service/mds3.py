@@ -5,7 +5,7 @@ first DAP convention powered by the DBIO APIs.
 Support for the web service frontend is provided as a 
 WSGI :ref:class:`~nistoar.pdr.publish.service.wsgi.SubApp` implementation.
 """
-import os, re
+import os, re, pkg_resources
 from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence, Callable
@@ -123,38 +123,43 @@ class DAPService(ProjectService):
                 raise ConfigurationException("'validate_nerdm' is set but cannot find schema dir")
             self._valid8r = validate.create_lenient_validator(self._schemadir, "_")
 
-        self._mediatypes = {
-            "csv": "text/csv", "txt": "text/plain", "html": "text/html", "htm": "text/html",
-            "sha256": "text/plain", "md5": "text/plain"
-        }
-        mimefiles = self.cfg.get('mimetype_files', [])
-        if not isinstance(mimefiles, list):
-            mimefiles = [mimefiles]
-        if mimefiles:
-            self._mediatypes = build_mime_type_map(mimefiles)
-            
-        self._formatbyext = {}
-        if 'file_format_maps' in self.cfg:
-            mimefiles = self.cfg.get('file_format_maps', [])
-        else:
-            mimefiles = os.path.join(def_etc_dir, "fext2format.json")
-        if not isinstance(mimefiles, list):
-            mimefiles = [mimefiles]
-        for ffile in mimefiles:
-            try:
-                fmp = read_json(ffile)
-                if not isinstance(fmp, Mapping):
-                    raise ValueError("wrong format for format-map file: contains "+type(fmp))
-                if fmp:
-                    self._formatbyext.update(fmp)
-            except Exception as ex:
-                self.log.warning("Unable to read format-map file, %s: %s", ffile, str(ex))
+        self._mediatypes = None
+        self._formatbyext = None
 
         self._minnerdmver = minnerdmver
 
+    def _choose_mediatype(self, fext):
+        defmt = 'application/octet-stream'
+
+        if not self._mediatypes:
+            mtfiles = [f if os.path.isabs(f) else os.path.join(def_etc_dir, f)
+                         for f in self.cfg.get('mimetype_files', [])]
+            if not mtfiles:
+                mtfiles = [pkg_resources.resource_filename('nistoar.pdr', 'data/mime.types')]
+            self._mediatypes = build_mime_type_map(mtfiles)
+
+        return self._mediatypes.get(fext, defmt)
+
     def _guess_format(self, file_ext, mimetype=None):
         if not mimetype:
-            mimetype = self._mediatypes.get(file_ext)
+            mimetype = self._choose_mediatypes(file_ext)
+
+        if self._formatbyext is None:
+            fmtfiles = [f if os.path.isabs(f) else os.path.join(def_etc_dir, f)
+                         for f in self.cfg.get('file_format_maps', [])]
+            if not fmtfiles:
+                fmtfiles = [pkg_resources.resource_filename('nistoar.pdr', 'data/fext2format.json')]
+            self._formatbyext = {}
+            for f in fmtfiles:
+                try:
+                    fmp = read_json(f)
+                    if not isinstance(fmp, Mapping):
+                        raise ValueError("wrong format for format-map file: contains "+type(fmp))
+                    if fmp:
+                        self._formatbyext.update(fmp)
+                except Exception as ex:
+                    self.log.warning("Unable to fead format-map file, %s: %s", f, str(ex))
+            
         fmtd = self._formatbyext.get(file_ext)
         if fmtd:
             return { "description": fmtd }
@@ -1398,7 +1403,7 @@ class DAPService(ProjectService):
         if nerdutils.is_type(cmp, "DownloadableFile"):
             filext = os.path.splitext(cmp.get("filepath",""))[-1].lstrip('.')
             if not cmp.get("mediaType"):
-                cmp["mediaType"] = self._mediatypes.get(filext, "application/octet-stream")
+                cmp["mediaType"] = self._choose_mediatype(filext)
                                                         
             if not cmp.get("format"):
                 fmt = self._guess_format(filext, cmp["mediaType"])

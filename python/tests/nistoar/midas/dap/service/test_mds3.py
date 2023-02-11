@@ -696,7 +696,7 @@ class TestMDS3DAPService(test.TestCase):
             self.fail("Validation Error: "+ex.format_errors())
         self.assertEqual(cmp, {"filepath": "data.zip", "downloadURL": "pdr:file",
                                "@type": ["nrdp:DataFile", "nrdp:DownloadableFile"],
-                               "mediaType": "application/octet-stream",
+                               "mediaType": "application/zip",
                                "format": {"description": "compressed file archive"},
                                "_extensionSchemas": [ mds3.NERDMPUB_DEF+"DataFile" ]})
 
@@ -707,7 +707,7 @@ class TestMDS3DAPService(test.TestCase):
             self.fail("Validation Error: "+ex.format_errors())
         self.assertEqual(cmp, {"filepath": "data.zip", "downloadURL": "pdr:file",
                                "@type": ["nrdp:DataFile", "nrdp:DownloadableFile", "dcat:Distribution"],
-                               "mediaType": "application/octet-stream",
+                               "mediaType": "application/zip",
                                "format": {"description": "compressed file archive"},
                                "_extensionSchemas": [ mds3.NERDMPUB_DEF+"DataFile" ]})
 
