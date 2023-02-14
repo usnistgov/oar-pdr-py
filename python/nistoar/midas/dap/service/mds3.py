@@ -2,20 +2,32 @@
 The DAP Authoring Service implemented using the mds3 convention.  This convention represents the 
 first DAP convention powered by the DBIO APIs.
 
-Support for the web service frontend is provided as a 
-WSGI :ref:class:`~nistoar.pdr.publish.service.wsgi.SubApp` implementation.
+The key features of the mds3 conventions are:
+  * The data record being created/updated through the service is a NERDm Resource
+  * The NERDm Resource record is stored separately from the DBIO 
+    :py:class:`~nistoar.midas.dbio.base.ProjectRecord` (via the 
+    :py:mod:`~nistoar.midas.dap.nerdstore` module).  The ``data`` property of the 
+    :py:class:`~nistoar.midas.dbio.base.ProjectRecord` contains a summary (i.e. a subset of 
+    properties) of the NERDm record.  
+  * Conventions and heuristics are applied for setting default values for various NERDm 
+    properties based on the potentially limited properties provided by the client during the 
+    editing process.  (These conventions and hueristics are implemented the in various 
+    ``_moderate_*`` functions in the :py:class:`DAPService` class.)
+
+Support for the web service frontend is provided via :py:class:`DAPApp` class, an implementation
+of the WSGI-based :ref:class:`~nistoar.pdr.publish.service.wsgi.SubApp`.
 """
 import os, re, pkg_resources
 from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence, Callable
-from typing import List
+from typing import List, Union
 from copy import deepcopy
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
                      InvalidUpdate, ObjectNotFound, PartNotAccessible,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
-from ...dbio.wsgi.project import MIDASProjectApp
+from ...dbio.wsgi.project import MIDASProjectApp, ProjectDataHandler, SubApp
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
@@ -70,6 +82,10 @@ NIST_NAME = "National Institute of Standards and Technology"
 NIST_ABBREV = "NIST"
 NIST_ROR = "ror:05xpvk416"
 
+VER_DELIM = const.RELHIST_EXTENSION.lstrip('/')
+FILE_DELIM = const.FILECMP_EXTENSION.lstrip('/')
+LINK_DELIM = const.LINKCMP_EXTENSION.lstrip('/')
+AGG_DELIM = const.AGGCMP_EXTENSION.lstrip('/')
 EXTSCHPROP = "_extensionSchemas"
 
 class DAPService(ProjectService):
@@ -77,20 +93,9 @@ class DAPService(ProjectService):
     a project record request broker class for DAP records.  
 
     This service allows a client to create and update DAP records in the form of NERDm Resource 
-    records.  
-
-    This service extends the generic DBIO :py:class:`~nistoar.midas.dbio.project.ProjectService` by 
-    supporting the following conventions:
-      * The data record being created/updated through the service is a NERDm Resource
-      * The NERDm Resource record is stored separately from the DBIO 
-        :py:class:`~nistoar.midas.dbio.base.ProjectRecord` (via the 
-        :py:mod:`~nistoar.midas.dap.nerdstore` module).  The ``data`` property of the 
-        :py:class:`~nistoar.midas.dbio.base.ProjectRecord` contains a summary (i.e. a subset of 
-        properties) of the NERDm record.  
-      * Conventions and heuristics are applied for setting default values for various NERDm 
-        properties based on the potentially limited properties provided by the client during the 
-        editing process.  (These conventions and hueristics are implemented the in various 
-        ``_moderate_*`` functions in this class.
+    records according to the mds3 conventions.  See this 
+    :py:module:`module's documentation <nistoar.midas.dap.service.mds3>` for 
+    a summary of the supported conventions.
 
     In addition to the configuration parameters supported by the parent class, this specialization
     also supports the following parameters:
@@ -247,18 +252,18 @@ class DAPService(ProjectService):
             prec.data = self._summarize(nerd)
 
             if data:
-                self.update_data(prec.id, data, prec=prec, nerd=nerd)  # this will call prec.save()
+                self._update_data(prec.id, data, prec=prec, nerd=nerd)  # this will call prec.save()
             else:
                 prec.save()
 
         except Exception as ex:
             if nerd:
                 try:
-                    nerd.delete()
+                    self._store.delete(prec.id)
                 except Exception as ex:
                     self.log.error("Error while cleaning up NERDm data after create failure: %s", str(ex))
             try:
-                prec.delete()
+                self.dbcli.delete_record(prec.id)
             except Exception as ex:
                 self.log.error("Error while cleaning up DAP record after create failure: %s", str(ex))
             raise
@@ -273,7 +278,7 @@ class DAPService(ProjectService):
             ("@context", NERDM_CONTEXT),
             (EXTSCHPROP, [NERDMPUB_DEF + "PublicDataResource"]),
             ("@id", self._arkid_for(recid)),
-            ("@type", [":".join([NERDMPUB_PRE, "PublicDataResource"]), "dcat:Resource"])
+            ("@type", [NERDMPUB_PRE + ":PublicDataResource", "dcat:Resource"])
         ])
 
         if self.cfg.get('assign_doi') == ASSIGN_DOI_ALWAYS:
@@ -283,9 +288,9 @@ class DAPService(ProjectService):
             if meta.get("resourceType"):
                 addtypes = []
                 if meta['resourceType'].lower() == "software":
-                    addtypes = [":".join([NERDPUB_PRE, "Software"])]
+                    addtypes = [":".join([NERDMSW_PRE, "SoftwarePublication"])]
                 elif meta['resourceType'].lower() == "srd":
-                    addtypes = [":".join([NERDPUB_PRE, "SRD"])]
+                    addtypes = [":".join([NERDMPUB_PRE, "SRD"])]
                 out["@type"] = addtypes + out["@type"]
 
             if meta.get("softwareLink"):
@@ -332,7 +337,7 @@ class DAPService(ProjectService):
         if isinstance(out.get('creatorisContact'), str):
             out['creatorisContact'] = out['creatorisContact'].lower() == "true"
         elif out.get('creatorisContact') is None:
-            out['creatorisContact'] = true
+            out['creatorisContact'] = True
 
         return out
         
@@ -387,6 +392,10 @@ class DAPService(ProjectService):
                 out = nerd.authors.get_data()
             elif part == "authors":
                 out = nerd.references.get_data()
+            elif part == FILE_DELIM:
+                out = nerd.files.get_data()
+            elif part == LINK_DELIM:
+                out = nerd.nonfiles.get_data()
             elif part == "components":
                 out = nerd.nonfiles.get_data() + nerd.files.get_data()
             else:
@@ -474,6 +483,10 @@ class DAPService(ProjectService):
                 nerd.authors.empty()
             elif part == "references":
                 nerd.references.empty()
+            elif part == FILE_DELIM:
+                nerd.files.empty()
+            elif part == LINK_DELIM:
+                nerd.nonfiles.empty()
             elif part == "components":
                 nerd.files.empty()
                 nerd.nonfiles.empty()
@@ -600,7 +613,7 @@ class DAPService(ProjectService):
             raise InvalidUpdate("Input metadata data would create invalid record (%d errors detected)"
                                 % len(errors), prec.id, errors=errors)
         elif len(errors) == 1:
-            raise InvalidUpdate("Input validation error: "+errors[0], prec.id, errors=errors)
+            raise InvalidUpdate("Input validation error: "+str(errors[0]), prec.id, errors=errors)
 
         # all data is merged and validated; now commit
         nerd.replace_res_data(newdata)
@@ -638,8 +651,13 @@ class DAPService(ProjectService):
 
         return nerd.get_data(True)
 
-    def _update_part_nerd(self, path: str, prec: ProjectRecord, nerd: NERDResource, data: Mapping,
-                          replace=False, doval=True):
+    def _update_part_nerd(self, path: str, prec: ProjectRecord, nerd: NERDResource, 
+                          data: Union[list, Mapping], replace=False, doval=True):
+        # update just part of the NERDm metadata as given by path.  The path identifies which
+        # NERDm Resource property to update; the data parameter is expected to be of a JSONSchema 
+        # type that matches that property.  Two special path values, FILE_DELIM ("pdr:f") and
+        # LINK_DELIM ("pdr:see") are taken to refer to the list of file and non-file components,
+        # respectively.
 
         schemabase = prec.data.get("_schema") or NERDMPUB_SCH_ID
         
@@ -659,7 +677,11 @@ class DAPService(ProjectService):
                 data["_schema"] = schemabase+"/definitions/BibliographicReference"
                 data = self._update_listitem(nerd.references, self._moderate_reference, data, key,
                                              replace, doval)
-            elif m.group(1) == "components":
+            elif m.group(1) == LINK_DELIM:
+                data["_schema"] = schemabase+"/definitions/Component"
+                data = self._update_listitem(nerd.nonfiles, self._moderate_nonfile, data, key,
+                                             replace, doval)
+            elif m.group(1) == "components" or m.group(1) == FILE_DELIM:
                 data["_schema"] = schemabase+"/definitions/Component"
                 data = self._update_component(nerd, data, key, replace, doval=doval)
             else:
@@ -683,22 +705,42 @@ class DAPService(ProjectService):
             else:
                 data = self._update_objlist(nerd.references, self._moderate_reference, data, doval)
 
-        elif path == "components":
+        elif path == LINK_DELIM:
+            if not isinstance(data, list):
+                err = "non-file (links) data is not a list"
+                raise InvalidUpdate(err, id, path, errors=[err])
+            if replace:
+                data = self._replace_objlist(nerd.nonfies, self._moderate_nonfile, data, doval)
+            else:
+                data = self._update_objlist(nerd.nonfiles, self._moderate_nonfile, data, doval)
+
+        elif path == FILE_DELIM:
+            if not isinstance(data, list):
+                err = "components data is not a list"
+                raise InvalidUpdate(err, id, path, errors=[err])
+
+        elif path == "components" or path == FILE_DELIM:
             if not isinstance(data, list):
                 err = "components data is not a list"
                 raise InvalidUpdate(err, id, path, errors=[err])
             files, nonfiles = self._merge_comps_for_update(nerd, data, replace, doval)
             if replace:
-                nerd.nonfiles.empty()
+                if path == "components":
+                    nerd.nonfiles.empty()
                 nerd.files.empty()
-            for cmp in nonfiles:
-                if cmp.get("@id"):
-                    nerd.nonfiles.set(cmp['@id'])
-                else:
-                    nerd.nonfiles.append(cmp)
+            if path == "components":
+                for cmp in nonfiles:
+                    if cmp.get("@id"):
+                        nerd.nonfiles.set(cmp['@id'])
+                    else:
+                        nerd.nonfiles.append(cmp)
             for cmp in files:
                 nerd.files.set_file_at(cmp)
-            data = nerd.nonfiles.get_data() + nerd.files.get_files()
+
+            if path == "components":
+                data = nerd.nonfiles.get_data() + nerd.files.get_files()
+            else:
+                data = nerd.files.get_files()
 
         elif path == "contactPoint":
             if not isinstance(data, Mapping):
@@ -748,7 +790,7 @@ class DAPService(ProjectService):
                               the "@id" property is set, it will be ignored.
         :param str filepath:  the path within the dataset to assign to the file.  If provided,
                               it will override the corresponding value in ``filemd``; if not 
-                              provided, the filepath must be set within ``filemd``.
+                              provided, the ``filepath`` property must be set within ``filemd``.
         """
         prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
         if filepath:
@@ -1601,18 +1643,22 @@ class DAPServiceFactory(ProjectServiceFactory):
     """
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, log: Logger=None,
-                 project_coll: str=None):
+                 nerdstore: NERDResourceStorage=None, project_coll: str=None):
         """
         create a service factory associated with a particulr DB backend.
         :param DBClientFactory dbclient_factory:  the factory instance to use to create a DBClient to 
                                  talk to the DB backend.
         :param Mapping  config:  the configuration for the service (see class-level documentation).  
         :param Logger      log:  the Logger to use in the service.  
+        :param NERDResourceStorage nerdstore:  the NERDResourceStorage instance to use to access NERDm 
+                                 records.  If not provided, one will be created based on the given 
+                                 configuration (in the ``nerdstore`` parameter). 
         :param str project_coll: the project type (i.e. the DBIO project collection to access); 
                                  default: "dap".
         """
         if not project_coll:
             project_coll = DAP_PROJECTS
+        self._nerdstore = nerdstore
         super(DAPServiceFactory, self).__init__(project_coll, dbclient_factory, config, log)
 
     def create_service_for(self, who: PubAgent=None):
@@ -1620,15 +1666,100 @@ class DAPServiceFactory(ProjectServiceFactory):
         create a service that acts on behalf of a specific user.  
         :param PubAgent who:    the user that wants access to a project
         """
-        return DAPService(self._dbclifact, self._cfg, who, self._log, self._prjtype)
+        return DAPService(self._dbclifact, self._cfg, who, self._log, self._nerdstore, self._prjtype)
 
     
 class DAPApp(MIDASProjectApp):
     """
-    A MIDAS SubApp supporting a DAP service
+    A MIDAS SubApp supporting a DAP service following the mds3 conventions
     """
     
-    def __init__(self, dbcli_factory: DBClientFactory, log: Logger, config: dict={}, project_coll: str=None):
-        service_factory = DAPServiceFactory(dbcli_factory, config, project_coll)
-        super(DAPApp, self).__init__(service_factory, log.getChild(DAP_PROJECTS), config)
+    def __init__(self, dbcli_factory: DBClientFactory, log: Logger, config: dict={},
+                 service_factory: ProjectServiceFactory=None, project_coll: str=None):
+        if not project_coll:
+            project_coll = DAP_PROJECTS
+        if not service_factory:
+            service_factory = DAPServiceFactory(dbcli_factory, config, project_coll)
+        super(DAPApp, self).__init__(service_factory, log.getChild(project_coll), config)
+        self._data_update_handler = DAPProjectDataHandler
 
+class DAPProjectDataHandler(ProjectDataHandler):
+    """
+    A :py:class:`~nistoar.midas.wsgi.project.ProjectDataHandler` specialized for editing NERDm records.
+    """
+    _allowed_post_paths = "authors references components".split() + [FILE_DELIM, LINK_DELIM]
+
+    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
+                 who: PubAgent, id: str, datapath: str, config: dict=None, log: Logger=None):
+        super(DAPProjectDataHandler, self).__init__(service, subapp, wsgienv, start_resp, who,
+                                                    id, datapath, config, log)
+
+    def do_GET(self, path, ashead=False):
+        """
+        respond to a GET request
+        :param str path:  a path to the portion of the data to get.  This is the same as the `datapath`
+                          given to the handler constructor.  This will be an empty string if the full
+                          data object is requested.
+        :param bool ashead:  if True, the request is actually a HEAD request for the data
+        """
+        try:
+            out = self.svc.get_nerdm_data(self._id, path)
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            if ex.record_part:
+                return self.send_error_resp(404, "Data property not found",
+                                            "No data found at requested property", self._id, ashead=ashead)
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found", self._id, ashead=ashead)
+        return self.send_json(out)
+
+    def do_POST(self, path):
+        """
+        respond to a POST request.  Allowed paths include "authors", "references", "components", 
+        "pdr:f" (for files), and "pdr:see" (for non-file components).  
+        :param str path:  a path to the portion of the data to get.  This is the same as the `datapath`
+                          given to the handler constructor.  This will be an empty string if the full
+                          data object is requested.
+        :param bool ashead:  if True, the request is actually a HEAD request for the data
+        """
+        try:
+            newdata = self.get_json_body()
+        except self.FatalError as ex:
+            return self.send_fatal_error(ex)
+
+        try:
+            if not self.svc.dbcli.exists(self._id):
+                return self.end_error_resp(404, "ID not found"
+                                           "Record with requested identifier not found", self._id)
+
+            if path == "authors":
+                self.svc.add_author(self._id, newdata)
+            elif path == "references":
+                self.svc.add_reference(self._id, newdata)
+            elif path == FILE_DELIM:
+                self.svc.set_file_component(self._id, newdata)
+            elif path == LINK_DELIM:
+                self.svc.add_nonfile_component(self._id, newdata)
+            elif path == "components":
+                if 'filepath' in newdata:
+                    self.svc.set_file_component(self._id, newdata)
+                else:
+                    self.svc.add_nonfile_component(self._id, newdata)
+
+            else:
+                return self.send_error_resp(405, "POST not allowed",
+                                            "POST not supported on path")
+
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except ObjectNotFound as ex:
+            return send.send_error_resp(404, "Path not found",
+                                        "Requested path not found within record", self._id) 
+        except InvalidUpdate as ex:
+            return self.send_error_resp(400, "Invalid Input Data", str(ex), self._id)
+        except PartNotAccessible as ex:
+            return self.send_error_resp(405, "Data part not updatable",
+                                        "Requested part of data cannot be updated", self._id)
+
+    

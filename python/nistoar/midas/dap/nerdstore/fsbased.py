@@ -726,7 +726,7 @@ class FSBasedFileComps(NERDFileComps):
 
                 # base subcollection contents first on 'has_member' list as this captures order info
                 if cmp.get('has_member'):
-                    if isinstance(cmd.get('has_member',[]), str):
+                    if isinstance(cmp.get('has_member',[]), str):
                         cmp['has_member'] = [cmp['has_member']]
                     for child in cmp['has_member']:
                         if child.get('@id') in saved and child.get('name'):

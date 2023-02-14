@@ -192,7 +192,7 @@ class InMemoryNonFileComps(InMemoryObjectList, NERDNonFileComps):
             if 'filepath' not in cmp:
                 if cmp.get('@id'):
                     self._data[cmp.get('@id')] = copy.deepcopy(cmp)
-                    m = _idre.find(cmd['@id'])
+                    m = _idre.search(cmp['@id'])
                     if m:
                         # the id was set by a previous call to this class's minter
                         # extract the number to ensure future ids are unique
@@ -233,7 +233,7 @@ class InMemoryFileComps(NERDFileComps):
         for cmp in cmps:
             if cmp.get('filepath'):
                 if cmp.get('@id'):
-                    m = _idre.search(cmd['@id'])
+                    m = _idre.search(cmp['@id'])
                     if m:
                         # the id was set by a previous call to this class's minter
                         # extract the number to ensure future ids are unique
@@ -277,7 +277,7 @@ class InMemoryFileComps(NERDFileComps):
 
                 # base subcollection contents first on 'has_member' list as this captures order info
                 if cmp.get('has_member'):
-                    if isinstance(cmd.get('has_member',[]), str):
+                    if isinstance(cmp.get('has_member',[]), str):
                         cmp['has_member'] = [cmp['has_member']]
                     for child in cmp['has_member']:
                         if child.get('@id') in self._files and child.get('name'):

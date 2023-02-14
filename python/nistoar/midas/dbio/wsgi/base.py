@@ -104,7 +104,7 @@ class DBIOHandler(Handler):
             if self._reqrec:
                 self._reqrec.add_body_text(body).record()
             raise self.FatalError(400, "Input not parseable as JSON",
-                                  "Input document is not parse-able as JSON: "+str(ex), sipid)
+                                  "Input document is not parse-able as JSON: "+str(ex))
 
         except Exception as ex:
             if self._reqrec:

@@ -22,79 +22,7 @@ from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
 
-
-class MIDASProjectApp(SubApp):
-    """
-    a base web app for an interface handling project record
-    """
-
-    def __init__(self, service_factory: ProjectServiceFactory, log: Logger, config: dict={}):
-        super(MIDASProjectApp, self).__init__(service_factory._prjtype, log, config)
-        self.svcfact = service_factory
-
-    def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:
-        """
-        return a handler instance to handle a particular request to a path
-        :param Mapping env:  the WSGI environment containing the request
-        :param Callable start_resp:  the start_resp function to use initiate the response
-        :param str path:     the path to the resource being requested.  This is usually 
-                             relative to a parent path that this SubApp is configured to 
-                             handle.  
-        :param PubAgent who  the authenticated user agent making the request
-        """
-
-        # create a service on attached to the user
-        service = self.svcfact.create_service_for(who)
-
-        # now parse the requested path; we have different handlers for different types of paths
-        path = path.strip('/')
-        idattrpart = path.split('/', 2)
-        if len(idattrpart) < 2:
-            if not idattrpart[0]:
-                # path is empty: this is used to list all available projects or create a new one
-                return ProjectSelectionHandler(service, self, env, start_resp, who)
-            else:
-                # path is just an ID: 
-                return ProjectHandler(service, self, env, start_resp, who, idattrpart[0])
-            
-        elif idattrpart[1] == "name":
-            # path=ID/name: get/change the mnumonic name of record ID
-            return ProjectNameHandler(service, self, env, start_resp, who, idattrpart[0])
-        elif idattrpart[1] == "data":
-            # path=ID/data[/...]: get/change the content of record ID
-            if len(idattrpart) == 2:
-                idattrpart.append("")
-            return ProjectDataHandler(service, self, env, start_resp, who, idattrpart[0], idattrpart[2])
-        elif idattrpart[1] == "acls":
-            # path=ID/acls: get/update the access control on record ID
-            if len(idattrpart) < 3:
-                idattrpart.append("")
-            return ProjectACLsHandler(service, self, env, start_resp, who, idattrpart[0], idattrpart[2])
-
-        # the fallback handler will return some arbitrary part of the record
-        if len(idattrpart) > 2:
-            idattrpart[1] = "/".join(idattrpart[1:])
-        return ProjectInfoHandler(service, self, env, start_resp, who, idattrpart[0], idattrpart[1])
-
-    class _factory:
-        def __init__(self, project_coll):
-            self._prjcoll = project_coll
-        def __call__(self, dbcli_factory: dbio.DBClientFactory, log: Logger, config: dict={},
-                     prjcoll: str=None):
-            if not prjcoll:
-                prjcoll = self._prjcoll
-            service_factory = ProjectServiceFactory(prjcoll, dbcli_factory, config, log)
-            return MIDASProjectApp(service_factory, log, config)
-
-    @classmethod
-    def factory_for(cls, project_coll):
-        """
-        return a factory function that instantiates this class connected to the given DBIO collection.  
-        This is intended for plugging this SubApp into the main WSGI app as is.  
-        :param str project_coll:  the name of the DBIO project collection to use for creating and 
-                                  updating project records.
-        """
-        return cls._factory(project_coll)
+__all__ = ["MIDASProjectHandler", "ProjectDataHandler"]
 
 class ProjectRecordHandler(DBIOHandler):
     """
@@ -357,7 +285,7 @@ class ProjectDataHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
         except InvalidUpdate as ex:
-            return self.send_error_resp(400, "Invalid Input Data", str(ex))
+            return self.send_error_resp(400, "Invalid Input Data", ex.format_errors())
         except PartNotAccessible as ex:
             return self.send_error_resp(405, "Data part not updatable",
                                         "Requested part of data cannot be updated")
@@ -377,8 +305,9 @@ class ProjectDataHandler(ProjectRecordHandler):
         except dbio.ObjectNotFound as ex:
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
-        except InvalidUpdate as ex:
-            return self.send_error_resp(400, "Invalid Input Data", str(ex))
+        except dbio.InvalidUpdate as ex:
+            return self.send_error_resp(400, "Submitted data creates an invalid record",
+                                        ex.format_errors())
         except PartNotAccessible as ex:
             return self.send_error_resp(405, "Data part not updatable",
                                         "Requested part of data cannot be updated")
@@ -469,6 +398,9 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             return self.send_unauthorized()
         except dbio.AlreadyExists as ex:
             return self.send_error_resp(400, "Name already in use", str(ex))
+        except dbio.InvalidUpdate as ex:
+            return self.send_error_resp(400, "Submitted data creates an invalid record",
+                                        ex.format_errors())
     
         return self.send_json(prec.to_dict(), "Project Created", 201)
 
@@ -702,6 +634,88 @@ class ProjectACLsHandler(ProjectRecordHandler):
                                     "Updating specified permission is not allowed")
         
         
+class MIDASProjectApp(SubApp):
+    """
+    a base web app for an interface handling project record
+    """
+    _selection_handler = ProjectSelectionHandler
+    _update_handler = ProjectHandler
+    _name_update_handler = ProjectNameHandler
+    _data_update_handler = ProjectDataHandler
+    _acls_update_handler = ProjectACLsHandler
+    _info_update_handler = ProjectInfoHandler
+
+    def __init__(self, service_factory: ProjectServiceFactory, log: Logger, config: dict={}):
+        super(MIDASProjectApp, self).__init__(service_factory._prjtype, log, config)
+        self.svcfact = service_factory
+
+    def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:
+        """
+        return a handler instance to handle a particular request to a path
+        :param Mapping env:  the WSGI environment containing the request
+        :param Callable start_resp:  the start_resp function to use initiate the response
+        :param str path:     the path to the resource being requested.  This is usually 
+                             relative to a parent path that this SubApp is configured to 
+                             handle.  
+        :param PubAgent who  the authenticated user agent making the request
+        """
+
+        # create a service on attached to the user
+        service = self.svcfact.create_service_for(who)
+
+        # now parse the requested path; we have different handlers for different types of paths
+        path = path.strip('/')
+        idattrpart = path.split('/', 2)
+        if len(idattrpart) < 2:
+            if not idattrpart[0]:
+                # path is empty: this is used to list all available projects or create a new one
+                return self._selection_handler(service, self, env, start_resp, who)
+            else:
+                # path is just an ID: 
+                return self._update_handler(service, self, env, start_resp, who, idattrpart[0])
+            
+        elif idattrpart[1] == "name":
+            # path=ID/name: get/change the mnumonic name of record ID
+            return self._name_update_handler(service, self, env, start_resp, who, idattrpart[0])
+        elif idattrpart[1] == "data":
+            # path=ID/data[/...]: get/change the content of record ID
+            if len(idattrpart) == 2:
+                idattrpart.append("")
+            return self._data_update_handler(service, self, env, start_resp, who,
+                                             idattrpart[0], idattrpart[2])
+        elif idattrpart[1] == "acls":
+            # path=ID/acls: get/update the access control on record ID
+            if len(idattrpart) < 3:
+                idattrpart.append("")
+            return self._acls_update_handler(service, self, env, start_resp, who,
+                                             idattrpart[0], idattrpart[2])
+
+        # the fallback handler will return some arbitrary part of the record
+        if len(idattrpart) > 2:
+            idattrpart[1] = "/".join(idattrpart[1:])
+        return self._info_update_handler(service, self, env, start_resp, who,
+                                         idattrpart[0], idattrpart[1])
+
+    class _factory:
+        def __init__(self, project_coll):
+            self._prjcoll = project_coll
+        def __call__(self, dbcli_factory: dbio.DBClientFactory, log: Logger, config: dict={},
+                     prjcoll: str=None):
+            if not prjcoll:
+                prjcoll = self._prjcoll
+            service_factory = ProjectServiceFactory(prjcoll, dbcli_factory, config, log)
+            return MIDASProjectApp(service_factory, log, config)
+
+    @classmethod
+    def factory_for(cls, project_coll):
+        """
+        return a factory function that instantiates this class connected to the given DBIO collection.  
+        This is intended for plugging this SubApp into the main WSGI app as is.  
+        :param str project_coll:  the name of the DBIO project collection to use for creating and 
+                                  updating project records.
+        """
+        return cls._factory(project_coll)
+
         
 
     
