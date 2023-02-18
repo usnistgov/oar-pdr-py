@@ -35,6 +35,7 @@ from nistoar.pdr.utils import build_mime_type_map, read_json
 from nistoar.pdr.publish.prov import PubAgent
 
 from . import validate
+from .. import nerdstore
 from ..nerdstore import NERDResource, NERDResourceStorage, NERDResourceStorageFactory
 
 ASSIGN_DOI_NEVER   = 'never'
@@ -86,6 +87,7 @@ VER_DELIM = const.RELHIST_EXTENSION.lstrip('/')
 FILE_DELIM = const.FILECMP_EXTENSION.lstrip('/')
 LINK_DELIM = const.LINKCMP_EXTENSION.lstrip('/')
 AGG_DELIM = const.AGGCMP_EXTENSION.lstrip('/')
+RES_DELIM = const.RESONLY_EXTENSION.lstrip('/')
 EXTSCHPROP = "_extensionSchemas"
 
 class DAPService(ProjectService):
@@ -352,7 +354,10 @@ class DAPService(ProjectService):
         return the full NERDm metadata.  This differs from the :py:method:`get_data` method which (in
         this implementation) only returns a summary of hte NERDm metadata.  
         :param str id:    the identifier for the record whose NERDm data should be returned. 
-        :param str part:  a path to the part of the record that should be returned
+        :param str part:  a path to the part of the record that should be returned.  This can be the 
+                          name of a top level NERDm property or one of the following special values:
+                            * ``pdr:f`` -- returns only the file-like components (files and subcollections)
+                            * ``pdr:see`` -- returns only the non-file components (like links)
         """
         prec = self.dbcli.get_record_for(id, ACLs.READ)   # may raise ObjectNotFound/NotAuthorized
         nerd = self._store.open(prec.id)
@@ -361,10 +366,10 @@ class DAPService(ProjectService):
             out = nerd.get_data()
 
         else:
-            m = re.search(r'^([a-z]+s)\[([\w\d]+)\]$', path)
+            m = re.search(r'^([a-z]+s)\[([\w\d/#\.]+)\]$', part)
             if m:
-                # path is of the form xxx[k] and refers to an item in a list
-                key = m.group(3)
+                # part is of the form xxx[k] and refers to an item in a list
+                key = m.group(2)
                 try:
                     key = int(key)
                 except ValueError:
@@ -374,6 +379,10 @@ class DAPService(ProjectService):
                     out = nerd.authors.get(key)
                 elif m.group(1) == "references":
                     out = nerd.reference.get(key)
+                elif m.group(1) == LINK_DELIM:
+                    out = nerd.nonfiles.get(key)
+                elif m.group(1) == FILE_DELIM:
+                    out = nerd.files.get(key)
                 elif m.group(1) == "components":
                     out = None
                     try:
@@ -383,27 +392,33 @@ class DAPService(ProjectService):
                     if not out:
                         try:
                             out = nerd.files.get_file_by_id(key)
-                        except ObjectNotFound as ex:
-                            pass
-                    if not out:
-                        out = nerd.files.get_file_by_path(key)
+                        except nerdstore.ObjectNotFound as ex:
+                            raise ObjectNotFound(id, part, str(ex))
 
             elif part == "authors":
                 out = nerd.authors.get_data()
-            elif part == "authors":
+            elif part == "references":
                 out = nerd.references.get_data()
+            elif part == "components":
+                out = nerd.nonfiles.get_data() + nerd.files.get_data()
             elif part == FILE_DELIM:
                 out = nerd.files.get_data()
             elif part == LINK_DELIM:
                 out = nerd.nonfiles.get_data()
-            elif part == "components":
-                out = nerd.nonfiles.get_data() + nerd.files.get_data()
+            elif part == RES_DELIM:
+                out = nerd.get_res_data()
+            elif part.startswith(FILE_DELIM+"/"):
+                fprts = part.split('/', 1)
+                try: 
+                    out = nerd.files.get_file_by_path(fprts[1])
+                except nerdstore.ObjectNotFound as ex:
+                    raise ObjectNotFound(id, part, str(ex))
             else:
                 out = nerd.get_res_data()
                 if part in out:
                     out = out[part]
                 else:
-                    raise PartNotAccessible(prec.id, path, "Accessing %s not supported" % path)
+                    raise PartNotAccessible(prec.id, part, "Accessing %s not supported" % part)
 
         return out
 
@@ -714,10 +729,10 @@ class DAPService(ProjectService):
             else:
                 data = self._update_objlist(nerd.nonfiles, self._moderate_nonfile, data, doval)
 
-        elif path == FILE_DELIM:
-            if not isinstance(data, list):
-                err = "components data is not a list"
-                raise InvalidUpdate(err, id, path, errors=[err])
+        # elif path == FILE_DELIM:
+        #     if not isinstance(data, list):
+        #         err = "components data is not a list"
+        #         raise InvalidUpdate(err, id, path, errors=[err])
 
         elif path == "components" or path == FILE_DELIM:
             if not isinstance(data, list):
@@ -805,7 +820,7 @@ class DAPService(ProjectService):
         oldfile = None
         try:
             oldfile = nerd.files.get_file_by_path(filepath)  # it must have na id
-        except ObjectNotFound as ex:
+        except nerdstore.ObjectNotFound as ex:
             pass
 
         return self._update_file_comp(nerd, data, oldfile, replace=True, doval=True)
@@ -832,7 +847,10 @@ class DAPService(ProjectService):
             filemd['filepath'] = filepath
             
         nerd = self._store.open(id)
-        oldfile = nerd.files.get_file_by_path(filepath)  # may raise ObjectNotFound
+        try:
+            oldfile = nerd.files.get_file_by_path(filepath)
+        except nerdstore.ObjectNotFound as ex:
+            raise ObjectNotFound(id, FILE_DELIM+"/"+filepath, str(ex), self._sys)
 
         return self._update_file_comp(nerd, filemd, oldfile, replace=False, doval=True)
 
@@ -858,7 +876,10 @@ class DAPService(ProjectService):
             filemd['@id'] = fileid
 
         nerd = self._store.open(id)
-        oldfile = nerd.files.get_file_by_path(filepath)  # may raise ObjectNotFound
+        try:
+            oldfile = nerd.files.get_file_by_path(filepath)
+        except nerdstore.ObjectNotFound as ex:
+            raise ObjectNotFound(id, FILE_DELIM+"/"+filepath, str(ex), self._sys)
 
         return self._update_file_comp(nerd, filemd, oldfile, replace=False, doval=True)
 
@@ -1215,8 +1236,8 @@ class DAPService(ProjectService):
         return val
 
     def _moderate_description(self, val, resmd=None, doval=True):
-        if not isinstance(val, list):
-            val = [val]
+        if isinstance(val, str):
+            val = val.split("\n\n")
         return [self._moderate_text(t, resmd, doval=doval) for t in val if t != ""]
 
     _pfx_for_type = OrderedDict([
@@ -1704,9 +1725,9 @@ class DAPProjectDataHandler(ProjectDataHandler):
         """
         try:
             out = self.svc.get_nerdm_data(self._id, path)
-        except dbio.NotAuthorized as ex:
+        except NotAuthorized as ex:
             return self.send_unauthorized()
-        except dbio.ObjectNotFound as ex:
+        except ObjectNotFound as ex:
             if ex.record_part:
                 return self.send_error_resp(404, "Data property not found",
                                             "No data found at requested property", self._id, ashead=ashead)
@@ -1734,18 +1755,18 @@ class DAPProjectDataHandler(ProjectDataHandler):
                                            "Record with requested identifier not found", self._id)
 
             if path == "authors":
-                self.svc.add_author(self._id, newdata)
+                out = self.svc.add_author(self._id, newdata)
             elif path == "references":
-                self.svc.add_reference(self._id, newdata)
+                out = self.svc.add_reference(self._id, newdata)
             elif path == FILE_DELIM:
-                self.svc.set_file_component(self._id, newdata)
+                out = self.svc.set_file_component(self._id, newdata)
             elif path == LINK_DELIM:
-                self.svc.add_nonfile_component(self._id, newdata)
+                out = self.svc.add_nonfile_component(self._id, newdata)
             elif path == "components":
                 if 'filepath' in newdata:
-                    self.svc.set_file_component(self._id, newdata)
+                    out = self.svc.set_file_component(self._id, newdata)
                 else:
-                    self.svc.add_nonfile_component(self._id, newdata)
+                    out = self.svc.add_nonfile_component(self._id, newdata)
 
             else:
                 return self.send_error_resp(405, "POST not allowed",
@@ -1762,4 +1783,4 @@ class DAPProjectDataHandler(ProjectDataHandler):
             return self.send_error_resp(405, "Data part not updatable",
                                         "Requested part of data cannot be updated", self._id)
 
-    
+        return self.send_json(out, "Added", 201)

@@ -284,9 +284,9 @@ class ProjectDataHandler(ProjectRecordHandler):
         except dbio.ObjectNotFound as ex:
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
-        except InvalidUpdate as ex:
+        except dbio.InvalidUpdate as ex:
             return self.send_error_resp(400, "Invalid Input Data", ex.format_errors())
-        except PartNotAccessible as ex:
+        except dbio.PartNotAccessible as ex:
             return self.send_error_resp(405, "Data part not updatable",
                                         "Requested part of data cannot be updated")
 
@@ -308,7 +308,7 @@ class ProjectDataHandler(ProjectRecordHandler):
         except dbio.InvalidUpdate as ex:
             return self.send_error_resp(400, "Submitted data creates an invalid record",
                                         ex.format_errors())
-        except PartNotAccessible as ex:
+        except dbio.PartNotAccessible as ex:
             return self.send_error_resp(405, "Data part not updatable",
                                         "Requested part of data cannot be updated")
 
