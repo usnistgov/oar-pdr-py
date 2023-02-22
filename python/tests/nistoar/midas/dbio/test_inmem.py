@@ -3,6 +3,9 @@ from pathlib import Path
 import unittest as test
 
 from nistoar.midas.dbio import inmem, base
+from nistoar.pdr.publish.prov import Action, PubAgent
+
+testuser = PubAgent("test", PubAgent.AUTO, "tester")
 
 class TestInMemoryDBClientFactory(test.TestCase):
 
@@ -214,9 +217,113 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
         self.assertEqual(recs[0].id, id)
 
+    def test_action_log_io(self):
+        with self.assertRaises(ValueError):
+            self.cli._save_action_data({'goob': 'gurn'})
+
+        self.cli._save_action_data({'subject': 'goob:gurn', 'foo': 'bar'})
+        self.assertTrue('action_log' in self.cli._db)
+        self.assertTrue('goob:gurn' in self.cli._db['action_log'])
+        self.assertEqual(len(self.cli._db['action_log']['goob:gurn']), 1)
+        self.assertEqual(self.cli._db['action_log']['goob:gurn'][0], 
+                         {'subject': 'goob:gurn', 'foo': 'bar'})
+
+        self.cli._save_action_data({'subject': 'goob:gurn', 'bob': 'alice'})
+        self.assertEqual(len(self.cli._db['action_log']['goob:gurn']), 2)
+        self.assertEqual(self.cli._db['action_log']['goob:gurn'][0], 
+                         {'subject': 'goob:gurn', 'foo': 'bar'})
+        self.assertEqual(self.cli._db['action_log']['goob:gurn'][1], 
+                         {'subject': 'goob:gurn', 'bob': 'alice'})
         
+        self.cli._save_action_data({'subject': 'grp0001', 'dylan': 'bob'})
+        self.assertTrue('action_log' in self.cli._db)
+        self.assertTrue('grp0001' in self.cli._db['action_log'])
+        self.assertEqual(len(self.cli._db['action_log']['grp0001']), 1)
+        self.assertEqual(self.cli._db['action_log']['grp0001'][0], 
+                         {'subject': 'grp0001', 'dylan': 'bob'})
+
+        acts = self.cli._select_actions_for("goob:gurn")
+        self.assertEqual(len(acts), 2)
+        self.assertEqual(acts[0], {'subject': 'goob:gurn', 'foo': 'bar'})
+        self.assertEqual(acts[1], {'subject': 'goob:gurn', 'bob': 'alice'})
+        acts = self.cli._select_actions_for("grp0001")
+        self.assertEqual(len(acts), 1)
+        self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
+
+        self.cli._delete_actions_for("goob:gurn")
+        self.assertTrue('action_log' in self.cli._db)
+        self.assertTrue('goob:gurn' not in self.cli._db['action_log'])
+        self.assertEqual(len(self.cli._db['action_log']['grp0001']), 1)
+        self.assertEqual(self.cli._db['action_log']['grp0001'][0], 
+                         {'subject': 'grp0001', 'dylan': 'bob'})
+
+        self.cli._delete_actions_for("grp0001")
+        self.assertTrue('action_log' in self.cli._db)
+        self.assertTrue('goob:gurn' not in self.cli._db['action_log'])
+        self.assertTrue('grp0001' not in self.cli._db['action_log'])
+
+        self.assertEqual(self.cli._select_actions_for("goob:gurn"), [])
+        self.assertEqual(self.cli._select_actions_for("grp0001"), [])
+
+    def test_save_history(self):
+        with self.assertRaises(ValueError):
+            self.cli._save_history({'goob': 'gurn'})
+
+        self.cli._save_history({'recid': 'goob:gurn', 'foo': 'bar'})
+        self.cli._save_history({'recid': 'goob:gurn', 'alice': 'bob'})
+
+        self.assertTrue('history' in self.cli._db)
+        self.assertTrue('goob:gurn' in self.cli._db['history'])
+        self.assertEqual(len(self.cli._db['history']['goob:gurn']), 2)
+        self.assertEqual(self.cli._db['history']['goob:gurn'][0],
+                         {'recid': 'goob:gurn', 'foo': 'bar'})
+        self.assertEqual(self.cli._db['history']['goob:gurn'][1],
+                         {'recid': 'goob:gurn', 'alice': 'bob'})
+
+    def test_record_action(self):
+        self.cli.record_action(Action(Action.CREATE, "mds3:0008", testuser, "created"))
+        self.cli.record_action(Action(Action.COMMENT, "mds3:0008", testuser, "i'm hungry"))
+        acts = self.cli._select_actions_for("mds3:0008")
+        self.assertEqual(len(acts), 2)
+        self.assertEqual(acts[0]['type'], Action.CREATE)
+        self.assertEqual(acts[1]['type'], Action.COMMENT)
         
+    def test_close_actionlog_with(self):
+        prec = base.ProjectRecord(base.DRAFT_PROJECTS,
+                                  {"id": "pdr0:2222", "name": "brains", "owner": "nist0:ava1"}, self.cli)
+        finalact = Action(Action.SUBMIT, "pdr0:2222", testuser, "done!")
+        self.assertNotIn('action_log', self.cli._db)
+        self.cli._close_actionlog_with(prec, finalact, {"published_as": "comicbook"})
+
+        # no history should have been written
+        self.assertNotIn('history', self.cli._db)
                          
+        self.cli.record_action(Action(Action.CREATE, "pdr0:2222", testuser, "created"))
+        self.cli.record_action(Action(Action.COMMENT, "pdr0:2222", testuser, "i'm hungry"))
+        self.cli._close_actionlog_with(prec, finalact, {"published_as": "comicbook", "recid": "goob"})
+        self.assertIn('history', self.cli._db)
+        self.assertEqual(len(self.cli._db['history']["pdr0:2222"]), 1)
+        self.assertEqual(len(self.cli._db['history']["pdr0:2222"][0]['history']), 3)
+        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['recid'], "pdr0:2222")
+        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['published_as'], "comicbook")
+        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['close_action'], Action.SUBMIT)
+        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['acls'],
+                         {"read": prec.acls._perms['read']})
+        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['history'][-1]['message'], "done!")
+        self.assertEqual(self.cli._select_actions_for("pdr0:2222"), [])
+        
+        self.cli._close_actionlog_with(prec, finalact, {"published_as": "comicbook"})
+        self.assertEqual(self.cli._select_actions_for("pdr0:2222"), [])
+        self.assertEqual(len(self.cli._db['history']["pdr0:2222"]), 1)
+        
+        self.cli._close_actionlog_with(prec, finalact, {"published_as": "comicbook"}, False)
+        self.assertEqual(self.cli._select_actions_for("pdr0:2222"), [])
+        self.assertEqual(len(self.cli._db['history']["pdr0:2222"]), 2)
+        self.assertEqual(self.cli._db['history']["pdr0:2222"][1]['history'][-1]['message'], "done!")
+        self.assertEqual(len(self.cli._db['history']["pdr0:2222"][1]['history']), 1)
+
+        
+
 if __name__ == '__main__':
     test.main()
         

@@ -242,8 +242,68 @@ class TestFSBasedDBClient(test.TestCase):
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
         self.assertEqual(recs[0].id, id)
 
-        
+    def test_action_log_io(self):
+        with self.assertRaises(ValueError):
+            self.cli._save_action_data({'goob': 'gurn'})
 
+        recpath = self.cli._root / "action_log" / "goob:gurn.lis"
+        self.assertTrue(not recpath.exists())
+        self.cli._save_action_data({'subject': 'goob:gurn', 'foo': 'bar'})
+        self.assertTrue(recpath.exists())
+        with open(recpath) as fd:
+            lines = fd.readlines()
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(json.loads(lines[0]), {'subject': 'goob:gurn', 'foo': 'bar'})
+
+        self.cli._save_action_data({'subject': 'goob:gurn', 'bob': 'alice'})
+        with open(recpath) as fd:
+            lines = fd.readlines()
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(json.loads(lines[0]), {'subject': 'goob:gurn', 'foo': 'bar'})
+        self.assertEqual(json.loads(lines[1]), {'subject': 'goob:gurn', 'bob': 'alice'})
+        
+        recpath = self.cli._root / "action_log" / "grp0001.lis"
+        self.assertTrue(not recpath.exists())
+        self.cli._save_action_data({'subject': 'grp0001', 'dylan': 'bob'})
+        self.assertTrue(recpath.exists())
+        with open(recpath) as fd:
+            lines = fd.readlines()
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(json.loads(lines[0]), {'subject': 'grp0001', 'dylan': 'bob'})
+
+        acts = self.cli._select_actions_for("goob:gurn")
+        self.assertEqual(len(acts), 2)
+        self.assertEqual(acts[0], {'subject': 'goob:gurn', 'foo': 'bar'})
+        self.assertEqual(acts[1], {'subject': 'goob:gurn', 'bob': 'alice'})
+        acts = self.cli._select_actions_for("grp0001")
+        self.assertEqual(len(acts), 1)
+        self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
+
+        self.cli._delete_actions_for("grp0001")
+        self.assertTrue(not recpath.exists())
+        recpath = self.cli._root / "action_log" / "goob:gurn.lis"
+        self.assertTrue(recpath.exists())
+        self.cli._delete_actions_for("goob:gurn")
+        self.assertTrue(not recpath.exists())
+
+        self.assertEqual(self.cli._select_actions_for("goob:gurn"), [])
+        self.assertEqual(self.cli._select_actions_for("grp0001"), [])
+
+    def test_save_history(self):
+        with self.assertRaises(ValueError):
+            self.cli._save_history({'goob': 'gurn'})
+
+        recpath = self.cli._root / "history" / "goob:gurn.json"
+        self.assertFalse(recpath.exists())
+        self.cli._save_history({'recid': 'goob:gurn', 'foo': 'bar'})
+        self.cli._save_history({'recid': 'goob:gurn', 'alice': 'bob'})
+
+        self.assertTrue(recpath.is_file(), "history not saved to file")
+        with open(recpath) as fd:
+            data = json.load(fd)
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0], {'recid': 'goob:gurn', 'foo': 'bar'})
+        self.assertEqual(data[1], {'recid': 'goob:gurn', 'alice': 'bob'})
 
 
 

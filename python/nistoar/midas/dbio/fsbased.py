@@ -146,11 +146,73 @@ class FSBasedDBClient(base.DBClient):
                     # skip over corrupted records
                     continue
                 except IOError as ex:
-                    raise DBIOException(recf+": file locking error: "+str(ex))
+                    raise base.DBIOException(recf+": file locking error: "+str(ex))
                 for p in perm:
                     if rec.authorized(p):
                         yield rec
                         break
+
+    def _save_action_data(self, actdata: Mapping):
+        self._ensure_collection("action_log")
+        try:
+            recpath = self._root / 'action_log' / (actdata['subject']+".lis")
+            return self._append_json_to_listfile(actdata, recpath)
+        except KeyError as ex:
+            raise ValueError("_save_action_data(): Action is missing subject id")
+        except Exception as ex:
+            raise base.DBIOException(actdata['subject']+": Unable to append action: "+str(ex)) from ex
+
+    # the action log list file contains one JSON object per line
+    def _append_json_to_listfile(self, data: Mapping, outpath: Path):
+        exists = outpath.exists()
+        with open(outpath, 'a') as fd:
+            fd.write(json.dumps(data))
+            fd.write("\n")
+        return not exists
+
+    # the action log list file contains one JSON object per line
+    def _load_from_listfile(self, inpath: Path):
+        if not inpath.exists():
+            return []
+        with open(inpath) as fd:
+            return [json.loads(line.strip()) for line in fd]
+                
+    def _select_actions_for(self, id: str) -> List[Mapping]:
+        self._ensure_collection("action_log")
+        recpath = self._root / 'action_log' / (id+".lis")
+        if not recpath.is_file():
+            return []
+        try:
+            return self._load_from_listfile(recpath)
+        except Exception as ex:
+            raise base.DBIOException(id+": Unable to read actions: "+str(ex))
+
+    def _delete_actions_for(self, id):
+        self._ensure_collection("action_log")
+        recpath = self._root / 'action_log' / (id+".lis")
+        if recpath.is_file():
+            recpath.unlink()
+
+    def _save_history(self, histrec):
+        if not histrec.get('recid'):
+            raise ValueError("_save_history(): History is missing record id")
+        self._ensure_collection("history")
+
+        history = []
+        recpath = self._root / 'history' / (histrec['recid']+".json")
+        if recpath.is_file():
+            try:
+                history = read_json(str(recpath))
+            except Exception as ex:
+                raise base.DBIOException(histrec['recid']+": Failed to read old history entries: "+str(ex))
+        elif recpath.exists():
+            raise base.DBIOException(str(recpath)+": not a file")
+        
+        history.append(histrec)
+        try:
+            write_json(history, str(recpath))
+        except Exception as ex:
+            raise base.DBIOException(histrec['recid']+": Failed to write history entries: "+str(ex))
 
 class FSBasedDBClientFactory(base.DBClientFactory):
     """

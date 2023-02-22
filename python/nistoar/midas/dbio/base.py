@@ -20,7 +20,9 @@ from enum import Enum
 from datetime import datetime
 
 from nistoar.base.config import ConfigurationException
+from nistoar.pdr.publish.prov import Action
 from .. import MIDASException
+from .status import ProjectStatus
 
 DAP_PROJECTS = "dap"
 DMP_PROJECTS = "dmp"
@@ -276,6 +278,14 @@ class ProtectedRecord(ABC):
             return False
         self._data['deactivated'] = None
         return True
+
+    @property
+    def status(self) -> ProjectStatus:
+        """
+        return the status object that indicates the current state of the record and the last 
+        action applied to it.  
+        """
+        return ProjectStatus(self._data.get('status', {}))
 
     @property
     def acls(self) -> ACLs:
@@ -713,7 +723,7 @@ class ProjectRecord(ProtectedRecord):
     def __str__(self):
         return "<{} ProjectRecord: {} ({}) owner={}>".format(self._coll.rstrip("s"), self.id,
                                                              self.name, self.owner)
-        
+
 class DBClient(ABC):
     """
     a client connected to the database for a particular service (e.g. drafting, DMPs, etc.)
@@ -1043,6 +1053,81 @@ class DBClient(ABC):
 
         self._delete_from(self._projcoll, id)
         return True
+
+    def record_action(self, act: Action):
+        """
+        save the given action record to the back-end store
+        """
+        if not act.subject:
+            raise ValueError("record_action(): action is missing a subject identifier")
+        self._save_action_data(act.to_dict())
+
+    @abstractmethod
+    def _save_action_data(self, actdata: Mapping):
+        """
+        save the given data to the action log collection
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _select_actions_for(self, id: str) -> List[Mapping]:
+        """
+        retrieve all actions currently recorded for the record with the given identifier
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _delete_actions_for(self, id: str):
+        """
+        purge all actions currently recorded for the record with the given identifier
+        """
+        raise NotImplementedError()
+
+    def _close_actionlog_with(self, rec: ProtectedRecord, close_action: Action, extra=None,
+                              cancel_if_empty=True):
+        """
+        archive all actions in the action log for a given ID, ending with the given action.
+        :param str id:  the record identifier to select the actions for
+        :param Action close_action:  the action that is effectively closing the record.  This 
+                        is usually a SUBMIT action or a DELETE action.
+        """
+        history = self._select_actions_for(rec.id)
+        if len(history) == 0 and cancel_if_empty:
+            return
+        history.append(close_action.to_dict())
+
+        # users with permission to read record can read the history, but only superusers
+        # can update it or administer it.
+        acls = OrderedDict([
+            ("read", rec.acls._perms.get('read', []))
+        ])
+
+        if 'recid' in extra or 'close_action' in extra:
+            extra = deepcopy(extra)
+            if 'recid' in extra:
+                del extra['recid']
+            if 'close_action' in extra:
+                del extra['close_action']
+
+        archive = OrderedDict([
+            ("recid", rec.id),
+            ("close_action", close_action.type)
+        ])
+        archive.update(extra)
+        archive['acls'] = acls
+        archive['history'] = history
+
+        self._save_history(archive)
+        self._delete_actions_for(rec.id)
+
+    @abstractmethod
+    def _save_history(self, histrec):
+        """
+        save the given history record to the history collection
+        """
+        raise NotImplementedError()
+
+
 
 
 class DBClientFactory(ABC):

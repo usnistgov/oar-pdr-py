@@ -7,7 +7,7 @@ from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
 
-from pymongo import MongoClient
+from pymongo import MongoClient, ASCENDING
 
 from nistoar.base.config import ConfigurationException, merge_config
 
@@ -17,6 +17,8 @@ class MongoDBClient(base.DBClient):
     """
     an implementation of DBClient using a MongoDB database as the backend store.
     """
+    ACTION_LOG_COLL = 'action_log'
+    HISTORY_COLL = 'history'
 
     def __init__(self, dburl: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS):
         """
@@ -201,6 +203,45 @@ class MongoDBClient(base.DBClient):
 
         except Exception as ex:
             raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
+
+    def _save_action_data(self, actdata: Mapping):
+        try:
+            coll = self.native[self.ACTION_LOG_COLL]
+            result = coll.insert_one(actdata)
+            return True
+
+        except base.DBIOException as ex:
+            raise
+        except Exception as ex:
+            raise base.DBIOException(actdata.get('subject',"id=?")+
+                                     ": Failed to save action: "+str(ex)) from ex
+
+    def _select_actions_for(self, id: str) -> List[Mapping]:
+        try:
+            coll = self.native[self.ACTION_LOG_COLL]
+            return [rec for rec in coll.find({'subject': id}, {'_id': False}).sort("timestamp", ASCENDING)]
+        except Exception as ex:
+            raise base.DBIOException(id+": Failed to select action records: "+str(ex)) from ex
+
+    def _delete_actions_for(self, id):
+        try:
+            coll = self.native[self.ACTION_LOG_COLL]
+            result = coll.delete_many({'subject': id})
+            return result.deleted_count > 0
+        except Exception as ex:
+            raise base.DBIOException(id+": Failed to delete action records: "+str(ex)) from ex
+
+    def _save_history(self, histrec):
+        try:
+            coll = self.native[self.HISTORY_COLL]
+            result = coll.insert_one(histrec)
+            return True
+        except base.DBIOException as ex:
+            raise
+        except Exception as ex:
+            raise DBIOEception(histrec.get('recid', "id=?")+": Failed to save history entry: "+str(ex)) \
+                from ex
+    
 
 class MongoDBClientFactory(base.DBClientFactory):
     """

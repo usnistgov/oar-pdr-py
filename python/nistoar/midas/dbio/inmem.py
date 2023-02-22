@@ -80,7 +80,36 @@ class InMemoryDBClient(base.DBClient):
                 if rec.authorized(p):
                     yield deepcopy(rec)
                     break
+
+    def _save_action_data(self, actdata: Mapping):
+        if 'subject' not in actdata:
+            raise ValueError("_save_action_data(): Missing subject property in action data")
+        id = actdata['subject']
+        if 'action_log' not in self._db:
+            self._db['action_log'] = {}
+        if id not in self._db['action_log']:
+            self._db['action_log'][id] = []
+        self._db['action_log'][id].append(actdata)
                 
+    def _select_actions_for(self, id: str) -> List[Mapping]:
+        if 'action_log' not in self._db or id not in self._db['action_log']:
+            return []
+        return deepcopy(self._db['action_log'][id])
+
+    def _delete_actions_for(self, id):
+        if 'action_log' not in self._db or id not in self._db['action_log']:
+            return
+        del self._db['action_log'][id]
+
+    def _save_history(self, histrec):
+        if 'recid' not in histrec:
+            raise ValueError("_save_history(): Missing recid property in history data")
+        if 'history' not in self._db:
+            self._db['history'] = {}
+        if histrec['recid'] not in self._db['history']:
+            self._db['history'][histrec['recid']] = []
+        self._db['history'][histrec['recid']].append(histrec)
+
                 
 class InMemoryDBClientFactory(base.DBClientFactory):
     """
