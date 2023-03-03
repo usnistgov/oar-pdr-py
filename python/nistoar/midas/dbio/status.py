@@ -1,5 +1,5 @@
 """
-Module for tracking the status of a project record.
+Module for tracking the status of a dbio record.
 
 Note that this module is similar in intent and implementation to 
 :py:mod:`nistoar.pdr.publish.service.status` but has implemented to different requirements.
@@ -12,7 +12,7 @@ from copy import deepcopy
 
 from nistoar.pdr.publish.prov import Action
 
-# Available project states:
+# Available record states:
 #
 EDIT       = "edit"        # Record is currently being edit for a new released version
 PROCESSING = "processing"  # Record is being processed at the moment and cannot be updated
@@ -29,27 +29,27 @@ _action_p   = "action"
 _modified_p = "modified"
 _message_p  = "message"
 
-# Common project record actions
+# Common record actions
 # 
 ACTION_CREATE = "create"
 ACTION_UPDATE = "update"
 
-class ProjectStatus:
+class RecordStatus:
     """
-    a class that holds the current status of a project, aggregating multiple pieces of information about 
-    the projects state and the last action applied to it.  
+    a class that holds the current status of a record (particularly, a project record), aggregating 
+    multiple pieces of information about the record's state and the last action applied to it.  
     """
     CREATE_ACTION = ACTION_CREATE
     UPDATE_ACTION = ACTION_UPDATE
     
     def __init__(self, id: str, status_data: Mapping):
         """
-        wrap the status information for a particular project record.  Note that this constructor
+        wrap the status information for a particular record.  Note that this constructor
         may update the input data to add default values to standard properties.
-        :param str id:  the project identifier that this status object belongs to
-        :param Mapping status_data:  the dictionary containing the project's status data.  This 
+        :param str id:  the record identifier that this status object belongs to
+        :param Mapping status_data:  the dictionary containing the record's status data.  This 
                         data usually comes from the ``status`` the internal property of a 
-                        :py:class:`~nistoar.midas.dbio.project.ProjectRecord`.  This class will 
+                        :py:class:`~nistoar.midas.dbio.project.ProtectedRecord`.  This class will 
                         manipulate the given dictionary directly without making a copy.
         """
         self._id = id
@@ -79,7 +79,7 @@ class ProjectStatus:
     @property
     def id(self) -> str:
         """
-        the identifier for the project record this object provides the status for
+        the identifier for the record this object provides the status for
         """
         return self._id
 
@@ -109,8 +109,8 @@ class ProjectStatus:
     @property
     def action(self) -> str:
         """
-        The name of the last action applied to the project.  In general the actions that can be applied 
-        to a project record are project-type-specific; however, there are a set of common actions.
+        The name of the last action applied to the record.  In general the actions that can be applied 
+        to a record are record-type-specific; however, there are a set of common actions.
         """
         return self._data[_action_p]
 
@@ -135,7 +135,7 @@ class ProjectStatus:
         """
         A statement providing further description of about the last action.  The message may be 
         provided by the requesting user (to record the intent of the action) or set by default 
-        by the project service.
+        by the record service.
         """
         return self._data[_message_p]
 
@@ -145,13 +145,13 @@ class ProjectStatus:
 
     def act(self, action: str, message: str="", when: int=0):
         """
-        record the application of a particular action on the project
+        record the application of a particular action on the record
         :param str action:   the name of the action being applied
         :param str message:  a statement indicating the reason or intent of the action
         :param int when:     the epoch timestamp for when the action was applied.  A value of 
                              zero (default) indicates that the timestamp should be set when the 
-                             project record is saved.  A value less than zero will cause 
-                             the current time to be set.  
+                             record is saved.  A value less than zero will cause the current 
+                             time to be set.  
         """
         if not action:
             raise ValueError("Action not specified")
@@ -166,11 +166,11 @@ class ProjectStatus:
 
     def set_state(self, state, when: int=-1):
         """
-        record a new state that the project record has entered.
+        record a new state that the record has entered.
         :param str state:  the name of the new state that the record has entered
         :param int when:   the epoch timestamp for when the state changed.  A value of 
                              zero indicates that the timestamp should be set when the 
-                             project record is saved.  A value less than zero (default) will 
+                             record is saved.  A value less than zero (default) will 
                              cause the current time to be set.  
         """
         if not state:
@@ -183,7 +183,7 @@ class ProjectStatus:
         
     def to_dict(self, with_id=True):
         """
-        return a new dictionary instance containing the storable data from this ProjectStatus instance
+        return a new dictionary instance containing the storable data from this RecordStatus instance
         """
         out = deepcopy(self._data)
         if with_id:

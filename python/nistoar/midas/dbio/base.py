@@ -22,7 +22,7 @@ from datetime import datetime
 from nistoar.base.config import ConfigurationException
 from nistoar.pdr.publish.prov import Action
 from .. import MIDASException
-from .status import ProjectStatus
+from .status import RecordStatus
 
 DAP_PROJECTS = "dap"
 DMP_PROJECTS = "dmp"
@@ -191,7 +191,7 @@ class ProtectedRecord(ABC):
             # Should be None or a date
             recdata['deactivated'] = None
         if 'status' not in recdata:
-            recdata['status'] = ProjectStatus(recdata['id'], {}).to_dict(False)
+            recdata['status'] = RecordStatus(recdata['id'], {}).to_dict(False)
         for perm in ACLs.OWN:
             if perm not in recdata['acls']:
                 recdata['acls'][perm] = [recdata['owner']] if recdata['owner'] else []
@@ -282,12 +282,12 @@ class ProtectedRecord(ABC):
         return True
 
     @property
-    def status(self) -> ProjectStatus:
+    def status(self) -> RecordStatus:
         """
         return the status object that indicates the current state of the record and the last 
         action applied to it.  
         """
-        return ProjectStatus(self.id, self._data.get('status'))
+        return RecordStatus(self.id, self._data.get('status'))
 
     @property
     def acls(self) -> ACLs:
