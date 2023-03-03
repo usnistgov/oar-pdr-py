@@ -5,13 +5,13 @@ from copy import deepcopy
 from nistoar.midas.dbio import status
 from nistoar.pdr.publish.prov import Action
 
-class TestProjectStatus(test.TestCase):
+class TestRecordStatus(test.TestCase):
 
     def test_ctor(self):
-        stat = status.ProjectStatus("goob", {})
+        stat = status.RecordStatus("goob", {})
         self.assertEqual(stat.id, "goob")
         self.assertEqual(stat.state, status.EDIT)
-        self.assertEqual(stat.action, Action.CREATE)
+        self.assertEqual(stat.action, status.ACTION_CREATE)
         self.assertEqual(stat.message, "")
         self.assertEqual(stat.since, 0)
         self.assertEqual(stat.modified, 0)
@@ -19,10 +19,10 @@ class TestProjectStatus(test.TestCase):
         self.assertEqual(stat.modified_date, "pending")
 
     def test_act(self):
-        stat = status.ProjectStatus("goob", {"state": status.EDIT, "since": -1})
+        stat = status.RecordStatus("goob", {"state": status.EDIT, "since": -1})
         self.assertEqual(stat.id, "goob")
         self.assertEqual(stat.state, status.EDIT)
-        self.assertEqual(stat.action, Action.CREATE)
+        self.assertEqual(stat.action, status.ACTION_CREATE)
         self.assertEqual(stat.message, "")
         self.assertGreater(stat.since, 0)
         self.assertGreater(stat.modified, 0)
@@ -54,10 +54,10 @@ class TestProjectStatus(test.TestCase):
         self.assertNotEqual(stat.modified_date, "pending")
         
     def test_set_state(self):
-        stat = status.ProjectStatus("goob", {"state": status.EDIT, "since": -1})
+        stat = status.RecordStatus("goob", {"state": status.EDIT, "since": -1})
         self.assertEqual(stat.id, "goob")
         self.assertEqual(stat.state, status.EDIT)
-        self.assertEqual(stat.action, Action.CREATE)
+        self.assertEqual(stat.action, status.ACTION_CREATE)
         self.assertEqual(stat.message, "")
         self.assertGreater(stat.since, 0)
         self.assertGreater(stat.modified, 0)
@@ -68,7 +68,7 @@ class TestProjectStatus(test.TestCase):
         stat.set_state(status.PROCESSING)
         self.assertEqual(stat.id, "goob")
         self.assertEqual(stat.state, status.PROCESSING)
-        self.assertEqual(stat.action, Action.CREATE)
+        self.assertEqual(stat.action, status.ACTION_CREATE)
         self.assertEqual(stat.message, "")
         self.assertGreater(stat.since, then)
         self.assertLess(stat.modified, stat.since)
