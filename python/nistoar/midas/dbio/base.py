@@ -190,6 +190,8 @@ class ProtectedRecord(ABC):
         if 'deactivated' not in recdata:
             # Should be None or a date
             recdata['deactivated'] = None
+        if 'status' not in recdata:
+            recdata['status'] = ProjectStatus(recdata['id'], {}).to_dict(False)
         for perm in ACLs.OWN:
             if perm not in recdata['acls']:
                 recdata['acls'][perm] = [recdata['owner']] if recdata['owner'] else []
@@ -285,7 +287,7 @@ class ProtectedRecord(ABC):
         return the status object that indicates the current state of the record and the last 
         action applied to it.  
         """
-        return ProjectStatus(self._data.get('status', {}))
+        return ProjectStatus(self.id, self._data.get('status'))
 
     @property
     def acls(self) -> ACLs:

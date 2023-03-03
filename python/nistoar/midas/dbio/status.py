@@ -8,9 +8,12 @@ import math
 from collections.abc import Mapping
 from time import time
 from datetime import datetime
+from copy import deepcopy
 
 from nistoar.pdr.publish.prov import Action
 
+# Available project states:
+#
 EDIT       = "edit"        # Record is currently being edit for a new released version
 PROCESSING = "processing"  # Record is being processed at the moment and cannot be updated
                            #   further until this processing is complete.
@@ -26,15 +29,23 @@ _action_p   = "action"
 _modified_p = "modified"
 _message_p  = "message"
 
+# Common project record actions
+# 
+ACTION_CREATE = "create"
+ACTION_UPDATE = "update"
+
 class ProjectStatus:
     """
     a class that holds the current status of a project, aggregating multiple pieces of information about 
     the projects state and the last action applied to it.  
     """
+    CREATE_ACTION = ACTION_CREATE
+    UPDATE_ACTION = ACTION_UPDATE
     
     def __init__(self, id: str, status_data: Mapping):
         """
-        wrap the status information for a particular project record
+        wrap the status information for a particular project record.  Note that this constructor
+        may update the input data to add default values to standard properties.
         :param str id:  the project identifier that this status object belongs to
         :param Mapping status_data:  the dictionary containing the project's status data.  This 
                         data usually comes from the ``status`` the internal property of a 
@@ -46,7 +57,7 @@ class ProjectStatus:
         if not self._data.get(_state_p):
             self._data[_state_p] = EDIT
         if not self._data.get(_action_p):
-            self._data[_action_p] = Action.CREATE
+            self._data[_action_p] = self.CREATE_ACTION
 
         # try to keep since <= modified by default
         if _since_p not in self._data or not isinstance(self._data[_since_p], int):
@@ -170,3 +181,15 @@ class ProjectStatus:
         self._data[_state_p]  = state
         self._data[_since_p] = when
         
+    def to_dict(self, with_id=True):
+        """
+        return a new dictionary instance containing the storable data from this ProjectStatus instance
+        """
+        out = deepcopy(self._data)
+        if with_id:
+            out['@id'] = self.id
+        return out
+
+    def __str__(self):
+        return str(self.to_dict())
+
