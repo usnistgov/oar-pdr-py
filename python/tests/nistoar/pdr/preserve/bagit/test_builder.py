@@ -65,11 +65,19 @@ class TestBuilder2(test.TestCase):
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
         self.tf.track("testbag")
         self.tf.track("issued-ids.json")
+        if len(self.bag.plog.handlers) > 0:
+            print("warning: found stray handlers attached:"+
+                  ("\n".join([str(h) for h in self.bag.plog.handlers])))
 
     def tearDown(self):
         self.bag.disconnect_logfile()
+        plog = self.bag.plog
+        del self.bag
         self.bag = None
         self.tf.clean()
+        if len(plog.handlers) > 0:
+            print("ERROR: found stray handlers attached:"+
+                  ("\n".join([str(h) for h in self.bag.plog.handlers])))
 
     def test_ctor(self):
         self.assertEqual(self.bag.bagname, "testbag")
@@ -111,6 +119,7 @@ class TestBuilder2(test.TestCase):
         bagdir = os.path.join(self.tf.root, "testbag")
         if not os.path.exists(bagdir):
             os.mkdir(bagdir)
+        del self.bag
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
 
         self.assertEqual(self.bag.bagname, "testbag")
@@ -127,6 +136,7 @@ class TestBuilder2(test.TestCase):
         self.assertFalse(self.bag._has_resmd())
 
     def test_ctor_with_id(self):
+        del self.bag
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg,
                                    id="edi00hw91c")
 
@@ -161,6 +171,7 @@ class TestBuilder2(test.TestCase):
             self.bag._fix_id("ark:/88434/mds2-4193")
 
         self.cfg['validate_id'] = False
+        del self.bag
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
         self.assertEqual(self.bag._fix_id("ark:/88434/edi00hw91c"),
                          "ark:/88434/edi00hw91c")
@@ -172,6 +183,7 @@ class TestBuilder2(test.TestCase):
             self.bag._fix_id("ark:/goober/foo")
 
         self.cfg['validate_id'] = r'(edi\d)|(mds[01])'
+        del self.bag
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
         with self.assertRaises(ValueError):
             # validate this one
@@ -188,6 +200,7 @@ class TestBuilder2(test.TestCase):
         
         self.cfg['validate_id'] = r'(edi\d)|(mds[01])'
         self.cfg['require_ark_id'] = False
+        del self.bag
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
         self.assertEqual(self.bag._fix_id("edi00hw91c"), "edi00hw91c")
         self.assertEqual(self.bag._fix_id("ark:/88434/edi00hw91c"),
@@ -1176,6 +1189,7 @@ class TestBuilder2(test.TestCase):
 
     def test_add_res_nerd(self):
         self.cfg['ensure_nerdm_type_on_add'] = bldr.NERDM_SCH_ID_BASE + "v0.4"
+        del self.bag
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
         self.assertIsNone(self.bag.ediid)
         with open(simplenerd) as fd:
@@ -1230,6 +1244,7 @@ class TestBuilder2(test.TestCase):
 
     def test_add_ds_pod_convert(self):
         self.cfg['ensure_nerdm_type_on_add'] = bldr.NERDM_SCH_ID_BASE + "v0.7"
+        del self.bag
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
 
         self.assertIsNone(self.bag.ediid)
