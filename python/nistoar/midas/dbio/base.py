@@ -29,6 +29,7 @@ DMP_PROJECTS = "dmp"
 GROUPS_COLL  = "groups"
 PEOPLE_COLL  = "people"
 DRAFT_PROJECTS = "draft"   # this name is deprecated
+PROV_ACT_LOG = "prov_action_log"
 
 DEF_PEOPLE_SHOULDER = "ppl0"
 DEF_GROUPS_SHOULDER = "grp0"
@@ -1062,6 +1063,10 @@ class DBClient(ABC):
         """
         if not act.subject:
             raise ValueError("record_action(): action is missing a subject identifier")
+        if act.type == Action.PROCESS and \
+           (not isinstance(act.object, Mapping) or 'name' not in act.object):
+            raise ValueError("record_action(): action object is missing name property: "+str(act.object))
+            
         self._save_action_data(act.to_dict())
 
     @abstractmethod
@@ -1115,6 +1120,8 @@ class DBClient(ABC):
             ("recid", rec.id),
             ("close_action", close_action.type)
         ])
+        if close_action.type == Action.PROCESS:
+            archive['close_action'] += ":%s" % str(close_action.object)
         archive.update(extra)
         archive['acls'] = acls
         archive['history'] = history
@@ -1176,6 +1183,15 @@ class DBIOException(MIDASException):
     """
     pass
 
+class DBIORecordException(DBIOException):
+    """
+    a base Exception class for DBIO exceptions that are associated with a specific DBIO record.  This 
+    class provides the record identifier via a ``record_id`` attribute.  
+    """
+    def __init__(self, recid, message, sys=None):
+        super(DBIORecordException, self).__init__(message, sys=sys)
+        self.record_id = recid
+
 class NotAuthorized(DBIOException):
     """
     an exception indicating that the user attempted an operation that they are not authorized to 
@@ -1209,7 +1225,7 @@ class AlreadyExists(DBIOException):
     """
     pass
 
-class ObjectNotFound(DBIOException):
+class ObjectNotFound(DBIORecordException):
     """
     an exception indicating that the requested record, or a requested part of a record, does not exist.
     """
@@ -1221,7 +1237,6 @@ class ObjectNotFound(DBIOException):
                             the entire record does not exist.  
         :param str message: a brief description of the error (what object was not found)
         """
-        self.record_id = recid
         self.record_part = part
 
         if not message:
@@ -1229,7 +1244,7 @@ class ObjectNotFound(DBIOException):
                 message = "Requested portion of record (id=%s) does not exist: %s" % (recid, part)
             else:
                 message = "Requested record with id=%s does not exist" % recid
-        super(ObjectNotFound, self).__init__(message)
+        super(ObjectNotFound, self).__init__(recid, message)
 
 
 

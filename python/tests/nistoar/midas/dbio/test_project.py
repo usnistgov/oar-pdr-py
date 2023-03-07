@@ -101,6 +101,9 @@ class TestProjectService(test.TestCase):
         self.assertEqual(prec.data, {})
         self.assertEqual(prec.meta, {})
         self.assertEqual(prec.owner, "nstr1")
+        self.assertEqual(prec.status.action, "create")
+        self.assertEqual(prec.status.message, "draft created")
+        self.assertEqual(prec.status.state, "edit")
 
         self.assertTrue(self.project.dbcli.name_exists("goob"))
         prec2 = self.project.get_record(prec.id)
@@ -182,6 +185,25 @@ class TestProjectService(test.TestCase):
 
         with self.assertRaises(project.PartNotAccessible):
             self.project.update_data(prec.id, 2, "pos/vec/x")
+
+    def test_finalize(self):
+        self.create_service()
+        prec = self.project.create_record("goob")
+        self.assertEqual(prec.status.state, "edit")
+        self.assertIn("created", prec.status.message)
+        data = self.project.update_data(prec.id, {"color": "red", "pos": {"x": 23, "y": 12, "grid": "A"}})
+        self.project.finalize(prec.id)
+        stat = self.project.get_status(prec.id)
+        self.assertEqual(stat.state, "ready")
+        self.assertEqual(stat.message, "draft is ready for submission")
+
+        prec = self.project.get_record(prec.id)
+        prec._data['status']['state'] = "ennui"
+        prec.save()
+        with self.assertRaises(project.NotEditable):
+            self.project.finalize(prec.id)
+        
+        
 
 
 class TestProjectServiceFactory(test.TestCase):

@@ -17,7 +17,7 @@ class MongoDBClient(base.DBClient):
     """
     an implementation of DBClient using a MongoDB database as the backend store.
     """
-    ACTION_LOG_COLL = 'action_log'
+    ACTION_LOG_COLL = base.PROV_ACT_LOG
     HISTORY_COLL = 'history'
 
     def __init__(self, dburl: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS):

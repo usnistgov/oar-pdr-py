@@ -17,6 +17,8 @@ from nistoar.pdr.publish.prov import Action
 EDIT       = "edit"        # Record is currently being edit for a new released version
 PROCESSING = "processing"  # Record is being processed at the moment and cannot be updated
                            #   further until this processing is complete.
+READY      = "ready"       # Record is ready for submission having finalized and passed all
+                           #   validation tests.
 SUBMITTED  = "submitted"   # Record has been submitted and is either processed or is under review
 ACCEPTED   = "accepted"    # Record has been reviewed and is being processed for release
 INPRESS    = "in press"    # Record was submitted to the publishing service and is still being processed

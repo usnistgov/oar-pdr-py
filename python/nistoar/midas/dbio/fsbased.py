@@ -153,9 +153,9 @@ class FSBasedDBClient(base.DBClient):
                         break
 
     def _save_action_data(self, actdata: Mapping):
-        self._ensure_collection("action_log")
+        self._ensure_collection(base.PROV_ACT_LOG)
         try:
-            recpath = self._root / 'action_log' / (actdata['subject']+".lis")
+            recpath = self._root / base.PROV_ACT_LOG / (actdata['subject']+".lis")
             return self._append_json_to_listfile(actdata, recpath)
         except KeyError as ex:
             raise ValueError("_save_action_data(): Action is missing subject id")
@@ -178,8 +178,8 @@ class FSBasedDBClient(base.DBClient):
             return [json.loads(line.strip()) for line in fd]
                 
     def _select_actions_for(self, id: str) -> List[Mapping]:
-        self._ensure_collection("action_log")
-        recpath = self._root / 'action_log' / (id+".lis")
+        self._ensure_collection(base.PROV_ACT_LOG)
+        recpath = self._root / base.PROV_ACT_LOG / (id+".lis")
         if not recpath.is_file():
             return []
         try:
@@ -188,8 +188,8 @@ class FSBasedDBClient(base.DBClient):
             raise base.DBIOException(id+": Unable to read actions: "+str(ex))
 
     def _delete_actions_for(self, id):
-        self._ensure_collection("action_log")
-        recpath = self._root / 'action_log' / (id+".lis")
+        self._ensure_collection(base.PROV_ACT_LOG)
+        recpath = self._root / base.PROV_ACT_LOG / (id+".lis")
         if recpath.is_file():
             recpath.unlink()
 

@@ -222,24 +222,24 @@ class TestInMemoryDBClient(test.TestCase):
             self.cli._save_action_data({'goob': 'gurn'})
 
         self.cli._save_action_data({'subject': 'goob:gurn', 'foo': 'bar'})
-        self.assertTrue('action_log' in self.cli._db)
-        self.assertTrue('goob:gurn' in self.cli._db['action_log'])
-        self.assertEqual(len(self.cli._db['action_log']['goob:gurn']), 1)
-        self.assertEqual(self.cli._db['action_log']['goob:gurn'][0], 
+        self.assertTrue('prov_action_log' in self.cli._db)
+        self.assertTrue('goob:gurn' in self.cli._db['prov_action_log'])
+        self.assertEqual(len(self.cli._db['prov_action_log']['goob:gurn']), 1)
+        self.assertEqual(self.cli._db['prov_action_log']['goob:gurn'][0], 
                          {'subject': 'goob:gurn', 'foo': 'bar'})
 
         self.cli._save_action_data({'subject': 'goob:gurn', 'bob': 'alice'})
-        self.assertEqual(len(self.cli._db['action_log']['goob:gurn']), 2)
-        self.assertEqual(self.cli._db['action_log']['goob:gurn'][0], 
+        self.assertEqual(len(self.cli._db['prov_action_log']['goob:gurn']), 2)
+        self.assertEqual(self.cli._db['prov_action_log']['goob:gurn'][0], 
                          {'subject': 'goob:gurn', 'foo': 'bar'})
-        self.assertEqual(self.cli._db['action_log']['goob:gurn'][1], 
+        self.assertEqual(self.cli._db['prov_action_log']['goob:gurn'][1], 
                          {'subject': 'goob:gurn', 'bob': 'alice'})
         
         self.cli._save_action_data({'subject': 'grp0001', 'dylan': 'bob'})
-        self.assertTrue('action_log' in self.cli._db)
-        self.assertTrue('grp0001' in self.cli._db['action_log'])
-        self.assertEqual(len(self.cli._db['action_log']['grp0001']), 1)
-        self.assertEqual(self.cli._db['action_log']['grp0001'][0], 
+        self.assertTrue('prov_action_log' in self.cli._db)
+        self.assertTrue('grp0001' in self.cli._db['prov_action_log'])
+        self.assertEqual(len(self.cli._db['prov_action_log']['grp0001']), 1)
+        self.assertEqual(self.cli._db['prov_action_log']['grp0001'][0], 
                          {'subject': 'grp0001', 'dylan': 'bob'})
 
         acts = self.cli._select_actions_for("goob:gurn")
@@ -251,16 +251,16 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
 
         self.cli._delete_actions_for("goob:gurn")
-        self.assertTrue('action_log' in self.cli._db)
-        self.assertTrue('goob:gurn' not in self.cli._db['action_log'])
-        self.assertEqual(len(self.cli._db['action_log']['grp0001']), 1)
-        self.assertEqual(self.cli._db['action_log']['grp0001'][0], 
+        self.assertTrue('prov_action_log' in self.cli._db)
+        self.assertTrue('goob:gurn' not in self.cli._db['prov_action_log'])
+        self.assertEqual(len(self.cli._db['prov_action_log']['grp0001']), 1)
+        self.assertEqual(self.cli._db['prov_action_log']['grp0001'][0], 
                          {'subject': 'grp0001', 'dylan': 'bob'})
 
         self.cli._delete_actions_for("grp0001")
-        self.assertTrue('action_log' in self.cli._db)
-        self.assertTrue('goob:gurn' not in self.cli._db['action_log'])
-        self.assertTrue('grp0001' not in self.cli._db['action_log'])
+        self.assertTrue('prov_action_log' in self.cli._db)
+        self.assertTrue('goob:gurn' not in self.cli._db['prov_action_log'])
+        self.assertTrue('grp0001' not in self.cli._db['prov_action_log'])
 
         self.assertEqual(self.cli._select_actions_for("goob:gurn"), [])
         self.assertEqual(self.cli._select_actions_for("grp0001"), [])
@@ -291,8 +291,8 @@ class TestInMemoryDBClient(test.TestCase):
     def test_close_actionlog_with(self):
         prec = base.ProjectRecord(base.DRAFT_PROJECTS,
                                   {"id": "pdr0:2222", "name": "brains", "owner": "nist0:ava1"}, self.cli)
-        finalact = Action(Action.SUBMIT, "pdr0:2222", testuser, "done!")
-        self.assertNotIn('action_log', self.cli._db)
+        finalact = Action(Action.PROCESS, "pdr0:2222", testuser, "done!", "submit")
+        self.assertNotIn('prov_action_log', self.cli._db)
         self.cli._close_actionlog_with(prec, finalact, {"published_as": "comicbook"})
 
         # no history should have been written
@@ -306,7 +306,7 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(len(self.cli._db['history']["pdr0:2222"][0]['history']), 3)
         self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['recid'], "pdr0:2222")
         self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['published_as'], "comicbook")
-        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['close_action'], Action.SUBMIT)
+        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['close_action'], "PROCESS:submit")
         self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['acls'],
                          {"read": prec.acls._perms['read']})
         self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['history'][-1]['message'], "done!")

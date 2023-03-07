@@ -304,6 +304,7 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(len(acts), 1)
         self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
 
+        # _select_actions_for() will return the actions sorted by timestamp
         acts = self.cli._select_actions_for("goob:gurn")
         self.assertEqual(len(acts), 2)
         self.assertEqual(acts[0], {'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})

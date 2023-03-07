@@ -13,11 +13,23 @@ from logging import Logger, getLogger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
 from typing import List
+from copy import deepcopy
 
-from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs,
-                   AlreadyExists, NotAuthorized, ObjectNotFound, DBIOException)
+import jsonpatch
+
+from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus,
+                   AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException)
+from . import status
 from .. import MIDASException, MIDASSystem
-from nistoar.pdr.publish.prov import PubAgent
+from nistoar.pdr.publish.prov import PubAgent, Action
+
+_STATUS_ACTION_CREATE   = RecordStatus.CREATE_ACTION
+_STATUS_ACTION_UPDATE   = RecordStatus.CREATE_ACTION
+_STATUS_ACTION_CLEAR    = "clear"
+_STATUS_ACTION_FINALIZE = "finalize"
+_STATUS_ACTION_SUBMIT   = "submit"
+
+DEF_PUBLISHED_SUFFIX = "_published"
 
 class ProjectService(MIDASSystem):
     """
@@ -54,6 +66,11 @@ class ProjectService(MIDASSystem):
     This parameter gives the identifier shoulder that should be used the identifier for a new record 
     created under the user group.  Subclasses of this service class may support other parameters. 
     """
+    STATUS_ACTION_CREATE   = _STATUS_ACTION_CREATE  
+    STATUS_ACTION_UPDATE   = _STATUS_ACTION_UPDATE  
+    STATUS_ACTION_CLEAR    = _STATUS_ACTION_CLEAR   
+    STATUS_ACTION_FINALIZE = _STATUS_ACTION_FINALIZE
+    STATUS_ACTION_SUBMIT   = _STATUS_ACTION_SUBMIT  
 
     def __init__(self, project_type: str, dbclient_factory: DBClient, config: Mapping={},
                  who: PubAgent=None, log: Logger=None, _subsys=None, _subsysabbrev=None):
@@ -112,11 +129,13 @@ class ProjectService(MIDASSystem):
         elif not prec.meta:
             prec.meta = self._new_metadata_for(shoulder)
         prec.data = self._new_data_for(prec.id, prec.meta)
+        prec.status.act(self.STATUS_ACTION_CREATE, "draft created")
         if data:
-            self.update_data(prec.id, data, prec=prec)  # this will call prec.save()
+            self.update_data(prec.id, data, message=None, _prec=prec)  # this will call prec.save()
         else:
             prec.save()
 
+        self.dbcli.record_action(Action(Action.CREATE, prec.id, self.who, prec.status.message))
         return prec
 
     def _get_id_shoulder(self, user: PubAgent):
@@ -149,18 +168,27 @@ class ProjectService(MIDASSystem):
         """
         return self.dbcli.get_record_for(id)
 
+    def get_status(self, id) -> RecordStatus:
+        """
+        For the record with the given identifier, return the status object that indicates the current 
+        state of the record and the last action applied to it.  
+        :raises ObjectNotFound:  if a record with that ID does not exist
+        :raises NotAuthorized:   if the record exists but the current user is not authorized to read it.
+        """
+        return self.get_record(id).status
+
     def get_data(self, id, part=None):
         """
         return a data content from the record with the given ID
         :param str   id:  the record's identifier
-        :param str path:  a path to the portion of the data to get.  This is the same as the `datapath`
+        :param str path:  a path to the portion of the data to get.  This is the same as the ``datapath``
                           given to the handler constructor.  This will be an empty string if the full
                           data object is requested.
-        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+        :raises ObjectNotFound:  if no record with the given ID exists or the ``part`` parameter points to 
                           a non-existent part of the data content.  
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
-                          given by `id`.  
-        :raises PartNotAccessible:  if access to the part of the data specified by `part` is not allowed.
+                          given by ``id``.  
+        :raises PartNotAccessible:  if access to the part of the data specified by ``part`` is not allowed.
         """
         prec = self.dbcli.get_record_for(id)  # may raise ObjectNotFound
         if not part:
@@ -180,35 +208,55 @@ class ProjectService(MIDASSystem):
 
         return out
 
-    def update_data(self, id, newdata, part=None, prec=None):
+    def _record_action(self, act: Action):
+        # this is tolerant of recording errors
+        try:
+            self.dbcli.record_action(act)
+        except Exception as ex:
+            self.log.error("Failed to record provenance action for %s: %s: %s",
+                           act.subject, act.type, act.message)
+
+    def _try_save(self, prec):
+        # this is tolerant of recording errors
+        try:
+            prec.save()
+        except Exception as ex:
+            self.log.error("Failed to save project record, %s: %s", prec.id, str(ex))
+
+    def update_data(self, id, newdata, part=None, message="", _prec=None):
         """
         merge the given data into the currently save data content for the record with the given identifier.
         :param str      id:  the identifier for the record whose data should be updated.
         :param str newdata:  the data to save as the new content.  
-        :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
-                             the given `newdata` is a value that should be set to the property pointed 
-                             to by `part`.  
-        :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to `id`.
-                             If this is not provided, the record will by fetched anew based on the `id`.  
-        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+        :param str    part:  the slash-delimited pointer to an internal data property.  If provided, 
+                             the given ``newdata`` is a value that should be set to the property pointed 
+                             to by ``part``.  
+        :param str message:  an optional message that will be recorded as an explanation of the update.
+        :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to ``id``.
+                             If this is not provided, the record will by fetched anew based on the ``id``.  
+        :raises ObjectNotFound:  if no record with the given ID exists or the ``part`` parameter points to 
                              an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
-                             given by `id`.  
+                             given by ``id``.  
         :raises PartNotAccessible:  if replacement of the part of the data specified by `part` is not allowed.
-        :raises InvalidUpdate:  if the provided `newdata` represents an illegal or forbidden update or 
+        :raises InvalidUpdate:  if the provided ``newdata`` represents an illegal or forbidden update or 
                              would otherwise result in invalid data content.
         """
-        if not prec:
-            prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        set_action = False
+        if not _prec:
+            set_action = True  # setting the last action will NOT be the caller's responsibility
+            _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        olddata = None
 
         if not part:
             # updating data as a whole: merge given data into previously saved data
-            self._merge_into(newdata, prec.data)
+            olddata = deepcopy(_prec.data)
+            self._merge_into(newdata, _prec.data)
 
         else:
             # updating just a part of the data
             steps = part.split('/')
-            data = prec.data
+            data = _prec.data
             while steps:
                 prop = steps.pop(0)
                 if prop not in data or data[prop] is None:
@@ -217,6 +265,7 @@ class ProjectService(MIDASSystem):
                     else:
                         data[prop] = {}
                 elif not steps:
+                    olddata = data[prop]
                     if isinstance(data[prop], Mapping) and isinstance(newdata, Mapping):
                         self._merge_into(newdata, data[prop])
                     else:
@@ -226,14 +275,38 @@ class ProjectService(MIDASSystem):
                                             "%s: data property, %s, is not in an updatable state")
                 data = data[prop]
 
-        data = prec.data
+        data = _prec.data
+        if message is None:
+            message = "draft updated"
+        
+        # prep the provenance record
+        obj = self._jsondiff(olddata, newdata)  # used in provenance record below
+        tgt = _prec.id
+        if part:
+            # if patching a specific part, record it as a subaction
+            provact = Action(Action.PATCH, tgt, self.who, message)
+            tgt += "#data.%s" % part
+            provact.add_subaction(Action(Action.PATCH, tgt, self.who, "updating data."+part, obj))
+        else:
+            provact = Action(Action.PATCH, tgt, self.who, _prec.status.message, obj)
 
         # ensure the replacing data is sufficiently complete and valid and then save it
         # If it is invalid, InvalidUpdate is raised.
-        data = self._save_data(data, prec)
+        try:
+            data = self._save_data(data, _prec, message, set_action and _STATUS_ACTION_UPDATE)
 
+        except Exception as ex:
+            self.log.error("Failed to save update for project, %s: %s", _prec.id, str(ex))
+            provact.message = "Failed to save update due to an internal error"
+            raise
+
+        finally:
+            self._record_action(provact)
+        
         return self._extract_data_part(data, part)
 
+    def _jsondiff(self, old, new):
+        return {"jsonpatch": jsonpatch.make_patch(old, new)}
 
     def _merge_into(self, update: Mapping, base: Mapping, depth: int=-1):
         if depth == 0:
@@ -285,7 +358,7 @@ class ProjectService(MIDASSystem):
         out.update(mdata)
         return out
 
-    def replace_data(self, id, newdata, part=None, prec=None):
+    def replace_data(self, id, newdata, part=None, message="", _prec=None):
         """
         Replace the currently stored data content of a record with the given data.  It is expected that 
         the new data will be filtered/cleansed via an internal call to :py:method:`dress_data`.  
@@ -304,8 +377,11 @@ class ProjectService(MIDASSystem):
         :raises InvalidUpdate:  if the provided `newdata` represents an illegal or forbidden update or 
                              would otherwise result in invalid data content.
         """
-        if not prec:
-            prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        set_action = False
+        if not _prec:
+            set_action = True  # setting the last action will NOT be the caller's responsibility
+            _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        olddata = deepcopy(_prec.data)
 
         if not part:
             # this is a complete replacement; merge it with a starter record
@@ -314,7 +390,7 @@ class ProjectService(MIDASSystem):
 
         else:
             # replacing just a part of the data
-            data = prec.data
+            data = _prec.data
             steps = part.split('/')
             while steps:
                 prop = steps.pop(0)
@@ -329,15 +405,39 @@ class ProjectService(MIDASSystem):
                     raise PartNotAccessible(id, part)
                 data = data[prop]
 
-            data = prec.data
+            data = _prec.data
+
+        if message is None:
+            message = "draft updated"
+
+        # prep the provenance record
+        obj = self._jsondiff(olddata, newdata)
+        tgt = _prec.id
+        if part:
+            # if patching a specific part, record it as a subaction
+            provact = Action(Action.PATCH, tgt, self.who, _prec.status.message)
+            tgt += "#data.%s" % part
+            provact.add_subaction(Action(Action.PUT, tgt, self.who, "replacing data."+part, obj))
+        else:
+            provact = Action(Action.PUT, tgt, self.who, _prec.status.message, obj)
 
         # ensure the replacing data is sufficiently complete and valid.
         # If it is invalid, InvalidUpdate is raised.
-        data = self._save_data(data, prec)
+        try:
+            data = self._save_data(data, _prec, message, set_action and _STATUS_ACTION_UPDATE)
+
+        except Exception as ex:
+            self.log.error("Failed to save update to project, %s: %s", _prec.id, str(ex))
+            provact.message = "Failed to save update due to an internal error"
+            raise
+
+        finally:
+            self._record_action(provact)
 
         return self._extract_data_part(data, part)
 
-    def _save_data(self, indata: Mapping, prec: ProjectRecord = None) -> Mapping:
+    def _save_data(self, indata: Mapping, prec: ProjectRecord,
+                   message: str, action: str = _STATUS_ACTION_UPDATE) -> Mapping:
         """
         expand, validate, and save the data modified by the user as the record's data content.
         
@@ -351,6 +451,9 @@ class ProjectService(MIDASSystem):
                              final transformations and validation, this will be saved the the 
                              record's `data` property.
         :param ProjectRecord prec:  the project record object to save the data to.  
+        :param str message:  a message to save as the status action message; if None, no message 
+                             is saved.
+        :param str  action:  the action label to record; if None, the action is not updated.
         :return:  the (transformed) data that was actually saved
                   :rtype: dict
         :raises InvalidUpdate:  if the provided `indata` represents an illegal or forbidden update or 
@@ -360,14 +463,20 @@ class ProjectService(MIDASSystem):
         self._validate_data(indata)  # may raise InvalidUpdate
 
         prec.data = indata
-        prec.save();
 
+        # update the record status according to the inputs
+        if action:
+            prec.status.act(action, message)
+        elif message is not None:
+            prec.message = message
+
+        prec.save();
         return indata
 
     def _validate_data(self, data):
         pass
 
-    def clear_data(self, id, part=None, prec=None):
+    def clear_data(self, id: str, part: str=None, message: str=None, prec=None):
         """
         remove the stored data content of the record and reset it to its defaults.  
         :param str      id:  the identifier for the record whose data should be cleared.
@@ -387,8 +496,11 @@ class ProjectService(MIDASSystem):
 
         initdata = self._new_data_for(prec.id, prec.meta)
         if not part:
-            # clearing everything: return record to its initial defaults 
+            # clearing everything: return record to its initial defaults
             prec.data = initdata
+            if message is None:
+                message = "reset draft to initial defaults"
+            prec.status.act(self.STATUS_ACTION_CLEAR, message)
 
         else:
             # clearing only part of the data
@@ -408,6 +520,193 @@ class ProjectService(MIDASSystem):
                     break
                 data = data[prop]
                 initdata = initdata.get(prop, {})
+
+            if message is None:
+                message = "reset %s to initial defaults" % part
+            prec.status.act(self.STATUS_ACTION_UPDATE, message)
+
+        # prep the provenance record
+        tgt = prec.id
+        if part:
+            # if deleting a specific part, record it as a subaction
+            provact = Action(Action.PATCH, tgt, self.who, prec.status.message)
+            tgt += "#data.%s" % part
+            provact.add_subaction(Action(Action.DELETE, tgt, self.who, "clearing data."+part))
+        else:
+            provact = Action(Action.DELETE, tgt, self.who, prec.status.message)
+
+        try:
+            self.save()
+
+        except Exception as ex:
+            self.log.error("Failed to save cleared data for project, %s: %s", tgt, str(ex))
+            provact.message = "Failed to clear requested data due to internal error"
+            raise
+
+        finally:
+            self._record_action(provact)
+
+
+    def update_status_message(self, id: str, message: str, _prec=None):
+        """
+        set the message to be associated with the current status regarding the last action
+        taken on the record with the given identifier
+        :param str      id:  the identifier of the record to attach the message to
+        :param str message:  the message to attach
+        """
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        stat = _prec.status
+
+        if stat.state != status.EDIT:
+            raise NotEditable(id)
+        stat.message = message
+        _prec.save()
+        self._record_action(Action(Action.COMMENT, _prec.id, self.who, message))
+        
+
+    def finalize(self, id, message=None, as_version=None, _prec=None):
+        """
+        Assume that no more client updates will be applied and apply any final automated updates 
+        to the record in preparation for final publication.  After the changes are applied, the 
+        resulting record will be validated.  Normally, the record's state will not be changed as 
+        a result.  The record must be in the edit state to be applied.  
+        :param str      id:  the identifier of the record to finalize
+        :param str message:  a message summarizing the updates to the record
+        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+                             an undefined or unrecognized part of the data
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
+                             given by `id`.  
+        :raises NotEditable:  the requested record in not in the edit state 
+        :raises InvalidUpdate:  if the finalization produces an invalid record
+        """
+        reset_state = False
+        if not _prec:
+            reset_state = True  # if successful, resetting state will NOT be caller's responsibility
+            _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+
+        stat = _prec.status
+        if stat.state != status.EDIT:
+            raise NotEditable(id)
+
+        stat.set_state(status.PROCESSING)
+        stat.act(self.STATUS_ACTION_FINALIZE, "in progress")
+        _prec.save()
+        
+        try:
+            defmsg = self._apply_final_updates(_prec)
+
+        except InvalidRecord as ex:
+            emsg = "finalize process failed: "+str(ex)
+            self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
+                                       {"name": "finalize", "errors": ex.errors}))
+            stat.set_state(status.EDIT)
+            stat.act(self.STATUS_ACTION_FINALIZE, ex.format_errors())
+            self._try_save(prec)
+            raise
+
+        except Exception as ex:
+            self.log.error("Failed to finalize project record, %s: %s", _prec.id, str(ex))
+            emsg = "Failed to finalize due to an internal error"
+            self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
+                                       {"name": "finalize", "errors": [emsg]}))
+            stat.set_state(status.EDIT)
+            stat.act(self.STATUS_ACTION_FINALIZE, emsg)
+            self._try_save(prec)
+            raise
+
+        else:
+            # record provenance record
+            self._record_action(Action(Action.PROCESS, _prec.id, self.who, defmsg, {"name": "finalize"}))
+
+            if reset_state:
+                stat.set_state(status.READY)
+            stat.act(self.STATUS_ACTION_FINALIZE, message or defmsg)
+            _prec.save()
+
+    def _apply_final_updates(self, prec):
+        # update the data
+        
+
+        self._validate_data(prec.data)
+        return "draft is ready for submission"
+
+    def submit(self, id: str, message: str=None, _prec=None) -> str:
+        """
+        finalize (via :py:meth:`finalize`) the record and submit it for publishing.  After a successful 
+        submission, it may not be possible to edit or revise the record until the submission process 
+        has been completed.  The record must be in the "edit" state prior to calling this method.
+        :param str      id:  the identifier of the record to submit
+        :param str message:  a message summarizing the updates to the record
+        :returns:  the label indicating its post-editing state
+                   :rtype: str
+        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+                             an undefined or unrecognized part of the data
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
+                             given by `id`.  
+        :raises NotEditable:  the requested record is not in the edit state.  
+        :raises NotSubmitable:  if the finalization produces an invalid record because the record 
+                             contains invalid data or is missing required data.
+        :raises SubmissionFailed:  if, during actual submission (i.e. after finalization), an error 
+                             occurred preventing successful submission.  This error is typically 
+                             not due to anything the client did, but rather reflects a system problem
+                             (e.g. from a downstream service). 
+        """
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        self.finalize(id, message, _prec)  # may raise NotEditable
+
+        # this record is ready for submission.  Send the record to its post-editing destination,
+        # and update its status accordingly.
+        try:
+            defmsg = self._submit(_prec)
+
+        except InvalidRecord as ex:
+            emsg = "submit process failed: "+str(ex)
+            self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
+                                       {"name": "submit", "errors": ex.errors}))
+            stat.set_state(status.EDIT)
+            stat.act(self.STATUS_ACTION_SUBMIT, ex.format_errors())
+            self._try_save(prec)
+            raise
+
+        except Exception as ex:
+            emsg = "Submit process failed due to an internal error"
+            self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
+                                       {"name": "submit", "errors": [emsg]}))
+            stat.set_state(status.EDIT)
+            stat.act(self.STATUS_ACTION_SUBMIT, emsg)
+            self._try_save(prec)
+            raise
+
+        else:
+            # record provenance record
+            self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, defmsg, {"name": "submit"}))
+
+            _prec.stat.set_state(status.SUBMITTED)
+            _prec.stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg)
+            _prec.save()
+            
+
+    def _submit(prec: ProjectRecord) -> str:
+        """
+        Actually send the given record to its post-editing destination and update its status 
+        accordingly.
+
+        This method should be overridden to provide project-specific handling.  This generic 
+        implementation will simply copy the data contents of the record to another collection.
+        :returns:  the label indicating its post-editing state
+                   :rtype: str
+        :raises NotSubmitable:  if the finalization process produced an invalid record because the record 
+                             contains invalid data or is missing required data.
+        :raises SubmissionFailed:  if, during actual submission (i.e. after finalization), an error 
+                             occurred preventing successful submission.  This error is typically 
+                             not due to anything the client did, but rather reflects a system problem
+                             (e.g. from a downstream service). 
+        """
+        pass
+        
+
                     
 
 class ProjectServiceFactory:
@@ -449,17 +748,17 @@ class ProjectServiceFactory:
         return ProjectService(self._prjtype, self._dbclifact, self._cfg, who, self._log)
 
 
-class InvalidUpdate(DBIOException):
+class InvalidRecord(DBIORecordException):
     """
-    an exception indicating that the user-provided data is invalid or otherwise would result in 
-    invalid data content for a record. 
+    an exception indicating that record data is invalid and requires correction or completion.
 
     The determination of invalid data may result from detailed data validation which may uncover 
     multiple errors.  The ``errors`` property will contain a list of messages, each describing a
     validation error encounted.  The :py:meth:`format_errors` will format all these messages into 
     a single string for a (text-based) display. 
     """
-    def __init__(self, message: str=None, recid=None, part=None, errors: List[str]=None, sys=None):
+    def __init__(self, message: str=None, recid: str=None, part: str=None,
+                 errors: List[str]=None, sys=None):
         """
         initialize the exception
         :param str message:  a brief description of the problem with the user input
@@ -482,8 +781,7 @@ class InvalidUpdate(DBIOException):
             message = "Unknown validation errors encountered while updating data"
             errors = []
         
-        super(InvalidUpdate, self).__init__(message)
-        self.record_id = recid
+        super(InvalidUpdate, self).__init__(recid, message, sys)
         self.record_part = part
         self.errors = errors
 
@@ -513,8 +811,28 @@ class InvalidUpdate(DBIOException):
         out += ":\n  * "
         out += "\n  * ".join([str(e) for e in self.errors])
         return out
+
+class InvalidUpdate(InvalidRecord):
+    """
+    an exception indicating that the user-provided data is invalid or otherwise would result in 
+    invalid data content for a record. 
+
+    The determination of invalid data may result from detailed data validation which may uncover 
+    multiple errors.  The ``errors`` property will contain a list of messages, each describing a
+    validation error encounted.  The :py:meth:`format_errors` will format all these messages into 
+    a single string for a (text-based) display. 
+    """
+    def __init__(self, message: str=None, recid=None, part=None, errors: List[str]=None, sys=None):
+        """
+        initialize the exception
+        :param str message:  a brief description of the problem with the user input
+        :param str   recid:  the id of the record that data was provided for
+        :param str    part:  the part of the record that was requested for update.  Do not provide 
+                             this parameter if the entire record was provided.
+        :param [str] errors: a listing of the individual errors uncovered in the data
+        """
     
-class PartNotAccessible(DBIOException):
+class PartNotAccessible(DBIORecordException):
     """
     an exception indicating that the user-provided data is invalid or otherwise would result in 
     invalid data content for a record. 
@@ -526,12 +844,34 @@ class PartNotAccessible(DBIOException):
         :param str  part:  the part of the record that was requested.  Do not provide this parameter if 
                            the entire record does not exist.  
         """
-        self.record_id = recid
-        self.record_part = part
-
         if not message:
             message = "%s: data property, %s, is not in an updateable state" % (recid, part)
-        super(PartNotAccessible, self).__init__(message, sys=sys)
-
-
+        super(PartNotAccessible, self).__init__(recid, message, sys=sys)
+        self.record_part = part
     
+class NotEditable(DBIORecordException):
+    """
+    An error indicating that a requested record cannot be updated because it is in an uneditable state.
+    """
+    def __init__(self, recid, message=None, sys=None):
+        """
+        initialize the exception
+        """
+        if not message:
+            message = "%s: not in an editable state" % recid
+        super(NotEditable, self).__init__(recid, message, sys=sys)
+    
+class NotSubmitable(InvalidRecord):
+    """
+    An error indicating that a requested record cannot be finalized and submitted for publication, 
+    typically because it is contains invalid data or is missing required data.  
+    """
+    def __init__(self, recid: str, message: str=None, errors: List[str]=None, sys=None):
+        """
+        initialize the exception
+        """
+        if not message:
+            message = "%s: not in an submitable state" % recid
+        super(NotSubmitable, self).__init__(message, recid, errors, sys=sys)
+
+

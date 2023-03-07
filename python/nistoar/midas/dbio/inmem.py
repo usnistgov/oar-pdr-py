@@ -85,21 +85,21 @@ class InMemoryDBClient(base.DBClient):
         if 'subject' not in actdata:
             raise ValueError("_save_action_data(): Missing subject property in action data")
         id = actdata['subject']
-        if 'action_log' not in self._db:
-            self._db['action_log'] = {}
-        if id not in self._db['action_log']:
-            self._db['action_log'][id] = []
-        self._db['action_log'][id].append(actdata)
+        if base.PROV_ACT_LOG not in self._db:
+            self._db[base.PROV_ACT_LOG] = {}
+        if id not in self._db[base.PROV_ACT_LOG]:
+            self._db[base.PROV_ACT_LOG][id] = []
+        self._db[base.PROV_ACT_LOG][id].append(actdata)
                 
     def _select_actions_for(self, id: str) -> List[Mapping]:
-        if 'action_log' not in self._db or id not in self._db['action_log']:
+        if base.PROV_ACT_LOG not in self._db or id not in self._db[base.PROV_ACT_LOG]:
             return []
-        return deepcopy(self._db['action_log'][id])
+        return deepcopy(self._db[base.PROV_ACT_LOG][id])
 
     def _delete_actions_for(self, id):
-        if 'action_log' not in self._db or id not in self._db['action_log']:
+        if base.PROV_ACT_LOG not in self._db or id not in self._db[base.PROV_ACT_LOG]:
             return
-        del self._db['action_log'][id]
+        del self._db[base.PROV_ACT_LOG][id]
 
     def _save_history(self, histrec):
         if 'recid' not in histrec:

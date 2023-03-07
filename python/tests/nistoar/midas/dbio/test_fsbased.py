@@ -246,7 +246,7 @@ class TestFSBasedDBClient(test.TestCase):
         with self.assertRaises(ValueError):
             self.cli._save_action_data({'goob': 'gurn'})
 
-        recpath = self.cli._root / "action_log" / "goob:gurn.lis"
+        recpath = self.cli._root / "prov_action_log" / "goob:gurn.lis"
         self.assertTrue(not recpath.exists())
         self.cli._save_action_data({'subject': 'goob:gurn', 'foo': 'bar'})
         self.assertTrue(recpath.exists())
@@ -262,7 +262,7 @@ class TestFSBasedDBClient(test.TestCase):
         self.assertEqual(json.loads(lines[0]), {'subject': 'goob:gurn', 'foo': 'bar'})
         self.assertEqual(json.loads(lines[1]), {'subject': 'goob:gurn', 'bob': 'alice'})
         
-        recpath = self.cli._root / "action_log" / "grp0001.lis"
+        recpath = self.cli._root / "prov_action_log" / "grp0001.lis"
         self.assertTrue(not recpath.exists())
         self.cli._save_action_data({'subject': 'grp0001', 'dylan': 'bob'})
         self.assertTrue(recpath.exists())
@@ -281,7 +281,7 @@ class TestFSBasedDBClient(test.TestCase):
 
         self.cli._delete_actions_for("grp0001")
         self.assertTrue(not recpath.exists())
-        recpath = self.cli._root / "action_log" / "goob:gurn.lis"
+        recpath = self.cli._root / "prov_action_log" / "goob:gurn.lis"
         self.assertTrue(recpath.exists())
         self.cli._delete_actions_for("goob:gurn")
         self.assertTrue(not recpath.exists())
