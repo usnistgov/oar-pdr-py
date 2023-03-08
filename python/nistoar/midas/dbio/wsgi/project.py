@@ -94,7 +94,7 @@ class ProjectHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
                                         self._id, ashead=ashead)
 
-        return self.send_json(prec.to_dict())
+        return self.send_json(prec.to_dict(), ashead=ashead)
     
 
 class ProjectInfoHandler(ProjectRecordHandler):
@@ -195,7 +195,7 @@ class ProjectNameHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
                                         self._id, ashead=ashead)
 
-        return self.send_json(prec.name)
+        return self.send_json(prec.name, ashead=ashead)
 
     def do_PUT(self, path):
         try:
@@ -269,7 +269,7 @@ class ProjectDataHandler(ProjectRecordHandler):
                                             "No data found at requested property", self._id, ashead=ashead)
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id, ashead=ashead)
-        return self.send_json(out)
+        return self.send_json(out, ashead=ashead)
 
     def do_PUT(self, path):
         try:
@@ -289,6 +289,9 @@ class ProjectDataHandler(ProjectRecordHandler):
         except dbio.PartNotAccessible as ex:
             return self.send_error_resp(405, "Data part not updatable",
                                         "Requested part of data cannot be updated")
+        except dbio.NotEditable as ex:
+            return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit")
+                                        
 
         return self.send_json(data)
 
@@ -311,6 +314,8 @@ class ProjectDataHandler(ProjectRecordHandler):
         except dbio.PartNotAccessible as ex:
             return self.send_error_resp(405, "Data part not updatable",
                                         "Requested part of data cannot be updated")
+        except dbio.NotEditable as ex:
+            return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit")
 
         return self.send_json(data)
 
@@ -454,20 +459,21 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
         recd = prec.to_dict()
         if not path:
-            return self.send_json(recd.get('acls', {}))
+            return self.send_json(recd.get('acls', {}), ashead=ashead)
 
         path = path.strip('/')
         parts = path.split('/', 1)
         acl = recd.get('acls', {}).get(parts[0])
         if acl is None:
             if parts[0] not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
-                return self.send_error_resp(404, "Unsupported ACL type", "Request for unsupported ACL type")
+                return self.send_error_resp(404, "Unsupported ACL type",
+                                            "Request for unsupported ACL type", ashead=ashead)
             acl = []
 
         if len(parts) < 2:
-            return self.send_json(acl)
+            return self.send_json(acl, ashead=ashead)
 
-        return self.send_json(parts[1] in acl)
+        return self.send_json(parts[1] in acl, ashead=ashead)
 
     def do_POST(self, path):
         """
@@ -632,6 +638,130 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
         return self.send_error_resp(405, "DELETE not allowed on this permission type",
                                     "Updating specified permission is not allowed")
+
+class ProjectStatusHandler(ProjectRecordHandler):
+    """
+    handle status requests and actions
+    """
+    _requestable_actions = [ ProjectService.STATUS_ACTION_FINALIZE, ProjectService.STATUS_ACTION_SUBMIT ] 
+
+    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
+                 who: PubAgent, id: str, datapath: str="", config: dict=None, log: Logger=None):
+        """
+        Initialize this data request handler with the request particulars.  This constructor is called 
+        by the webs service SubApp in charge of the project record interface.  
+
+        :param ProjectService service:  the ProjectService instance to use to get and update
+                               the project data.
+        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param dict  wsgienv:  the WSGI request context dictionary
+        :param Callable start_resp:  the WSGI start-response function used to send the response
+        :param PubAgent  who:  the authenticated user making the request.  
+        :param str        id:  the ID of the project record being requested
+        :param str  permpath:  the subpath pointing to a particular permission ACL; it can either be
+                               simply a permission name, PERM (e.g. "read"), or a p
+                               this will be a '/'-delimited identifier pointing to an object property 
+                               within the data object.  This will be an empty string if the full data 
+                               object is requested.
+        :param dict   config:  the handler's configuration; if not provided, the inherited constructor
+                               will extract the configuration from `subapp`.  Normally, the constructor
+                               is called without this parameter.
+        :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
+                               logger attached to the SubApp will be used.  
+        """
+        super(ProjectStatusHandler, self).__init__(service, subapp, wsgienv, start_resp, who, datapath,
+                                                   config, log)
+        self._id = id
+        if not id:
+            # programming error
+            raise ValueError("Missing ProjectRecord id")
+
+    def do_GET(self, path, ashead=False):
+        """
+        return the status object in response to a GET request
+        """
+        try:
+            out = self.svc.get_status(self._id)
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            if ex.record_part:
+                return self.send_error_resp(404, "Data property not found",
+                                            "No data found at requested property", self._id, ashead=ashead)
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found", self._id, ashead=ashead)
+
+        if path == "state":
+            out = out.state
+        elif path == "action":
+            out = out.action
+        elif path == "message":
+            out = out.action
+        elif path:
+            return self.send_error_resp(404, "Status property not accessible",
+                                        "Requested status property is not accessible", self._id, ashead=ashead)
+            
+        return self.send_json(out.to_dict(), ashead=ashead)
+
+    def do_PUT(self, path):
+        """
+        request an action to be applied to the record 
+        """
+        path = path.strip('/')
+        if path:
+            return self.send_error_resp(405, "PUT not allowed", "PUT is not allowed on a status property")
+                                        
+        try:
+            req = self.get_json_body()
+        except self.FatalError as ex:
+            return self.send_fatal_error(ex)
+
+        if not req.get('action'):
+            return self.send_error_resp(400, "Invalid input: missing action property"
+                                        "Input record is missing required action property")
+        return self._apply_action(req['action'], req.get('message'))
+
+    def do_PATCH(self, path):
+        """
+        request an action to be applied to the record or just update the associated message
+        """
+        path = path.strip('/')
+        if path:
+            return self.send_error_resp(405, "PATCH not allowed", "PATCH is not allowed on a status property")
+                                        
+        try:
+            req = self.get_json_body()
+        except self.FatalError as ex:
+            return self.send_fatal_error(ex)
+
+        # if action is not set, the message will just get updated.
+        return self._apply_action(req.get('action'), req.get('message'))
+        
+    def _apply_action(self, action, message=None):
+        try:
+            if message and action is None:
+                stat = self.svc.update_status_message(self._id, message)
+            elif action == 'finalize':
+                stat = self.svc.finalize(self._id, message)
+            elif action == 'submit':
+                stat = self.svc.submit(self._id, message)
+            else:
+                return self.send_error_resp(400, "Unrecognized action",
+                                            "Unrecognized action requested")
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found", self._id)
+        except dbio.InvalidUpdate as ex:
+            return self.send_error_resp(400, "Request creates an invalid record", ex.format_errors())
+        except dbio.NotEditable as ex:
+            return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit or ready")
+        except dbio.NotSubmitable as ex:
+            return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit or ready")
+
+        return self.send_json(stat.to_dict())
+
         
         
 class MIDASProjectApp(SubApp):
@@ -644,6 +774,8 @@ class MIDASProjectApp(SubApp):
     _data_update_handler = ProjectDataHandler
     _acls_update_handler = ProjectACLsHandler
     _info_update_handler = ProjectInfoHandler
+    _status_handler = ProjectStatusHandler
+    # _history_handler = ProjectHistoryHandler
 
     def __init__(self, service_factory: ProjectServiceFactory, log: Logger, config: dict={}):
         super(MIDASProjectApp, self).__init__(service_factory._prjtype, log, config)
@@ -683,6 +815,11 @@ class MIDASProjectApp(SubApp):
                 idattrpart.append("")
             return self._data_update_handler(service, self, env, start_resp, who,
                                              idattrpart[0], idattrpart[2])
+        elif idattrpart[1] == "status":
+            # path=ID/status: get or act on the status of the record
+            if len(idattrpart) == 2:
+                idattrpart.append("")
+            return self._status_handler(service, self, env, start_resp, who, idattrpart[0], idattrpart[2])
         elif idattrpart[1] == "acls":
             # path=ID/acls: get/update the access control on record ID
             if len(idattrpart) < 3:

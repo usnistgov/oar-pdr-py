@@ -192,6 +192,12 @@ class RecordStatus:
             out['@id'] = self.id
         return out
 
+    def clone(self):
+        """
+        return a copy that will be detached from its respective ProjectRecord
+        """
+        return RecordStatus(self.id, self.to_dict(False))
+
     def __str__(self):
         return str(self.to_dict())
 

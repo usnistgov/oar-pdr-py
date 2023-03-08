@@ -635,6 +635,154 @@ class TestMIDASProjectApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("404 ", self.resp[0])
 
+    def test_get_status(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "big", "owner": "nobody", "data": {"color": "red"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "big")
+        self.assertEqual(resp['owner'], "nstr1")
+        self.assertEqual(resp['id'], "mdm1:0003")
+        self.assertEqual(resp['status']['state'], "edit")
+        self.assertEqual(resp['status']['action'], "create")
+
+        self.resp = []
+        path = "mdm1:0003/status"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectStatusHandler))
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+
+        self.assertEqual(resp['state'], 'edit')
+        self.assertEqual(resp['action'], 'create')
+        self.assertIn('modified', resp)
+        self.assertIn('since', resp)
+        self.assertIn('message', resp)
+        
+    def test_update_status_message(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "big", "owner": "nobody", "data": {"color": "red"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "big")
+        self.assertEqual(resp['owner'], "nstr1")
+        self.assertEqual(resp['id'], "mdm1:0003")
+        self.assertEqual(resp['status']['state'], "edit")
+        self.assertEqual(resp['status']['action'], "create")
+        self.assertTrue(resp['status'].get('message'))
+        self.assertNotEqual(resp['status']['message'], 'starting over')
+
+        self.resp = []
+        path = "mdm1:0003/status"
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"message": "starting over"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectStatusHandler))
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+
+        self.assertEqual(resp['state'], 'edit')
+        self.assertEqual(resp['action'], 'create')
+        self.assertIn('modified', resp)
+        self.assertIn('since', resp)
+        self.assertEqual(resp['message'], 'starting over')
+
+    def test_process(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "big", "owner": "nobody", "data": {"color": "red"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "big")
+        self.assertEqual(resp['owner'], "nstr1")
+        self.assertEqual(resp['id'], "mdm1:0003")
+        self.assertEqual(resp['status']['state'], "edit")
+        self.assertEqual(resp['status']['action'], "create")
+        self.assertTrue(resp['status'].get('message'))
+        self.assertNotEqual(resp['status']['message'], 'starting over')
+
+        self.resp = []
+        path = "mdm1:0003/status"
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"message": "starting over", "action": "sleep"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectStatusHandler))
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+
+        self.resp = []
+        req['wsgi.input'] = StringIO(json.dumps({"action": "finalize"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectStatusHandler))
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+
+        self.assertEqual(resp['state'], 'ready')
+        self.assertEqual(resp['action'], 'finalize')
+        self.assertIn('modified', resp)
+        self.assertIn('since', resp)
+        self.assertIn('ready', resp['message'])
+
+        self.resp = []
+        req['wsgi.input'] = StringIO(json.dumps({"action": "submit", "message": "I'm done!"}))
+        req['REQUEST_METHOD'] = 'PUT'
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectStatusHandler))
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+
+        self.assertEqual(resp['state'], 'submitted')
+        self.assertEqual(resp['action'], 'submit')
+        self.assertIn('modified', resp)
+        self.assertIn('since', resp)
+        self.assertEqual(resp['message'], "I'm done!")
+
+        
 
                          
 if __name__ == '__main__':

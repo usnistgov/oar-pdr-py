@@ -554,10 +554,12 @@ class ProjectService(MIDASSystem):
             self._record_action(provact)
 
 
-    def update_status_message(self, id: str, message: str, _prec=None):
+    def update_status_message(self, id: str, message: str, _prec=None) -> status.RecordStatus:
         """
         set the message to be associated with the current status regarding the last action
         taken on the record with the given identifier
+        :returns:  a Project status instance providing status after updating the message
+                   :rtype: RecordStatus
         :param str      id:  the identifier of the record to attach the message to
         :param str message:  the message to attach
         """
@@ -570,9 +572,11 @@ class ProjectService(MIDASSystem):
         stat.message = message
         _prec.save()
         self._record_action(Action(Action.COMMENT, _prec.id, self.who, message))
+
+        return stat.clone()
         
 
-    def finalize(self, id, message=None, as_version=None, _prec=None):
+    def finalize(self, id, message=None, as_version=None, _prec=None) -> status.RecordStatus:
         """
         Assume that no more client updates will be applied and apply any final automated updates 
         to the record in preparation for final publication.  After the changes are applied, the 
@@ -580,6 +584,8 @@ class ProjectService(MIDASSystem):
         a result.  The record must be in the edit state to be applied.  
         :param str      id:  the identifier of the record to finalize
         :param str message:  a message summarizing the updates to the record
+        :returns:  a Project status instance providing the post-finalization status
+                   :rtype: RecordStatus
         :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
                              an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
@@ -593,7 +599,7 @@ class ProjectService(MIDASSystem):
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
         stat = _prec.status
-        if stat.state != status.EDIT:
+        if _prec.status.state not in [status.EDIT, status.READY]:
             raise NotEditable(id)
 
         stat.set_state(status.PROCESSING)
@@ -631,6 +637,9 @@ class ProjectService(MIDASSystem):
             stat.act(self.STATUS_ACTION_FINALIZE, message or defmsg)
             _prec.save()
 
+        return stat.clone()
+        
+
     def _apply_final_updates(self, prec):
         # update the data
         
@@ -638,15 +647,15 @@ class ProjectService(MIDASSystem):
         self._validate_data(prec.data)
         return "draft is ready for submission"
 
-    def submit(self, id: str, message: str=None, _prec=None) -> str:
+    def submit(self, id: str, message: str=None, _prec=None) -> status.RecordStatus:
         """
         finalize (via :py:meth:`finalize`) the record and submit it for publishing.  After a successful 
         submission, it may not be possible to edit or revise the record until the submission process 
         has been completed.  The record must be in the "edit" state prior to calling this method.
         :param str      id:  the identifier of the record to submit
         :param str message:  a message summarizing the updates to the record
-        :returns:  the label indicating its post-editing state
-                   :rtype: str
+        :returns:  a Project status instance providing the post-submission status
+                   :rtype: RecordStatus
         :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
                              an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
@@ -661,7 +670,8 @@ class ProjectService(MIDASSystem):
         """
         if not _prec:
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
-        self.finalize(id, message, _prec)  # may raise NotEditable
+        stat = _prec.status
+        self.finalize(id, message, _prec=_prec)  # may raise NotEditable
 
         # this record is ready for submission.  Send the record to its post-editing destination,
         # and update its status accordingly.
@@ -674,7 +684,7 @@ class ProjectService(MIDASSystem):
                                        {"name": "submit", "errors": ex.errors}))
             stat.set_state(status.EDIT)
             stat.act(self.STATUS_ACTION_SUBMIT, ex.format_errors())
-            self._try_save(prec)
+            self._try_save(_prec)
             raise
 
         except Exception as ex:
@@ -683,19 +693,21 @@ class ProjectService(MIDASSystem):
                                        {"name": "submit", "errors": [emsg]}))
             stat.set_state(status.EDIT)
             stat.act(self.STATUS_ACTION_SUBMIT, emsg)
-            self._try_save(prec)
+            self._try_save(_prec)
             raise
 
         else:
             # record provenance record
             self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, defmsg, {"name": "submit"}))
 
-            _prec.stat.set_state(status.SUBMITTED)
-            _prec.stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg)
+            stat.set_state(status.SUBMITTED)
+            stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg)
             _prec.save()
+
+        return stat.clone()
             
 
-    def _submit(prec: ProjectRecord) -> str:
+    def _submit(self, prec: ProjectRecord) -> str:
         """
         Actually send the given record to its post-editing destination and update its status 
         accordingly.

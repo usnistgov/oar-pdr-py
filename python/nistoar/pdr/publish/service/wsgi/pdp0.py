@@ -45,9 +45,6 @@ class PDP0App(SubApp):
 
     class _Handler(Handler):
         default_agent = None
-        ACTION_UPDATE   = ''
-        ACTION_FINALIZE = "finalize"
-        ACTION_PUBLISH  = "publish"
 
         def __init__(self, app, path: str, wsgienv: dict, start_resp: Callable, who=None, config: dict={}):
             self._app = app
@@ -55,20 +52,6 @@ class PDP0App(SubApp):
             self._reqrec = None
             if self._app._recorder:
                 self._reqrec = self._app._recorder.from_wsgi(self._env)
-
-        def get_action(self):
-            """
-            return the value of the action query parameter of None if it was not provided
-            """
-            qstr = self._env.get('QUERY_STRING')
-            if not qstr:
-                return self.ACTION_UPDATE
-
-            params = parse_qs(qstr)
-            action = params.get('action')
-            if len(action) > 0 and action[0] in [self.ACTION_FINALIZE, self.ACTION_PUBLISH]:
-                return action[0]
-            return self.ACTION_UPDATE
 
         def send_error_resp(self, code, reason, explain, sipid=None, pdrid=None, ashead=False):
             """

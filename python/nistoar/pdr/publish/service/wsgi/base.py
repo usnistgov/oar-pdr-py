@@ -6,6 +6,7 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from typing import Callable
 from functools import reduce
 from logging import Logger
+from urllib.parse import parse_qs
 
 from wsgiref.headers import Headers
 # from urllib.parse import parse_qs
@@ -27,9 +28,17 @@ class Unacceptable(Exception):
 class Handler(object):
     """
     a default web request handler that also serves as a base class for the 
-    handlers specialized for the supported resource paths.
+    handlers specialized for the supported resource paths.  Key features built into this 
+    class include:
+      * the ``who`` property that holds the identity of the remote user making the request
+      * support for an ``action`` query parameter to request an action to be applied to 
+        the resource being requested (perhaps in addition to that implied by the HTTP 
+        request method); see :py:meth:`get_action`.
     """
     default_agent = PubAgent("public", PubAgent.UNKN, "anonymous")
+    ACTION_UPDATE   = ''
+    ACTION_FINALIZE = "finalize"
+    ACTION_PUBLISH  = "publish"
 
     def __init__(self, path: str, wsgienv: dict, start_resp: Callable, who=None, 
                  config: dict={}, log: Logger=None):
@@ -46,6 +55,20 @@ class Handler(object):
         self.log = log
 
         self._meth = self._env.get('REQUEST_METHOD', 'GET')
+
+    def get_action(self):
+        """
+        return the value of the action query parameter of None if it was not provided
+        """
+        qstr = self._env.get('QUERY_STRING')
+        if not qstr:
+            return self.ACTION_UPDATE
+
+        params = parse_qs(qstr)
+        action = params.get('action')
+        if len(action) > 0 and action[0] in [self.ACTION_FINALIZE, self.ACTION_PUBLISH]:
+            return action[0]
+        return self.ACTION_UPDATE
 
     def send_error(self, code, message, content=None, contenttype=None, ashead=None, encoding='utf-8'):
         """
