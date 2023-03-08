@@ -52,6 +52,12 @@ class TestProjectService(test.TestCase):
                                               rootlog.getChild("project"))
         return self.project
 
+    def last_action_for(self, recid):
+        acts = self.project.dbcli._db.get(base.PROV_ACT_LOG, {}).get(recid,[])
+        if not acts:
+            return None
+        return acts[-1]
+
     def test_ctor(self):
         self.create_service()
         self.assertTrue(self.project.dbcli)
@@ -113,6 +119,11 @@ class TestProjectService(test.TestCase):
         self.assertEqual(prec2.meta, {})
         self.assertEqual(prec2.owner, "nstr1")
 
+        lastact = self.last_action_for(prec.id)
+        self.assertEqual(lastact['subject'], prec.id)
+        self.assertEqual(lastact['type'], prov.Action.CREATE)
+        self.assertNotIn('subactions', lastact)
+
         with self.assertRaises(project.AlreadyExists):
             self.project.create_record("goob")
 
@@ -139,6 +150,11 @@ class TestProjectService(test.TestCase):
         self.assertEqual(self.project.get_data(prec.id, "pos/desc"), {"a": 1})
         self.assertEqual(self.project.get_data(prec.id, "pos/desc/a"), 1)
         
+        lastact = self.last_action_for(prec.id)
+        self.assertEqual(lastact['subject'], prec.id)
+        self.assertEqual(lastact['type'], prov.Action.CREATE)
+        self.assertNotIn('subactions', lastact)
+
         with self.assertRaises(project.ObjectNotFound):
             self.project.get_data(prec.id, "pos/desc/b")
         with self.assertRaises(project.ObjectNotFound):
@@ -161,11 +177,23 @@ class TestProjectService(test.TestCase):
         prec = self.project.get_record(prec.id)
         self.assertEqual(prec.data, {"color": "red", "pos": {"x": 23, "y": 12, "grid": "A"}})
 
+        lastact = self.last_action_for(prec.id)
+        self.assertEqual(lastact['subject'], prec.id)
+        self.assertEqual(lastact['type'], prov.Action.PATCH)
+        self.assertNotIn('subactions', lastact)
+
         data = self.project.update_data(prec.id, {"y": 1, "z": 10, "grid": "B"}, "pos")
         self.assertEqual(data, {"x": 23, "y": 1, "z": 10, "grid": "B"})
         prec = self.project.get_record(prec.id)
         self.assertEqual(prec.data, {"color": "red", "pos": {"x": 23, "y": 1, "z": 10, "grid": "B"}})
         
+        lastact = self.last_action_for(prec.id)
+        self.assertEqual(lastact['subject'], prec.id)
+        self.assertEqual(lastact['type'], prov.Action.PATCH)
+        self.assertEqual(len(lastact['subactions']), 1)
+        self.assertEqual(lastact['subactions'][0]['type'], prov.Action.PATCH)
+        self.assertEqual(lastact['subactions'][0]['subject'], prec.id+"#data.pos")
+
         data = self.project.update_data(prec.id, "C", "pos/grid")
         self.assertEqual(data, "C")
         prec = self.project.get_record(prec.id)
@@ -177,6 +205,11 @@ class TestProjectService(test.TestCase):
         prec = self.project.get_record(prec.id)
         self.assertEqual(prec.data, {"pos": {"vec": [15, 22, 1], "grid": "Z"}})
 
+        lastact = self.last_action_for(prec.id)
+        self.assertEqual(lastact['subject'], prec.id)
+        self.assertEqual(lastact['type'], prov.Action.PUT)
+        self.assertNotIn('subactions', lastact)
+
         # update again
         data = self.project.update_data(prec.id, "blue", "color")
         self.assertEqual(data, "blue")
@@ -185,6 +218,8 @@ class TestProjectService(test.TestCase):
 
         with self.assertRaises(project.PartNotAccessible):
             self.project.update_data(prec.id, 2, "pos/vec/x")
+
+        self.assertEqual(len(self.project.dbcli._db.get(base.PROV_ACT_LOG, {}).get(prec.id,[])), 6)
 
     def test_finalize(self):
         self.create_service()
