@@ -1057,16 +1057,32 @@ class DBClient(ABC):
         self._delete_from(self._projcoll, id)
         return True
 
-    def record_action(self, act: Action):
+    def record_action(self, act: Action, coll: str=None):
         """
-        save the given action record to the back-end store
+        save the given action record to the back-end store.  In order to save the action, the 
+        action's subject must identify an existing record and the current user must have write 
+        permission on that record.
+
+        :param Action act:  the Action object to save
+        :param str   coll:  the collection that the record with the action's subject ID can be 
+                            found.  If not provided, the current project collection will be assumed.
         """
         if not act.subject:
             raise ValueError("record_action(): action is missing a subject identifier")
         if act.type == Action.PROCESS and \
            (not isinstance(act.object, Mapping) or 'name' not in act.object):
             raise ValueError("record_action(): action object is missing name property: "+str(act.object))
-            
+
+        # check existence and permission
+        if not coll:
+            coll = self._projcoll
+        rec = self._get_from_coll(coll, act.subject)
+        if not rec:
+            raise ObjectNotFound(act.subject)
+        rec = ProtectedRecord(coll, rec, self)
+        if not rec.authorized(ACLs.WRITE):
+            raise NotAuthorized(rec.id, "record action for id="+rec.id)
+
         self._save_action_data(act.to_dict())
 
     @abstractmethod
@@ -1094,10 +1110,19 @@ class DBClient(ABC):
                               cancel_if_empty=True):
         """
         archive all actions in the action log for a given ID, ending with the given action.
-        :param str id:  the record identifier to select the actions for
+        All of the entries associated with the given record will be removed from the action 
+        log and stored into an action archive document in JSON format.  
+
+        :param ProtectedRecord rec:  the record whose action log is being closed
         :param Action close_action:  the action that is effectively closing the record.  This 
-                        is usually a SUBMIT action or a DELETE action.
+                                     is usually a PROCESS action or a DELETE action.
+        :param dict extra:  additional data to include in the action archive document
+        :raises NotAuthorized:  if the current user does not have write permission to the given
+                                record.  
         """
+        if not rec.authorized(ACLs.WRITE):
+            raise NotAuthorized(self.user_id, "close record history for id="+rec.id)
+
         history = self._select_actions_for(rec.id)
         if len(history) == 0 and cancel_if_empty:
             return

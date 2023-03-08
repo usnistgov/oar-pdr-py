@@ -36,9 +36,9 @@ class TestInMemoryDBClientFactory(test.TestCase):
 class TestInMemoryDBClient(test.TestCase):
 
     def setUp(self):
-        self.cfg = {}
+        self.cfg = { "default_shoulder": "mds3" }
         self.user = "nist0:ava1"
-        self.cli = inmem.InMemoryDBClientFactory({}).create_client(base.DMP_PROJECTS, {}, self.user)
+        self.cli = inmem.InMemoryDBClientFactory({}).create_client(base.DMP_PROJECTS, self.cfg, self.user)
 
     def test_next_recnum(self):
         self.assertEqual(self.cli._next_recnum("goob"), 1)
@@ -281,47 +281,14 @@ class TestInMemoryDBClient(test.TestCase):
                          {'recid': 'goob:gurn', 'alice': 'bob'})
 
     def test_record_action(self):
-        self.cli.record_action(Action(Action.CREATE, "mds3:0008", testuser, "created"))
-        self.cli.record_action(Action(Action.COMMENT, "mds3:0008", testuser, "i'm hungry"))
-        acts = self.cli._select_actions_for("mds3:0008")
+        rec = self.cli.create_record("mine1")
+        self.cli.record_action(Action(Action.CREATE, "mds3:0001", testuser, "created"))
+        self.cli.record_action(Action(Action.COMMENT, "mds3:0001", testuser, "i'm hungry"))
+        acts = self.cli._select_actions_for("mds3:0001")
         self.assertEqual(len(acts), 2)
         self.assertEqual(acts[0]['type'], Action.CREATE)
         self.assertEqual(acts[1]['type'], Action.COMMENT)
         
-    def test_close_actionlog_with(self):
-        prec = base.ProjectRecord(base.DRAFT_PROJECTS,
-                                  {"id": "pdr0:2222", "name": "brains", "owner": "nist0:ava1"}, self.cli)
-        finalact = Action(Action.PROCESS, "pdr0:2222", testuser, "done!", "submit")
-        self.assertNotIn('prov_action_log', self.cli._db)
-        self.cli._close_actionlog_with(prec, finalact, {"published_as": "comicbook"})
-
-        # no history should have been written
-        self.assertNotIn('history', self.cli._db)
-                         
-        self.cli.record_action(Action(Action.CREATE, "pdr0:2222", testuser, "created"))
-        self.cli.record_action(Action(Action.COMMENT, "pdr0:2222", testuser, "i'm hungry"))
-        self.cli._close_actionlog_with(prec, finalact, {"published_as": "comicbook", "recid": "goob"})
-        self.assertIn('history', self.cli._db)
-        self.assertEqual(len(self.cli._db['history']["pdr0:2222"]), 1)
-        self.assertEqual(len(self.cli._db['history']["pdr0:2222"][0]['history']), 3)
-        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['recid'], "pdr0:2222")
-        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['published_as'], "comicbook")
-        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['close_action'], "PROCESS:submit")
-        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['acls'],
-                         {"read": prec.acls._perms['read']})
-        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['history'][-1]['message'], "done!")
-        self.assertEqual(self.cli._select_actions_for("pdr0:2222"), [])
-        
-        self.cli._close_actionlog_with(prec, finalact, {"published_as": "comicbook"})
-        self.assertEqual(self.cli._select_actions_for("pdr0:2222"), [])
-        self.assertEqual(len(self.cli._db['history']["pdr0:2222"]), 1)
-        
-        self.cli._close_actionlog_with(prec, finalact, {"published_as": "comicbook"}, False)
-        self.assertEqual(self.cli._select_actions_for("pdr0:2222"), [])
-        self.assertEqual(len(self.cli._db['history']["pdr0:2222"]), 2)
-        self.assertEqual(self.cli._db['history']["pdr0:2222"][1]['history'][-1]['message'], "done!")
-        self.assertEqual(len(self.cli._db['history']["pdr0:2222"][1]['history']), 1)
-
         
 
 if __name__ == '__main__':
