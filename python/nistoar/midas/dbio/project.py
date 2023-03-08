@@ -248,6 +248,9 @@ class ProjectService(MIDASSystem):
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
         olddata = None
 
+        if _prec.status.state not in [status.EDIT, status.READY]:
+            raise NotEditable(id)
+
         if not part:
             # updating data as a whole: merge given data into previously saved data
             olddata = deepcopy(_prec.data)
@@ -383,6 +386,9 @@ class ProjectService(MIDASSystem):
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
         olddata = deepcopy(_prec.data)
 
+        if _prec.status.state not in [status.EDIT, status.READY]:
+            raise NotEditable(id)
+
         if not part:
             # this is a complete replacement; merge it with a starter record
             data = self._new_data_for(id)
@@ -469,6 +475,7 @@ class ProjectService(MIDASSystem):
             prec.status.act(action, message)
         elif message is not None:
             prec.message = message
+        prec.status.set_state(status.EDIT)
 
         prec.save();
         return indata
