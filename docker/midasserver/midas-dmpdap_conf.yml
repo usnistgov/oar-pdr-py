@@ -25,6 +25,9 @@ services:
          allowed_project_shoulders: ["mdsx", "mds3", "mds0", "pdr0"]
          default_shoulder:          mdsx
 
+      include_headers:
+         "Access-Control-Allow-Origin": "*"
+
       default_convention: mdsx
       conventions: 
          mdsx: 
@@ -53,6 +56,9 @@ services:
          superusers:                [ "rlp3" ]
          allowed_project_shoulders: ["mdm0", "mdm1"]
          default_shoulder:          mdm1
+
+      include_headers:
+         "Access-Control-Allow-Origin": "*"
 
       default_convention: mdm1
       conventions: 
