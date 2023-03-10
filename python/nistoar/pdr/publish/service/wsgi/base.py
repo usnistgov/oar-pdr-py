@@ -7,6 +7,8 @@ from typing import Callable
 from functools import reduce
 from logging import Logger
 from urllib.parse import parse_qs
+from collections import OrderedDict
+from collections.abc import Mapping
 
 from wsgiref.headers import Headers
 # from urllib.parse import parse_qs
@@ -41,7 +43,7 @@ class Handler(object):
     ACTION_PUBLISH  = "publish"
 
     def __init__(self, path: str, wsgienv: dict, start_resp: Callable, who=None, 
-                 config: dict={}, log: Logger=None):
+                 config: dict={}, log: Logger=None, app=None):
         self._path = path
         self._env = wsgienv
         self._start = start_resp
@@ -53,6 +55,10 @@ class Handler(object):
             who = self.default_agent
         self.who = who
         self.log = log
+
+        self._app = app
+        if self._app and hasattr(app, 'include_headers'):
+            self._hdr = Headers(list(app.include_headers.items()))
 
         self._meth = self._env.get('REQUEST_METHOD', 'GET')
 
@@ -141,7 +147,8 @@ class Handler(object):
     def _send(self, code, message, content, contenttype, ashead, encoding):
         if ashead is None:
             ashead = self._meth.upper() == "HEAD"
-        status = "{0} {1}".format(str(code), message)
+        # status = "{0} {1}".format(str(code), message)
+        self.set_response(code, message)
 
         if content:
             if not isinstance(content, list):
@@ -156,15 +163,12 @@ class Handler(object):
         # convert to bytes
         content = [(isinstance(c, str) and c.encode(encoding)) or c for c in content]
 
-        hdrs = []
         if contenttype:
-            hdrs = Headers([])
-            hdrs.add_header("Content-Type", contenttype)
-            hdrs = hdrs.items()
+            self.add_header("Content-Type", contenttype)
         if len(content) > 0:
-            hdrs.append(("Content-Length", str(reduce(lambda x, t: x+len(t), content, 0))))
+            self.add_header("Content-Length", str(reduce(lambda x, t: x+len(t), content, 0)))
 
-        self._start(status, hdrs, None)
+        self.end_headers()
         return (not ashead and content) or []
 
     def add_header(self, name, value):
@@ -202,7 +206,7 @@ class Handler(object):
         return the body content (as an iterable).  
         """
         status = "{0} {1}".format(str(self._code), self._msg)
-        self._start(status, self._hdr.items())
+        self._start(status, self._hdr.items(), None)
 
     def handle(self):
         """
@@ -284,6 +288,19 @@ class SubApp(metaclass=ABCMeta):
             if not os.path.isabs(wrlogf) and cfgmod.global_logdir:
                 wrlogf = os.path.join(cfgmod.global_logdir, wrlogf)
             self._recorder = WebRecorder(wrlogf, self._name)
+
+        self.include_headers = Headers()
+        if config.get("include_headers"):
+            try:
+                if isinstance(config.get("include_headers"), Mapping):
+                    self.include_headers = Headers(list(config.get("include_headers").items()))
+                elif isinstance(config.get("include_headers"), list):
+                    self._default_headers = Headers(list(config.get("include_headers")))
+                else:
+                    raise TypeError("Not a list of 2-tuples")
+            except TypeError as ex:
+                raise ConfigurationException("include_headers: must be either a dict or a list of "+
+                                             "name-value pairs")
 
     @abstractmethod
     def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:

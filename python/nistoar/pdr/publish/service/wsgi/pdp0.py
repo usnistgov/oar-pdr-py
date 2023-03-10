@@ -47,8 +47,7 @@ class PDP0App(SubApp):
         default_agent = None
 
         def __init__(self, app, path: str, wsgienv: dict, start_resp: Callable, who=None, config: dict={}):
-            self._app = app
-            Handler.__init__(self, path, wsgienv, start_resp, who, config, self._app.log)
+            Handler.__init__(self, path, wsgienv, start_resp, who, config, app.log, app)
             self._reqrec = None
             if self._app._recorder:
                 self._reqrec = self._app._recorder.from_wsgi(self._env)
