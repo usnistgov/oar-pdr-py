@@ -310,6 +310,140 @@ paths:
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
 
+  /mdm1/{projid}/status:
+    summary:
+      information about the status of the record, including its current state and the last action
+      applied to the record.
+    parameters:
+      "$ref": "#/components/parameters/projid"
+      summary:  the identifier assigned to the desired DMP record
+    get:
+      summary: "the current status data"
+      description:
+        this returns the value of the "status" property that is returned by the "/mdm1/{projid}"
+        endpoint.  The properties in this describe the current state of the record.
+      responses:
+        "200":
+          description:  The DMP record was found and its status info was returned.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RecordStatus"
+        "404":
+          description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    put:
+      summary: "request an action be applied to the record"
+      description:
+        This endpoint can be used to request special processing be applied to the record.  The
+        "action" property in the input object indicates what action should be applied.  The only
+        accepted values are "finalize" and "submit".  The finalize action will cause the last of
+        the automated updates be applied
+        before the record can be submitted for publishing.  For example, the version
+        that the record will be published as will be set as part of this action.  Applying finalize
+        before the submit action allows the client to give the record one last examination before
+        submission.  The submit action will apply the finalize action (again) and then submit the
+        record to be published.  Note that all input properties besides "action" and "message" will
+        be ignored.  
+      responses:
+        "200":
+          description:
+            The requested action was successfully applied to the record.  If the
+            requested action was "finalize", the new state returned will be "ready".
+            If the requested action was "submit", the new state will be "submitted".
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RecordStatus"
+        "202":
+          description:
+            The requested action was initiated on the record and is still underway.
+            The new state returned will be "processing".  The record must leave this
+            state before further edits or actions can be applied.  If the processing
+            eventually fails, the "message" property will be set to an error message. 
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RecordStatus"
+        "400":
+          description:
+            The inputs for the requested action were illegal in some way.  In particular, an
+            unsupported "action" value will result in this error.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    patch:
+      summary: "update the status (synonymous to a PUT request)"
+      description:
+        This method is synonymous to a PUT request in that it can also be used to request
+        special processing.  In addition, if the input includes only the "message"
+        property, the status message will just be updated with no other processing applied. 
+      responses:
+        "200":
+          description:
+            The requested action was successfully applied to the record or the message was
+            updated (depending on whether an action was requested).  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RecordStatus"
+        "202":
+          description:
+            Special processing was requested via the "action" input property; the 
+            processing was initiated on the record and is still underway.
+            The new state returned will be "processing".  The record must leave this
+            state before further edits or actions can be applied.  If the processing
+            eventually fails, the "message" property will be set to an error message.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RecordStatus"
+        "400":
+          description:
+            The inputs for the requested action were illegal in some way.  In particular, an
+            unsupported "action" value will result in this error.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
 components:
   parameters:
     projid:
@@ -365,20 +499,13 @@ components:
           type: string
           minimum: 1
           required: true
-        "created":
-          description: the epoch date-time that this record was created
-          type: integer
-          required: true
-        "createdDate":
-          description: the ISO 8601-formatted data-time that this record was created
-          type: string
-        "lastModified":
-          description: the epoch date-time that this record was last updated via the API
-          type: integer
-          required: true
-        "lastModifiedDate":
-          description: the ISO 8601-formatted data-time that this record was last updated via the API
-          type: string
+        "status":
+          description:
+            information describing the current state of the record and the last change that was
+            applied to it.
+          "$ref": "#/components/schemas/RecordStatus"
+          minimum: 1
+          maximum: 1
         "curators":
           description:
             the list of IDs for people who have been assigned as curators for this record; it will be empty
@@ -399,6 +526,87 @@ components:
         "meta":
           description:  metadata associated with the client, managed by the service
           type:  object
+
+    ActionRequest:
+      title: a form of a RecordStatus that is used to request an action be applied to the record
+      description:
+        Use this payload type to request that an action (e.g. "finalize" or "submit") be applied to
+        the record.  The finalize action will cause the last of the automated updates be applied
+        before the record can be submitted for publishing.  For example, the version
+        that the record will be published as will be set as part of this action.  Applying finalize
+        before the submit action allows the client to give the record one last examination before
+        submission.  The submit action will apply the finalize action (again) and then submit the
+        record to be published.
+      properties:
+        "action":
+          description:
+            the name of the action to apply.  Currently, only "finalize" and "submit" are allowed
+            action names that can be applied.  If not provided, only the status message will be
+            updated. 
+          type: string
+          minimum: 0
+          maximum: 1
+        "message":
+          description:
+            an optional message to record as to the reason or intent for applying the action.  If, 
+            for example, the action is submit which would revise a previous publication, the client 
+            can providea message describing what has changed.  If not provided, a default message 
+            will be recorded.
+
+    RecordStatus:
+      title:  a description of the current state of the record
+      description:
+        This object provides information about the current state of the record and the action that
+        was applied to it.  It also includes the three timestamps--when it was created, last
+        modified, and when it entered its current state.
+      properties:
+        "state":
+          description:
+            a label indicating it stage in its life-cycle.  Possible values are "edit", "processing",
+            "ready", "submitted", "published", and "unwell".  When a DMP is created, it enters the 
+            "edit" state.  After being finalized, it will be in the "ready" state.  Further updates
+            to the record are only allowed when it is in the "edit" or "ready" state.  
+            After it is submitted, it will first be in the "submitted" state and then eventually the
+            "published" state.  If it gets into an erroneous state that cannot be auto-corrected,
+            it may go into the "unwell" state.  
+          type: string
+          minimum: 1
+          enum: ["edit", "processing", "ready", "submitted", "published", "unwell" ]
+        "action":
+          description:
+            the name of the last action that was applied.  Possible values include "create",
+            "update", "finalize", and "submit".  
+          type: string
+          minimum: 1
+          maximum: 1
+        "message":
+          description:
+            a human-oriented message describing the last action applied to the record.  In some
+            cases this can be client provided.
+          type: string
+          minimum: 1
+          maximum: 1
+        "created":
+          description: the epoch timestamp in fractional seconds when the record was created
+          type: number
+        "createdDate":
+          description: the ISO 8601-formatted data-time that this record was created
+          type: string
+        "modified":
+          description: the epoch timestamp in fractional seconds when the record was last updated
+          type: number
+        "modifiedDate":
+          description: the ISO 8601-formatted data-time that this record was last updated
+          type: string
+        "since":
+          description:
+            the epoch timestamp in fractional seconds when the record was entered its current state.
+            For example, if the current state is "submitted", this is the date that the record was
+            submitted for publication. 
+          type: number
+        "sinceDate":
+          description: the ISO 8601-formatted data-time that this record entered its current state
+          type: string
 
     CreateRecordRequest:
       title: a form of a ProjectRecord that is used as a request to create a new one
