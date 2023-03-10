@@ -15,8 +15,10 @@ class TestRecordStatus(test.TestCase):
         self.assertEqual(stat.message, "")
         self.assertEqual(stat.since, 0)
         self.assertEqual(stat.modified, 0)
+        self.assertEqual(stat.created, 0)
         self.assertEqual(stat.since_date, "pending")
         self.assertEqual(stat.modified_date, "pending")
+        self.assertEqual(stat.created_date, "pending")
 
     def test_act(self):
         stat = status.RecordStatus("goob", {"state": status.EDIT, "since": -1})
@@ -26,16 +28,20 @@ class TestRecordStatus(test.TestCase):
         self.assertEqual(stat.message, "")
         self.assertGreater(stat.since, 0)
         self.assertGreater(stat.modified, 0)
+        self.assertGreater(stat.created, 0)
         self.assertNotEqual(stat.since_date, "pending")
         self.assertNotEqual(stat.modified_date, "pending")
+        self.assertNotEqual(stat.created_date, "pending")
 
         stat.act(Action.PATCH, "made updates")
         self.assertEqual(stat.state, status.EDIT)
         self.assertEqual(stat.action, Action.PATCH)
         self.assertEqual(stat.message, "made updates")
         self.assertEqual(stat.modified, 0)
+        self.assertGreater(stat.created, 0)
         self.assertNotEqual(stat.since_date, "pending")
         self.assertEqual(stat.modified_date, "pending")
+        self.assertNotEqual(stat.created_date, "pending")
         
         stat.act(Action.PUT)
         self.assertEqual(stat.state, status.EDIT)
@@ -74,6 +80,23 @@ class TestRecordStatus(test.TestCase):
         self.assertLess(stat.modified, stat.since)
         self.assertNotEqual(stat.since_date, "pending")
         self.assertNotEqual(stat.modified_date, "pending")
+
+    def test_set_times(self):
+        stat = status.RecordStatus("goob", {})
+        self.assertEqual(stat.since, 0)
+        self.assertEqual(stat.modified, 0)
+        self.assertEqual(stat.created, 0)
+        self.assertEqual(stat.since_date, "pending")
+        self.assertEqual(stat.modified_date, "pending")
+        self.assertEqual(stat.created_date, "pending")
+        
+        stat.set_times()
+        self.assertGreater(stat.since, 0)
+        self.assertGreater(stat.modified, 0)
+        self.assertGreater(stat.created, 0)
+        self.assertNotEqual(stat.since_date, "pending")
+        self.assertNotEqual(stat.modified_date, "pending")
+        self.assertNotEqual(stat.created_date, "pending")
         
 
 if __name__ == '__main__':

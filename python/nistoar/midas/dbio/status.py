@@ -29,6 +29,7 @@ _state_p    = "state"
 _since_p    = "since"
 _action_p   = "action"
 _modified_p = "modified"
+_created_p  = "created"
 _message_p  = "message"
 
 # Common record actions
@@ -61,17 +62,23 @@ class RecordStatus:
         if not self._data.get(_action_p):
             self._data[_action_p] = self.CREATE_ACTION
 
-        # try to keep since <= modified by default
-        if _since_p not in self._data or not isinstance(self._data[_since_p], int):
+        # try to keep created,since <= modified by default
+        if _created_p not in self._data or not isinstance(self._data[_created_p], (int, float)):
+            self._data[_created_p] = self._data.get(_modified_p) \
+                if isinstance(self._data.get(_modified_p), float) else 0
+        if _since_p not in self._data or not isinstance(self._data[_since_p], (int, float)):
             self._data[_since_p] = self._data.get(_modified_p) \
-                if isinstance(self._data.get(_modified_p), int) else 0
-        if _modified_p not in self._data or not isinstance(self._data[_modified_p], int):
+                if isinstance(self._data.get(_modified_p), float) else 0
+        if _modified_p not in self._data or not isinstance(self._data[_modified_p], (int, float)):
             self._data[_modified_p] = -1 if self._data[_since_p] < 0 else 0
 
-        if self._data[_since_p] < 0:
-            self._data[_since_p] = time()
+        now = time()
         if self._data[_modified_p] < 0:
-            self._data[_modified_p] = time()
+            self._data[_modified_p] = now
+        if self._data[_since_p] < 0 or (self._data[_modified_p] > 0 and self._data[_since_p] < 1):
+            self._data[_since_p] = now
+        if self._data[_created_p] < 0 or (self._data[_modified_p] > 0 and self._data[_created_p] < 1):
+            self._data[_created_p] = now
 
         if _message_p not in self._data:
             self._data[_message_p] = ""
@@ -93,7 +100,23 @@ class RecordStatus:
         return self._data[_state_p]
 
     @property
-    def since(self) -> int:
+    def created(self) -> float:
+        """
+        The epoch timestamp when the record entered the current state
+        """
+        return self._data[_created_p]
+
+    @property
+    def created_date(self) -> str:
+        """
+        the timestamp for when the record entered the current state, formatted as an ISO string
+        """
+        if self.created <= 0:
+            return "pending"
+        return datetime.fromtimestamp(math.floor(self.created)).isoformat()
+
+    @property
+    def since(self) -> float:
         """
         The epoch timestamp when the record entered the current state
         """
@@ -117,7 +140,7 @@ class RecordStatus:
         return self._data[_action_p]
 
     @property
-    def modified(self) -> int:
+    def modified(self) -> float:
         """
         The epoch timestamp when the latest action was applied to the record.
         """
@@ -145,12 +168,12 @@ class RecordStatus:
     def message(self, val):
         self._data[_message_p] = val
 
-    def act(self, action: str, message: str="", when: int=0):
+    def act(self, action: str, message: str="", when: float=0):
         """
         record the application of a particular action on the record
-        :param str action:   the name of the action being applied
+        :param str  action:  the name of the action being applied
         :param str message:  a statement indicating the reason or intent of the action
-        :param int when:     the epoch timestamp for when the action was applied.  A value of 
+        :param float  when:  the epoch timestamp for when the action was applied.  A value of 
                              zero (default) indicates that the timestamp should be set when the 
                              record is saved.  A value less than zero will cause the current 
                              time to be set.  
@@ -165,23 +188,43 @@ class RecordStatus:
         self._data[_action_p]   = action
         self._data[_message_p]  = message
         self._data[_modified_p] = when
+        if self._data[_created_p] < 1:
+            self._data[_created_p] = when
 
-    def set_state(self, state, when: int=-1):
+    def set_state(self, state, when: float=-1):
         """
         record a new state that the record has entered.
         :param str state:  the name of the new state that the record has entered
-        :param int when:   the epoch timestamp for when the state changed.  A value of 
+        :param float when: the epoch timestamp for when the state changed.  A value of 
                              zero indicates that the timestamp should be set when the 
                              record is saved.  A value less than zero (default) will 
                              cause the current time to be set.  
         """
         if not state:
             raise ValueError("State not specified")
-        if when < 0:
-            when = time()
 
-        self._data[_state_p]  = state
-        self._data[_since_p] = when
+        if self._data[_state_p] != state:
+            if when < 0:
+                when = time()
+            self._data[_state_p]  = state
+            self._data[_since_p] = when
+            if self._data[_created_p] < 1:
+                self._data[_created_p] = when
+
+    def set_times(self, set_modified=True):
+        """
+        update any dates that are waiting to be set.  This will be called when the record is 
+        saved.  
+        :param bool set_modified:  if True (default), the modified time will always be updated; 
+                                   otherwise, it is only updated if it is non-positive.
+        """
+        now = time()
+        if self._data[_created_p] < 1:
+            self._data[_created_p] = now
+        if self._data[_since_p] < 1:
+            self._data[_since_p] = now
+        if set_modified or self._data[_modified_p] < 1:
+            self._data[_modified_p] = now
         
     def to_dict(self, with_id=True):
         """

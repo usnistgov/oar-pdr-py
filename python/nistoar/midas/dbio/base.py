@@ -180,10 +180,6 @@ class ProtectedRecord(ABC):
         """
         now = time.time()
 
-        if 'created' not in recdata:
-            recdata['created'] = now
-        if 'modified' not in recdata:
-            recdata['modified'] = recdata['created']
         if not recdata.get('acls'):
             recdata['acls'] = {}
         if not recdata.get('owner'):
@@ -192,7 +188,7 @@ class ProtectedRecord(ABC):
             # Should be None or a date
             recdata['deactivated'] = None
         if 'status' not in recdata:
-            recdata['status'] = RecordStatus(recdata['id'], {}).to_dict(False)
+            recdata['status'] = RecordStatus(recdata['id'], {'created': -1}).to_dict(False)
         for perm in ACLs.OWN:
             if perm not in recdata['acls']:
                 recdata['acls'][perm] = [recdata['owner']] if recdata['owner'] else []
@@ -214,28 +210,31 @@ class ProtectedRecord(ABC):
         """
         the epoch timestamp indicating when this record was first corrected
         """
-        return self._data.get('created', 0)
+        return self.status.created
 
     @property
     def created_date(self) -> str:
         """
         the creation timestamp formatted as an ISO string
         """
-        return datetime.fromtimestamp(math.floor(self.created)).isoformat()
+        return self.status.created_date
 
     @property
     def modified(self) -> float:
         """
         the epoch timestamp indicating when this record was last updated
         """
-        return self._data.get('modified', self._data.get('created', 0))
+        out = self.status.modified
+        if out < 1:
+            out = self.status.created
+        return out
 
     @property
     def modified_date(self) -> str:
         """
         the timestamp for the last modification, formatted as an ISO string
         """
-        return datetime.fromtimestamp(math.floor(self.modified)).isoformat()
+        return self.status.modified_date
 
     @property
     def deactivated(self) -> bool:
@@ -306,12 +305,12 @@ class ProtectedRecord(ABC):
         """
         if not self.authorized(ACLs.WRITE):
             raise NotAuthorized(self._cli.user_id, "update record")
-        oldmod = self.modified
-        self._data['modified'] = time.time()
+        olddates = (self.status.modified, self.status.created, self.status.since)
+        self.status.set_times()
         try: 
             self._cli._upsert(self._coll, self._data)
         except Exception as ex:
-            self._data['modified'] = oldmod
+            (self._data['modified'], self._data['created'], self._data['since']) = olddates
             raise
 
     def authorized(self, perm: Permissions, who: str = None):

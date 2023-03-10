@@ -15,6 +15,8 @@ class TestProjectRecord(test.TestCase):
                                       {"id": "pdr0:2222", "name": "brains", "owner": self.user}, self.cli)
 
     def test_ctor(self):
+        self.rec = base.ProjectRecord(base.DRAFT_PROJECTS,
+                                      {"id": "pdr0:2222", "name": "brains", "owner": self.user}, self.cli)
         self.assertIs(self.rec._cli, self.cli)
         self.assertEqual(self.rec.id, "pdr0:2222")
         self.assertEqual(self.rec.name, "brains")
@@ -45,7 +47,7 @@ class TestProjectRecord(test.TestCase):
         self.assertNotIn("pdr0:2222", self.cli._db[base.DRAFT_PROJECTS])
         
         self.rec.save()
-        self.assertGreater(self.rec.modified, self.rec.created)
+        self.assertGreaterEqual(self.rec.modified, self.rec.created)
         oldmod = self.rec.modified
         self.assertIn("pdr0:2222", self.cli._db[base.DRAFT_PROJECTS])
         self.assertEqual(self.cli._db[base.DRAFT_PROJECTS]["pdr0:2222"]['name'], "brains")
