@@ -250,7 +250,7 @@ class Action(object):
         return self._msg
 
     @message.setter
-    def message(self, msg: str) -> None:
+    def message(self, message: str) -> None:
         self._msg = message
 
     @property
@@ -352,6 +352,14 @@ class Action(object):
             return json.loads(self.object.to_string())
         if hasattr(self.object, 'to_dict'):
             return self.object.to_dict()
+        if isinstance(self.object, Mapping):
+            out = OrderedDict()
+            for k,v in self.object.items():
+                if isinstance(v, JsonPatch):
+                    out[k] = json.loads(v.to_string())
+                else:
+                    out[k] = v
+            return out
         return self.object
 
     def _serialize_subactions(self, indent=4) -> str:
