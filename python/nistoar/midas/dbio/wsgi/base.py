@@ -33,12 +33,11 @@ class DBIOHandler(Handler):
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
                                logger attached to the SubApp will be used.  
         """
-        self._app = subapp
-        if config is None:
-            config = self._app.cfg
-        if not log:
-            log = self._app.log
-        Handler.__init__(self, path, wsgienv, start_resp, who, config, log)
+        if config is None and hasattr(subapp, 'cfg'):
+            config = subapp.cfg
+        if not log and hasattr(subapp, 'log'):
+            log = subapp.log
+        Handler.__init__(self, path, wsgienv, start_resp, who, config, log, subapp)
         self._dbcli = dbclient
         self._reqrec = None
         if hasattr(self._app, "_recorder") and self._app._recorder:

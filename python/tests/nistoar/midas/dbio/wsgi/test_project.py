@@ -57,12 +57,15 @@ class TestMIDASProjectApp(test.TestCase):
                 "superusers": [ "rlp" ],
                 "allowed_project_shoulders": ["mdm1", "spc1"],
                 "default_shoulder": "mdm0"
+            },
+            "include_headers": {
+                "Access-Control-Allow-Origin": "*"
             }
         }
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdm1": 2 }})
         self.svcfact = prj.ProjectServiceFactory(base.DMP_PROJECTS, self.dbfact, self.cfg, 
                                                  rootlog.getChild("midas.prj"))
-        self.app = prj.MIDASProjectApp(self.svcfact, rootlog.getChild("dmpapi"))
+        self.app = prj.MIDASProjectApp(self.svcfact, rootlog.getChild("dmpapi"), self.cfg)
         self.resp = []
         self.rootpath = "/midas/dmp/"
 
@@ -85,7 +88,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectNameHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         self.assertEqual(hdlr._id, "mdm1:0001")
 
@@ -111,6 +114,11 @@ class TestMIDASProjectApp(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
         self.assertIn("404 ", self.resp[0])
+
+        # Check for CORS header
+        cors = [h for h in self.resp if h.startswith("Access-Control-Allow-Origin")]
+        self.assertGreater(len(cors), 0)
+        self.assertTrue(cors[0].startswith("Access-Control-Allow-Origin: *"))
 
     def test_put_name(self):
         path = "mdm1:0003/name"
@@ -178,7 +186,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         self.assertEqual(hdlr._id, "mdm1:0001")
 
@@ -189,7 +197,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         self.assertEqual(hdlr._id, "mdm1:0001")
 
@@ -258,7 +266,7 @@ class TestMIDASProjectApp(test.TestCase):
         req['wsgi.input'] = StringIO(json.dumps({"data": {"color": "red"}}))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         body = hdlr.handle()
         self.assertIn("400 ", self.resp[0])
@@ -267,7 +275,7 @@ class TestMIDASProjectApp(test.TestCase):
         req['wsgi.input'] = StringIO(json.dumps({"name": "big", "owner": "nobody", "data": {"color": "red"}}))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         body = hdlr.handle()
         self.assertIn("201 ", self.resp[0])
@@ -287,7 +295,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         body = hdlr.handle()
         self.assertIn("200 ", self.resp[0])
@@ -340,7 +348,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         self.assertEqual(hdlr._id, "mdm1:0003")
         body = hdlr.handle()
@@ -411,7 +419,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "authors")
         self.assertEqual(hdlr._id, "pdr0:0012")
 
@@ -423,7 +431,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectACLsHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         self.assertEqual(hdlr._id, "mdm1:0003")
         body = hdlr.handle()
@@ -460,7 +468,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectACLsHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "read")
         self.assertEqual(hdlr._id, "mdm1:0003")
         body = hdlr.handle()
@@ -528,7 +536,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectACLsHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "write/hank")
         self.assertEqual(hdlr._id, "mdm1:0003")
         body = hdlr.handle()
@@ -644,7 +652,7 @@ class TestMIDASProjectApp(test.TestCase):
         req['wsgi.input'] = StringIO(json.dumps({"name": "big", "owner": "nobody", "data": {"color": "red"}}))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         body = hdlr.handle()
         self.assertIn("201 ", self.resp[0])
@@ -683,7 +691,7 @@ class TestMIDASProjectApp(test.TestCase):
         req['wsgi.input'] = StringIO(json.dumps({"name": "big", "owner": "nobody", "data": {"color": "red"}}))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         body = hdlr.handle()
         self.assertIn("201 ", self.resp[0])
@@ -725,7 +733,7 @@ class TestMIDASProjectApp(test.TestCase):
         req['wsgi.input'] = StringIO(json.dumps({"name": "big", "owner": "nobody", "data": {"color": "red"}}))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
-        self.assertEqual(hdlr.cfg, {})
+        self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         body = hdlr.handle()
         self.assertIn("201 ", self.resp[0])

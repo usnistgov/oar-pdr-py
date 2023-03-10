@@ -167,6 +167,7 @@ class ProtectedRecord(ABC):
             raise ValueError("Record data is missing its 'id' property")
         self._data = self._initialize(recdata)
         self._acls = ACLs(self, self._data.get("acls", {}))
+        self._status = RecordStatus(self.id, self._data['status'])
 
     def _initialize(self, recdata: MutableMapping) -> MutableMapping:
         """
@@ -287,7 +288,7 @@ class ProtectedRecord(ABC):
         return the status object that indicates the current state of the record and the last 
         action applied to it.  
         """
-        return RecordStatus(self.id, self._data.get('status'))
+        return self._status
 
     @property
     def acls(self) -> ACLs:
@@ -376,8 +377,9 @@ class ProtectedRecord(ABC):
         out = deepcopy(self._data)
         out['acls'] = self.acls._perms
         out['type'] = self._coll
-        out['createdDate'] = self.created_date
-        out['modifiedDate'] = self.modified_date
+        out['status']['createdDate'] = self.status.created_date
+        out['status']['modifiedDate'] = self.status.modified_date
+        out['status']['sinceDate'] = self.status.since_date
         return out
 
 class Group(ProtectedRecord):

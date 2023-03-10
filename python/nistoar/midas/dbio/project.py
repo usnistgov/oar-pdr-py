@@ -24,7 +24,7 @@ from .. import MIDASException, MIDASSystem
 from nistoar.pdr.publish.prov import PubAgent, Action
 
 _STATUS_ACTION_CREATE   = RecordStatus.CREATE_ACTION
-_STATUS_ACTION_UPDATE   = RecordStatus.CREATE_ACTION
+_STATUS_ACTION_UPDATE   = RecordStatus.UPDATE_ACTION
 _STATUS_ACTION_CLEAR    = "clear"
 _STATUS_ACTION_FINALIZE = "finalize"
 _STATUS_ACTION_SUBMIT   = "submit"
@@ -135,7 +135,7 @@ class ProjectService(MIDASSystem):
         else:
             prec.save()
 
-        self.dbcli.record_action(Action(Action.CREATE, prec.id, self.who, prec.status.message))
+        self._record_action(Action(Action.CREATE, prec.id, self.who, prec.status.message))
         return prec
 
     def _get_id_shoulder(self, user: PubAgent):
@@ -232,8 +232,6 @@ class ProjectService(MIDASSystem):
                              the given ``newdata`` is a value that should be set to the property pointed 
                              to by ``part``.  
         :param str message:  an optional message that will be recorded as an explanation of the update.
-        :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to ``id``.
-                             If this is not provided, the record will by fetched anew based on the ``id``.  
         :raises ObjectNotFound:  if no record with the given ID exists or the ``part`` parameter points to 
                              an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
@@ -298,6 +296,10 @@ class ProjectService(MIDASSystem):
         try:
             data = self._save_data(data, _prec, message, set_action and _STATUS_ACTION_UPDATE)
 
+        except InvalidUpdate as ex:
+            provact.message = "Failed to save update due to invalid data: " + ex.format_errors()
+            raise
+            
         except Exception as ex:
             self.log.error("Failed to save update for project, %s: %s", _prec.id, str(ex))
             provact.message = "Failed to save update due to an internal error"
@@ -432,12 +434,17 @@ class ProjectService(MIDASSystem):
         try:
             data = self._save_data(data, _prec, message, set_action and _STATUS_ACTION_UPDATE)
 
+        except PartNotAccessible as ex:
+            # client request error; don't record action
+            raise
+
         except Exception as ex:
             self.log.error("Failed to save update to project, %s: %s", _prec.id, str(ex))
             provact.message = "Failed to save update due to an internal error"
+            self._record_action(provact)
             raise
 
-        finally:
+        else:
             self._record_action(provact)
 
         return self._extract_data_part(data, part)
@@ -498,8 +505,13 @@ class ProjectService(MIDASSystem):
                              given by `id`.  
         :raises PartNotAccessible:  if clearing of the part of the data specified by `part` is not allowed.
         """
+        set_state = False
         if not prec:
+            set_state = True
             prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+
+        if _prec.status.state not in [status.EDIT, status.READY]:
+            raise NotEditable(id)
 
         initdata = self._new_data_for(prec.id, prec.meta)
         if not part:
@@ -542,8 +554,11 @@ class ProjectService(MIDASSystem):
         else:
             provact = Action(Action.DELETE, tgt, self.who, prec.status.message)
 
+        if set_state:
+            prec.status.set_state(status.EDIT)
+
         try:
-            self.save()
+            prec.save()
 
         except Exception as ex:
             self.log.error("Failed to save cleared data for project, %s: %s", tgt, str(ex))
@@ -800,7 +815,7 @@ class InvalidRecord(DBIORecordException):
             message = "Unknown validation errors encountered while updating data"
             errors = []
         
-        super(InvalidUpdate, self).__init__(recid, message, sys)
+        super(InvalidRecord, self).__init__(recid, message, sys)
         self.record_part = part
         self.errors = errors
 
@@ -850,6 +865,7 @@ class InvalidUpdate(InvalidRecord):
                              this parameter if the entire record was provided.
         :param [str] errors: a listing of the individual errors uncovered in the data
         """
+        super(InvalidUpdate, self).__init__(message, recid, part, errors, sys)
     
 class PartNotAccessible(DBIORecordException):
     """

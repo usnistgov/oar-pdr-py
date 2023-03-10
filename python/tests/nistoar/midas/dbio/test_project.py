@@ -58,6 +58,9 @@ class TestProjectService(test.TestCase):
             return None
         return acts[-1]
 
+    def assertActionCount(self, recid, count):
+        self.assertEqual(len(self.project.dbcli._db.get(base.PROV_ACT_LOG, {}).get(recid,[])), count)
+
     def test_ctor(self):
         self.create_service()
         self.assertTrue(self.project.dbcli)
@@ -171,6 +174,11 @@ class TestProjectService(test.TestCase):
         self.assertEqual(prec.id, "mdm1:0003")
         self.assertEqual(prec.data, {})
         self.assertEqual(prec.meta, {})
+        lastact = self.last_action_for(prec.id)
+        self.assertEqual(lastact['subject'], prec.id)
+        self.assertEqual(lastact['type'], prov.Action.CREATE)
+        self.assertNotIn('subactions', lastact)
+#        self.assertEqual(len(lastact['subactions']), 1)
 
         data = self.project.update_data(prec.id, {"color": "red", "pos": {"x": 23, "y": 12, "grid": "A"}})
         self.assertEqual(data, {"color": "red", "pos": {"x": 23, "y": 12, "grid": "A"}})
@@ -181,6 +189,7 @@ class TestProjectService(test.TestCase):
         self.assertEqual(lastact['subject'], prec.id)
         self.assertEqual(lastact['type'], prov.Action.PATCH)
         self.assertNotIn('subactions', lastact)
+        self.assertActionCount(prec.id, 2)
 
         data = self.project.update_data(prec.id, {"y": 1, "z": 10, "grid": "B"}, "pos")
         self.assertEqual(data, {"x": 23, "y": 1, "z": 10, "grid": "B"})
