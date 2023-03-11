@@ -714,6 +714,9 @@ class NERDFileComps(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
+    def __contains__(self, idorpath: str) -> bool:
+        return self.exists(idorpath) or self.path_exists(idorpath)
+
     @abstractmethod
     def path_is_collection(self, filepath: str) -> bool:
         """

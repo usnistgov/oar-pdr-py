@@ -28,11 +28,12 @@ from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, No
                      InvalidUpdate, ObjectNotFound, PartNotAccessible,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import MIDASProjectApp, ProjectDataHandler, SubApp
+from ...dbio import status
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
 from nistoar.pdr.utils import build_mime_type_map, read_json
-from nistoar.pdr.publish.prov import PubAgent
+from nistoar.pdr.publish.prov import PubAgent, Action
 
 from . import validate
 from .. import nerdstore
@@ -270,6 +271,7 @@ class DAPService(ProjectService):
                 self.log.error("Error while cleaning up DAP record after create failure: %s", str(ex))
             raise
 
+        self._record_action(Action(Action.CREATE, prec.id, self.who, prec.status.message))
         return prec
 
     def _new_data_for(self, recid, meta=None, schemaid=None):
@@ -445,7 +447,7 @@ class DAPService(ProjectService):
         """
         return self._update_data(id, newdata, part, replace=True)
 
-    def update_data(self, id, newdata, part=None):
+    def update_data(self, id, newdata, part=None, message="", _prec=None):
         """
         merge the given data into the currently save data content for the record with the given identifier.
         :param str      id:  the identifier for the record whose data should be updated.
@@ -453,9 +455,7 @@ class DAPService(ProjectService):
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
                              the given ``newdata`` is a value that should be set to the property pointed 
                              to by ``part``.  
-        :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to 
-                             ``id``.  If this is not provided, the record will by fetched anew based on 
-                             the ``id``.  
+        :param str message:  an optional message that will be recorded as an explanation of the update.
         :raises ObjectNotFound:  if no record with the given ID exists or the ``part`` parameter points to 
                              an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
@@ -465,7 +465,7 @@ class DAPService(ProjectService):
         :raises InvalidUpdate:  if the provided ``newdata`` represents an illegal or forbidden update or 
                              would otherwise result in invalid data content.
         """
-        return self._update_data(id, newdata, part, replace=False)
+        return self._update_data(id, newdata, part, replace=False, message="", prec=_prec)
 
     def clear_data(self, id, part=None, _prec=None):
         """
@@ -484,7 +484,9 @@ class DAPService(ProjectService):
         :raises PartNotAccessible:  if clearing of the part of the data specified by ``part`` is not 
                              allowed.
         """
+        set_state = False
         if not _prec:
+            set_state = True
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
         if not self._store.exists(id):
@@ -493,36 +495,84 @@ class DAPService(ProjectService):
             self._store.load_from(nerd)
         nerd = self._store.open(id)
 
-        if part:
-            if part == "authors":
-                nerd.authors.empty()
-            elif part == "references":
-                nerd.references.empty()
-            elif part == FILE_DELIM:
-                nerd.files.empty()
-            elif part == LINK_DELIM:
-                nerd.nonfiles.empty()
-            elif part == "components":
-                nerd.files.empty()
-                nerd.nonfiles.empty()
-            elif part in "title rights disclaimer description".split():
-                resmd = nerd.get_res_data()
-                del resmd[part]
-                nerd.replace_res_data(resmd)
+        try:
+            if part:
+                what = part
+                if part == "authors":
+                    nerd.authors.empty()
+                elif part == "references":
+                    nerd.references.empty()
+                elif part == FILE_DELIM:
+                    what = "files"
+                    nerd.files.empty()
+                elif part == LINK_DELIM:
+                    what = "links"
+                    nerd.nonfiles.empty()
+                elif part == "components":
+                    nerd.files.empty()
+                    nerd.nonfiles.empty()
+                elif part in "title rights disclaimer description".split():
+                    resmd = nerd.get_res_data()
+                    del resmd[part]
+                    nerd.replace_res_data(resmd)
+                else:
+                    raise PartNotAccessible(_prec.id, path, "Clearing %s not allowed" % path)
+
+                provact = Action(Action.PATCH, _prec.id, self.who, "clearing "+what)
+                part = ("/"+part) if part.startswith("pdr:") else ("."+part)
+                provact.add_subaction(Action(Action.DELETE, _prec.id+"#data"+part, self.who,
+                                             "clearing "+what))
+                prec.status.act(self.STATUS_ACTION_CLEAR, "cleared "+what)
+
             else:
-                raise PartNotAccessible(_prec.id, path, "Clearing %s not allowed" % path)
+                nerd.authors.empty()
+                nerd.references.empty()
+                nerd.files.empty()
+                nerd.nonfiles.empty()
+                nerd.replace_res_data(self._new_data_for(_prec.id, prec.meta))
 
-        else:
-            nerd.authors.empty()
-            nerd.references.empty()
-            nerd.files.empty()
-            nerd.nonfiles.empty()
-            nerd.replace_res_data(self._new_data_for(_prec.id, prec.meta))
+                provact = Action(Action.PATCH, _prec.id, self.who, "clearing all NERDm data")
+                prec.status.act(self.STATUS_ACTION_CLEAR, "cleared all NERDm data")
 
+        except PartNotAccessible:
+            # client request error; don't record action
+            raise
 
-    def _update_data(self, id, newdata, part=None, prec=None, nerd=None, replace=False):
+        except Exception as ex:
+            self.log.error("Failed to clear requested NERDm data, %s: %s", _prec.id, str(ex))
+            self.log.warning("Partial update is possible")
+            provact.message = "Failed to clear requested NERDm data"
+            self._record_action(provact)
+            
+            prec.status.act(self.STATUS_ACTION_CLEAR, "Failed to clear NERDm data")
+            prec.set_state(status.EDIT)
+            prec.data = self._summarize(nerd)
+            self._try_save(prec)
+            raise
+
+        prec.data = self._summarize(nerd)
+        if set_state:
+            prec.status.set_state(status.EDIT)
+
+        try:
+            prec.save()
+
+        except Exception as ex:
+            self.log.error("Failed to saved DBIO record, %s: %s", prec.id, str(ex))
+            raise
+
+        finally:
+            self._record_action(provact)            
+            
+
+    def _update_data(self, id, newdata, part=None, prec=None, nerd=None, replace=False, message=""):
+        set_action = False
         if not prec:
+            set_action = True  # setting the last action will NOT be the caller's responsibility
             prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+
+        if prec.status.state not in [status.EDIT, status.READY]:
+            raise NotEditable(id)
 
         if not nerd:
             if not self._store.exists(id):
@@ -534,10 +584,14 @@ class DAPService(ProjectService):
 
             nerd = self._store.open(id)
 
+        provact = Action(Action.PUT if not part and replace else Action.PATCH,
+                         prec.id, self.who, message)
+
         if not part:
             # this is a complete replacement; save updated NERDm data to the metadata store
             try:
-                data = self._update_all_nerd(prec, nerd, newdata, replace)
+                # prep the provenance record
+                data = self._update_all_nerd(prec, nerd, newdata, provact, replace)
             except InvalidUpdate as ex:
                 ex.record_id = prec.id
                 raise
@@ -551,9 +605,7 @@ class DAPService(ProjectService):
                 ex.record_part = part
                 raise
 
-        prec.data = self._summarize(nerd)
-        prec.save()
-
+        self._save_data(self._summarize(nerd), prec, message, set_action and self.STATUS_ACTION_UPDATE)
         return data
 
     def _summarize(self, nerd: NERDResource):
@@ -575,7 +627,9 @@ class DAPService(ProjectService):
                  "bureauCode programCode systemOfRecords primaryITInvestmentUII "       + \
                  "doi ediid releaseHistory status theme").split()
 
-    def _update_all_nerd(self, prec: ProjectRecord, nerd: NERDResource, data: Mapping, replace=False):
+    def _update_all_nerd(self, prec: ProjectRecord, nerd: NERDResource,
+                         data: Mapping, provact: Action, replace=False):
+
         # filter out properties that the user is not allow to update
         newdata = OrderedDict()
         for prop in data:
@@ -631,38 +685,86 @@ class DAPService(ProjectService):
             raise InvalidUpdate("Input validation error: "+str(errors[0]), prec.id, errors=errors)
 
         # all data is merged and validated; now commit
-        nerd.replace_res_data(newdata)
-        if replace:
-            nerd.authors.empty()
-            if authors:
-                nerd.authors.replace_all_with(authors)
-            nerd.references.empty()
-            if refs:
-                nerd.references.replace_all_with(refs)
-            nerd.nonfiles.empty()
-            if nonfiles:
-                nerd.nonfiles.replace_all_with(nonfiles)
-        else:
-            def put_listitem_into(item, objlist):
-                if item.get("@id"):
-                    objlist.set(item.get("@id"), item)
+        try:
+            old = nerd.get_res_data()
+            nerd.replace_res_data(newdata)
+            provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
+                                         prec.id+"#data/pdr.r", self.who,
+                                         "updating resource-level metadata",
+                                         self._jsondiff(old, newdata)))
+
+            if replace:
+                old = nerd.authors.get_data()
+                nerd.authors.empty()
+                if authors:
+                    provact.add_subaction(Action(Action.PUT, prec.id+"#data.authors", self.who,
+                                                 "replacing authors", self._jsondiff(old, authors)))
+                    nerd.authors.replace_all_with(authors)
                 else:
-                    objlist.append(item)
-            def put_each_into(data, objlist):
-                for item in data:
-                    put_listitem_into(item, objlist)
+                    provact.add_subaction(Action(Action.DELETE, prec.id+"#data.authors", self.who,
+                                                 "removing authors"))
 
-            if authors:
-                put_each_into(authors, nerd.authors)
-            if refs:
-                put_each_into(refs, nerd.references)
-            if nonfiles:
-                put_each_into(nonfiles, nerd.nonfiles)
+                old = nerd.references.get_data()
+                nerd.references.empty()
+                if refs:
+                    provact.add_subaction(Action(Action.PUT, prec.id+"#data.references", self.who,
+                                                 "replacing references", self._jsondiff(old, refs)))
+                    nerd.references.replace_all_with(refs)
+                else:
+                    provact.add_subaction(Action(Action.DELETE, prec.id+"#data.references", self.who,
+                                                 "removing references"))
 
-        if replace:
-            nerd.files.empty()
-        for fmd in files:
-            nerd.files.set_file_at(fmd)
+                old = nerd.nonfiles.get_data()
+                nerd.nonfiles.empty()
+                if nonfiles:
+                    provact.add_subaction(Action(Action.PUT, prec.id+"#data/pdr:see", self.who,
+                                                 "replacing non-file components", self._jsondiff(old, nonfiles)))
+                    nerd.nonfiles.replace_all_with(nonfiles)
+                else:
+                    provact.add_subaction(Action(Action.DELETE, prec.id+"#data/pdr:see", self.who,
+                                                 "removing non-file components"))
+                    
+            else:
+                def put_listitem_into(item, objlist):
+                    if item.get("@id"):
+                        objlist.set(item.get("@id"), item)
+                    else:
+                        objlist.append(item)
+                def put_each_into(data, objlist):
+                    for item in data:
+                        put_listitem_into(item, objlist)
+
+                if authors:
+                    provact.add_subaction(Action(Action.PATCH, prec.id+"#data.authors", self.who,
+                                                 "updating authors", self._jsondiff(old, nonfiles)))
+                    put_each_into(authors, nerd.authors)
+                if refs:
+                    provact.add_subaction(Action(Action.PATCH, prec.id+"#data.references", self.who,
+                                                 "updating references", self._jsondiff(old, refs)))
+                    put_each_into(refs, nerd.references)
+                if nonfiles:
+                    provact.add_subaction(Action(Action.PATCH, prec.id+"#data/pdr:see", self.who,
+                                                 "updating non-file components", self._jsondiff(old, nonfiles)))
+                    put_each_into(nonfiles, nerd.nonfiles)
+
+            if replace:
+                provact.add_subaction(Action(Action.PUT, prec.id+"#data/pdr:f", self.who,
+                                             "replacing non-file components"))
+                nerd.files.empty()
+            else:
+                provact.add_subaction(Action(Action.PUT, prec.id+"#data/pdr:f", self.who,
+                                             "replacing non-file components"))
+            for fmd in files:
+                nerd.files.set_file_at(fmd)
+
+        except Exception as ex:
+            provact.message = "Failed to save NERDm data update due to internal error"
+            self.log.error("Failed to save NERDm metadata: "+str(ex))
+            self.log.warning("Failed NERDm save may have been partial")
+            raise
+        
+        finally:
+            self._record_action(provact)
 
         return nerd.get_data(True)
 
@@ -675,123 +777,202 @@ class DAPService(ProjectService):
         # respectively.
 
         schemabase = prec.data.get("_schema") or NERDMPUB_SCH_ID
-        
-        m = re.search(r'^([a-z]+s)\[([\w\d\.\/]+)\]$', path)
-        if m:
-            # path is of the form xxx[k] and refers to an item in a list
-            key = m.group(2)
-            try:
-                key = int(key)
-            except ValueError:
-                pass
+        subacttype = Action.PUT if replace else Action.PATCH
+        provact = Action(Action.PATCH, prec.id, self.who, "updating NERDm part")
 
-            if m.group(1) == "authors":
-                data["_schema"] = schemabase+"/definitions/Person"
-                data = self._update_listitem(nerd.authors, self._moderate_author, data, key, replace, doval)
-            elif m.group(1) == "references":
-                data["_schema"] = schemabase+"/definitions/BibliographicReference"
-                data = self._update_listitem(nerd.references, self._moderate_reference, data, key,
-                                             replace, doval)
-            elif m.group(1) == LINK_DELIM:
-                data["_schema"] = schemabase+"/definitions/Component"
-                data = self._update_listitem(nerd.nonfiles, self._moderate_nonfile, data, key,
-                                             replace, doval)
-            elif m.group(1) == "components" or m.group(1) == FILE_DELIM:
-                data["_schema"] = schemabase+"/definitions/Component"
-                data = self._update_component(nerd, data, key, replace, doval=doval)
+        try:
+            m = re.search(r'^([a-z]+s)\[([\w\d\.\/]+)\]$', path)
+            if m:
+                # path is of the form xxx[k] and refers to an item in a list
+                key = m.group(2)
+                try:
+                    key = int(key)
+                except ValueError:
+                    pass
+
+                old = {}
+                if m.group(1) == "authors":
+                    what = "adding author"
+                    if key in nerd.authors:
+                        old = nerd.authors.get(key)
+                        what = "updating author"
+                    data["_schema"] = schemabase+"/definitions/Person"
+                    data = self._update_listitem(nerd.authors, self._moderate_author, data, key,
+                                                 replace, doval)
+                    provact.add_subaction(Action(subacttype, "%s#data.authors[%s]" % (prec.id, str(key)), 
+                                                 what, self._jsondiff(old, data)))
+                    
+                elif m.group(1) == "references":
+                    what = "adding author"
+                    if key in nerd.authors:
+                        old = nerd.authors.get(key)
+                        what = "updating author"
+                    data["_schema"] = schemabase+"/definitions/BibliographicReference"
+                    data = self._update_listitem(nerd.references, self._moderate_reference, data, key,
+                                                 replace, doval)
+                    provact.add_subaction(Action(subacttype, "%s#data.references[%s]" % (prec.id, str(key)), 
+                                          what, self._jsondiff(old, data)))
+                    
+                elif m.group(1) == LINK_DELIM:
+                    what = "adding link"
+                    if key in nerd.nonfiles:
+                        old = nerd.nonfiles.get(key)
+                        what = "updating link"
+                    data["_schema"] = schemabase+"/definitions/Component"
+                    data = self._update_listitem(nerd.nonfiles, self._moderate_nonfile, data, key,
+                                                 replace, doval)
+                    provact.add_subaction(Action(subacttype, "%s#data/pdr:see[%s]" % (prec.id, str(key)), 
+                                                 what, self._jsondiff(old, data)))
+                    
+                elif m.group(1) == "components" or m.group(1) == FILE_DELIM:
+                    if ('filepath' not in data and key in nerd.nonfiles):
+                        old = nerd.nonfiles.get(key)
+                        what = "updating link"
+                    elif key in nerd.files:
+                        old = nerd.files.get(key)
+                        what = "updating file"
+                    else:
+                        old = {}
+                        what = "adding component"
+                    data["_schema"] = schemabase+"/definitions/Component"
+                    data = self._update_component(nerd, data, key, replace, doval=doval)
+                    provact.add_subaction(Action(subacttype, "%s#data/pdr:f[%s]" % (prec.id, str(key)), 
+                                                 what, self._jsondiff(old, data)))
+                    
+                else:
+                    raise PartNotAccessible(prec.id, path, "Updating %s not allowed" % path)
+
+            elif path == "authors":
+                if not isinstance(data, list):
+                    err = "authors data is not a list"
+                    raise InvalidUpdate(err, id, path, errors=[err])
+                old = nerd.authors.get_data()
+                if replace:
+                    data = self._replace_objlist(nerd.authors, self._moderate_author, data, doval)
+                else:
+                    data = self._update_objlist(nerd.authors, self._moderate_author, data, doval)
+                provact.add_subaction(Action(subacttype, prec.id+"#data.authors", "updating authors",
+                                             self._jsondiff(old, data)))
+
+            elif path == "references":
+                if not isinstance(data, list):
+                    err = "references data is not a list"
+                    raise InvalidUpdate(err, id, path, errors=[err])
+                old = nerd.references.get_data()
+                if replace:
+                    data = self._replace_objlist(nerd.references, self._moderate_reference, data, doval)
+                else:
+                    data = self._update_objlist(nerd.references, self._moderate_reference, data, doval)
+                provact.add_subaction(Action(subacttype, prec.id+"#data.references", "updating references",
+                                             self._jsondiff(old, data)))
+
+            elif path == LINK_DELIM:
+                if not isinstance(data, list):
+                    err = "non-file (links) data is not a list"
+                    raise InvalidUpdate(err, id, path, errors=[err])
+                old = nerd.nonfiles.get_data()
+                if replace:
+                    data = self._replace_objlist(nerd.nonfies, self._moderate_nonfile, data, doval)
+                else:
+                    data = self._update_objlist(nerd.nonfiles, self._moderate_nonfile, data, doval)
+                provact.add_subaction(Action(subacttype, prec.id+"#data/pdr:see", "updating link list",
+                                             self._jsondiff(old, data)))
+                
+
+            # elif path == FILE_DELIM:
+            #     if not isinstance(data, list):
+            #         err = "components data is not a list"
+            #         raise InvalidUpdate(err, id, path, errors=[err])
+
+            elif path == "components" or path == FILE_DELIM:
+                if not isinstance(data, list):
+                    err = "components data is not a list"
+                    raise InvalidUpdate(err, id, path, errors=[err])
+                oldn = nerd.nonfiles.get_data()
+                oldf = nerd.files.get_files()
+                files, nonfiles = self._merge_comps_for_update(nerd, data, replace, doval)
+                if replace:
+                    if path == "components":
+                        nerd.nonfiles.empty()
+                    nerd.files.empty()
+                if path == "components":
+                    for cmp in nonfiles:
+                        if cmp.get("@id"):
+                            nerd.nonfiles.set(cmp['@id'])
+                        else:
+                            nerd.nonfiles.append(cmp)
+
+                provact.add_subaction(Action(subacttype, prec.id+"#data/pdr:f", "updating file list",
+                                             self._jsondiff(oldn, nerd.nonfiles.get_data())))
+                for cmp in files:
+                    nerd.files.set_file_at(cmp)
+
+                if path == "components":
+                    provact.add_subaction(Action(subacttype, prec.id+"#data/pdr:see", "updating link list",
+                                                 self._jsondiff(oldf, nerd.nonfiles.get_data())))
+                    data = nerd.nonfiles.get_data() + nerd.files.get_files()
+                else:
+                    data = nerd.files.get_files()
+
+            elif path == "contactPoint":
+                if not isinstance(data, Mapping):
+                    raise InvalidUpdate("contactPoint data is not an object", sys=self)
+                res = nerd.get_res_data()
+                old = res['contactPoint']
+                res['contactPoint'] = self._moderate_contact(data, res, replace=replace, doval=doval)
+                    # may raise InvalidUpdate
+                provact.add_subaction(Action(subacttype, prec.id+"#data.contactPoint", 
+                                      "updating contact point", self._jsondiff(old, res['contactPoint'])))
+                nerd.replace_res_data(res)
+                data = res[path]
+                
+            elif path == "@type":
+                if not isinstance(data, (list, str)):
+                    raise InvalidUpdate("@type data is not a list of strings", sys=self)
+                res = nerd.get_res_data()
+                old = res['@type']
+                res = self._moderate_restype(data, res, nerd, replace=replace, doval=doval)
+                provact.add_subaction(Action(subacttype, prec.id+"#data.@type", "updating resource types",
+                                             self._jsondiff(old, res['@type'])))
+                nerd.replace_res_data(res)
+                data = res[path]
+
+            elif path == "description":
+                if not isinstance(data, (list, str)):
+                    raise InvalidUpdate("description data is not a list of strings", sys=self)
+                res = nerd.get_res_data()
+                old = res['description']
+                res[path] = self._moderate_description(data, res, doval=doval)  # may raise InvalidUpdate
+                provact.add_subaction(Action(subacttype, prec.id+"#data.description", "updating description",
+                                             self._jsondiff(old, res['description'])))
+                nerd.replace_res_data(res)
+                data = res[path]
+                
+            elif path in "title rights disclaimer".split():
+                if not isinstance(data, str):
+                    raise InvalidUpdate("%s value is not a string" % path, sys=self)
+                res = nerd.get_res_data()
+                old = res[path]
+                res[path] = self._moderate_text(data, res, doval=doval)  # may raise InvalidUpdate
+                provact.add_subaction(Action(subacttype, prec.id+"#data."+path, "updating "+path,
+                                             self._jsondiff(old, res[path])))
+                nerd.replace_res_data(res)
+                data = res[path]
+                
             else:
                 raise PartNotAccessible(prec.id, path, "Updating %s not allowed" % path)
 
-        elif path == "authors":
-            if not isinstance(data, list):
-                err = "authors data is not a list"
-                raise InvalidUpdate(err, id, path, errors=[err])
-            if replace:
-                data = self._replace_objlist(nerd.authors, self._moderate_author, data, doval)
-            else:
-                data = self._update_objlist(nerd.authors, self._moderate_author, data, doval)
-
-        elif path == "references":
-            if not isinstance(data, list):
-                err = "references data is not a list"
-                raise InvalidUpdate(err, id, path, errors=[err])
-            if replace:
-                data = self._replace_objlist(nerd.references, self._moderate_reference, data, doval)
-            else:
-                data = self._update_objlist(nerd.references, self._moderate_reference, data, doval)
-
-        elif path == LINK_DELIM:
-            if not isinstance(data, list):
-                err = "non-file (links) data is not a list"
-                raise InvalidUpdate(err, id, path, errors=[err])
-            if replace:
-                data = self._replace_objlist(nerd.nonfies, self._moderate_nonfile, data, doval)
-            else:
-                data = self._update_objlist(nerd.nonfiles, self._moderate_nonfile, data, doval)
-
-        # elif path == FILE_DELIM:
-        #     if not isinstance(data, list):
-        #         err = "components data is not a list"
-        #         raise InvalidUpdate(err, id, path, errors=[err])
-
-        elif path == "components" or path == FILE_DELIM:
-            if not isinstance(data, list):
-                err = "components data is not a list"
-                raise InvalidUpdate(err, id, path, errors=[err])
-            files, nonfiles = self._merge_comps_for_update(nerd, data, replace, doval)
-            if replace:
-                if path == "components":
-                    nerd.nonfiles.empty()
-                nerd.files.empty()
-            if path == "components":
-                for cmp in nonfiles:
-                    if cmp.get("@id"):
-                        nerd.nonfiles.set(cmp['@id'])
-                    else:
-                        nerd.nonfiles.append(cmp)
-            for cmp in files:
-                nerd.files.set_file_at(cmp)
-
-            if path == "components":
-                data = nerd.nonfiles.get_data() + nerd.files.get_files()
-            else:
-                data = nerd.files.get_files()
-
-        elif path == "contactPoint":
-            if not isinstance(data, Mapping):
-                raise InvalidUpdate("contactPoint data is not an object", sys=self)
-            res = nerd.get_res_data()
-            res['contactPoint'] = self._moderate_contact(data, res, replace=replace, doval=doval)
-                # may raise InvalidUpdate
-            nerd.replace_res_data(res)
-            data = res[path]
-            
-        elif path == "@type":
-            if not isinstance(data, (list, str)):
-                raise InvalidUpdate("@type data is not a list of strings", sys=self)
-            res = nerd.get_res_data()
-            res = self._moderate_restype(data, res, nerd, replace=replace, doval=doval)
-            nerd.replace_res_data(res)
-            data = res[path]
-
-        elif path == "description":
-            if not isinstance(data, (list, str)):
-                raise InvalidUpdate("description data is not a list of strings", sys=self)
-            res = nerd.get_res_data()
-            res[path] = self._moderate_description(data, res, doval=doval)  # may raise InvalidUpdate
-            nerd.replace_res_data(res)
-            data = res[path]
-            
-        elif path in "title rights disclaimer".split():
-            if not isinstance(data, str):
-                raise InvalidUpdate("%s value is not a string" % path, sys=self)
-            res = nerd.get_res_data()
-            res[path] = self._moderate_text(data, res, doval=doval)  # may raise InvalidUpdate
-            nerd.replace_res_data(res)
-            data = res[path]
-            
+        except PartNotAccessible:
+            # client request error; don't record action
+            raise
+        except Exception as ex:
+            self.log.error("Failed to save update to NERDm data, %s: %s", prec.id, str(ex))
+            self.log.warning("Partial update is possible")
+            provact.message = "Failed to update NERDm part"
+            self._record_action(provact)
+            raise
         else:
-            raise PartNotAccessible(prec.id, path, "Updating %s not allowed" % path)
+            self._record_action(provact)
 
         return data
 
@@ -1238,6 +1419,8 @@ class DAPService(ProjectService):
     def _moderate_description(self, val, resmd=None, doval=True):
         if isinstance(val, str):
             val = val.split("\n\n")
+        if not isinstance(val, Sequence):
+            raise InvalidUpdate("Description value is not a string or array of strings", sys=self)
         return [self._moderate_text(t, resmd, doval=doval) for t in val if t != ""]
 
     _pfx_for_type = OrderedDict([
