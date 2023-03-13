@@ -964,6 +964,11 @@ class FSBasedResourceStorage(NERDResourceStorage):
         :param str  newidprefix:  a prefix to use when minting new identifiers
         """
         self._dir = Path(storeroot)
+        pdir = self._dir.parents[0]
+        if not pdir.is_dir():
+            raise StorageFormatException("%s: does not exist as a directory" % str(pdir))
+        if not self._dir.exists():
+            self._dir.mkdir()
         if not self._dir.is_dir():
             raise StorageFormatException("%s: does not exist as a directory" % str(self._dir))
         if not os.access(self._dir, os.R_OK|os.W_OK|os.X_OK):

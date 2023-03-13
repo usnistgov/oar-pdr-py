@@ -38,7 +38,7 @@ services:
                 version:     mdsx
             assign_doi: always
             doi_naan:   "18434"
-         mdsx: 
+         mds3: 
             about: 
                 title:       "Digital Asset Publication (DAP) Authoring API (mds3 convention)"
                 describedBy: "http://localhost:9091/docs/dapsvc-elements.html"
@@ -46,6 +46,9 @@ services:
                 version:     mds3
             assign_doi: always
             doi_naan:   "18434"
+            nerdstorage:
+              type: fsbased
+              store_dir: /data/midas/nerdm
 
    dmp: 
       about: 
