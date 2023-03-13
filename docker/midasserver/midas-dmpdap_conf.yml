@@ -28,14 +28,22 @@ services:
       include_headers:
          "Access-Control-Allow-Origin": "*"
 
-      default_convention: mdsx
+      default_convention: mds3
       conventions: 
+         mdsx: 
+            about: 
+                title:       "Digital Asset Publication (DAP) Authoring API (experimental)"
+                describedBy: "http://localhost:9091/docs/dapsvc-elements.html"
+                href:        "http://localhost:9091/midas/dap/mdsx"
+                version:     mdsx
+            assign_doi: always
+            doi_naan:   "18434"
          mdsx: 
             about: 
                 title:       "Digital Asset Publication (DAP) Authoring API (mds3 convention)"
                 describedBy: "http://localhost:9091/docs/dapsvc-elements.html"
-                href:        "http://localhost:9091/midas/dap/mdsx"
-                version:     mdsx
+                href:        "http://localhost:9091/midas/dap/mds3"
+                version:     mds3
             assign_doi: always
             doi_naan:   "18434"
 

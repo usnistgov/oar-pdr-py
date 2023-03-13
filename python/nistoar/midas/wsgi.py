@@ -124,7 +124,7 @@ from copy import deepcopy
 from . import system
 from .dbio.base import DBClientFactory
 from .dbio.wsgi import project as prj, SubApp, Handler, DBIOHandler
-from .dap.service import mdsx 
+from .dap.service import mdsx, mds3
 from .dbio.inmem import InMemoryDBClientFactory
 from .dbio.fsbased import FSBasedDBClientFactory
 from .dbio.mongo import MongoDBClientFactory
@@ -442,7 +442,8 @@ class About(SubApp):
 _MIDASSubApps = {
 #    "dmp/mdm1":  mdm1.DMPApp,
     "dmp/mdm1":  prj.MIDASProjectApp.factory_for("dmp"),
-    "dap/mdsx":  mdsx.DAPApp
+    "dap/mdsx":  mdsx.DAPApp,
+    "dap/mds3":  mds3.DAPApp
 }
 
 class MIDASApp:
