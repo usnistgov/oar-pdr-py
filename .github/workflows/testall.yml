@@ -27,13 +27,5 @@ jobs:
           cd docker && bash ./dockbuild.sh
 
       - name: Build & Run Python Tests via Docker
-        run: cd docker && ./testall python
+        run: scripts/testall.docker
 
-      - name: Test Java via Docker
-        run: cd docker && ./testall java
-
-      - name: Build Angular Code
-        run: cd docker && ./makedist angular
-
-      - name: Run Angular Tests
-        run: cd docker && ./testall angular
