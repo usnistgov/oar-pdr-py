@@ -9,6 +9,7 @@ module provides a base service class for manipulating such records.  It is inten
 subclassed to handle the creation of the different types of projects and conventions, policies,
 and interaction models for manipulating them.
 """
+import re
 from logging import Logger, getLogger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
@@ -22,6 +23,8 @@ from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus,
 from . import status
 from .. import MIDASException, MIDASSystem
 from nistoar.pdr.publish.prov import PubAgent, Action
+from nistoar.id.versions import OARVersion
+from nistoar.pdr import ARK_NAAN
 
 _STATUS_ACTION_CREATE   = RecordStatus.CREATE_ACTION
 _STATUS_ACTION_UPDATE   = RecordStatus.UPDATE_ACTION
@@ -630,7 +633,7 @@ class ProjectService(MIDASSystem):
                                        {"name": "finalize", "errors": ex.errors}))
             stat.set_state(status.EDIT)
             stat.act(self.STATUS_ACTION_FINALIZE, ex.format_errors())
-            self._try_save(prec)
+            self._try_save(_prec)
             raise
 
         except Exception as ex:
@@ -640,7 +643,7 @@ class ProjectService(MIDASSystem):
                                        {"name": "finalize", "errors": [emsg]}))
             stat.set_state(status.EDIT)
             stat.act(self.STATUS_ACTION_FINALIZE, emsg)
-            self._try_save(prec)
+            self._try_save(_prec)
             raise
 
         else:
@@ -653,14 +656,81 @@ class ProjectService(MIDASSystem):
             _prec.save()
 
         return stat.clone()
-        
 
-    def _apply_final_updates(self, prec):
-        # update the data
-        
+    MAJOR_VERSION_LEV = 0
+    MINOR_VERSION_LEV = 1
+    TRIVIAL_VERSION_LEV = 2
 
-        self._validate_data(prec.data)
-        return "draft is ready for submission"
+    def _apply_final_updates(self, prec: ProjectRecord, vers_inc_lev: int=None):
+        # update the data content
+        self._finalize_data(prec)
+
+        # ensure a finalized version
+        ver = self._finalize_version(prec, vers_inc_lev)
+
+        # ensure a finalized data identifier
+        id = self._finalize_id(prec)
+
+        self._validate_data(prec)
+        return "draft is ready for submission as %s, %s" % (id, ver)
+
+    def _finalize_version(self, prec: ProjectRecord, vers_inc_lev: int=None):
+        """
+        determine what the version string for the to-be-submitted document should be
+        and save it into the record.
+
+        This implementation will increment the "minor" (i.e. second) field in the version
+        string by default and save as part of the data field as a "@version" property.  To 
+        be incremented, the current version must include a suffix the starts with "+"; after
+        being incremented, the suffix is dropped (to indicate that it should not be further 
+        incremented).  If a version is not yet assigned, it will be set as 1.0.0.  
+
+        :param ProjectRecord prec:  the record to finalize
+        :param int   vers_inc_lev:  the field position in the version to increment if the 
+                                    version needs incrmenting.  
+        :returns:  the version that the record will be published as
+        """
+        # determine output version
+        if vers_inc_lev is None:
+            # assess the state of the revision to determine proper level
+            vers_inc_lev = self.MINOR_VERSION_LEV
+
+        vers = OARVersion(prec.data.setdefault('@version', "1.0.0"))
+        if vers.is_draft():
+            vers.drop_suffix().increment_field(vers_inc_lev)
+            prec.date['@version'] = str(vers)
+
+        return prec.data['@version']
+
+    def _finalize_id(self, prec):
+        """
+        finalize the identifier that will be attached to to-be-submitted document.  Generally,
+        an identifier is assigned once the first time it is finalized and is normally not changed
+        subsequently; however, an implementations may alter this ID according to policy.
+        """
+        # determine output identifier
+        if not prec.data.get('@id'):
+            prec.data['@id'] = self._arkify_recid(prec.id)
+
+        return prec.data['@id']
+
+    def _arkify_recid(self, recid):
+        """
+        turn a standard project record identifier into an institutional ARK identifier.
+        If the the given identifier is not recognized as a project record identifier 
+        (based on its form), it is returned unchanged.  
+        """
+        naan = self.cfg.get('ark_naan', ARK_NAAN)
+        m = re.match('^(\w+):([\w\-\/]+)$', recid)
+        if m:
+            return "ark:/%s/%s-%s" % (naan, m.group(1), m.group(2))
+        return recid
+
+    def _finalize_data(self, prec):
+        """
+        update the data content for the record in preparation for submission.
+        """
+        pass
 
     def submit(self, id: str, message: str=None, _prec=None) -> status.RecordStatus:
         """

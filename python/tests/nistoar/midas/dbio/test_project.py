@@ -239,7 +239,7 @@ class TestProjectService(test.TestCase):
         self.project.finalize(prec.id)
         stat = self.project.get_status(prec.id)
         self.assertEqual(stat.state, "ready")
-        self.assertEqual(stat.message, "draft is ready for submission")
+        self.assertTrue(stat.message.startswith("draft is ready for submission as "))
 
         prec = self.project.get_record(prec.id)
         prec._data['status']['state'] = "ennui"
