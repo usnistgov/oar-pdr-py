@@ -3,7 +3,7 @@ The base Handler class for handler implementations used by the PDP WSGI app
 """
 import sys, re, json
 from abc import ABCMeta, abstractmethod, abstractproperty
-from typing import Callable
+from typing import Callable, List
 from functools import reduce
 from logging import Logger
 from urllib.parse import parse_qs
@@ -143,6 +143,33 @@ class Handler(object):
                          :type data: dict, list, or string
         """
         return self._send(code, message, json.dumps(data, indent=2), "application/json", ashead, encoding)
+
+    def send_options(self, allowed_methods: List[str]=None, origin: str=None, extra=None,
+                     forcors: bool=True):
+        """
+        send a response to a OPTIONS request.  This implememtation is primarily for CORS preflight requests
+        :param List[str] allowed_methods:   a list of the HTTP methods that are allowed for request
+        :param str                origin: 
+        :param dict|Headers        extra:   extra headers to include in the output.  This is either a 
+                                            dictionary-like object or a list of 2-tuples (like 
+                                            wsgiref.header.Headers).  
+        """
+        meths = list(allowed_methods)
+        if 'OPTIONS' not in meths:
+            meths.append('OPTIONS')
+        if forcors:
+            self.add_header('Access-Control-Allow-Methods', ", ".join(meths))
+            if origin:
+                self.add_header('Access-Control-Allow-Origin', origin)
+            self.add_header('Access-Control-Allow-Headers', "Content-Type")
+        if isinstance(extra, Mapping):
+            for k,v in extra.items():
+                self.add_header(k, v)
+        elif isinstance(extra, (list, tuple)):
+            for k,v in extra:
+                self.add_header(k, v)
+
+        return self.send_ok(message="No Content")
 
     def _send(self, code, message, content, contenttype, ashead, encoding):
         if ashead is None:

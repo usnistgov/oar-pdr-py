@@ -85,6 +85,9 @@ class ProjectHandler(ProjectRecordHandler):
             # programming error
             raise ValueError("Missing ProjectRecord id")
 
+    def do_OPTIONS(self, path):
+        return self.send_options(["GET"])
+
     def do_GET(self, path, ashead=False):
         try:
             prec = self.svc.get_record(self._id)
@@ -129,6 +132,9 @@ class ProjectInfoHandler(ProjectRecordHandler):
         if not id:
             # programming error
             raise ValueError("Missing ProjectRecord id")
+
+    def do_OPTIONS(self, path):
+        return self.send_options(["GET"])
 
     def do_GET(self, path, ashead=False):
         if not path:
@@ -185,6 +191,9 @@ class ProjectNameHandler(ProjectRecordHandler):
         if not id:
             # programming error
             raise ValueError("Missing ProjectRecord id")
+
+    def do_OPTIONS(self, path):
+        return self.send_options(["GET", "PUT"])
 
     def do_GET(self, path, ashead=False):
         try:
@@ -250,6 +259,9 @@ class ProjectDataHandler(ProjectRecordHandler):
         if not id:
             # programming error
             raise ValueError("Missing ProjectRecord id")
+
+    def do_OPTIONS(self, path):
+        return self.send_options(["GET", "PUT", "PATCH"])
 
     def do_GET(self, path, ashead=False):
         """
@@ -343,6 +355,9 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         """
         super(ProjectSelectionHandler, self).__init__(service, subapp, wsgienv, start_resp, who, "",
                                                       config, log)
+
+    def do_OPTIONS(self, path):
+        return self.send_options(["GET", "POST"])
 
     def do_GET(self, path, ashead=False):
         """
@@ -447,6 +462,9 @@ class ProjectACLsHandler(ProjectRecordHandler):
             raise ValueError("Missing ProjectRecord id")
 
         
+    def do_OPTIONS(self, path):
+        return self.send_options(["GET", "POST", "PUT", "PATCH", "DELETE"])
+
     def do_GET(self, path, ashead=False):
         try:
             prec = self.svc.get_record(self._id)
@@ -675,6 +693,9 @@ class ProjectStatusHandler(ProjectRecordHandler):
         if not id:
             # programming error
             raise ValueError("Missing ProjectRecord id")
+
+    def do_OPTIONS(self, path):
+        return self.send_options(["GET", "PUT", "PATCH"])
 
     def do_GET(self, path, ashead=False):
         """

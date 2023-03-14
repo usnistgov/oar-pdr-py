@@ -693,6 +693,17 @@ class TestMIDASServer(test.TestCase):
         self.assertTrue(data['title'].startswith("Microscopy of "))
         self.assertEqual(data['expectedDataSize'], "2 TB")
 
+    def test_cors_preflight(self):
+        req = {
+            'REQUEST_METHOD': 'OPTIONS',
+            'PATH_INFO': '/midas/dmp/mdm1',
+            'HTTP_ACCESS-CONTROL-REQUEST-METHOD': 'POST'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        self.assertIn("Access-Control-Allow-Methods: GET, POST, OPTIONS", self.resp)
+        
+
     def test_create_dap3(self):
         req = {
             'REQUEST_METHOD': 'POST',
