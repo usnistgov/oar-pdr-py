@@ -16,9 +16,9 @@ services:
 
       clients: 
          midas: 
-            default_shoulder: mdsx
+            default_shoulder: mds3
          default: 
-            default_shoulder: mdsx
+            default_shoulder: mds3
 
       dbio: 
          superusers:                [ "rlp3" ]
@@ -37,7 +37,7 @@ services:
                 href:        "http://localhost:9091/midas/dap/mdsx"
                 version:     mdsx
             assign_doi: always
-            doi_naan:   "18434"
+            doi_naan:   "10.18434"
          mds3: 
             about: 
                 title:       "Digital Asset Publication (DAP) Authoring API (mds3 convention)"
@@ -45,7 +45,7 @@ services:
                 href:        "http://localhost:9091/midas/dap/mds3"
                 version:     mds3
             assign_doi: always
-            doi_naan:   "18434"
+            doi_naan:   "10.18434"
             nerdstorage:
               type: fsbased
               store_dir: /data/midas/nerdm

@@ -23,7 +23,7 @@ oarmd_pkg=$base/metadata
 mkdir -p $PY_LIBDIR
 echo Installing python libraries into $PY_LIBDIR...
 (cd $PY_LIBDIR && PY_LIBDIR=$PWD)
-(cd $SOURCE_DIR/python && python setup.py install --install-purelib=$PY_LIBDIR --install-scripts=$BINDIR)
+(cd $SOURCE_DIR/python && python3 setup.py install --install-purelib=$PY_LIBDIR --install-scripts=$BINDIR)
 
 #install the JAVA jars
 # None at this time

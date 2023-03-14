@@ -837,10 +837,10 @@ class MIDASProjectApp(SubApp):
         def __init__(self, project_coll):
             self._prjcoll = project_coll
         def __call__(self, dbcli_factory: dbio.DBClientFactory, log: Logger, config: dict={},
-                     prjcoll: str=None):
-            if not prjcoll:
-                prjcoll = self._prjcoll
-            service_factory = ProjectServiceFactory(prjcoll, dbcli_factory, config, log)
+                     project_coll: str=None):
+            if not project_coll:
+                project_coll = self._prjcoll
+            service_factory = ProjectServiceFactory(project_coll, dbcli_factory, config, log)
             return MIDASProjectApp(service_factory, log, config)
 
     @classmethod

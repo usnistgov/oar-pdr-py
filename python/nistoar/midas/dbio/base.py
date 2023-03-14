@@ -872,8 +872,8 @@ class DBClient(ABC):
 
     def _new_record_data(self, id):
         """
-        return a new ProjectRecord instance with the given identifier assigned to it.  Generally, 
-        this record should not be committed yet.
+        return a dictionary containing data that will constitue a new ProjectRecord with the given 
+        identifier assigned to it.  Generally, this record should not be committed yet.
         """
         return {"id": id}
 

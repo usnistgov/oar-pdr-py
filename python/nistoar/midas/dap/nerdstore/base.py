@@ -12,7 +12,7 @@ from nistoar.pdr.preserve.bagit.builder import (DATAFILE_TYPE, SUBCOLL_TYPE, DOW
 
 __all__ = [ "NERDResource", "NERDAuthorList", "NERDRefList", "NERDNonFileComps", "NERDFileComps",
             "NERDStorageException", "MismatchedIdentifier", "RecordDeleted", "ObjectNotFound",
-            "CollectionRemovalDissallowed", "NERDResourceStorage" ]
+            "StorageFormatException", "CollectionRemovalDissallowed", "NERDResourceStorage" ]
 
 NERDResource     = NewType("NERDResource", ABC)
 NERDAuthorList   = NewType("NERDAuthorList", NERDResource)

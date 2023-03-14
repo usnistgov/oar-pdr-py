@@ -1,9 +1,11 @@
-import os, json, pdb, logging, tempfile
+import os, json, pdb, logging, tempfile, shutil
 from collections import OrderedDict
 from io import StringIO
+from pathlib import Path
 import unittest as test
+import yaml
 
-from nistoar.midas.dbio import inmem, base
+from nistoar.midas.dbio import inmem, fsbased, base
 from nistoar.midas import wsgi as app
 from nistoar.pdr.publish import prov
 
@@ -608,6 +610,110 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["owner"], "anonymous")
         self.assertEqual(data["type"], "drafts")
 
+midasserverdir = Path(__file__).parents[4] / 'docker' / 'midasserver'
+midasserverconf = midasserverdir / 'midas-dmpdap_conf.yml'
+
+class TestMIDASServer(test.TestCase):
+    # This tests midas wsgi app with the configuration provided in docker/midasserver
+    # In particular it tests the examples given in the README
+
+    def start(self, status, headers=None, extup=None):
+        self.resp.append(status)
+        for head in headers:
+            self.resp.append("{0}: {1}".format(head[0], head[1]))
+
+    def body2dict(self, body):
+        return json.loads("\n".join(self.tostr(body)), object_pairs_hook=OrderedDict)
+
+    def tostr(self, resplist):
+        return [e.decode() for e in resplist]
+
+    def setUp(self):
+        self.resp = []
+        self.workdir = os.path.join(tmpdir.name, 'midasdata')
+        self.dbdir = os.path.join(self.workdir, 'dbfiles')
+        if not os.path.exists(self.dbdir):
+            if not os.path.exists(self.workdir):
+                os.mkdir(self.workdir)
+            os.mkdir(self.dbdir)
+        with open(midasserverconf) as fd:
+            self.config = yaml.safe_load(fd)
+        self.config['working_dir'] = self.workdir
+        self.config['services']['dap']['conventions']['mds3']['nerdstorage']['store_dir'] = \
+            os.path.join(self.workdir, 'nerdm')
+        self.clifact = fsbased.FSBasedDBClientFactory({}, self.dbdir)
+        self.app = app.MIDASApp(self.config, self.clifact)
+
+    def tearDown(self):
+        if os.path.exists(self.workdir):
+            shutil.rmtree(self.workdir)
+
+    def test_set_up(self):
+        self.assertTrue(self.app.subapps)
+        self.assertIn("dmp/mdm1", self.app.subapps)
+        self.assertIn("dap/mdsx", self.app.subapps)
+        self.assertIn("dap/mds3", self.app.subapps)
+
+        self.assertEqual(self.app.subapps["dmp/mdm1"].svcfact._prjtype, "dmp")
+        self.assertEqual(self.app.subapps["dap/mdsx"].svcfact._prjtype, "dap")
+        self.assertEqual(self.app.subapps["dap/mds3"].svcfact._prjtype, "dap")
+
+        self.assertTrue(os.path.isdir(self.workdir))
+        self.assertTrue(os.path.isdir(os.path.join(self.workdir, 'dbfiles')))
+        self.assertTrue(not os.path.exists(os.path.join(self.workdir, 'dbfiles', 'nextnum')))
+
+    def test_create_dmp(self):
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': '/midas/dmp/mdm1',
+            'wsgi.input': StringIO('{"name": "CoTEM", "data": {"title": "Microscopy of Cobalt Samples"}}')
+        }
+        body = self.app(req, self.start)
+        self.assertIn("201 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['id'], 'mdm1:0001')
+        self.assertEqual(data['name'], "CoTEM")
+        self.assertTrue(data['data']['title'].startswith("Microscopy of "))
+
+        self.assertTrue(os.path.isdir(self.workdir))
+        self.assertTrue(os.path.isdir(os.path.join(self.workdir, 'dbfiles')))
+        self.assertTrue(os.path.isdir(os.path.join(self.workdir, 'dbfiles', 'dmp')))
+        self.assertTrue(os.path.isfile(os.path.join(self.workdir, 'dbfiles', 'dmp', 'mdm1:0001.json')))
+        self.assertTrue(os.path.isfile(os.path.join(self.workdir, 'dbfiles', 'nextnum', 'mdm1.json')))
+
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': '/midas/dmp/mdm1/mdm1:0001/data',
+            'wsgi.input': StringIO('{"expectedDataSize": "2 TB"}')
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertTrue(data['title'].startswith("Microscopy of "))
+        self.assertEqual(data['expectedDataSize'], "2 TB")
+
+    def test_create_dap3(self):
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': '/midas/dap/mds3',
+            'wsgi.input': StringIO('{"name": "first", "data": {"title": "Microscopy of Cobalt Samples"}}')
+        }
+        body = self.app(req, self.start)
+        self.assertIn("201 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['id'], 'mds3:0001')
+        self.assertEqual(data['name'], "first")
+        self.assertTrue(data['data']['title'].startswith("Microscopy of "))
+
+        self.assertTrue(os.path.isdir(self.workdir))
+        self.assertTrue(os.path.isdir(os.path.join(self.workdir, 'dbfiles')))
+        self.assertTrue(os.path.isdir(os.path.join(self.workdir, 'dbfiles', 'dap')))
+        self.assertTrue(os.path.isfile(os.path.join(self.workdir, 'dbfiles', 'dap', 'mds3:0001.json')))
+        self.assertTrue(os.path.isfile(os.path.join(self.workdir, 'dbfiles', 'nextnum', 'mds3.json')))
+        self.assertTrue(os.path.isdir(os.path.join(self.workdir, 'nerdm')))
+        self.assertTrue(os.path.isfile(os.path.join(self.workdir, 'nerdm', '_seq.json')))
+        self.assertTrue(os.path.isdir(os.path.join(self.workdir, 'nerdm', 'mds3:0001')))
 
         
     

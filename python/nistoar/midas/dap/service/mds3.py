@@ -414,11 +414,13 @@ class DAPService(ProjectService):
                 try: 
                     out = nerd.files.get_file_by_path(fprts[1])
                 except nerdstore.ObjectNotFound as ex:
-                    raise ObjectNotFound(id, part, str(ex))
+                    raise ObjectNotFound(prec.id, part, str(ex))
             else:
                 out = nerd.get_res_data()
                 if part in out:
                     out = out[part]
+                elif part in "description @type contactPoint title rights disclaimer".split():
+                    raise ObjectNotFound(prec.id, part, "%s property not set yet" % part)
                 else:
                     raise PartNotAccessible(prec.id, part, "Accessing %s not supported" % part)
 
@@ -1882,9 +1884,10 @@ class DAPApp(MIDASProjectApp):
                  service_factory: ProjectServiceFactory=None, project_coll: str=None):
         if not project_coll:
             project_coll = DAP_PROJECTS
+        uselog = log.getChild(project_coll)
         if not service_factory:
-            service_factory = DAPServiceFactory(dbcli_factory, config, project_coll)
-        super(DAPApp, self).__init__(service_factory, log.getChild(project_coll), config)
+            service_factory = DAPServiceFactory(dbcli_factory, config, uselog, project_coll=project_coll)
+        super(DAPApp, self).__init__(service_factory, uselog, config)
         self._data_update_handler = DAPProjectDataHandler
 
 class DAPProjectDataHandler(ProjectDataHandler):
