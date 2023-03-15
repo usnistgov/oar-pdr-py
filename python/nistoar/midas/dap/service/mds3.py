@@ -304,6 +304,11 @@ class DAPService(ProjectService):
                 out['components'] = [swcomp] + out['components']
 
             # contact info
+            # if meta.get("creatorIsContact"):
+            #     # base contact on the currently logged in user
+            # elif meta.get("contactName"):
+            if meta.get("contactName"):
+                out['contactPoint'] = self._moderate_contact({"fn": meta["contactName"]}, doval=False)
 
         return out
 
@@ -619,6 +624,8 @@ class DAPService(ProjectService):
         out["@type"] = resmd.get("@type", ["nrd:Resource"])
         if 'doi' in resmd:
             out["doi"] = resmd["doi"]
+        if 'contactPoint' in resmd:
+            out["contactPoint"] = resmd["contactPoint"]
         out["author_count"] = nerd.authors.count
         out["file_count"] = nerd.files.count
         out["nonfile_count"] = nerd.nonfiles.count
