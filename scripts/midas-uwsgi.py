@@ -69,12 +69,12 @@ elif 'oar_config_service' in uwsgi.opt:
                                 _dec(uwsgi.opt.get('oar_config_env')))
     srvc.wait_until_up(int(_dec(uwsgi.opt.get('oar_config_timeout', 10))),
                        True, sys.stderr)
-    cfg = srvc.get(_dec(uwsgi.opt.get('oar_config_appname', 'pdr-pdp')))
+    cfg = srvc.get(_dec(uwsgi.opt.get('oar_config_appname', 'midas-dbio')))
 
 elif config.service:
     config.service.wait_until_up(int(os.environ.get('OAR_CONFIG_TIMEOUT', 10)),
                                  True, sys.stderr)
-    cfg = config.service.get(os.environ.get('OAR_CONFIG_APP', 'pdr-resolve'))
+    cfg = config.service.get(os.environ.get('OAR_CONFIG_APP', 'midas-dbio'))
 
 else:
     raise config.ConfigurationException("resolver: nist-oar configuration not provided")
