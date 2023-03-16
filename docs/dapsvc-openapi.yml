@@ -17,12 +17,12 @@ info:
        [GET to `/mds3/{draftid}/data`](/paths/mds3-draftid--data/get).
     4. When updates are complete, finalize the document with a
        [PUT to `/mds3/{draftid}/status`](/paths/mds3-draftid--status/put) (setting the `action`
-       property to "**finalize**".  Review the result via
+       property to "**finalize**").  Review the result via
        [GET to `/mds3/{draftid}/data`](/paths/mds3-draftid--data/get); further updates are still
        possible if needed.
     5. Submit the record for review with a
        [PUT to `/mds3/{draftid}/status`](/paths/mds3-draftid--status/put) (setting the `action`
-       property to "**submit**".  
+       property to "**submit**").  
 
   contact:
     name:  MIDAS support office
