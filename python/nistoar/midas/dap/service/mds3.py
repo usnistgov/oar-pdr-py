@@ -809,7 +809,7 @@ class DAPService(ProjectService):
                     data = self._update_listitem(nerd.authors, self._moderate_author, data, key,
                                                  replace, doval)
                     provact.add_subaction(Action(subacttype, "%s#data.authors[%s]" % (prec.id, str(key)), 
-                                                 what, self._jsondiff(old, data)))
+                                                 self.who, what, self._jsondiff(old, data)))
                     
                 elif m.group(1) == "references":
                     what = "adding author"
@@ -820,7 +820,7 @@ class DAPService(ProjectService):
                     data = self._update_listitem(nerd.references, self._moderate_reference, data, key,
                                                  replace, doval)
                     provact.add_subaction(Action(subacttype, "%s#data.references[%s]" % (prec.id, str(key)), 
-                                          what, self._jsondiff(old, data)))
+                                                 self.who, what, self._jsondiff(old, data)))
                     
                 elif m.group(1) == LINK_DELIM:
                     what = "adding link"
@@ -831,7 +831,7 @@ class DAPService(ProjectService):
                     data = self._update_listitem(nerd.nonfiles, self._moderate_nonfile, data, key,
                                                  replace, doval)
                     provact.add_subaction(Action(subacttype, "%s#data/pdr:see[%s]" % (prec.id, str(key)), 
-                                                 what, self._jsondiff(old, data)))
+                                                 self.who, what, self._jsondiff(old, data)))
                     
                 elif m.group(1) == "components" or m.group(1) == FILE_DELIM:
                     if ('filepath' not in data and key in nerd.nonfiles):
@@ -846,7 +846,7 @@ class DAPService(ProjectService):
                     data["_schema"] = schemabase+"/definitions/Component"
                     data = self._update_component(nerd, data, key, replace, doval=doval)
                     provact.add_subaction(Action(subacttype, "%s#data/pdr:f[%s]" % (prec.id, str(key)), 
-                                                 what, self._jsondiff(old, data)))
+                                                 self.who, what, self._jsondiff(old, data)))
                     
                 else:
                     raise PartNotAccessible(prec.id, path, "Updating %s not allowed" % path)
@@ -860,8 +860,8 @@ class DAPService(ProjectService):
                     data = self._replace_objlist(nerd.authors, self._moderate_author, data, doval)
                 else:
                     data = self._update_objlist(nerd.authors, self._moderate_author, data, doval)
-                provact.add_subaction(Action(subacttype, prec.id+"#data.authors", "updating authors",
-                                             self._jsondiff(old, data)))
+                provact.add_subaction(Action(subacttype, prec.id+"#data.authors", self.who, 
+                                             "updating authors", self._jsondiff(old, data)))
 
             elif path == "references":
                 if not isinstance(data, list):
@@ -872,8 +872,8 @@ class DAPService(ProjectService):
                     data = self._replace_objlist(nerd.references, self._moderate_reference, data, doval)
                 else:
                     data = self._update_objlist(nerd.references, self._moderate_reference, data, doval)
-                provact.add_subaction(Action(subacttype, prec.id+"#data.references", "updating references",
-                                             self._jsondiff(old, data)))
+                provact.add_subaction(Action(subacttype, prec.id+"#data.references", self.who, 
+                                             "updating references", self._jsondiff(old, data)))
 
             elif path == LINK_DELIM:
                 if not isinstance(data, list):
@@ -884,8 +884,8 @@ class DAPService(ProjectService):
                     data = self._replace_objlist(nerd.nonfies, self._moderate_nonfile, data, doval)
                 else:
                     data = self._update_objlist(nerd.nonfiles, self._moderate_nonfile, data, doval)
-                provact.add_subaction(Action(subacttype, prec.id+"#data/pdr:see", "updating link list",
-                                             self._jsondiff(old, data)))
+                provact.add_subaction(Action(subacttype, prec.id+"#data/pdr:see", self.who, 
+                                             "updating link list", self._jsondiff(old, data)))
                 
 
             # elif path == FILE_DELIM:
@@ -911,13 +911,15 @@ class DAPService(ProjectService):
                         else:
                             nerd.nonfiles.append(cmp)
 
-                provact.add_subaction(Action(subacttype, prec.id+"#data/pdr:f", "updating file list",
+                provact.add_subaction(Action(subacttype, prec.id+"#data/pdr:f", self.who,
+                                             "updating file list",
                                              self._jsondiff(oldn, nerd.nonfiles.get_data())))
                 for cmp in files:
                     nerd.files.set_file_at(cmp)
 
                 if path == "components":
-                    provact.add_subaction(Action(subacttype, prec.id+"#data/pdr:see", "updating link list",
+                    provact.add_subaction(Action(subacttype, prec.id+"#data/pdr:see", self.who,
+                                                 "updating link list",
                                                  self._jsondiff(oldf, nerd.nonfiles.get_data())))
                     data = nerd.nonfiles.get_data() + nerd.files.get_files()
                 else:
@@ -930,7 +932,7 @@ class DAPService(ProjectService):
                 old = res['contactPoint']
                 res['contactPoint'] = self._moderate_contact(data, res, replace=replace, doval=doval)
                     # may raise InvalidUpdate
-                provact.add_subaction(Action(subacttype, prec.id+"#data.contactPoint", 
+                provact.add_subaction(Action(subacttype, prec.id+"#data.contactPoint", self.who,
                                       "updating contact point", self._jsondiff(old, res['contactPoint'])))
                 nerd.replace_res_data(res)
                 data = res[path]
@@ -941,8 +943,8 @@ class DAPService(ProjectService):
                 res = nerd.get_res_data()
                 old = res['@type']
                 res = self._moderate_restype(data, res, nerd, replace=replace, doval=doval)
-                provact.add_subaction(Action(subacttype, prec.id+"#data.@type", "updating resource types",
-                                             self._jsondiff(old, res['@type'])))
+                provact.add_subaction(Action(subacttype, prec.id+"#data.@type", self.who,
+                                             "updating resource types", self._jsondiff(old, res['@type'])))
                 nerd.replace_res_data(res)
                 data = res[path]
 
@@ -952,8 +954,21 @@ class DAPService(ProjectService):
                 res = nerd.get_res_data()
                 old = res['description']
                 res[path] = self._moderate_description(data, res, doval=doval)  # may raise InvalidUpdate
-                provact.add_subaction(Action(subacttype, prec.id+"#data.description", "updating description",
+                provact.add_subaction(Action(Action.PUT, prec.id+"#data.description", self.who,
+                                             "updating description",
                                              self._jsondiff(old, res['description'])))
+                nerd.replace_res_data(res)
+                data = res[path]
+
+            elif path == "landingPage":
+                if not isinstance(data, str):
+                    raise InvalidUpdate("description data is not a string", sys=self)
+                res = nerd.get_res_data()
+                old = res['landingPage']
+                res[path] = self._moderate_landingPage(data, res, doval)        # may raise InvalidUpdate
+                provact.add_subaction(Action(Action.PUT, prec.id+"#data.landingPage", self.who,
+                                             "updating landingPage",
+                                             self._jsondiff(old, res['landingPage'])))
                 nerd.replace_res_data(res)
                 data = res[path]
                 
@@ -963,7 +978,7 @@ class DAPService(ProjectService):
                 res = nerd.get_res_data()
                 old = res[path]
                 res[path] = self._moderate_text(data, res, doval=doval)  # may raise InvalidUpdate
-                provact.add_subaction(Action(subacttype, prec.id+"#data."+path, "updating "+path,
+                provact.add_subaction(Action(subacttype, prec.id+"#data."+path, self.who, "updating "+path,
                                              self._jsondiff(old, res[path])))
                 nerd.replace_res_data(res)
                 data = res[path]
@@ -1340,6 +1355,7 @@ class DAPService(ProjectService):
         objlist.empty()
         for item in data:
             objlist.append(item)
+        return objlist.get_data()
 
     def _update_objlist(self, objlist, moderate_func, data: List[Mapping], doval: bool=False):
         # match the items in the given list to existing items currently store by their ids; for each 
@@ -1369,6 +1385,7 @@ class DAPService(ProjectService):
                 objlist.set(item["@id"], item)
             else:
                 objlist.append(item)
+        return objlist.get_data()
 
         ## This is an implementation based on position rather than id
         # curcount = len(objlist)
@@ -1431,6 +1448,19 @@ class DAPService(ProjectService):
         if not isinstance(val, Sequence):
             raise InvalidUpdate("Description value is not a string or array of strings", sys=self)
         return [self._moderate_text(t, resmd, doval=doval) for t in val if t != ""]
+
+    def _moderate_landingPage(self, val, resmd=None, doval=True):
+        try: 
+            url = urlparse(val)
+            if url.scheme not in "https http".split() or not url.netloc:
+                raise InvalidInput("landingPage: Not a complete HTTP URL")
+        except ValueError as ex:
+            raise InvalidInput("landingPage: Not a legal URL: "+str(ex))
+        if resmd and doval:
+            resmd['landingPage'] = val
+            self.validate_json(resmd)
+        return val
+        
 
     _pfx_for_type = OrderedDict([
         ("ScienceTheme",        NERDMAGG_PRE),

@@ -216,8 +216,8 @@ class ProjectService(MIDASSystem):
         try:
             self.dbcli.record_action(act)
         except Exception as ex:
-            self.log.error("Failed to record provenance action for %s: %s: %s",
-                           act.subject, act.type, act.message)
+            self.log.error("Failed to record provenance action for %s (%s: %s): %s",
+                           act.subject, act.type, act.message, str(ex))
 
     def _try_save(self, prec):
         # this is tolerant of recording errors

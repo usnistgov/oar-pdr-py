@@ -726,6 +726,81 @@ class TestMIDASServer(test.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(self.workdir, 'nerdm', '_seq.json')))
         self.assertTrue(os.path.isdir(os.path.join(self.workdir, 'nerdm', 'mds3:0001')))
 
+    def test_put_authors(self):
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': '/midas/dap/mds3',
+            'wsgi.input': StringIO('{"name": "first", "data": {"title": "Microscopy of Cobalt Samples"}}')
+        }
+        body = self.app(req, self.start)
+        self.assertIn("201 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['id'], 'mds3:0001')
+        self.assertEqual(data['name'], "first")
+        self.assertTrue(data['data']['title'].startswith("Microscopy of "))
+        self.assertEqual(data['data']['author_count'], 0)
+
+        self.resp = []
+        authors = [
+            {"familyName": "Cranston", "givenName": "Gurn" },
+            {"familyName": "Howard", "givenName": "Dr."}
+        ]
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/authors',
+            'wsgi.input': StringIO(json.dumps(authors))
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        
+        self.assertTrue(isinstance(data, list))
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]['familyName'], "Cranston")
+        self.assertEqual(data[1]['familyName'], "Howard")
+        self.assertEqual(data[1]['givenName'], "Dr.")
+        
+        hold = data[0]
+        data[0] = data[1]
+        data[1] = hold
+        data[0]['givenName'] = "Doctor"
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/authors',
+            'wsgi.input': StringIO(json.dumps(data))
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        
+        self.assertTrue(isinstance(data, list))
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]['familyName'], "Cranston")
+        self.assertEqual(data[1]['familyName'], "Howard")
+        self.assertEqual(data[1]['givenName'], "Doctor")
+
+        # change order
+        hold = data[0]
+        data[0] = data[1]
+        data[1] = hold
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/authors',
+            'wsgi.input': StringIO(json.dumps(data))
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        
+        self.assertTrue(isinstance(data, list))
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]['familyName'], "Howard")
+        self.assertEqual(data[0]['givenName'], "Doctor")
+        self.assertEqual(data[1]['familyName'], "Cranston")
+        
+        
         
     
 
