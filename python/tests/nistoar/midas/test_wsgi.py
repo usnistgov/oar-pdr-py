@@ -799,6 +799,65 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(data[0]['familyName'], "Howard")
         self.assertEqual(data[0]['givenName'], "Doctor")
         self.assertEqual(data[1]['familyName'], "Cranston")
+
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001'
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['id'], 'mds3:0001')
+        self.assertEqual(data['name'], "first")
+        self.assertEqual(data['data']['author_count'], 2)
+        self.assertNotIn('authors', data['data'])   # not included in summary
+        
+    def test_put_landingpage(self):
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': '/midas/dap/mds3',
+            'wsgi.input': StringIO('{"name": "first", "data": {"title": "Microscopy of Cobalt Samples"}}')
+        }
+        body = self.app(req, self.start)
+        self.assertIn("201 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['id'], 'mds3:0001')
+        self.assertEqual(data['name'], "first")
+        self.assertTrue(data['data']['title'].startswith("Microscopy of "))
+        self.assertNotIn('landingPage', data['data'])
+        
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/landingPage',
+            'wsgi.input': StringIO('"ftp://goob.gov/data/index.html"')
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("400 ", self.resp[0])
+        
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/landingPage',
+            'wsgi.input': StringIO('"https://nist.gov/"')
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data, 'https://nist.gov/')
+
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001'
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['id'], 'mds3:0001')
+        self.assertEqual(data['name'], "first")
+        self.assertEqual(data['data']['landingPage'], 'https://nist.gov/')   # in summary
         
         
         

@@ -23,6 +23,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence, Callable
 from typing import List, Union
 from copy import deepcopy
+from urllib.parse import urlparse
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
                      InvalidUpdate, ObjectNotFound, PartNotAccessible,
@@ -626,6 +627,8 @@ class DAPService(ProjectService):
             out["doi"] = resmd["doi"]
         if 'contactPoint' in resmd:
             out["contactPoint"] = resmd["contactPoint"]
+        if 'landingPage' in resmd:
+            out["landingPage"] = resmd["landingPage"]
         out["author_count"] = nerd.authors.count
         out["file_count"] = nerd.files.count
         out["nonfile_count"] = nerd.nonfiles.count
@@ -929,7 +932,7 @@ class DAPService(ProjectService):
                 if not isinstance(data, Mapping):
                     raise InvalidUpdate("contactPoint data is not an object", sys=self)
                 res = nerd.get_res_data()
-                old = res['contactPoint']
+                old = res.get('contactPoint')
                 res['contactPoint'] = self._moderate_contact(data, res, replace=replace, doval=doval)
                     # may raise InvalidUpdate
                 provact.add_subaction(Action(subacttype, prec.id+"#data.contactPoint", self.who,
@@ -941,18 +944,18 @@ class DAPService(ProjectService):
                 if not isinstance(data, (list, str)):
                     raise InvalidUpdate("@type data is not a list of strings", sys=self)
                 res = nerd.get_res_data()
-                old = res['@type']
+                old = res.get('@type')
                 res = self._moderate_restype(data, res, nerd, replace=replace, doval=doval)
                 provact.add_subaction(Action(subacttype, prec.id+"#data.@type", self.who,
                                              "updating resource types", self._jsondiff(old, res['@type'])))
                 nerd.replace_res_data(res)
-                data = res[path]
+                data = res.get(path)
 
             elif path == "description":
                 if not isinstance(data, (list, str)):
                     raise InvalidUpdate("description data is not a list of strings", sys=self)
                 res = nerd.get_res_data()
-                old = res['description']
+                old = res.get('description')
                 res[path] = self._moderate_description(data, res, doval=doval)  # may raise InvalidUpdate
                 provact.add_subaction(Action(Action.PUT, prec.id+"#data.description", self.who,
                                              "updating description",
@@ -964,7 +967,7 @@ class DAPService(ProjectService):
                 if not isinstance(data, str):
                     raise InvalidUpdate("description data is not a string", sys=self)
                 res = nerd.get_res_data()
-                old = res['landingPage']
+                old = res.get('landingPage')
                 res[path] = self._moderate_landingPage(data, res, doval)        # may raise InvalidUpdate
                 provact.add_subaction(Action(Action.PUT, prec.id+"#data.landingPage", self.who,
                                              "updating landingPage",
@@ -976,7 +979,7 @@ class DAPService(ProjectService):
                 if not isinstance(data, str):
                     raise InvalidUpdate("%s value is not a string" % path, sys=self)
                 res = nerd.get_res_data()
-                old = res[path]
+                old = res.get(path)
                 res[path] = self._moderate_text(data, res, doval=doval)  # may raise InvalidUpdate
                 provact.add_subaction(Action(subacttype, prec.id+"#data."+path, self.who, "updating "+path,
                                              self._jsondiff(old, res[path])))
@@ -1453,9 +1456,9 @@ class DAPService(ProjectService):
         try: 
             url = urlparse(val)
             if url.scheme not in "https http".split() or not url.netloc:
-                raise InvalidInput("landingPage: Not a complete HTTP URL")
+                raise InvalidUpdate("landingPage: Not a complete HTTP URL")
         except ValueError as ex:
-            raise InvalidInput("landingPage: Not a legal URL: "+str(ex))
+            raise InvalidUpdate("landingPage: Not a legal URL: "+str(ex))
         if resmd and doval:
             resmd['landingPage'] = val
             self.validate_json(resmd)
