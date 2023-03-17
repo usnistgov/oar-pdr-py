@@ -859,6 +859,66 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(data['name'], "first")
         self.assertEqual(data['data']['landingPage'], 'https://nist.gov/')   # in summary
         
+    def test_put_keywords(self):
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': '/midas/dap/mds3',
+            'wsgi.input': StringIO('{"name": "first", "data": {"title": "Microscopy of Cobalt Samples"}}')
+        }
+        body = self.app(req, self.start)
+        self.assertIn("201 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['id'], 'mds3:0001')
+        self.assertEqual(data['name'], "first")
+        self.assertTrue(data['data']['title'].startswith("Microscopy of "))
+        self.assertNotIn('landingPage', data['data'])
+        
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/keywords',
+            'wsgi.input': StringIO('["CICD", "testing"]')
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data, "CICD testing".split())
+
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/keywords',
+            'wsgi.input': StringIO('["frameworks", "testing"]')
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data, "CICD testing frameworks".split())
+
+        updates = {
+            "title": "a draft",
+            "description": "read me, please.\n\nPlease",
+            "keywords": "testing frameworks".split(),
+            "landingPage": "https://data.nist.gov/"
+        }
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data',
+            'wsgi.input': StringIO(json.dumps(updates))
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['title'], "a draft")
+        self.assertEqual(data['description'], ["read me, please.", "Please"])
+        self.assertEqual(data['keywords'], ["testing", "frameworks"])
+        self.assertEqual(data['landingPage'], "https://data.nist.gov/")
+
+        
+        
+
+        
         
         
     

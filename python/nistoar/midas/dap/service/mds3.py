@@ -309,7 +309,7 @@ class DAPService(ProjectService):
             #     # base contact on the currently logged in user
             # elif meta.get("contactName"):
             if meta.get("contactName"):
-                out['contactPoint'] = self._moderate_contact({"fn": meta["contactName"]}, doval=False)
+                out['contactPoint'] = self._moderate_contactPoint({"fn": meta["contactName"]}, doval=False)
 
         return out
 
@@ -933,7 +933,7 @@ class DAPService(ProjectService):
                     raise InvalidUpdate("contactPoint data is not an object", sys=self)
                 res = nerd.get_res_data()
                 old = res.get('contactPoint')
-                res['contactPoint'] = self._moderate_contact(data, res, replace=replace, doval=doval)
+                res['contactPoint'] = self._moderate_contactPoint(data, res, replace=replace, doval=doval)
                     # may raise InvalidUpdate
                 provact.add_subaction(Action(subacttype, prec.id+"#data.contactPoint", self.who,
                                       "updating contact point", self._jsondiff(old, res['contactPoint'])))
@@ -953,13 +953,26 @@ class DAPService(ProjectService):
 
             elif path == "description":
                 if not isinstance(data, (list, str)):
-                    raise InvalidUpdate("description data is not a list of strings", sys=self)
+                    raise InvalidUpdate(part+" data is not a list of strings", sys=self)
                 res = nerd.get_res_data()
-                old = res.get('description')
+                old = res.get(path)
+
                 res[path] = self._moderate_description(data, res, doval=doval)  # may raise InvalidUpdate
-                provact.add_subaction(Action(Action.PUT, prec.id+"#data.description", self.who,
-                                             "updating description",
-                                             self._jsondiff(old, res['description'])))
+                provact.add_subaction(Action(Action.PUT, prec.id+"#data."+path, self.who, "updating "+path,
+                                             self._jsondiff(old, res[path])))
+                nerd.replace_res_data(res)
+                data = res[path]
+
+            elif path == "keywords":
+                if not isinstance(data, (list, str)):
+                    raise InvalidUpdate(part+" data is not a list of strings", sys=self)
+                res = nerd.get_res_data()
+                old = res.get(path)
+
+                res[path] = self._moderate_keywords(data, res, doval=doval, replace=replace)  # InvalidUpdate
+                provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
+                                             prec.id+"#data."+path, self.who, "updating "+path,
+                                             self._jsondiff(old, res[path])))
                 nerd.replace_res_data(res)
                 data = res[path]
 
@@ -1445,14 +1458,36 @@ class DAPService(ProjectService):
             raise InvalidUpdate("Text value is not a string", sys=self)
         return val
 
-    def _moderate_description(self, val, resmd=None, doval=True):
+    def _moderate_description(self, val, resmd=None, doval=True, replace=True):
+        # replace is ignored
+        if val is None:
+            val = []
         if isinstance(val, str):
-            val = val.split("\n\n")
+            val = re.split(r'\n\n+', val)
         if not isinstance(val, Sequence):
-            raise InvalidUpdate("Description value is not a string or array of strings", sys=self)
-        return [self._moderate_text(t, resmd, doval=doval) for t in val if t != ""]
+            raise InvalidUpdate("description value is not a string or array of strings", sys=self)
+        return [self._moderate_text(t, resmd, doval=doval) for t in val if t]
 
-    def _moderate_landingPage(self, val, resmd=None, doval=True):
+    def _moderate_keywords(self, val, resmd=None, doval=True, replace=True):
+        if val is None:
+            val = []
+        if isinstance(val, str):
+            val = re.split(r'\n+', val)
+        if not isinstance(val, Sequence):
+            raise InvalidUpdate("keywords value is not a string or array of strings", sys=self)
+
+        # uniquify list
+        out = resmd.get('keywords', []) if resmd and not replace else []
+        for v in val:
+            if v not in out:
+                out.append(self._moderate_text(v, resmd, doval=doval))
+
+        return out
+
+    def _moderate_landingPage(self, val, resmd=None, doval=True, replace=True):
+        # replace is ignored
+        if val is None:
+            val = ""
         try: 
             url = urlparse(val)
             if url.scheme not in "https http".split() or not url.netloc:
@@ -1482,6 +1517,8 @@ class DAPService(ProjectService):
     }
 
     def _moderate_restype(self, types, resmd, nerd=None, replace=True, doval=True):
+        if types is None:
+            types = []
         if not isinstance(types, list):
             types = [types]
         if any([not isinstance(t, str) for t in types]):
@@ -1550,7 +1587,9 @@ class DAPService(ProjectService):
         return False
 
     _contact_props = set("fn hasEmail postalAddress phoneNumber timezone proxyFor".split())
-    def _moderate_contact(self, info, resmd=None, replace=False, doval=True):
+    def _moderate_contactPoint(self, info, resmd=None, replace=False, doval=True):
+        if info is None:
+            info = OrderedDict()
         if not isinstance(info, Mapping):
             raise InvalidUpdate("contactPoint data is not an object", sys=self)
         info = OrderedDict([(k,v) for k,v in info.items() if k in self._contact_props])
@@ -1845,25 +1884,19 @@ class DAPService(ProjectService):
         resmd["@type"] = restypes
 
         errors = []
-        if 'contactPoint' in resmd:
-            if "contactPoint" not in resmd and not resmd.get("contactPoint"):
-                del resmd["contactPoint"]
-            else:
-                try:
-                    resmd["contactPoint"] = self._moderate_contact(resmd["contactPoint"], resmd,
-                                                                   replace=True, doval=False)
-                except InvalidUpdate as ex:
-                    errors.extend(ex.errors)
+        for prop in "contactPoint description keywords landingPage".split():
+            if prop in resmd:
+                if resmd.get(prop) is None:
+                    del resmd[prop]
+                else:
+                    try:
+                        moderate = '_moderate_' + prop
+                        if hasattr(self, moderate):
+                            moderate = getattr(self, moderate)
+                            resmd[prop] = moderate(resmd[prop], resmd, replace=True, doval=False)
 
-        if 'description' in resmd:
-            if "description" not in resmd and not resmd.get("description"):
-                del resmd["description"]
-            else:
-                try:
-                    resmd["description"] = self._moderate_description(resmd["description"], resmd,
-                                                                      doval=False)
-                except InvalidUpdate as ex:
-                    errors.extend(ex.errors)
+                    except InvalidUpdate as ex:
+                        errors.extend(ex.errors)
 
         resmd.setdefault("@type", [])
         try:
