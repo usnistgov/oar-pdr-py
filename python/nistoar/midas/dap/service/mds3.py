@@ -374,24 +374,31 @@ class DAPService(ProjectService):
             out = nerd.get_data()
 
         else:
-            m = re.search(r'^([a-z]+s)\[([\w\d/#\.]+)\]$', part)
-            if m:
-                # part is of the form xxx[k] and refers to an item in a list
-                key = m.group(2)
-                try:
-                    key = int(key)
-                except ValueError:
-                    pass
+            steps = part.split('/')
+            if len(steps) > 1:
+                if len(steps) > 2:
+                    raise ObjectNotFound(id, part)
 
-                if m.group(1) == "authors":
+                # part is of the form ppp/kkk and refers to an item in list, ppp, where
+                # kkk is either an element identifier or an element index of the form,
+                # [N]. 
+                key = steps[1]
+                m = re.search(r'^\[(\d+)\]$', key)
+                if m:
+                    try:
+                        key = int(m.group(1))
+                    except ValueError as ex:
+                        raise PartNotAccessible(id, part, "Accessing %s not supported" % part)
+
+                if steps[0] == "authors":
                     out = nerd.authors.get(key)
-                elif m.group(1) == "references":
+                elif steps[0] == "references":
                     out = nerd.reference.get(key)
-                elif m.group(1) == LINK_DELIM:
+                elif steps[0] == LINK_DELIM:
                     out = nerd.nonfiles.get(key)
-                elif m.group(1) == FILE_DELIM:
+                elif steps[0] == FILE_DELIM:
                     out = nerd.files.get(key)
-                elif m.group(1) == "components":
+                elif steps[0] == "components":
                     out = None
                     try:
                         out = nerd.nonfiles.get(key)
@@ -402,6 +409,8 @@ class DAPService(ProjectService):
                             out = nerd.files.get_file_by_id(key)
                         except nerdstore.ObjectNotFound as ex:
                             raise ObjectNotFound(id, part, str(ex))
+                else:
+                    raise PartNotAccessible(id, part, "Accessing %s not supported" % part)
 
             elif part == "authors":
                 out = nerd.authors.get_data()
@@ -793,28 +802,35 @@ class DAPService(ProjectService):
         provact = Action(Action.PATCH, prec.id, self.who, "updating NERDm part")
 
         try:
-            m = re.search(r'^([a-z]+s)\[([\w\d\.\/]+)\]$', path)
-            if m:
-                # path is of the form xxx[k] and refers to an item in a list
-                key = m.group(2)
-                try:
-                    key = int(key)
-                except ValueError:
-                    pass
+            steps = path.split('/')
+            if len(steps) > 1:
+                if len(steps) > 2:
+                    raise ObjectNotFound(id, path)
+
+                # path is of the form ppp/kkk and refers to an item in list, ppp, where
+                # kkk is either an element identifier or an element index of the form,
+                # [N]. 
+                key = steps[1]
+                m = re.search(r'^\[(\d+)\]$', key)
+                if m:
+                    try:
+                        key = int(m.group(1))
+                    except ValueError as ex:
+                        raise PartNotAccessible(id, path, "Accessing %s not supported" % path)
 
                 old = {}
-                if m.group(1) == "authors":
+                if steps[0] == "authors":
                     what = "adding author"
                     if key in nerd.authors:
                         old = nerd.authors.get(key)
                         what = "updating author"
-                    data["_schema"] = schemabase+"/definitions/Person"
+                    # data["_schema"] = schemabase+"/definitions/Person"
                     data = self._update_listitem(nerd.authors, self._moderate_author, data, key,
                                                  replace, doval)
                     provact.add_subaction(Action(subacttype, "%s#data.authors[%s]" % (prec.id, str(key)), 
                                                  self.who, what, self._jsondiff(old, data)))
                     
-                elif m.group(1) == "references":
+                elif steps[0] == "references":
                     what = "adding author"
                     if key in nerd.authors:
                         old = nerd.authors.get(key)
@@ -825,7 +841,7 @@ class DAPService(ProjectService):
                     provact.add_subaction(Action(subacttype, "%s#data.references[%s]" % (prec.id, str(key)), 
                                                  self.who, what, self._jsondiff(old, data)))
                     
-                elif m.group(1) == LINK_DELIM:
+                elif steps[0] == LINK_DELIM:
                     what = "adding link"
                     if key in nerd.nonfiles:
                         old = nerd.nonfiles.get(key)
@@ -836,7 +852,7 @@ class DAPService(ProjectService):
                     provact.add_subaction(Action(subacttype, "%s#data/pdr:see[%s]" % (prec.id, str(key)), 
                                                  self.who, what, self._jsondiff(old, data)))
                     
-                elif m.group(1) == "components" or m.group(1) == FILE_DELIM:
+                elif steps[0] == "components" or steps[0] == FILE_DELIM:
                     if ('filepath' not in data and key in nerd.nonfiles):
                         old = nerd.nonfiles.get(key)
                         what = "updating link"

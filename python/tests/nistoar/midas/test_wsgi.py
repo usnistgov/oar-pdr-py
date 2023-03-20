@@ -801,6 +801,31 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(data[1]['familyName'], "Cranston")
 
         req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/authors/[0]',
+            'wsgi.input': StringIO('{"givenName": "The Doctor"}')
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['familyName'], "Howard")
+        self.assertEqual(data['givenName'], "The Doctor")
+
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/authors/' + data['@id'],
+            'wsgi.input': StringIO('{"givenName": "Doctor", "fn": "The Doctor"}')
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['familyName'], "Howard")
+        self.assertEqual(data['fn'], "The Doctor")
+        self.assertEqual(data['givenName'], "Doctor")
+        
+        req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': '/midas/dap/mds3/mds3:0001'
         }
