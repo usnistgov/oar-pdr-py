@@ -915,6 +915,43 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(data['keywords'], ["testing", "frameworks"])
         self.assertEqual(data['landingPage'], "https://data.nist.gov/")
 
+    def test_patch_contact(self):
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': '/midas/dap/mds3',
+            'wsgi.input':
+                StringIO('{"name": "first", "data": {"contactPoint": {"hasEmail": "mailto:who@where.com"}}}')
+        }
+        body = self.app(req, self.start)
+        self.assertIn("201 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['id'], 'mds3:0001')
+        self.assertEqual(data['name'], "first")
+        self.assertEqual(data['data']['contactPoint']['hasEmail'], "mailto:who@where.com")
+
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/contactPoint',
+            'wsgi.input': StringIO('{"fn": "The Doctor", "phoneNumber": "555-1212"}')
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data, {"fn": "The Doctor", "phoneNumber": "555-1212", 
+                                "hasEmail": "mailto:who@where.com", "@type": "vcard:Contact"})
+
+        data['hasEmail'] = "drwho@where.com"
+        req['REQUEST_METHOD'] = 'PUT'
+        req['wsgi.input'] = StringIO(json.dumps(data))
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data, {"fn": "The Doctor", "phoneNumber": "555-1212", 
+                                "hasEmail": "mailto:drwho@where.com", "@type": "vcard:Contact"})
+
+        
         
         
 

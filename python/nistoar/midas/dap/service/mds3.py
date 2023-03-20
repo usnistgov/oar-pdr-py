@@ -1593,9 +1593,11 @@ class DAPService(ProjectService):
         if not isinstance(info, Mapping):
             raise InvalidUpdate("contactPoint data is not an object", sys=self)
         info = OrderedDict([(k,v) for k,v in info.items() if k in self._contact_props])
+        if info.get('hasEmail') and not info['hasEmail'].startswith("mailto:"):
+            info['hasEmail'] = "mailto:"+info['hasEmail'].strip()
 
-        if not replace and resmd and resmd.get('contactInfo'):
-            info = self._merge_into(info, resmd['contactInfo'])
+        if not replace and resmd and resmd.get('contactPoint'):
+            info = self._merge_into(info, resmd['contactPoint'])
         info['@type'] = "vcard:Contact"
 
         if doval:
