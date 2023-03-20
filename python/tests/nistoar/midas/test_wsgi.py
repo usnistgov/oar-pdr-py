@@ -900,7 +900,7 @@ class TestMIDASServer(test.TestCase):
         
         req = {
             'REQUEST_METHOD': 'PUT',
-            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/keywords',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/keyword',
             'wsgi.input': StringIO('["CICD", "testing"]')
         }
         self.resp = []
@@ -911,7 +911,7 @@ class TestMIDASServer(test.TestCase):
 
         req = {
             'REQUEST_METHOD': 'PATCH',
-            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/keywords',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/keyword',
             'wsgi.input': StringIO('["frameworks", "testing"]')
         }
         self.resp = []
@@ -923,7 +923,7 @@ class TestMIDASServer(test.TestCase):
         updates = {
             "title": "a draft",
             "description": "read me, please.\n\nPlease",
-            "keywords": "testing frameworks".split(),
+            "keyword": "testing frameworks".split(),
             "landingPage": "https://data.nist.gov/"
         }
         req = {
@@ -937,7 +937,7 @@ class TestMIDASServer(test.TestCase):
         data = self.body2dict(body)
         self.assertEqual(data['title'], "a draft")
         self.assertEqual(data['description'], ["read me, please.", "Please"])
-        self.assertEqual(data['keywords'], ["testing", "frameworks"])
+        self.assertEqual(data['keyword'], ["testing", "frameworks"])
         self.assertEqual(data['landingPage'], "https://data.nist.gov/")
 
     def test_patch_contact(self):

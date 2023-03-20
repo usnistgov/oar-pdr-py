@@ -801,16 +801,14 @@ class TestMDS3DAPService(test.TestCase):
         self.create_service()
         cmp = self.svc._get_sw_desc_for("https://github.com/foo/bar")
         self.assertEqual(cmp, {
-            "@id": "pdr:see/repo:bar",
-            "@type": ["nrd:AccessPage", "dcat:Distribution"],
+            "@type": ["nrdp:AccessPage"],
             "title": "Software Repository in GitHub",
             "accessURL": "https://github.com/foo/bar"
         })
 
         cmp = self.svc._get_sw_desc_for("https://bitbucket.com/foo/bar")
         self.assertEqual(cmp, {
-            "@id": "pdr:see/repo:bar",
-            "@type": ["nrd:AccessPage", "dcat:Distribution"],
+            "@type": ["nrdp:AccessPage"],
             "title": "Software Repository",
             "accessURL": "https://bitbucket.com/foo/bar"
         })
@@ -868,7 +866,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertNotIn("authors", nerd)
 
         self.assertEqual(nerd["references"][0]["refType"], "IsReferencedBy")
-        result = self.svc.update_data(prec.id, {"refType": "References"}, "references[0]")
+        result = self.svc.update_data(prec.id, {"refType": "References"}, "references/[0]")
         self.assertEqual(result["location"], "https://doi.org/10.1364/OE.24.014100")
         self.assertEqual(result["refType"], "References")
         nerd = self.svc.get_nerdm_data(prec.id)
@@ -880,16 +878,16 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(nerd["references"][0]["refType"], "References")
 
         with self.assertRaises(ObjectNotFound):
-            self.svc.update_data(prec.id, {"refType": "References"}, "references[1]")
-        with self.assertRaises(PartNotAccessible):
-            self.svc.update_data(prec.id, {"refType": "References"}, "references[-1]")
+            self.svc.update_data(prec.id, {"refType": "References"}, "references/[1]")
         with self.assertRaises(ObjectNotFound):
-            self.svc.update_data(prec.id, {"refType": "References"}, "references[goober]")
+            self.svc.update_data(prec.id, {"refType": "References"}, "references/[-2]")
+        with self.assertRaises(ObjectNotFound):
+            self.svc.update_data(prec.id, {"refType": "References"}, "references/goober")
         with self.assertRaises(InvalidUpdate):
-            self.svc.update_data(prec.id, {"refType": "IsGurnTo"}, "references[0]")
+            self.svc.update_data(prec.id, {"refType": "IsGurnTo"}, "references/[0]")
 
         try:
-            result = self.svc.update_data(prec.id, {"refType": "IsSourceOf"}, "references[ref_0]")
+            result = self.svc.update_data(prec.id, {"refType": "IsSourceOf"}, "references/ref_0")
         except InvalidUpdate as ex:
             self.fail(str(ex) + ":\n" + "\n".join([str(e) for e in ex.errors]))
         self.assertEqual(result["location"], "https://doi.org/10.1364/OE.24.014100")
@@ -905,7 +903,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(filemd["size"], 69)
         filemd["size"] = 70
         try:
-            result = self.svc.update_data(prec.id, filemd, "components[trial1.json]")
+            result = self.svc.update_data(prec.id, filemd, "components/trial1.json")
         except InvalidUpdate as ex:
             self.fail(str(ex) + ":\n" + "\n".join([str(e) for e in ex.errors]))
         self.assertEqual(result["filepath"], "trial1.json")

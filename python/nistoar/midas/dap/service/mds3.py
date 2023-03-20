@@ -389,7 +389,7 @@ class DAPService(ProjectService):
                 if steps[0] == "authors":
                     out = nerd.authors.get(key)
                 elif steps[0] == "references":
-                    out = nerd.reference.get(key)
+                    out = nerd.references.get(key)
                 elif steps[0] == LINK_DELIM:
                     out = nerd.nonfiles.get(key)
                 elif steps[0] == FILE_DELIM:
@@ -804,7 +804,7 @@ class DAPService(ProjectService):
                 # kkk is either an element identifier or an element index of the form,
                 # [N]. 
                 key = steps[1]
-                m = re.search(r'^\[(\d+)\]$', key)
+                m = re.search(r'^\[([\+\-]?\d+)\]$', key)
                 if m:
                     try:
                         key = int(m.group(1))
@@ -824,14 +824,14 @@ class DAPService(ProjectService):
                                                  self.who, what, self._jsondiff(old, data)))
                     
                 elif steps[0] == "references":
-                    what = "adding author"
-                    if key in nerd.authors:
-                        old = nerd.authors.get(key)
-                        what = "updating author"
+                    what = "adding reference"
+                    if key in nerd.references:
+                        old = nerd.references.get(key)
+                        what = "updating reference"
                     data["_schema"] = schemabase+"/definitions/BibliographicReference"
                     data = self._update_listitem(nerd.references, self._moderate_reference, data, key,
                                                  replace, doval)
-                    provact.add_subaction(Action(subacttype, "%s#data.references[%s]" % (prec.id, str(key)), 
+                    provact.add_subaction(Action(subacttype, "%s#data.references/%s" % (prec.id, str(key)), 
                                                  self.who, what, self._jsondiff(old, data)))
                     
                 elif steps[0] == LINK_DELIM:
@@ -972,13 +972,13 @@ class DAPService(ProjectService):
                 nerd.replace_res_data(res)
                 data = res[path]
 
-            elif path == "keywords":
+            elif path == "keyword":
                 if not isinstance(data, (list, str)):
                     raise InvalidUpdate(part+" data is not a list of strings", sys=self)
                 res = nerd.get_res_data()
                 old = res.get(path)
 
-                res[path] = self._moderate_keywords(data, res, doval=doval, replace=replace)  # InvalidUpdate
+                res[path] = self._moderate_keyword(data, res, doval=doval, replace=replace)  # InvalidUpdate
                 provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
                                              prec.id+"#data."+path, self.who, "updating "+path,
                                              self._jsondiff(old, res[path])))
@@ -1477,7 +1477,7 @@ class DAPService(ProjectService):
             raise InvalidUpdate("description value is not a string or array of strings", sys=self)
         return [self._moderate_text(t, resmd, doval=doval) for t in val if t]
 
-    def _moderate_keywords(self, val, resmd=None, doval=True, replace=True):
+    def _moderate_keyword(self, val, resmd=None, doval=True, replace=True):
         if val is None:
             val = []
         if isinstance(val, str):
@@ -1486,7 +1486,7 @@ class DAPService(ProjectService):
             raise InvalidUpdate("keywords value is not a string or array of strings", sys=self)
 
         # uniquify list
-        out = resmd.get('keywords', []) if resmd and not replace else []
+        out = resmd.get('keyword', []) if resmd and not replace else []
         for v in val:
             if v not in out:
                 out.append(self._moderate_text(v, resmd, doval=doval))
@@ -1895,7 +1895,7 @@ class DAPService(ProjectService):
         resmd["@type"] = restypes
 
         errors = []
-        for prop in "contactPoint description keywords landingPage".split():
+        for prop in "contactPoint description keyword landingPage".split():
             if prop in resmd:
                 if resmd.get(prop) is None:
                     del resmd[prop]
