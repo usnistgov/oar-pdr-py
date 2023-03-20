@@ -314,11 +314,10 @@ class DAPService(ProjectService):
         return out
 
     def _get_sw_desc_for(self, link):
-        id = link.rsplit('/', 1)[-1]
-        id = "%s/repo:%s" % (const.LINKCMP_EXTENSION.lstrip('/'), id)
+        # id = link.rsplit('/', 1)[-1]
+        # id = "%s/repo:%s" % (const.LINKCMP_EXTENSION.lstrip('/'), id)   # let moderate handle this
         out = OrderedDict([
-            ("@id", id),
-            ("@type", ["nrd:AccessPage", "dcat:Distribution"]),
+            ("@type", ["nrdp:AccessPage"]),
             ("title", "Software Repository"),
             ("accessURL", link)
         ])
@@ -374,11 +373,8 @@ class DAPService(ProjectService):
             out = nerd.get_data()
 
         else:
-            steps = part.split('/')
+            steps = part.split('/', 1)
             if len(steps) > 1:
-                if len(steps) > 2:
-                    raise ObjectNotFound(id, part)
-
                 # part is of the form ppp/kkk and refers to an item in list, ppp, where
                 # kkk is either an element identifier or an element index of the form,
                 # [N]. 
@@ -802,11 +798,8 @@ class DAPService(ProjectService):
         provact = Action(Action.PATCH, prec.id, self.who, "updating NERDm part")
 
         try:
-            steps = path.split('/')
+            steps = path.split('/', 1)
             if len(steps) > 1:
-                if len(steps) > 2:
-                    raise ObjectNotFound(id, path)
-
                 # path is of the form ppp/kkk and refers to an item in list, ppp, where
                 # kkk is either an element identifier or an element index of the form,
                 # [N]. 

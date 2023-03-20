@@ -726,7 +726,7 @@ class TestMIDASServer(test.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(self.workdir, 'nerdm', '_seq.json')))
         self.assertTrue(os.path.isdir(os.path.join(self.workdir, 'nerdm', 'mds3:0001')))
 
-    def test_put_authors(self):
+    def test_upd_authors(self):
         req = {
             'REQUEST_METHOD': 'POST',
             'PATH_INFO': '/midas/dap/mds3',
@@ -976,6 +976,55 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(data, {"fn": "The Doctor", "phoneNumber": "555-1212", 
                                 "hasEmail": "mailto:drwho@where.com", "@type": "vcard:Contact"})
 
+    def test_upd_links(self):
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': '/midas/dap/mds3',
+            'wsgi.input': StringIO('{"name": "first", "data": {"title": "Microscopy of Cobalt Samples"},'
+                                   ' "meta": {"softwareLink": "https://github.com/usnistgov/oar-pdr-py"}}')
+        }
+        body = self.app(req, self.start)
+        self.assertIn("201 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['id'], 'mds3:0001')
+        self.assertEqual(data['name'], "first")
+        self.assertTrue(data['data']['title'].startswith("Microscopy of "))
+        self.assertEqual(data['data']['nonfile_count'], 1)
+
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/pdr:see/[0]'
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        
+        self.assertEqual(data['accessURL'], "https://github.com/usnistgov/oar-pdr-py")
+        self.assertEqual(data['title'], "Software Repository in GitHub")
+        self.assertEqual(data['@type'], ["nrdp:AccessPage"])
+        self.assertEqual(data['@id'], "cmp_0")
+        self.assertNotIn('description', data)
+
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/pdr:see/'+data['@id'],
+            'wsgi.input': StringIO('{"description": "fork me!",'
+                                   ' "title": "OAR Software repository"}')
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        
+        self.assertEqual(data['accessURL'], "https://github.com/usnistgov/oar-pdr-py")
+        self.assertEqual(data['title'], "OAR Software repository")
+        self.assertEqual(data['@type'], ["nrdp:AccessPage"])
+        self.assertEqual(data['description'], "fork me!")
+        self.assertIn('@id', data)
+
+        
+        
         
         
         
