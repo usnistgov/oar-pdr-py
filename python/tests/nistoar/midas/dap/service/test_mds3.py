@@ -256,24 +256,25 @@ class TestMDS3DAPService(test.TestCase):
         self.create_service()
 
         try: 
-            contact = self.svc._moderate_contact({"fn": "Gurn Cranston", "hasEmail": "gurn.cranston@gmail.com",
-                                                  "foo": "bar", "phoneNumber": "Penn6-5000"})
+            contact = self.svc._moderate_contactPoint({"fn": "Gurn Cranston",
+                                                       "hasEmail": "gurn.cranston@gmail.com",
+                                                       "foo": "bar", "phoneNumber": "Penn6-5000"})
         except InvalidUpdate as ex:
             self.fail("Validation Error: "+ex.format_errors())
         self.assertEqual(contact['fn'], "Gurn Cranston")
-        self.assertEqual(contact['hasEmail'], "gurn.cranston@gmail.com")
+        self.assertEqual(contact['hasEmail'], "mailto:gurn.cranston@gmail.com")
         self.assertEqual(contact['phoneNumber'], "Penn6-5000")
         self.assertNotIn("foo", contact)
         self.assertEqual(contact["@type"], "vcard:Contact")
         self.assertEqual(len(contact), 4)
 
         try: 
-            contact = self.svc._moderate_contact({"fn": "Gurn J. Cranston", "goob": "gurn"},
-                                                 {"contactInfo": contact})
+            contact = self.svc._moderate_contactPoint({"fn": "Gurn J. Cranston", "goob": "gurn"},
+                                                      {"contactPoint": contact})
         except InvalidUpdate as ex:
             self.fail("Validation Error: "+ex.format_errors())
         self.assertEqual(contact['fn'], "Gurn J. Cranston")
-        self.assertEqual(contact['hasEmail'], "gurn.cranston@gmail.com")
+        self.assertEqual(contact['hasEmail'], "mailto:gurn.cranston@gmail.com")
         self.assertEqual(contact['phoneNumber'], "Penn6-5000")
         self.assertNotIn("foo", contact)
         self.assertEqual(contact["@type"], "vcard:Contact")
@@ -285,8 +286,8 @@ class TestMDS3DAPService(test.TestCase):
 
 
         try:
-            contact = self.svc._moderate_contact({"fn": "Gurn Cranston", "goob": "gurn"},
-                                                 {"contactInfo": contact}, True)
+            contact = self.svc._moderate_contactPoint({"fn": "Gurn Cranston", "goob": "gurn"},
+                                                      {"contactPoint": contact}, True)
         except InvalidUpdate as ex:
             self.fail("Validation Error: "+ex.format_errors())
         self.assertEqual(contact['fn'], "Gurn Cranston")
@@ -329,7 +330,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(res.get("_extensionSchemas"), [ mds3.NERDMPUB_DEF+"PublicDataResource" ])
         self.assertEqual(res.get("description"), ["This is it."])
         self.assertIn("contactPoint", res)
-        self.assertEqual(res.get("contactPoint",{}).get("hasEmail"), "eap@dead.com")
+        self.assertEqual(res.get("contactPoint",{}).get("hasEmail"), "mailto:eap@dead.com")
         self.assertEqual(res.get("contactPoint",{}).get("@type"), "vcard:Contact")
             
 
