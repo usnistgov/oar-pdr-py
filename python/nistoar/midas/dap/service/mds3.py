@@ -893,7 +893,7 @@ class DAPService(ProjectService):
                     raise InvalidUpdate(err, id, path, errors=[err])
                 old = nerd.nonfiles.get_data()
                 if replace:
-                    data = self._replace_objlist(nerd.nonfies, self._moderate_nonfile, data, doval)
+                    data = self._replace_objlist(nerd.nonfiles, self._moderate_nonfile, data, doval)
                 else:
                     data = self._update_objlist(nerd.nonfiles, self._moderate_nonfile, data, doval)
                 provact.add_subaction(Action(subacttype, prec.id+"#data/pdr:see", self.who, 
@@ -1508,7 +1508,6 @@ class DAPService(ProjectService):
             self.validate_json(resmd)
         return val
         
-
     _pfx_for_type = OrderedDict([
         ("ScienceTheme",        NERDMAGG_PRE),
         ("ExperimentalData",    NERDMEXP_PRE),

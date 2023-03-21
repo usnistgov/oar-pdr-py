@@ -1023,6 +1023,94 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(data['description'], "fork me!")
         self.assertIn('@id', data)
 
+    def test_upd_links2(self):
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': '/midas/dap/mds3',
+            'wsgi.input': StringIO('{"name": "first", "data": {"title": "Microscopy of Cobalt Samples"}}')
+        }
+        body = self.app(req, self.start)
+        self.assertIn("201 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['id'], 'mds3:0001')
+        self.assertEqual(data['name'], "first")
+        self.assertTrue(data['data']['title'].startswith("Microscopy of "))
+        self.assertEqual(data['data']['nonfile_count'], 0)
+
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/pdr:see',
+            'wsgi.input': StringIO('{"accessURL": "https://data.nist.gov", "description": "test",'
+                                   ' "@id": "pdr:see/repo:data.nist.gov" }')
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("201 ", self.resp[0])
+        data = self.body2dict(body)
+        
+        self.assertEqual(data['accessURL'], "https://data.nist.gov")
+        self.assertEqual(data['description'], "test")
+        self.assertEqual(data['@type'], ["nrdp:AccessPage"])
+        self.assertEqual(data['@id'], "pdr:see/repo:data.nist.gov")
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/pdr:see/[0]'
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        
+        self.assertEqual(data['accessURL'], "https://data.nist.gov")
+        self.assertEqual(data['description'], "test")
+        self.assertEqual(data['@type'], ["nrdp:AccessPage"])
+        self.assertEqual(data['@id'], "pdr:see/repo:data.nist.gov")
+        self.assertNotIn("title", data)
+
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/pdr:see/'+data['@id'],
+            'wsgi.input': StringIO('{"accessURL": "https://data.nist.gov", "description": "test",'
+                                   ' "@id": "pdr:see/repo:data.nist.gov", "title": "PDR",'
+                                   ' "@type": ["nrdp:AccessPage", "dcat:Distribution"]}')
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        
+        self.assertEqual(data['accessURL'], "https://data.nist.gov")
+        self.assertEqual(data['description'], "test")
+        self.assertEqual(data['@type'], ["nrdp:AccessPage", "dcat:Distribution"])
+        self.assertEqual(data['@id'], "pdr:see/repo:data.nist.gov")
+        self.assertEqual(data['title'], "PDR")
+        
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/pdr:see',
+            'wsgi.input': StringIO('[]')
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data, [])
+
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/pdr:see'
+        }
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data, [])
+        
+        
+        
+        
+
         
         
         
