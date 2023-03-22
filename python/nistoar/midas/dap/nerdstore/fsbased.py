@@ -807,7 +807,7 @@ class FSBasedResource(NERDResource):
     files on disk.
     """
 
-    _subprops = "authors references components @id".split()
+    _subprops = "authors references components".split()
 
     def __init__(self, id: str, storeroot: str, create: bool=True, parentlog: Logger=None):
         super(FSBasedResource, self).__init__(id, parentlog)
@@ -899,7 +899,8 @@ class FSBasedResource(NERDResource):
             raise StorageFormatException("%s: Failed to write file metadata: %s"
                                          % (str(self._seqp), str(ex)))
 
-    def replace_res_data(self, md): 
+    def replace_res_data(self, md):
+        md = OrderedDict(p for p in md.items() if p[0] not in self._subprops)
         self._cache_res_md(md)
 
     def get_res_data(self) -> Mapping:

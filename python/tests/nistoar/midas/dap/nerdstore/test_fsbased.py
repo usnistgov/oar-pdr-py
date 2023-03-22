@@ -874,6 +874,15 @@ class TestFSBasedResource(test.TestCase):
         with self.assertRaises(fsbased.RecordDeleted):
             self.res.authors
 
+    def test_replace_res_data(self):
+        nerd = load_simple()
+        self.res.replace_res_data(nerd)
+        resmd = self.res.get_res_data()
+        self.assertNotIn('authors', resmd)
+        self.assertNotIn('references', resmd)
+        self.assertNotIn('components', resmd)
+        
+
 class TestFSBasedResourceStorage(test.TestCase):
 
     def setUp(self):

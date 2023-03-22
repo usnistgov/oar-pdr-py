@@ -1099,13 +1099,13 @@ class TestMIDASServer(test.TestCase):
 
         req = {
             'REQUEST_METHOD': 'GET',
-            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data/pdr:see'
+            'PATH_INFO': '/midas/dap/mds3/mds3:0001/data'
         }
         self.resp = []
         body = self.app(req, self.start)
         self.assertIn("200 ", self.resp[0])
         data = self.body2dict(body)
-        self.assertEqual(data, [])
+        self.assertEqual(data.get('components',[]), [])
         
         
         
