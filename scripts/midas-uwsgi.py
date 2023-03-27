@@ -93,7 +93,21 @@ if not dbtype:
     dbtype = DEF_MIDAS_DB_TYPE
 
 if dbtype == "fsbased":
-    dbdir = os.path.join(cfg.get('working_dir','.'), "dbfiles")
+    # determine the DB's root directory
+    wdir = cfg.get('working_dir','.')
+    dbdir = cfg.get("dbio", {}).get('db_root_dir')
+    if not dbdir:
+        # use a default under the working directory
+        dbdir = os.path.join(wdir, "dbfiles")
+        if not os.path.exists(wdir):
+            os.mkdir(wdir)
+    elif not os.path.isabs(dbdir):
+        # if relative, make it relative to the work directory
+        dbdir = os.path.join(wdir, dbdir)
+        if not os.path.exists(wdir):
+            os.mkdir(wdir)
+        if not os.path.exists(dbdir):
+            os.makedirs(dbdir)
     if not os.path.exists(dbdir):
         os.mkdir(dbdir)
     factory = FSBasedDBClientFactory(cfg.get("dbio", {}), dbdir)
