@@ -282,6 +282,16 @@ class Handler(object):
         """
         return bool(self.who)
 
+    def get_accepts(self):
+        """
+        return the requested content types as a list ordered by their q-values.  An empty list
+        is returned if no types were specified.
+        """
+        accepts = self._env.get('HTTP_ACCEPT')
+        if not accepts:
+            return [];
+        return order_accepts(accepts)
+
     def acceptable(self):
         """
         return True if the client's Accept request is compatible with this handler.
@@ -289,10 +299,8 @@ class Handler(object):
         This default implementation will return True if "*/*" is included in the Accept request
         or if the Accept header is not specified.
         """
-        accepts = self._env.get('HTTP_ACCEPT')
-        if not accepts:
-            return True;
-        return "*/*" in order_accepts(accepts)
+        accepts = self.get_accepts()
+        return not accepts or "*/*" in order_accepts(accepts)
 
     
 class SubApp(metaclass=ABCMeta):

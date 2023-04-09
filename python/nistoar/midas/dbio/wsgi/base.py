@@ -1,7 +1,7 @@
 """
 Some common code for implementing the WSGI front end to dbio
 """
-import logging, json
+import logging, json, re
 from collections import OrderedDict
 from collections.abc import Callable
 
@@ -42,6 +42,19 @@ class DBIOHandler(Handler):
         self._reqrec = None
         if hasattr(self._app, "_recorder") and self._app._recorder:
             self._reqrec = self._app._recorder.from_wsgi(self._env)
+
+    def acceptable(self):
+        """
+        return True if the client's Accept request is compatible with this handler.
+
+        This implementation will return True if "*/*" or "application/json" is included in the 
+        Accept request or if the Accept header is not specified.
+        """
+        accepts = self.get_accepts()
+        if not accepts:
+            return True;
+        jsonre = re.compile(r"/json$")
+        return "*/*" in accepts or any(jsonre.search(a) for a in accepts);
 
     class FatalError(Exception):
         def __init__(self, code, reason, explain=None, id=None):

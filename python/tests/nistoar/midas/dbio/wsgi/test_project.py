@@ -84,13 +84,32 @@ class TestMIDASProjectApp(test.TestCase):
         path = "mdm1:0001/name"
         req = {
             'REQUEST_METHOD': 'GET',
-            'PATH_INFO': self.rootpath + path
+            'PATH_INFO': self.rootpath + path,
+            'HTTP_ACCEPT': "*/*"
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectNameHandler))
         self.assertNotEqual(hdlr.cfg, {})
         self.assertEqual(hdlr._path, "")
         self.assertEqual(hdlr._id, "mdm1:0001")
+
+        # throw in tests for acceptable
+        self.assertTrue(hdlr.acceptable())
+        hdlr._env['HTTP_ACCEPT'] = "application/json"
+        self.assertTrue(hdlr.acceptable())
+        hdlr._env['HTTP_ACCEPT'] = "text/json"
+        self.assertTrue(hdlr.acceptable())
+        hdlr._env['HTTP_ACCEPT'] = "*/json"
+        self.assertTrue(hdlr.acceptable())
+        hdlr._env['HTTP_ACCEPT'] = "goob/json"
+        self.assertTrue(hdlr.acceptable())
+        hdlr._env['HTTP_ACCEPT'] = "text/html"
+        self.assertTrue(not hdlr.acceptable())
+        hdlr._env['HTTP_ACCEPT'] = "text/html,text/json"
+        self.assertTrue(hdlr.acceptable())
+        hdlr._env['HTTP_ACCEPT'] = "text/html,*/*"
+        self.assertTrue(hdlr.acceptable())
+        
 
     def test_get_name(self):
         path = "mdm1:0003/name"
