@@ -415,10 +415,11 @@ class BagBuilder(PreservationSystem):
 
     @ediid.setter
     def ediid(self, val):
-        if val:
-            self.record("Setting ediid: " + val)
-        elif self._ediid:
-            self.record("Unsetting ediid")
+        if os.path.exists(self.bagdir):
+            if val:
+                self.record("Setting ediid: " + val)
+            elif self._ediid:
+                self.record("Unsetting ediid")
         self._ediid = val
         old = self._upd_ediid(val)
         if self._ediid and self._ediid != old:
