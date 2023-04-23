@@ -10,10 +10,14 @@ types {
     application/rss+xml                   rss;
 
     text/mathml                           mml;
-    text/plain                            txt sha256 sha512 md5;
+    text/plain                            txt sha256 sha512 md5 r R;
     text/vnd.sun.j2me.app-descriptor      jad;
     text/vnd.wap.wml                      wml;
     text/x-component                      htc;
+    text/csv                              csv;
+    text/tab-separated-values             tsv;
+    text/x-python                          py;
+    application/x-python-code             pyc;
 
     image/png                             png;
     image/tiff                            tif tiff;

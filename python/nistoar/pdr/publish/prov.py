@@ -152,6 +152,12 @@ class Action(object):
     ``DELETE``
         the content of the subject was deleted, and the subject identifer is no longer accessible.
         The ``Action`` should not have object data.  
+    ``PROCESS``
+        the subject was submitted for some type of processing.  The Action's object field will be an
+        object that will contain a ``name`` property giving the name of the process or operation 
+        that was applied (e.g. "finalize", "submit", etc.); the other object properties may represent
+        parameters that were used to control the processing.  Some types of processing--most notably, 
+        submitting for publishing--may result in the subject becoming no longer accessible or actionable.
     ``COMMENT``
         This action serves to provide via its message extra information about an action (e.g. as a 
         subaction) or otherwise describe an action that is not strictly one of the above types.  
@@ -162,15 +168,17 @@ class Action(object):
     PATCH:   str = "PATCH"
     MOVE:    str = "MOVE"
     DELETE:  str = "DELETE"
+    PROCESS: str = "PROCESS"
     COMMENT: str = "COMMENT"
-    types = "CREATE PUT PATCH MOVE DELETE COMMENT".split()
+    types = "CREATE PUT PATCH MOVE DELETE PROCESS COMMENT".split()
     TZ = datetime.timezone.utc
 
     def __init__(self, acttype: str, subj: str, agent: PubAgent, msg: str = None, obj = None,
                  timestamp: float = 0.0, subacts: List["Action"] = None):
         """
         intialize the action
-        :param str    acttype:  the type of action taken; one of CREATE, PUT, PATCH, MOVE, DELETE, COMMENT.
+        :param str    acttype:  the type of action taken; one of CREATE, PUT, PATCH, MOVE, DELETE, 
+                                PROCESS, COMMENT.
         :param str       subj:  the identifier for the part of the dataset that was updated
         :param PubAgent agent:  the agent (person or system) that intiated the action
         :param msg        str:  a description of the change (and possibly why).
@@ -206,7 +214,7 @@ class Action(object):
     @property
     def type(self) -> str:
         """
-        the type of action, one of CREATE, PUT, PATCH, MOVE, DELETE, COMMENT
+        the type of action, one of CREATE, PUT, PATCH, MOVE, DELETE, PROCESS, COMMENT
         """
         return self._type
 
@@ -242,7 +250,7 @@ class Action(object):
         return self._msg
 
     @message.setter
-    def message(self, msg: str) -> None:
+    def message(self, message: str) -> None:
         self._msg = message
 
     @property
@@ -304,6 +312,12 @@ class Action(object):
             raise TypeError("add_subaction(): input is not an Action: "+str(action))
         self._subacts.append(action)
 
+    def clear_subactions(self) -> None:
+        """
+        remove all subactions attached to this action
+        """
+        self._subacts = []
+
     def to_dict(self) -> Mapping:
         """
         convert this Action into JSON-serializable dictionary.  This implementation returns an 
@@ -338,6 +352,14 @@ class Action(object):
             return json.loads(self.object.to_string())
         if hasattr(self.object, 'to_dict'):
             return self.object.to_dict()
+        if isinstance(self.object, Mapping):
+            out = OrderedDict()
+            for k,v in self.object.items():
+                if isinstance(v, JsonPatch):
+                    out[k] = json.loads(v.to_string())
+                else:
+                    out[k] = v
+            return out
         return self.object
 
     def _serialize_subactions(self, indent=4) -> str:

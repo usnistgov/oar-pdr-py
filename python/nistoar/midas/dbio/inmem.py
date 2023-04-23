@@ -8,6 +8,8 @@ from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
 
+from nistoar.base.config import merge_config
+
 class InMemoryDBClient(base.DBClient):
     """
     an in-memory DBClient implementation 
@@ -23,11 +25,18 @@ class InMemoryDBClient(base.DBClient):
         self._db['nextnum'][shoulder] += 1
         return self._db['nextnum'][shoulder]
 
+    def _try_push_recnum(self, shoulder, recnum):
+        n = self._db['nextnum'].get(shoulder, -1)
+        if n >= 0 and n == recnum:
+            self._db['nextnum'][shoulder] -= 1
+
     def _get_from_coll(self, collname, id) -> MutableMapping:
         return deepcopy(self._db.get(collname, {}).get(id))
 
-    def _select_from_coll(self, collname, **constraints) -> Iterator[MutableMapping]:
+    def _select_from_coll(self, collname, incl_deact=False, **constraints) -> Iterator[MutableMapping]:
         for rec in self._db.get(collname, {}).values():
+            if rec.get('deactivated') and not incl_deact:
+                continue
             cancel = False
             for ck, cv in constraints.items():
                 if rec.get(ck) != cv:
@@ -37,14 +46,19 @@ class InMemoryDBClient(base.DBClient):
                 continue
             yield deepcopy(rec)
 
-    def _select_prop_contains(self, collname, prop, target) -> Iterator[MutableMapping]:
+    def _select_prop_contains(self, collname, prop, target, incl_deact=False) -> Iterator[MutableMapping]:
         for rec in self._db.get(collname, {}).values():
+            if rec.get('deactivated') and not incl_deact:
+                continue
             if prop in rec and isinstance(rec[prop], (list, tuple)) and target in rec[prop]:
                 yield deepcopy(rec)
 
     def _delete_from(self, collname, id):
         if collname in self._db and id in self._db[collname]:
             del self._db[collname][id]
+            shldr, num = self._parse_id(id)
+            if shldr:
+                self._try_push_recnum(shldr, num)
             return True
         return False
 
@@ -66,7 +80,36 @@ class InMemoryDBClient(base.DBClient):
                 if rec.authorized(p):
                     yield deepcopy(rec)
                     break
+
+    def _save_action_data(self, actdata: Mapping):
+        if 'subject' not in actdata:
+            raise ValueError("_save_action_data(): Missing subject property in action data")
+        id = actdata['subject']
+        if base.PROV_ACT_LOG not in self._db:
+            self._db[base.PROV_ACT_LOG] = {}
+        if id not in self._db[base.PROV_ACT_LOG]:
+            self._db[base.PROV_ACT_LOG][id] = []
+        self._db[base.PROV_ACT_LOG][id].append(actdata)
                 
+    def _select_actions_for(self, id: str) -> List[Mapping]:
+        if base.PROV_ACT_LOG not in self._db or id not in self._db[base.PROV_ACT_LOG]:
+            return []
+        return deepcopy(self._db[base.PROV_ACT_LOG][id])
+
+    def _delete_actions_for(self, id):
+        if base.PROV_ACT_LOG not in self._db or id not in self._db[base.PROV_ACT_LOG]:
+            return
+        del self._db[base.PROV_ACT_LOG][id]
+
+    def _save_history(self, histrec):
+        if 'recid' not in histrec:
+            raise ValueError("_save_history(): Missing recid property in history data")
+        if 'history' not in self._db:
+            self._db['history'] = {}
+        if histrec['recid'] not in self._db['history']:
+            self._db['history'][histrec['recid']] = []
+        self._db['history'][histrec['recid']].append(histrec)
+
                 
 class InMemoryDBClientFactory(base.DBClientFactory):
     """
@@ -86,7 +129,7 @@ class InMemoryDBClientFactory(base.DBClientFactory):
         """
         super(InMemoryDBClientFactory, self).__init__(config)
         self._db = {
-            base.DRAFT_PROJECTS: {},
+            base.DAP_PROJECTS: {},
             base.DMP_PROJECTS: {},
             base.GROUPS_COLL: {},
             base.PEOPLE_COLL: {},
@@ -96,8 +139,9 @@ class InMemoryDBClientFactory(base.DBClientFactory):
             self._db.update(deepcopy(_dbdata))
             
 
-    def create_client(self, servicetype: str, foruser: str = base.ANONYMOUS):
+    def create_client(self, servicetype: str, config: Mapping={}, foruser: str = base.ANONYMOUS):
+        cfg = merge_config(config, deepcopy(self._cfg))
         if servicetype not in self._db:
             self._db[servicetype] = {}
-        return InMemoryDBClient(self._db, self._cfg, servicetype, foruser)
+        return InMemoryDBClient(self._db, cfg, servicetype, foruser)
         

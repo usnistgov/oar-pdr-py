@@ -1,14 +1,15 @@
 """
 An implementation of the dbio interface that uses a MongoDB database as it backend store
 """
-from collections.abc import Mapping, MutableMapping, Set
 import re
+from copy import deepcopy
+from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
 
-from pymongo import MongoClient
+from pymongo import MongoClient, ASCENDING
 
-from nistoar.base.config import ConfigurationException
+from nistoar.base.config import ConfigurationException, merge_config
 
 _dburl_re = re.compile(r"^mongodb://(\w+(:\S+)?@)?\w+(\.\w+)*(:\d+)?/\w+$")
 
@@ -16,6 +17,8 @@ class MongoDBClient(base.DBClient):
     """
     an implementation of DBClient using a MongoDB database as the backend store.
     """
+    ACTION_LOG_COLL = base.PROV_ACT_LOG
+    HISTORY_COLL = 'history'
 
     def __init__(self, dburl: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS):
         """
@@ -62,7 +65,7 @@ class MongoDBClient(base.DBClient):
         the native pymongo database object that contains the DBIO collections.  Accessing this property
         will implicitly connect this client to the underlying MongoDB database.
         """
-        if not self._native:
+        if self._native is None:
             self.connect()
         return self._native
 
@@ -70,7 +73,7 @@ class MongoDBClient(base.DBClient):
         try:
             id = recdata['id']
         except KeyError as ex:
-            raise DBIOException("_upsert(): record is missing required 'id' property")
+            raise base.DBIOException("_upsert(): record is missing required 'id' property")
         key = {"id": id}
 
         try:
@@ -80,10 +83,10 @@ class MongoDBClient(base.DBClient):
             result = coll.replace_one(key, recdata, upsert=True)
             return result.matched_count == 0
 
-        except DBIOException as ex:
+        except base.DBIOException as ex:
             raise
         except Exception as ex:
-            raise DBIOException("Failed to load record with id=%s: %s" % (id, str(ex)))
+            raise base.DBIOException("Failed to load record with id=%s: %s" % (id, str(ex)))
 
     def _next_recnum(self, shoulder):
         key = {"slot": shoulder}
@@ -101,10 +104,29 @@ class MongoDBClient(base.DBClient):
             result = coll.find_one_and_update(key, {"$inc": {"next": 1}})
             return result["next"]
 
-        except DBIOException as ex:
+        except base.DBIOException as ex:
             raise
         except Exception as ex:
-            raise DBIOException("Failed to access named sequence, =%s: %s" % (shoulder, str(ex)))
+            raise base.DBIOException("Failed to access named sequence, =%s: %s" % (shoulder, str(ex)))
+
+    def _try_push_recnum(self, shoulder, recnum):
+        key = {"slot": shoulder}
+        try:
+            db = self.native
+            coll = db["nextnum"]
+
+            with self._mngocli.start_session() as session:
+                if coll.count_documents(key) == 0:
+                    return
+                slot = coll.find_one(key)
+                if slot["next"] == recnum+1:
+                    coll.update_one(key, {"$inc": {"next": -1}})
+
+        except base.DBIOException as ex:
+            raise
+        except Exception as ex:
+            # ignore database errors
+            pass
 
     def _get_from_coll(self, collname, id) -> MutableMapping:
         key = {"id": id}
@@ -116,29 +138,36 @@ class MongoDBClient(base.DBClient):
             return coll.find_one(key, {'_id': False})
 
         except Exception as ex:
-            raise DBIOException("Failed to access record with id=%s: %s" % (id, str(ex)))
+            raise base.DBIOException("Failed to access record with id=%s: %s" % (id, str(ex)))
 
-    def _select_from_coll(self, collname, **constraints) -> Iterator[MutableMapping]:
+    def _select_from_coll(self, collname, incl_deact=False, **constraints) -> Iterator[MutableMapping]:
         try:
             db = self.native
             coll = db[collname]
+
+            if not incl_deact:
+                constraints['deactivated'] = None
 
             for rec in coll.find(constraints, {'_id': False}):
                 yield rec
 
         except Exception as ex:
-            raise DBIOException("Failed while selecting records: " + str(ex))
+            raise base.DBIOException("Failed while selecting records: " + str(ex))
 
-    def _select_prop_contains(self, collname, prop, target) -> Iterator[MutableMapping]:
+    def _select_prop_contains(self, collname, prop, target, incl_deact=False) -> Iterator[MutableMapping]:
         try:
             db = self.native
             coll = db[collname]
 
-            for rec in coll.find({prop: target}, {'_id': False}):
+            query = { prop: target }
+            if not incl_deact:
+                query['deactivated'] = None
+
+            for rec in coll.find(query, {'_id': False}):
                 yield rec
 
         except Exception as ex:
-            raise DBIOException("Failed while selecting records: " + str(ex))
+            raise base.DBIOException("Failed while selecting records: " + str(ex))
 
     def _delete_from(self, collname, id):
         key = {"id": id}
@@ -150,7 +179,7 @@ class MongoDBClient(base.DBClient):
             return results.deleted_count > 0
 
         except Exception as ex:
-            raise DBIOException("Failed while deleting record with id=%s: %s" % (id, str(ex)))
+            raise base.DBIOException("Failed while deleting record with id=%s: %s" % (id, str(ex)))
 
     def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
@@ -173,7 +202,46 @@ class MongoDBClient(base.DBClient):
                 yield base.ProjectRecord(self._projcoll, rec)
 
         except Exception as ex:
-            raise base.DBIOException("Failed while selecting records: " + str(ex))
+            raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
+
+    def _save_action_data(self, actdata: Mapping):
+        try:
+            coll = self.native[self.ACTION_LOG_COLL]
+            result = coll.insert_one(actdata)
+            return True
+
+        except base.DBIOException as ex:
+            raise
+        except Exception as ex:
+            raise base.DBIOException(actdata.get('subject',"id=?")+
+                                     ": Failed to save action: "+str(ex)) from ex
+
+    def _select_actions_for(self, id: str) -> List[Mapping]:
+        try:
+            coll = self.native[self.ACTION_LOG_COLL]
+            return [rec for rec in coll.find({'subject': id}, {'_id': False}).sort("timestamp", ASCENDING)]
+        except Exception as ex:
+            raise base.DBIOException(id+": Failed to select action records: "+str(ex)) from ex
+
+    def _delete_actions_for(self, id):
+        try:
+            coll = self.native[self.ACTION_LOG_COLL]
+            result = coll.delete_many({'subject': id})
+            return result.deleted_count > 0
+        except Exception as ex:
+            raise base.DBIOException(id+": Failed to delete action records: "+str(ex)) from ex
+
+    def _save_history(self, histrec):
+        try:
+            coll = self.native[self.HISTORY_COLL]
+            result = coll.insert_one(histrec)
+            return True
+        except base.DBIOException as ex:
+            raise
+        except Exception as ex:
+            raise DBIOEception(histrec.get('recid', "id=?")+": Failed to save history entry: "+str(ex)) \
+                from ex
+    
 
 class MongoDBClientFactory(base.DBClientFactory):
     """
@@ -212,6 +280,7 @@ class MongoDBClientFactory(base.DBClientFactory):
                              dburl)
         self._dburl = dburl
 
-    def create_client(self, servicetype: str, foruser: str = base.ANONYMOUS):
-        return MongoDBClient(self._dburl, self._cfg, servicetype, foruser)
+    def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
+        cfg = merge_config(config, deepcopy(self._cfg))
+        return MongoDBClient(self._dburl, cfg, servicetype, foruser)
 

@@ -11,7 +11,7 @@ class TestACLs(test.TestCase):
         self.cfg = { "default_shoulder": "pdr0" }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
-        self.cli = self.fact.create_client(base.DMP_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
         self.rec = self.cli.create_record("test")
         self.acls = self.rec.acls
 

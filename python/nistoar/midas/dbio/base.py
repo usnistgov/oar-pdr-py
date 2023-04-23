@@ -3,10 +3,12 @@ The abstract interface for interacting with the database.
 
 This interface is based on the following model:
 
-  *  Each service (drafting, DMPs, etc.) has its own collection that extends on a common base model
+  *  Each service (DAP, DMPs, etc.) has its own collection that extends on a common base model
   *  Each *record* in the collection represents a "project" that a user is working on via the service
   *  A record can be expressed as a Python dictionary which can be exported into JSON
 
+See the :py:mod:`DBIO package documentation <nistoar.midas.dbio>` for a fully description of the 
+model and how to interact with the database.
 """
 import time, math
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
@@ -18,12 +20,16 @@ from enum import Enum
 from datetime import datetime
 
 from nistoar.base.config import ConfigurationException
+from nistoar.pdr.publish.prov import Action
 from .. import MIDASException
+from .status import RecordStatus
 
-DRAFT_PROJECTS = "draft"
-DMP_PROJECTS   = "dmp"
-GROUPS_COLL = "groups"
-PEOPLE_COLL = "people"
+DAP_PROJECTS = "dap"
+DMP_PROJECTS = "dmp"
+GROUPS_COLL  = "groups"
+PEOPLE_COLL  = "people"
+DRAFT_PROJECTS = "draft"   # this name is deprecated
+PROV_ACT_LOG = "prov_action_log"
 
 DEF_PEOPLE_SHOULDER = "ppl0"
 DEF_GROUPS_SHOULDER = "grp0"
@@ -31,8 +37,8 @@ DEF_GROUPS_SHOULDER = "grp0"
 PUBLIC_GROUP = DEF_GROUPS_SHOULDER + ":public"    # all users are implicitly part of this group
 ANONYMOUS = PUBLIC_GROUP
 
-__all__ = ["DBClient", "DBClientFactory", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP", "ANONYMOUS",
-           "DRAFT_PROJECTS", "DMP_PROJECTS"]
+__all__ = ["DBClient", "DBClientFactory", "ProjectRecord", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP", 
+           "ANONYMOUS", "DAP_PROJECTS", "DMP_PROJECTS", "ObjectNotFound", "NotAuthorized", "AlreadyExists"]
 
 Permissions = Union[str, Sequence[str], AbstractSet[str]]
 
@@ -91,6 +97,20 @@ class ACLs:
             if id not in self._perms[perm_name]:
                 self._perms[perm_name].append(id)
 
+    def revoke_perm_from_all(self, perm_name):
+        """
+        remove the given identities from the list having the given permission.  For each given identity 
+        that does not currently have the permission, nothing is done.  
+        :param str perm_name:  the permission to be revoked
+        :param str ids:        the identities of the users the permission should be revoked from
+        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
+                               authorized to grant this permission
+        """
+        if not self._rec.authorized(self.ADMIN):
+            raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
+        if perm_name in self._perms:
+            self._perms[perm_name] = []
+
     def revoke_perm_from(self, perm_name, *ids):
         """
         remove the given identities from the list having the given permission.  For each given identity 
@@ -127,7 +147,11 @@ class ACLs:
 
 class ProtectedRecord(ABC):
     """
-    a base class for records that have ACLs attached to them
+    a base class for records that have ACLs attached to them.
+
+    This record represents a local copy of the record that exists in the "remote" database.  The 
+    client can make changes to this record; however, those changes are not persisted in the 
+    database until the :py:meth:`save` method is called.
     """
 
     def __init__(self, servicetype: str, recdata: Mapping, dbclient: DBClient=None):
@@ -143,6 +167,7 @@ class ProtectedRecord(ABC):
             raise ValueError("Record data is missing its 'id' property")
         self._data = self._initialize(recdata)
         self._acls = ACLs(self, self._data.get("acls", {}))
+        self._status = RecordStatus(self.id, self._data['status'])
 
     def _initialize(self, recdata: MutableMapping) -> MutableMapping:
         """
@@ -154,10 +179,17 @@ class ProtectedRecord(ABC):
         :return: an combination of the given data and defaults
                  :rtype: MutableMapping
         """
+        now = time.time()
+
         if not recdata.get('acls'):
             recdata['acls'] = {}
         if not recdata.get('owner'):
             recdata['owner'] = self._cli.user_id if self._cli else ""
+        if 'deactivated' not in recdata:
+            # Should be None or a date
+            recdata['deactivated'] = None
+        if 'status' not in recdata:
+            recdata['status'] = RecordStatus(recdata['id'], {'created': -1}).to_dict(False)
         for perm in ACLs.OWN:
             if perm not in recdata['acls']:
                 recdata['acls'][perm] = [recdata['owner']] if recdata['owner'] else []
@@ -174,6 +206,89 @@ class ProtectedRecord(ABC):
     def owner(self):
         return self._data.get('owner', "")
 
+    @property
+    def created(self) -> float:
+        """
+        the epoch timestamp indicating when this record was first corrected
+        """
+        return self.status.created
+
+    @property
+    def created_date(self) -> str:
+        """
+        the creation timestamp formatted as an ISO string
+        """
+        return self.status.created_date
+
+    @property
+    def modified(self) -> float:
+        """
+        the epoch timestamp indicating when this record was last updated
+        """
+        out = self.status.modified
+        if out < 1:
+            out = self.status.created
+        return out
+
+    @property
+    def modified_date(self) -> str:
+        """
+        the timestamp for the last modification, formatted as an ISO string
+        """
+        return self.status.modified_date
+
+    @property
+    def deactivated(self) -> bool:
+        """
+        True if this record has been deactivated.  Record that are deactivated are generally
+        skipped over when being accessed or used.  A deactivated record can only be retrieved 
+        via its identifier.
+        """
+        return bool(self._data.get('deactivated'))
+
+    @property
+    def deactivated_date(self) -> str:
+        """
+        the timestamp when this record was deactivated, formatted as an ISO string.  An empty
+        string is returned if the record is not currently deactivated.
+        """
+        if not self._data.get('deactivated'):
+            return ""
+        return datetime.fromtimestamp(math.floor(self._data.get('deactivated'))).isoformat()
+
+    def deactivate(self) -> bool:
+        """
+        mark this record as "deactivated".  :py:meth:`deactivated` will now return True.
+        The :py:meth:`save` method should be called to commit this change.
+        :return:  False if the state was not changed for any reason, including because the record
+                  was already deactivated.
+                  :rtype: True
+        """
+        if self.deactivated:
+            return False
+        self._data['deactivated'] = time.time()
+        return True
+
+    def reactivate(self) -> bool:
+        """
+        reactivate this record; :py:meth:`deactivated` will now return False.
+        The :py:meth:`save` method should be called to commit this change.
+        :return:  False if the state was not changed for any reason, including because the record
+                  was already activated.
+                  :rtype: True
+        """
+        if not self.deactivated:
+            return False
+        self._data['deactivated'] = None
+        return True
+
+    @property
+    def status(self) -> RecordStatus:
+        """
+        return the status object that indicates the current state of the record and the last 
+        action applied to it.  
+        """
+        return self._status
 
     @property
     def acls(self) -> ACLs:
@@ -191,7 +306,13 @@ class ProtectedRecord(ABC):
         """
         if not self.authorized(ACLs.WRITE):
             raise NotAuthorized(self._cli.user_id, "update record")
-        self._cli._upsert(self._coll, self._data)
+        olddates = (self.status.modified, self.status.created, self.status.since)
+        self.status.set_times()
+        try: 
+            self._cli._upsert(self._coll, self._data)
+        except Exception as ex:
+            (self._data['modified'], self._data['created'], self._data['since']) = olddates
+            raise
 
     def authorized(self, perm: Permissions, who: str = None):
         """
@@ -213,7 +334,7 @@ class ProtectedRecord(ABC):
         """
         if not who:
             who = self._cli.user_id
-        if (self.owner and who == self.owner) or who in self._cli._cfg.get("superusers", []):
+        if who in self._cli._cfg.get("superusers", []):
             return True
             
         if isinstance(perm, str):
@@ -253,7 +374,13 @@ class ProtectedRecord(ABC):
         return errs
 
     def to_dict(self):
-        return deepcopy(self._data)
+        out = deepcopy(self._data)
+        out['acls'] = self.acls._perms
+        out['type'] = self._coll
+        out['status']['createdDate'] = self.status.created_date
+        out['status']['modifiedDate'] = self.status.modified_date
+        out['status']['sinceDate'] = self.status.since_date
+        return out
 
 class Group(ProtectedRecord):
     """
@@ -436,8 +563,8 @@ class DBGroups(object):
                           user ID attached to the `DBClient` is assumed.
         """
         if not owner:
-            owner = self.user_id
-        it = self._cli._select_from_coll(GROUPS_COLL, name=name, owner=owner)
+            owner = self._cli.user_id
+        it = self._cli._select_from_coll(GROUPS_COLL, incl_deact=True, name=name, owner=owner)
         try:
             return bool(next(it))
         except StopIteration:
@@ -468,7 +595,7 @@ class DBGroups(object):
         """
         if not owner:
             owner = self._cli.user_id
-        matches = self._cli._select_from_coll(GROUPS_COLL, name=name, owner=owner)
+        matches = self._cli._select_from_coll(GROUPS_COLL, incl_deact=True, name=name, owner=owner)
         for m in matches:
             m = Group(m, self._cli)
             if m.authorized(ACLs.READ):
@@ -479,10 +606,11 @@ class DBGroups(object):
         """
         return all the groups that a user (or a group) is a member of.  This implementation will 
         resolve the groups that the user is indirectly a member of--i.e. a user's group itself is a 
-        member of another group.  
+        member of another group.  Deactivated groups are not included.
         """
         checked = set()
         out = set(g['id'] for g in self._cli._select_prop_contains(GROUPS_COLL, 'members', id))
+
         follow = list(out)
         while len(follow) > 0:
             g = follow.pop(0)
@@ -517,6 +645,10 @@ class DBGroups(object):
 class ProjectRecord(ProtectedRecord):
     """
     a single record from the project collection representing one project created by the user
+
+    This record represents a local copy of the record that exists in the "remote" database.  The 
+    client can make changes to this record; however, those changes are not persisted in the 
+    database until the :py:meth:`save` method is called.
     """
 
     def __init__(self, projcoll: str, recdata: Mapping, dbclient: DBClient=None):
@@ -535,11 +667,6 @@ class ProjectRecord(ProtectedRecord):
             rec['meta'] = OrderedDict()
         if 'curators' not in rec:
             rec['curators'] = []
-        if 'created' not in rec:
-            rec['created'] = time.time()
-        if 'deactivated' not in rec:
-            # Should be None or a date
-            rec['deactivated'] = None
 
         self._initialize_data(rec)
         self._initialize_meta(rec)
@@ -564,20 +691,13 @@ class ProjectRecord(ProtectedRecord):
         """
         return self._data.get('name', "")
 
-    @property
-    def created(self) -> float:
+    @name.setter
+    def name(self, val):
         """
-        the epoch timestamp indicating when this record was first corrected
+        assign the given name as the record's mnumonic name
         """
-        return self._data.get('created', 0)
-
-    @property
-    def created_date(self) -> str:
-        """
-        the creation timestamp formatted as an ISO string
-        """
-        return datetime.fromtimestamp(math.floor(self.created)).isoformat()
-
+        self._data['name'] = val
+        
     @property
     def data(self) -> MutableMapping:
         """
@@ -586,6 +706,10 @@ class ProjectRecord(ProtectedRecord):
         are determined by the application.
         """
         return self._data['data']
+
+    @data.setter
+    def data(self, data: Mapping):
+        self._data['data'] = deepcopy(data)
 
     @property
     def meta(self) -> MutableMapping:
@@ -596,14 +720,35 @@ class ProjectRecord(ProtectedRecord):
         """
         return self._data['meta']
 
+    @meta.setter
+    def meta(self, data: Mapping):
+        self._data['meta'] = deepcopy(data)
+
     def __str__(self):
         return "<{} ProjectRecord: {} ({}) owner={}>".format(self._coll.rstrip("s"), self.id,
                                                              self.name, self.owner)
-        
-        
+
 class DBClient(ABC):
     """
     a client connected to the database for a particular service (e.g. drafting, DMPs, etc.)
+
+    As this class is abstract, implementations provide support for specific storage backends.  
+    All implementations support the following common set of configuration parameters:
+
+    ``superusers``
+         (List[str]) _optional_.  a list of strings giving the identifiers of users that 
+         should be considered superusers who will be afforded authorization for all operations
+    ``allowed_project_shoulders``
+         (List[str]) _optional_.  a list of strings representing the identifier prefixes--i.e. 
+         the _shoulders_--that can be used to create new project identifiers.  If not provided,
+         the only allowed shoulder will be that given by ``default_shoulder``.
+    ``default_shoulder``
+         (str) _required_.  the identifier prefix--i.e. the _shoulder_--that should be used 
+         by default when not otherwise requested by the user when creating new project records.
+    ``allowed_group_shoulders``
+         (List[str]) _optional_.  a list of strings representing the identifier prefixes--i.e. 
+         the _shoulders_--that can be used to create new group identifiers.  If not provided,
+         the only allowed shoulder will be the default, ``grp0``. 
     """
 
     def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS):
@@ -617,10 +762,16 @@ class DBClient(ABC):
 
     @property
     def user_id(self) -> str:
+        """
+        the identifier of the user that this client is acting on behalf of
+        """
         return self._who
 
     @property
     def user_groups(self) -> frozenset:
+        """
+        the set of identifiers for groups that the user given by :py:property:`user_id` belongs to.
+        """
         if not self._whogrps:
             self.recache_user_groups()
         return self._whogrps
@@ -641,9 +792,8 @@ class DBClient(ABC):
         :param str     name:  the mnumonic name (provided by the requesting user) to give to the 
                               record.
         :param str shoulder:  the identifier shoulder prefix to create the new ID with.  
-                              (The implementation should ensure that the requested shoulder is 
-                              recognized and that the requesting user is authorized to request 
-                              the shoulder.)
+                              (The implementation should ensure that the requested user is authorized 
+                              to request the shoulder.)
         :param str  foruser:  the ID of the user that should be registered as the owner.  If not 
                               specified, the value of :py:property:`user_id` will be assumed.  In 
                               this implementation, only a superuser can create a record for someone 
@@ -701,6 +851,15 @@ class DBClient(ABC):
         """
         return "{0}:{1:04}".format(shoulder, self._next_recnum(shoulder))
 
+    def _parse_id(self, id):
+        pair = id.rsplit(':', 1)
+        if len(pair) != 2:
+            return None, None
+        try:
+            return pair[0], int(pair[1])
+        except ValueError:
+            return None, None
+
     @abstractmethod
     def _next_recnum(self, shoulder):
         """
@@ -713,8 +872,8 @@ class DBClient(ABC):
 
     def _new_record_data(self, id):
         """
-        return a new ProjectRecord instance with the given identifier assigned to it.  Generally, 
-        this record should not be committed yet.
+        return a dictionary containing data that will constitue a new ProjectRecord with the given 
+        identifier assigned to it.  Generally, this record should not be committed yet.
         """
         return {"id": id}
 
@@ -735,7 +894,7 @@ class DBClient(ABC):
         """
         if not owner:
             owner = self.user_id
-        it = self._select_from_coll(self._projcoll, name=name, owner=owner)
+        it = self._select_from_coll(self._projcoll, incl_deact=True, name=name, owner=owner)
         try:
             return bool(next(it))
         except StopIteration:
@@ -748,7 +907,7 @@ class DBClient(ABC):
         """
         if not owner:
             owner = self.user_id
-        matches = self._select_from_coll(self._projcoll, name=name, owner=owner)
+        matches = self._select_from_coll(self._projcoll, incl_deact=True, name=name, owner=owner)
         for m in matches:
             m = ProjectRecord(self._projcoll, m, self)
             if m.authorized(ACLs.READ):
@@ -765,10 +924,12 @@ class DBClient(ABC):
         :param str perm:  the permission type that the user must be authorized for in order for 
                           the record to be returned; if user is not authorized, an exception is raised.
                           Default: `ACLs.READ`
+        :raises ObjectNotFound:  if the identifier does not exist
+        :raises  NotAuthorized:  if the user does not have the permission given by ``perm``
         """
         out = self._get_from_coll(self._projcoll, id)
         if not out:
-            return None
+            raise ObjectNotFound(id)
         out = ProjectRecord(self._projcoll, out, self)
         if not out.authorized(perm):
             raise NotAuthorized(self.user_id, perm)
@@ -841,9 +1002,9 @@ class DBClient(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def _select_from_coll(self, collname, **constraints) -> Iterator[MutableMapping]:
+    def _select_from_coll(self, collname, incl_deact=False, **constraints) -> Iterator[MutableMapping]:
         """
-        return an iterator to the records from a specified collectino that match the set of 
+        return an iterator to the records from a specified collection that match the set of 
         given constraints.
 
         :param str collname:   the logical name of the database collection (e.g. table, etc.) to pull 
@@ -855,7 +1016,7 @@ class DBClient(ABC):
         raise NotImplementedError()
     
     @abstractmethod
-    def _select_prop_contains(self, collname, prop, target) -> Iterator[MutableMapping]:
+    def _select_prop_contains(self, collname, prop, target, incl_deact=False) -> Iterator[MutableMapping]:
         """
         return an iterator to the records from a specified collection in which the named list property
         contains a given target value.
@@ -879,6 +1040,130 @@ class DBClient(ABC):
         """
         raise NotImplementedError()
         
+    def delete_record(self, id: str) -> bool:
+        """
+        delete the specified group from the database.  The user attached to this 
+        :py:class:`DBClient` must either be the owner of the record or have `DELETE` permission
+        to carry out this option. 
+        :return:  True if the group was found and successfully deleted; False, otherwise
+                  :rtype: bool
+        """
+        try:
+            g = self.get_record_for(id, ACLs.DELETE)
+        except ObjectNotFound:
+            return False
+        if not g:
+            return False
+
+        self._delete_from(self._projcoll, id)
+        return True
+
+    def record_action(self, act: Action, coll: str=None):
+        """
+        save the given action record to the back-end store.  In order to save the action, the 
+        action's subject must identify an existing record and the current user must have write 
+        permission on that record.
+
+        :param Action act:  the Action object to save
+        :param str   coll:  the collection that the record with the action's subject ID can be 
+                            found.  If not provided, the current project collection will be assumed.
+        """
+        if not act.subject:
+            raise ValueError("record_action(): action is missing a subject identifier")
+        if act.type == Action.PROCESS and \
+           (not isinstance(act.object, Mapping) or 'name' not in act.object):
+            raise ValueError("record_action(): action object is missing name property: "+str(act.object))
+
+        # check existence and permission
+        if not coll:
+            coll = self._projcoll
+        rec = self._get_from_coll(coll, act.subject)
+        if not rec:
+            raise ObjectNotFound(act.subject)
+        rec = ProtectedRecord(coll, rec, self)
+        if not rec.authorized(ACLs.WRITE):
+            raise NotAuthorized(rec.id, "record action for id="+rec.id)
+
+        self._save_action_data(act.to_dict())
+
+    @abstractmethod
+    def _save_action_data(self, actdata: Mapping):
+        """
+        save the given data to the action log collection
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _select_actions_for(self, id: str) -> List[Mapping]:
+        """
+        retrieve all actions currently recorded for the record with the given identifier
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _delete_actions_for(self, id: str):
+        """
+        purge all actions currently recorded for the record with the given identifier
+        """
+        raise NotImplementedError()
+
+    def _close_actionlog_with(self, rec: ProtectedRecord, close_action: Action, extra=None,
+                              cancel_if_empty=True):
+        """
+        archive all actions in the action log for a given ID, ending with the given action.
+        All of the entries associated with the given record will be removed from the action 
+        log and stored into an action archive document in JSON format.  
+
+        :param ProtectedRecord rec:  the record whose action log is being closed
+        :param Action close_action:  the action that is effectively closing the record.  This 
+                                     is usually a PROCESS action or a DELETE action.
+        :param dict extra:  additional data to include in the action archive document
+        :raises NotAuthorized:  if the current user does not have write permission to the given
+                                record.  
+        """
+        if not rec.authorized(ACLs.WRITE):
+            raise NotAuthorized(self.user_id, "close record history for id="+rec.id)
+
+        history = self._select_actions_for(rec.id)
+        if len(history) == 0 and cancel_if_empty:
+            return
+        history.append(close_action.to_dict())
+
+        # users with permission to read record can read the history, but only superusers
+        # can update it or administer it.
+        acls = OrderedDict([
+            ("read", rec.acls._perms.get('read', []))
+        ])
+
+        if 'recid' in extra or 'close_action' in extra:
+            extra = deepcopy(extra)
+            if 'recid' in extra:
+                del extra['recid']
+            if 'close_action' in extra:
+                del extra['close_action']
+
+        archive = OrderedDict([
+            ("recid", rec.id),
+            ("close_action", close_action.type)
+        ])
+        if close_action.type == Action.PROCESS:
+            archive['close_action'] += ":%s" % str(close_action.object)
+        archive.update(extra)
+        archive['acls'] = acls
+        archive['history'] = history
+
+        self._save_history(archive)
+        self._delete_actions_for(rec.id)
+
+    @abstractmethod
+    def _save_history(self, histrec):
+        """
+        save the given history record to the history collection
+        """
+        raise NotImplementedError()
+
+
+
 
 class DBClientFactory(ABC):
     """
@@ -886,10 +1171,18 @@ class DBClientFactory(ABC):
     """
 
     def __init__(self, config):
+        """
+        initialize the factory with its configuration.  The configuration provided here serves as 
+        the default parameters for the cient as these can be overridden by the configuration parameters
+        provided via :py:method:`create_client`.  Generally, it is recommended that the parameters 
+        the configure the backend storage be provided here, and that the non-storage parameters--namely,
+        the ones that control authorization--be provided via :py:method:`create_client` as these can 
+        depend on the type of project being access (e.g. "dmp" vs. "dap").
+        """
         self._cfg = config
 
     @abstractmethod
-    def create_client(self, servicetype: str, foruser: str = ANONYMOUS):
+    def create_client(self, servicetype: str, config: Mapping={}, foruser: str = ANONYMOUS):
         """
         create a client connected to the database and the contents related to the given service
 
@@ -897,10 +1190,15 @@ class DBClientFactory(ABC):
            :caption: Example
 
            # connect to the DMP collection
-           client = dbio.MIDASDBClienFactory(configdata).create_client(dbio.DMP_PROJECTS, userid)
+           client = dbio.MIDASDBClientFactory(configdata).create_client(dbio.DMP_PROJECTS, config, userid)
 
-        :param str servicetype:  the service data desired.  The value should be one of ``DRAFT_PROJECTS``
+        :param str servicetype:  the service data desired.  The value should be one of ``DAP_PROJECTS``
                                  or ``DMP_PROJECTS``
+        :param Mapping  config:  the configuration to pass into the client.  This will be merged into and 
+                                 override the configuration provided to the factory at construction time. 
+                                 Typically, the configuration provided here are the common parameters that 
+                                 are independent of the type of backend storage.
+        :param str     foruser:  The identifier of the user that DBIO requests will be made on behalf of.
         """
         raise NotImplementedError()
 
@@ -911,12 +1209,21 @@ class DBIOException(MIDASException):
     """
     pass
 
+class DBIORecordException(DBIOException):
+    """
+    a base Exception class for DBIO exceptions that are associated with a specific DBIO record.  This 
+    class provides the record identifier via a ``record_id`` attribute.  
+    """
+    def __init__(self, recid, message, sys=None):
+        super(DBIORecordException, self).__init__(message, sys=sys)
+        self.record_id = recid
+
 class NotAuthorized(DBIOException):
     """
     an exception indicating that the user attempted an operation that they are not authorized to 
     """
 
-    def __init__(self, who: str=None, op: str=None, message: str=None):
+    def __init__(self, who: str=None, op: str=None, message: str=None, sys=None):
         """
         create the exception
         :param str who:     the identifier of the user who requested the operation
@@ -943,5 +1250,27 @@ class AlreadyExists(DBIOException):
     identifying data the corresponds to an already existing record).
     """
     pass
+
+class ObjectNotFound(DBIORecordException):
+    """
+    an exception indicating that the requested record, or a requested part of a record, does not exist.
+    """
+    def __init__(self, recid, part=None, message=None, sys=None):
+        """
+        initialize this exception
+        :param str   recid: the id of the record that was existed
+        :param str    part: the part of the record that was requested.  Do not provide this parameter if 
+                            the entire record does not exist.  
+        :param str message: a brief description of the error (what object was not found)
+        """
+        self.record_part = part
+
+        if not message:
+            if part:
+                message = "Requested portion of record (id=%s) does not exist: %s" % (recid, part)
+            else:
+                message = "Requested record with id=%s does not exist" % recid
+        super(ObjectNotFound, self).__init__(recid, message)
+
 
 

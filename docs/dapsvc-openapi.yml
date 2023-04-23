@@ -1,0 +1,792 @@
+openapi: 3.1.0
+info:
+  title: MIDAS Data Asset Publication Service (DAPS) Interface, Convention MDS3
+  summary: A service allows the creation, updating, and publishing of Data Asset Publications (DAPs).  
+  description: |-
+    A client uses the DAPS interface to create and edit metadata that describe a draft Data Asset 
+    Pulication.  Clients are expected to be either automated systems or user-driven, interactive
+    tools.  After completing the draft publication via this API, the client can submit it for review
+    and final publication.  It also possible to revise previously published DAPs through this API.
+
+    A typical life cycle of a DAP managed by the service looks like this:
+    1. Create a new draft via a [POST to `/mds3`](/paths/mds3/post).  The **`id`** property in the
+       returned record is used to retrieve and update the recrd (via the `{draftid}` parameter).  
+    2. Update the draft publication via a [PUT](/paths/mds3-draftid--data/put) or
+       [PATCH](/paths/mds3-draftid--data/patch) to `/mds3/{draftid}/data
+    3. Inspect the draft publication document by retrieving it via a
+       [GET to `/mds3/{draftid}/data`](/paths/mds3-draftid--data/get).
+    4. When updates are complete, finalize the document with a
+       [PUT to `/mds3/{draftid}/status`](/paths/mds3-draftid--status/put) (setting the `action`
+       property to "**finalize**").  Review the result via
+       [GET to `/mds3/{draftid}/data`](/paths/mds3-draftid--data/get); further updates are still
+       possible if needed.
+    5. Submit the record for review with a
+       [PUT to `/mds3/{draftid}/status`](/paths/mds3-draftid--status/put) (setting the `action`
+       property to "**submit**").  
+
+  contact:
+    name:  MIDAS support office
+    email: datasupport@nist.gov
+
+  version: 0.1
+
+servers:
+  - url: https://localhost/midas/dap
+
+paths:
+  /mds3:
+    summary: the resource representing the full collection of publications created under the MDS3 convention
+    get:
+      summary: search for DAP records
+      description: return all or a subset of DAP records that the requesting user is authorized to read
+      parameters: [ ]    # parameters for selecting matching records.
+      responses:
+        "200":
+          description: >-
+            A list of the matched DAP records.  See the DAP record description for details.
+          content:
+            "application/json":
+              schema:
+                description:  a list of matched DAP records.
+                type:  array
+                items: { "type": { "$ref": "#/components/schemas/ProjectRecord" } }
+              examples:
+                "empty":
+                  summary: no matching DAPs found
+                  value: '[]'
+    post:
+      summary: create a new DAP record
+      description: >-
+        The client provides a name and initial data to be used to create the new record.  The
+        server will assign a new identifier to the newly created record, and returns the actual
+        ProjectRecord saved as a result of the request.
+
+      requestBody:
+        summary:  the data that should be used to initialize the newly created record
+        description: >-
+          This body contains the initial data for the record.  It must include the human-oriented
+          name to assign to the record.  The data field is optional, but if given, it must only 
+          include properties that are part of the NERDm schema for a Resource object.  Properties 
+          provide within the optional meta field are advisory, only.
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CreateRecordRequest"
+      responses:
+        "201":
+          description: >-
+            The request was accepted and a DAP record was created.  The response is DAP record that
+            was actually created.  The `data` property provides a digest of the draft publication
+            document with selected properties and summary information; to see the full draft
+            publication document, access the
+            [/mds3/{draftid}/data endpoint](../mds3-draftid--data/get).
+          content:
+            "applicaiton/json":
+              schema:
+                "$ref": "#/components/schemas/ProjectRecord"
+        "400":
+          description: |-
+            The client sent bad or unusabe input of one of the following forms:
+              * The input request body is not parsable as JSON
+              * The JSON document in the request body was not compliant with the CreateRecordRequest
+                schema, such as not including the name field, or including unrecognized properties as
+                part of the data or meta fields.  
+              * The requested name is already applied to another record owned by the user
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description: >-
+            The client did not submit recognized credentials and thus is not authorized
+            to create DAP records.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+                
+  /mds3/{draftid}:
+    summary: access to a specific DAP record
+    parameters:
+      - "$ref": "#/components/parameters/draftid"
+        summary:  the identifier assigned to the desired DAP record
+    get:
+      summary: Retrieve a DAP record
+      description: >-
+        The returns the DAP project record with the specified identifier.  The DAP record is an
+        administrative wrapper around the draft publication document that contains metadata about
+        the draft, such as its identifier, owner, status and history.  The `data` property
+        provides a digest of the draft publication document with selected properties and summary
+        information; to see the full draft publication document, access the
+        [/mds3/{draftid}/data endpoint](../mds3-draftid--data/get).
+      responses:
+        "200":
+          description:  The DAP draft record with the given identifier was found and returned
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ProjectRecord"
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description: >-
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+                
+  /mds3/{draftid}/data:
+    summary:  the draft publication document
+    parameters:
+      - "$ref": "#/components/parameters/draftid"
+        summary:  the identifier assigned to the desired DAP record
+    get:
+      summary: return the draft publication
+      description: >-
+        This returns the complete draft publication document--the document that the client wishes
+        to eventually publish.  It is encoded as a NERDm Resource JSON object.  
+      responses:
+        "200":
+          description:  The DAP record with the given identifier was found and it data content was returned
+          content:
+            "application/json":
+              schema:
+                "type": object
+                "description":  a NERDm Resource object
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:  The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    put:
+      summary: "replace the document data"
+      description: >-
+        This replaces the contents of the draft publication document with the given JSON object.
+      requestBody:
+        summary:  the data that should replace the currently stored publication document data
+        description: >-
+          The request message body is a NERDm Resource JSON object whose content represents the 
+          draft publication.  This JSON object will completely replace the data object previously
+          saved for this record.  Note that some normal NERDm compliance requirements are relax
+          to allow incomplete documents to be submitted.  Some properties (e.g. those that are
+          considered read-only and thus not updatable) will be ignored and not affect the content
+          that is actually saved.  
+        content:
+          "application/json":
+            schema:
+              type: object
+      responses:
+        "200":
+          description: >-
+            The DAP record with the given identifier was found and it document content was updated and
+            returned.  The returned data may modified from what was submitted as required by
+            policy or convention.
+          content:
+            "application/json":
+              schema:
+                "type": object
+        "400":
+          description: |-
+            The client sent bad or unusabe input of one of the following forms:
+              * The input request body is not parsable as a JSON object
+              * The JSON document in the request body was not a compliant NERDm Resource document.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description: >-
+            The authenticated user is not authorized to update this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    patch:
+      summary: update selected document data
+      description: >-
+        This merges the input data representing a partial update to the draft publication document
+        that is already stored.  Any sub-properties that match those in the input object will
+        updated with the given values; any previously stored properties not provided in the input will
+        remain unchanged.  Input subproperty object values can also be partially complete; these will be
+        correspondingly merged hierarchically.
+      requestBody:
+        summary:  the data that will be merged into the NERDm publication document
+        description: >-
+          The request message body is a JSON object whose properties are taken from the NERDm
+          Resource Schema.  This JSON object will merged in with the publicatoin data previously
+          saved for this record.  
+        content:
+          "application/json":
+            schema:
+              type: object
+      responses:
+        "200":
+          description:  The DAP record with the given identifier was found and it data content was updated and returned
+          content:
+            "application/json":
+              schema:
+                "type": object
+        "400":
+          description: |-
+            The client sent bad or unusabe input of one of the following forms:
+              * The input request body is not parsable as a JSON object
+              * The JSON object in the request body contains unrecognized or invalid properties as
+                expected by the DAP service
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to update this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+  /mds3/{draftid}/data/{nerdmprop}:
+    summary:  a property from the NERDm description of the publication
+    description: >-
+      This endpoint allows one to access and update selected top-level NERDm properties
+      describing the draft publication.  This can be more efficient for getting at particular
+      pieces of information when the NERDm document is large (e.g. due to many files or authors).  
+      Note that some properties (namely, `authors`, `references`, and others) support an expanded
+      interface; see the documentation for those endpoints specifically.  
+    parameters:
+      - "$ref": "#/components/parameters/draftid"
+        summary:  the identifier assigned to the desired DAP record
+      - "$ref": "#/components/parameters/nerdmprop"
+        summary:  a top-level property name from the NERDm Resource description of the draft publication
+    
+    get:
+      summary: "return a NERDm property value"
+      description: >-
+        This endpoint allows one to retrieve selected top-level NERDm properties
+        describing the draft publication.  This can be more efficient for getting at particular
+        pieces of information when the NERDm document is large (e.g. due to many files or authors).
+        Any top-level property can be retrieved from this endpoint.
+
+        In addition to standard NERDm resource properties, a few _pseudo-property_ names are
+        supported:
+          * **`pdr:f`**: this will return a list of NERDm components representing files and folders
+          * **`pdr:see`**:  this return the list of NERDM components that are _not_ files or
+            folders.  Generally these are links to other web sites.
+      responses:
+        "200":
+          description:  >-
+            The DAP record with the given identifier was found and the requested property value was
+            returned.  The type of the output is the type defined for the property in the NERDm schema.
+          content:
+            "application/json":
+              description: the type of the output is the type defined for the property in the NERDm schema
+              schema:
+                "oneOf":
+                  - "type": object
+                  - "type": string
+        "404":
+          description: >-
+            The DAP draft record with the given identifier was not found, or the particular property
+            is either not a supported property or the property has not been set yet.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:  The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    put:
+      summary: "replace a NERDm property value"
+      description: >-
+        This replaces the value of a particular, top-level NERDm property.  
+        Note that not all properties that can be retrieved via GET are updateable via PUT.
+        This may be because the property is read-only (i.e. set only by the server).  
+      requestBody:
+        summary:  the data that should replace the currently stored data content
+        description: >-
+          The request message body is a JSON object whose properties represent the content of the
+          draft publication.  This JSON object will completely replace the data object previously
+          saved for this record.  
+        content:
+          "application/json":
+            description: the type of the input is the type defined for the property in the NERDm schema
+            schema:
+              oneOf:
+                - type: object
+                - type: string
+      responses:
+        "200":
+          description: >-
+            The DAP record with the given identifier was found, the requested property value was
+            updated, and the updated value was retuned.  The value may modified from what was
+            submitted as required by policy or convention.
+          content:
+            "application/json":
+            description: the type of the output is the type defined for the property in the NERDm schema
+              schema:
+                oneOf:
+                  - type: object
+                  - type: string
+        "400":
+          description: |-
+            The client sent bad or unusabe input of one of the following forms:
+              * The input request body is not parsable as a JSON object
+              * The JSON document in the request body was not compliant with that required
+                for the requested property (i.e. its type and/or format).
+              * The value would otherwise result in an invalid description document
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description: >-
+            The authenticated user is not authorized to update this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "405":
+          description: >-
+            The requested property cannot be updated because it is a read-only property or 
+            because an independent update of the property is not supported.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+  /mds3/{draftid}/name:
+    summary:  the mnemonic name for the DAP record with the given identifier
+    parameters:
+      - "$ref": "#/components/parameters/draftid"
+        summary:  the identifier assigned to the desired DAP record
+    get:
+      summary: "get the DAP record's name"
+      description: >-
+        this returns the value of the `name` property that is returned by the `/mds3/{draftid}`
+        endpoint.
+      responses:
+        "200":
+          description:  The DAP record was found and its name was returned.
+          content:
+            "application/json":
+              schema:
+                "type": string
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    put:
+      summary: Change the DAP record's name
+      description: This endpoint method is used to change the mnemonic name assigned to the record.
+      requestBody:
+        summary:  the new name to assign to the DAP
+        content:
+          "application/json":
+            schema:
+              type: string
+      responses:
+        "200":
+          description:  the record was found, the name was successfully changed and the new name returned
+          content:
+            "application":
+              "type": string
+        "400":
+          description: |-
+            The client sent bad or unusabe input of one of the following forms:
+              * The input request body is not parsable as a JSON string
+              * The string represents a name that is already attached to another record owned by the 
+                user.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to change its name.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+  /mds3/{draftid}/status:
+    summary: >-
+      information about the status of the record, including its current state and the last action
+      applied to the record.
+    parameters:
+      "$ref": "#/components/parameters/draftid"
+      summary:  the identifier assigned to the desired DAP record
+    get:
+      summary: "return the record's current status"
+      description: >-
+        this returns the value of the `status` property that is returned by the `/mds3/{draftid}`
+        endpoint.  The properties in this object describe the current state of the record.
+      responses:
+        "200":
+          description:  The DAP record was found and its status info was returned.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RecordStatus"
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    put:
+      summary: "apply an action to the record"
+      description: >-
+        This endpoint can be used to request special processing be applied to the record.  The
+        `action` property in the input object indicates what action should be applied.  The only
+        accepted values are "**finalize**" and "**submit**".  The finalize action will cause the last of
+        the automated updates be applied
+        before the record can be submitted for publishing.  For example, the version
+        that the record will be published as will be set as part of this action.  Applying finalize
+        before the submit action allows the client to give the record one last examination before
+        submission.  The submit action will apply the finalize action (again) and then submit the
+        record to be published.  Note that all input properties besides `action` and `message` will
+        be ignored.  
+      responses:
+        "200":
+          description: >-
+            The requested action was successfully applied to the record.  If the
+            requested action was "**finalize**", the new state returned will be "**ready**".
+            If the requested action was "**submit**", the new state will be "**submitted**".
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RecordStatus"
+        "202":
+          description: >-
+            The requested action was initiated on the record and is still underway.
+            The new state returned will be "**processing**".  The record must leave this
+            state before further edits or actions can be applied.  If the processing
+            eventually fails, the `message` property will be set to an error message. 
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RecordStatus"
+        "400":
+          description: >-
+            The inputs for the requested action were illegal in some way.  In particular, an
+            unsupported `action` value will result in this error.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    patch:
+      summary: "update the status message"
+      description: >-
+        This method is synonymous to a PUT request in that it can also be used to request
+        special processing.  In addition, if the input includes only the `message`
+        property, the status message will just be updated with no other processing applied. 
+      responses:
+        "200":
+          description: >-
+            The requested action was successfully applied to the record or the message was
+            updated (depending on whether an action was requested).  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RecordStatus"
+        "202":
+          description: >-
+            Special processing was requested via the `action` input property; the 
+            processing was initiated on the record and is still underway.
+            The new state returned will be "**processing**".  The record must leave this
+            state before further edits or actions can be applied.  If the processing
+            eventually fails, the `message` property will be set to an error message.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RecordStatus"
+        "400":
+          description: >-
+            The inputs for the requested action were illegal in some way.  In particular, an
+            unsupported `action` value will result in this error.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description: >-
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+components:
+  parameters:
+    draftid:
+      name:  draftid
+      in: path
+      description: The identifer used to refer to a DAP
+      required: true
+      schema:
+        type: string
+
+    nerdmprop:
+      name: nerdmprop
+      in: path
+      description: >-
+        The name of a top-level NERDm Resource object property (e.g. "**title**", "**description**", etc.)
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    ErrorResponse:
+      title: a JSON-encoded error response
+      description:
+        This is a JSON-encoded description of an error detected by the service while processing
+        a service request.
+      properties:
+        "http:code":
+          description: the HTTP status code response
+          type: integer
+          minimum: 400
+          exclusiveMaximum: 600
+        "http:reason":
+          description: the (brief) HTTP status message associated with the code
+          type: string
+        "pdr:message":
+          description:
+            a more detailed explanation of the error detected.  This message may be quite lengthy.
+          type: string
+        "pdr:sipid":
+          description:
+            the identifier for the SIP being accessed, if known and exists.
+      required: [ 'http:code', 'http:reason', 'pdr:message' ]
+
+    ProjectRecord:
+      title: a JSON-encoded DBIO project record
+      description:
+        This record describes a project record being drafted by a client
+      properties:
+        "name":
+          description: the mnemonic, user-chosen name for the record
+          type: string
+          minimum: 1
+          required: true
+        "id":
+          description: the unique identifier assigned to the record by the system at its creation
+          type: string
+          minimum: 3
+          required: true
+        "owner":
+          description: the identifier of the user that is primarily responsible for maintaining this record
+          type: string
+          minimum: 1
+          required: true
+        "status":
+          description:
+            information describing the current state of the record and the last change that was
+            applied to it.
+          "$ref": "#/components/schemas/RecordStatus"
+          minimum: 1
+          maximum: 1
+        "curators":
+          description:
+            the list of IDs for people who have been assigned as curators for this record; it will be empty
+            if no curators are currently assigned.
+          type: array
+          items: { type: string }
+        "deactivated":
+          description:
+            a boolean set to True if this record has been deactivated, preventing any further editing or
+            listing
+          type: boolean
+        "acl":
+          description:  the access control lists associated with this record
+          type: { $ref: ACLs }
+        "data":
+          description:  a digest of the draft publication document, featuring selected and summary properties 
+          type:  object
+        "meta":
+          description:  metadata associated with the client, managed by the service
+          type:  object
+
+    ActionRequest:
+      title: a form of a RecordStatus that is used to request an action be applied to the record
+      description:
+        Use this payload type to request that an action (e.g. "finalize" or "submit") be applied to
+        the record.  The finalize action will cause the last of the automated updates be applied
+        before the record can be submitted for publishing.  For example, the version
+        that the record will be published as will be set as part of this action.  Applying finalize
+        before the submit action allows the client to give the record one last examination before
+        submission.  The submit action will apply the finalize action (again) and then submit the
+        record to be published.
+      properties:
+        "action":
+          description:
+            the name of the action to apply.  Currently, only "finalize" and "submit" are allowed
+            action names that can be applied.  If not provided, only the status message will be
+            updated. 
+          type: string
+          minimum: 0
+          maximum: 1
+        "message":
+          description:
+            an optional message to record as to the reason or intent for applying the action.  If, 
+            for example, the action is submit which would revise a previous publication, the client 
+            can providea message describing what has changed.  If not provided, a default message 
+            will be recorded.
+
+    RecordStatus:
+      title:  a description of the current state of the record
+      description:
+        This object provides information about the current state of the record and the action that
+        was applied to it.  It also includes the three timestamps--when it was created, last
+        modified, and when it entered its current state.
+      properties:
+        "state":
+          description:
+            a label indicating it stage in its life-cycle.  Possible values are "edit", "processing",
+            "ready", "submitted", "published", and "unwell".  When a DAP is created, it enters the 
+            "edit" state.  After being finalized, it will be in the "ready" state.  Further updates
+            to the record are only allowed when it is in the "edit" or "ready" state.  
+            After it is submitted, it will first be in the "submitted" state and then eventually the
+            "published" state.  If it gets into an erroneous state that cannot be auto-corrected,
+            it may go into the "unwell" state.  
+          type: string
+          minimum: 1
+          enum: ["edit", "processing", "ready", "submitted", "published", "unwell" ]
+        "action":
+          description:
+            the name of the last action that was applied.  Possible values include "create",
+            "update", "finalize", and "submit".  
+          type: string
+          minimum: 1
+          maximum: 1
+        "message":
+          description:
+            a human-oriented message describing the last action applied to the record.  In some
+            cases this can be client provided.
+          type: string
+          minimum: 1
+          maximum: 1
+        "created":
+          description: the epoch timestamp in fractional seconds when the record was created
+          type: number
+        "createdDate":
+          description: the ISO 8601-formatted data-time that this record was created
+          type: string
+        "modified":
+          description: the epoch timestamp in fractional seconds when the record was last updated
+          type: number
+        "modifiedDate":
+          description: the ISO 8601-formatted data-time that this record was last updated
+          type: string
+        "since":
+          description:
+            the epoch timestamp in fractional seconds when the record was entered its current state.
+            For example, if the current state is "submitted", this is the date that the record was
+            submitted for publication. 
+          type: number
+        "sinceDate":
+          description: the ISO 8601-formatted data-time that this record entered its current state
+          type: string
+
+    CreateRecordRequest:
+      title: a form of a ProjectRecord that is used as a request to create a new one
+      description:
+        This record describes a project record being drafted by a client
+      properties:
+        "name":
+          description: the mnemonic, user-chosen name to give to the record
+          type: string
+          minimum: 1
+          required: true
+        "data":
+          description:  the initial DAP record data to set
+          type:  object
+        "meta":
+          description:
+            initial meta-information to associate with the record.  This will be considered
+            advisory only; the server may override some or all of this data based on policy.
+          type:  object
+          
+          
+          
+        
+
+      
+  

@@ -427,10 +427,10 @@ class FSBasedFileComps(NERDFileComps):
                                          % (str(mdf), str(ex)))
 
     def _export_file(self, fmd):
-        out = OrderedDict([m for m in fmd.items() if not m[0].startswith("_")])
+        out = OrderedDict([m for m in fmd.items() if not m[0].startswith("__")])
         if self.is_collection(out):
             out['has_member'] = [OrderedDict([('@id', m[1]), ('name', m[0])])
-                                 for m in fmd.get("_children",{}).items()]
+                                 for m in fmd.get("__children",{}).items()]
         return out
 
     def get_file_by_path(self, path: str) -> Mapping:
@@ -457,7 +457,7 @@ class FSBasedFileComps(NERDFileComps):
             raise ObjectNotFound(origpath)
         fmd = self._read_file_md(mdf)
 
-        return self._find_fmd_id_by_relpath(fmd.get("_children", {}), steps, origpath)
+        return self._find_fmd_id_by_relpath(fmd.get("__children", {}), steps, origpath)
 
     def path_exists(self, filepath) -> bool:
         try:
@@ -482,7 +482,7 @@ class FSBasedFileComps(NERDFileComps):
             except ObjectNotFound:
                 return []
             else:
-                children = coll.get('_children', [])
+                children = coll.get('__children', [])
 
         return list(children.values())
 
@@ -511,8 +511,8 @@ class FSBasedFileComps(NERDFileComps):
                 mdf = self._fs._find_fmd_file(desc)
                 if mdf and self._fs._is_coll_mdfile(mdf):
                     descmd = self._fs._read_file_md(mdf)
-                    if descmd.get('_children'):
-                        self.descendents.extend(descmd.get('_children', {}).values())
+                    if descmd.get('__children'):
+                        self.descendents.extend(descmd.get('__children', {}).values())
                 return desc
             raise StopIteration()
 
@@ -556,11 +556,11 @@ class FSBasedFileComps(NERDFileComps):
             out['@type'] = [DATAFILE_TYPE, DOWNLOADABLEFILE_TYPE]
                 
         # if self.is_collection(fmd) and 'has_member' in fmd:
-        #     # convert 'has_member' to '_children'
-        #     out['_children'] = OrderedDict()
+        #     # convert 'has_member' to '__children'
+        #     out['__children'] = OrderedDict()
         #     for child in fmd['has_member']:
         #         if '@id' in child and 'filepath' in child:
-        #             out['_children'][self._basename(child['filepath'])] = child['@id']
+        #             out['__children'][self._basename(child['filepath'])] = child['@id']
         return out
 
     def set_file_at(self, md, filepath: str=None, id=None, as_coll: bool=None) -> str:
@@ -618,7 +618,7 @@ class FSBasedFileComps(NERDFileComps):
         deldestfile = False
         if destfile and \
            (destfile['@id'] != md['@id'] or self.is_collection(destfile) != self.is_collection(md)):
-            if destfile.get('_children'):
+            if destfile.get('__children'):
                 # destination is a non-empty collection: won't clobber it
                 raise CollectionRemovalDissallowed(destfile['filepath'], "collection is not empty")
             deldestfile = True
@@ -626,9 +626,9 @@ class FSBasedFileComps(NERDFileComps):
         if oldfile:
             if self.is_collection(oldfile) and self.is_collection(md):
                 # updating a collection; preserve its contents
-                md['_children'] = oldfile.get('_children')
-                if md['_children'] is None:
-                    md['_children'] = OrderedDict()
+                md['__children'] = oldfile.get('__children')
+                if md['__children'] is None:
+                    md['__children'] = OrderedDict()
 
             if filepath != oldfile.get('filepath'):
                 # this is a file move; deregister it from its old parent
@@ -654,9 +654,9 @@ class FSBasedFileComps(NERDFileComps):
             name = self._basename(filepath)
             if not self.is_collection(parent):
                 raise  ObjectNotFound(parent, message=self._dirname(filepath)+": Not a subcollection")
-            if '_children' not in parent:
-                parent['_children'] = OrderedDict()
-            parent['_children'][name] = id
+            if '__children' not in parent:
+                parent['__children'] = OrderedDict()
+            parent['__children'][name] = id
             self._cache_file_md(parent)
 
         else:
@@ -668,8 +668,8 @@ class FSBasedFileComps(NERDFileComps):
             try:
                 parent = self._get_file_by_path(self._dirname(filepath))
                 name = self._basename(filepath)
-                if name in parent.get('_children',{}):
-                    del parent['_children'][name]
+                if name in parent.get('__children',{}):
+                    del parent['__children'][name]
                     self._cache_file_md(parent)
             except ObjectNotFound:
                 pass
@@ -721,21 +721,21 @@ class FSBasedFileComps(NERDFileComps):
         # Go through a last time to set the subcollection content info into each subcollection component
         for cmp in subcolls:
             if cmp.get('filepath') in children:
-                if '_children' not in cmp:
-                    cmp['_children'] = OrderedDict()
+                if '__children' not in cmp:
+                    cmp['__children'] = OrderedDict()
 
                 # base subcollection contents first on 'has_member' list as this captures order info
                 if cmp.get('has_member'):
-                    if isinstance(cmd.get('has_member',[]), str):
+                    if isinstance(cmp.get('has_member',[]), str):
                         cmp['has_member'] = [cmp['has_member']]
                     for child in cmp['has_member']:
                         if child.get('@id') in saved and child.get('name'):
-                            cmp['_children'][child['name']] = child.get('@id')
+                            cmp['__children'][child['name']] = child.get('@id')
 
                 # capture any that got missed by 'has_member'
                 for child in children[cmp['filepath']]:
-                    if child[0] not in cmp['_children']:
-                        cmp['_children'][child[0]] = child[1]
+                    if child[0] not in cmp['__children']:
+                        cmp['__children'][child[0]] = child[1]
 
                 self.set_file_at(cmp)
 
@@ -778,9 +778,9 @@ class FSBasedFileComps(NERDFileComps):
             coll = self._get_file_by_path(collpath)
             if not self.is_collection(coll):
                 raise ObjectNotFound(collpath, message=collpath+": not a subcollection component")
-            if '_children' not in coll:
-                coll['_children'] = OrderedDict()
-            children = coll['_children']
+            if '__children' not in coll:
+                coll['__children'] = OrderedDict()
+            children = coll['__children']
 
         # create an inverted child map
         byid = OrderedDict( [(itm[1], itm[0]) for itm in children.items()] )
@@ -807,7 +807,7 @@ class FSBasedResource(NERDResource):
     files on disk.
     """
 
-    _subprops = "authors references components @id".split()
+    _subprops = "authors references components".split()
 
     def __init__(self, id: str, storeroot: str, create: bool=True, parentlog: Logger=None):
         super(FSBasedResource, self).__init__(id, parentlog)
@@ -899,7 +899,8 @@ class FSBasedResource(NERDResource):
             raise StorageFormatException("%s: Failed to write file metadata: %s"
                                          % (str(self._seqp), str(ex)))
 
-    def replace_res_data(self, md): 
+    def replace_res_data(self, md):
+        md = OrderedDict(p for p in md.items() if p[0] not in self._subprops)
         self._cache_res_md(md)
 
     def get_res_data(self) -> Mapping:
@@ -936,12 +937,39 @@ class FSBasedResourceStorage(NERDResourceStorage):
     _seqfile = "_seq.json"
     _idre = re.compile(r'^\w+\d*:0*(\d+)$')
 
+    @classmethod
+    def from_config(cls, config: Mapping, logger: Logger):
+        """
+        an class method for creatng an FSBasedResourceStorage instance from configuration data.
+
+        Recognized configuration paramters include:
+
+        ``store_dir``
+             (str) _required_. The root directory under which all resource data will be stored.
+        ``default_shoulder``
+             (str) _optional_. The shoulder that new identifiers are minted under.  This is not 
+             normally used as direct clients of this class typically choose the shoulder on a 
+             per-call basis.  The default is "nrd".
+
+        :param dict config:  the configuraiton for the specific type of storage
+        :param Logger logger:  the logger to use to capture messages
+        """
+        if not config.get('store_dir'):
+            raise ConfigurationException("Missing required configuration parameter: store_dir")
+        
+        return cls(config['store_dir'], config.get("default_shoulder", "nrd"), logger)
+        
     def __init__(self, storeroot: str, newidprefix: str="nrd", logger: Logger=None):
         """
         initialize a factory with with the resource data storage rooted at a given directory
         :param str  newidprefix:  a prefix to use when minting new identifiers
         """
         self._dir = Path(storeroot)
+        pdir = self._dir.parents[0]
+        if not pdir.is_dir():
+            raise StorageFormatException("%s: does not exist as a directory" % str(pdir))
+        if not self._dir.exists():
+            self._dir.mkdir()
         if not self._dir.is_dir():
             raise StorageFormatException("%s: does not exist as a directory" % str(self._dir))
         if not os.access(self._dir, os.R_OK|os.W_OK|os.X_OK):

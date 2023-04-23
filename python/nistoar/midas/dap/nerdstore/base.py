@@ -1,17 +1,18 @@
 """
 Abstract base classes providing the interface to metadata storage.
 """
-import logging
+import logging, re
 from abc import ABC, ABCMeta, abstractproperty, abstractmethod
 from collections.abc import MutableMapping, Mapping, MutableSequence
-from typing import Iterable, Iterator, NewType
+from typing import Iterable, Iterator, NewType, List
+from logging import Logger
 
 import nistoar.nerdm.utils as nerdmutils
 from nistoar.pdr.preserve.bagit.builder import (DATAFILE_TYPE, SUBCOLL_TYPE, DOWNLOADABLEFILE_TYPE)
 
 __all__ = [ "NERDResource", "NERDAuthorList", "NERDRefList", "NERDNonFileComps", "NERDFileComps",
             "NERDStorageException", "MismatchedIdentifier", "RecordDeleted", "ObjectNotFound",
-            "CollectionRemovalDissallowed", "NERDResourceStorage" ]
+            "StorageFormatException", "CollectionRemovalDissallowed", "NERDResourceStorage" ]
 
 NERDResource     = NewType("NERDResource", ABC)
 NERDAuthorList   = NewType("NERDAuthorList", NERDResource)
@@ -317,6 +318,17 @@ class _NERDOrderedObjectList(metaclass=ABCMeta):
         :return:  string giving the identifier assigned to this item.
         """
         return self.insert(self.count, md)
+
+    def replace_all_with(self, md: List[Mapping]):
+        """
+        replace the current list of items with the given list.  The currently saved items will 
+        first be removed, and then the given items will be added in order.
+        """
+        if not isinstance(md, list):
+            raise TypeError("replace_all_with(): md is not a list")
+        self.empty()
+        for item in md:
+            self.append(item)
 
     def pop(self, key):
         """
@@ -682,6 +694,13 @@ class NERDFileComps(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
+    def empty(self):
+        """
+        remove all files and folders from this collection of file components
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def exists(self, id: str) -> bool:
         """
         return True if the stored files include one with the given identifier
@@ -694,6 +713,9 @@ class NERDFileComps(metaclass=ABCMeta):
         return True if the stored files include one with the given filepath
         """
         raise NotImplementedError()
+
+    def __contains__(self, idorpath: str) -> bool:
+        return self.exists(idorpath) or self.path_exists(idorpath)
 
     @abstractmethod
     def path_is_collection(self, filepath: str) -> bool:
@@ -812,6 +834,16 @@ class NERDResourceStorage(ABC):
     """
     a factory function that creates or opens existing stored NERDm Resource records
     """
+
+    @classmethod
+    def from_config(cls, config: Mapping, logger: Logger):
+        """
+        an abstract class method for creatng NERDResourceStorage instances
+        :param dict config:  the configuraiton for the specific type of storage
+        :param Logger logger:  the logger to use to capture messages
+        """
+        raise NotImplementedError()
+        
     @abstractmethod
     def open(self, id: str=None) -> NERDResource:
         """

@@ -8,7 +8,7 @@ from copy import deepcopy
 
 from ... import ConfigurationException, PublishSystem, system
 from ...prov import PubAgent
-from .base import Ready
+from .base import Ready, SubApp, Handler
 from .pdp0 import PDP0App
 
 log = logging.getLogger(system.system_abbrev)   \

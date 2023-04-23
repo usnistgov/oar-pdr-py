@@ -3,9 +3,12 @@ The base Handler class for handler implementations used by the PDP WSGI app
 """
 import sys, re, json
 from abc import ABCMeta, abstractmethod, abstractproperty
-from typing import Callable
+from typing import Callable, List
 from functools import reduce
 from logging import Logger
+from urllib.parse import parse_qs
+from collections import OrderedDict
+from collections.abc import Mapping
 
 from wsgiref.headers import Headers
 # from urllib.parse import parse_qs
@@ -27,12 +30,20 @@ class Unacceptable(Exception):
 class Handler(object):
     """
     a default web request handler that also serves as a base class for the 
-    handlers specialized for the supported resource paths.
+    handlers specialized for the supported resource paths.  Key features built into this 
+    class include:
+      * the ``who`` property that holds the identity of the remote user making the request
+      * support for an ``action`` query parameter to request an action to be applied to 
+        the resource being requested (perhaps in addition to that implied by the HTTP 
+        request method); see :py:meth:`get_action`.
     """
     default_agent = PubAgent("public", PubAgent.UNKN, "anonymous")
+    ACTION_UPDATE   = ''
+    ACTION_FINALIZE = "finalize"
+    ACTION_PUBLISH  = "publish"
 
     def __init__(self, path: str, wsgienv: dict, start_resp: Callable, who=None, 
-                 config: dict={}, log: Logger=None):
+                 config: dict={}, log: Logger=None, app=None):
         self._path = path
         self._env = wsgienv
         self._start = start_resp
@@ -45,7 +56,25 @@ class Handler(object):
         self.who = who
         self.log = log
 
+        self._app = app
+        if self._app and hasattr(app, 'include_headers'):
+            self._hdr = Headers(list(app.include_headers.items()))
+
         self._meth = self._env.get('REQUEST_METHOD', 'GET')
+
+    def get_action(self):
+        """
+        return the value of the action query parameter of None if it was not provided
+        """
+        qstr = self._env.get('QUERY_STRING')
+        if not qstr:
+            return self.ACTION_UPDATE
+
+        params = parse_qs(qstr)
+        action = params.get('action')
+        if len(action) > 0 and action[0] in [self.ACTION_FINALIZE, self.ACTION_PUBLISH]:
+            return action[0]
+        return self.ACTION_UPDATE
 
     def send_error(self, code, message, content=None, contenttype=None, ashead=None, encoding='utf-8'):
         """
@@ -115,10 +144,38 @@ class Handler(object):
         """
         return self._send(code, message, json.dumps(data, indent=2), "application/json", ashead, encoding)
 
+    def send_options(self, allowed_methods: List[str]=None, origin: str=None, extra=None,
+                     forcors: bool=True):
+        """
+        send a response to a OPTIONS request.  This implememtation is primarily for CORS preflight requests
+        :param List[str] allowed_methods:   a list of the HTTP methods that are allowed for request
+        :param str                origin: 
+        :param dict|Headers        extra:   extra headers to include in the output.  This is either a 
+                                            dictionary-like object or a list of 2-tuples (like 
+                                            wsgiref.header.Headers).  
+        """
+        meths = list(allowed_methods)
+        if 'OPTIONS' not in meths:
+            meths.append('OPTIONS')
+        if forcors:
+            self.add_header('Access-Control-Allow-Methods', ", ".join(meths))
+            if origin:
+                self.add_header('Access-Control-Allow-Origin', origin)
+            self.add_header('Access-Control-Allow-Headers', "Content-Type")
+        if isinstance(extra, Mapping):
+            for k,v in extra.items():
+                self.add_header(k, v)
+        elif isinstance(extra, (list, tuple)):
+            for k,v in extra:
+                self.add_header(k, v)
+
+        return self.send_ok(message="No Content")
+
     def _send(self, code, message, content, contenttype, ashead, encoding):
         if ashead is None:
             ashead = self._meth.upper() == "HEAD"
-        status = "{0} {1}".format(str(code), message)
+        # status = "{0} {1}".format(str(code), message)
+        self.set_response(code, message)
 
         if content:
             if not isinstance(content, list):
@@ -133,15 +190,12 @@ class Handler(object):
         # convert to bytes
         content = [(isinstance(c, str) and c.encode(encoding)) or c for c in content]
 
-        hdrs = []
         if contenttype:
-            hdrs = Headers([])
-            hdrs.add_header("Content-Type", contenttype)
-            hdrs = hdrs.items()
+            self.add_header("Content-Type", contenttype)
         if len(content) > 0:
-            hdrs.append(("Content-Length", str(reduce(lambda x, t: x+len(t), content, 0))))
+            self.add_header("Content-Length", str(reduce(lambda x, t: x+len(t), content, 0)))
 
-        self._start(status, hdrs, None)
+        self.end_headers()
         return (not ashead and content) or []
 
     def add_header(self, name, value):
@@ -179,7 +233,7 @@ class Handler(object):
         return the body content (as an iterable).  
         """
         status = "{0} {1}".format(str(self._code), self._msg)
-        self._start(status, self._hdr.items())
+        self._start(status, self._hdr.items(), None)
 
     def handle(self):
         """
@@ -228,6 +282,16 @@ class Handler(object):
         """
         return bool(self.who)
 
+    def get_accepts(self):
+        """
+        return the requested content types as a list ordered by their q-values.  An empty list
+        is returned if no types were specified.
+        """
+        accepts = self._env.get('HTTP_ACCEPT')
+        if not accepts:
+            return [];
+        return order_accepts(accepts)
+
     def acceptable(self):
         """
         return True if the client's Accept request is compatible with this handler.
@@ -235,10 +299,8 @@ class Handler(object):
         This default implementation will return True if "*/*" is included in the Accept request
         or if the Accept header is not specified.
         """
-        accepts = self._env.get('HTTP_ACCEPT')
-        if not accepts:
-            return True;
-        return "*/*" in order_accepts(accepts)
+        accepts = self.get_accepts()
+        return not accepts or "*/*" in order_accepts(accepts)
 
     
 class SubApp(metaclass=ABCMeta):
@@ -261,6 +323,19 @@ class SubApp(metaclass=ABCMeta):
             if not os.path.isabs(wrlogf) and cfgmod.global_logdir:
                 wrlogf = os.path.join(cfgmod.global_logdir, wrlogf)
             self._recorder = WebRecorder(wrlogf, self._name)
+
+        self.include_headers = Headers()
+        if config.get("include_headers"):
+            try:
+                if isinstance(config.get("include_headers"), Mapping):
+                    self.include_headers = Headers(list(config.get("include_headers").items()))
+                elif isinstance(config.get("include_headers"), list):
+                    self._default_headers = Headers(list(config.get("include_headers")))
+                else:
+                    raise TypeError("Not a list of 2-tuples")
+            except TypeError as ex:
+                raise ConfigurationException("include_headers: must be either a dict or a list of "+
+                                             "name-value pairs")
 
     @abstractmethod
     def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:

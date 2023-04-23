@@ -43,7 +43,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
             mongo.MongoDBClientFactory(self.cfg)
 
     def test_create_client(self):
-        cli = self.fact.create_client(base.DMP_PROJECTS, "bob")
+        cli = self.fact.create_client(base.DMP_PROJECTS, {}, "bob")
         self.assertEqual(cli._cfg, self.fact._cfg)
         self.assertEqual(cli._projcoll, base.DMP_PROJECTS)
         self.assertEqual(cli._who, "bob")
@@ -65,7 +65,7 @@ class TestMongoDBClient(test.TestCase):
             client.get_database = client.get_default_database
         db = client.get_database()
         for coll in [base.GROUPS_COLL, base.PEOPLE_COLL, base.DMP_PROJECTS, base.DRAFT_PROJECTS,
-                     "nextnum", "about"]:
+                     "nextnum", "about", "action_log", "history"]:
             if coll in db.list_collection_names():
                 db.drop_collection(coll)
 
@@ -93,6 +93,20 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(self.cli._next_recnum("gary"), 1)
         self.assertEqual(self.cli._next_recnum("goober"), 1)
         self.assertEqual(self.cli._next_recnum("gary"), 2)
+
+        slot = self.cli.native.nextnum.find_one({"slot": "goob"})
+        self.assertEqual(slot["next"], 4)
+        self.cli._try_push_recnum("goob", 2)
+        slot = self.cli.native.nextnum.find_one({"slot": "goob"})
+        self.assertEqual(slot["next"], 4)
+
+        self.assertEqual(self.cli.native.nextnum.count_documents({"slot": "hank"}), 0)
+        self.cli._try_push_recnum("hank", 2)
+        self.assertEqual(self.cli.native.nextnum.count_documents({"slot": "hank"}), 0)
+
+        self.cli._try_push_recnum("goob", 3)
+        slot = self.cli.native.nextnum.find_one({"slot": "goob"})
+        self.assertEqual(slot["next"], 3)
 
     def test_get_from_coll(self):
         # test query on unrecognized collection
@@ -146,6 +160,18 @@ class TestMongoDBClient(test.TestCase):
         recs = list(self.cli._select_from_coll(base.GROUPS_COLL, hobby="whittling"))
         self.assertEqual(len(recs), 2)
 
+        # test deactivated filter
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:gang",
+                                                      "owner": "p:bob", "deactivated": 1.2 })
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob"))
+        self.assertEqual(len(recs), 1)
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, incl_deact=True, owner="p:bob"))
+        self.assertEqual(len(recs), 2)
+        self.cli.native[base.GROUPS_COLL].find_one_and_update({"id": "p:gang"},
+                                                              { "$set": { "deactivated": None } })
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob"))
+        self.assertEqual(len(recs), 2)
+
     def test_select_prop_contains(self):
         # test query on unrecognized collection
         it = self.cli._select_prop_contains("alice", "hobbies", "whittling")
@@ -179,6 +205,18 @@ class TestMongoDBClient(test.TestCase):
         recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
         self.assertEqual(len(recs), 2)
         self.assertEqual(set([r.get('id') for r in recs]), set("p:bob stars".split()))
+
+        # test deactivated filter
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:gang",
+                                                      "members": ["p:bob"], "deactivated": 1.2})
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
+        self.assertEqual(len(recs), 2)
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob", incl_deact=True))
+        self.assertEqual(len(recs), 3)
+        self.cli.native[base.GROUPS_COLL].find_one_and_update({"id": "p:gang"},
+                                                              { "$set": { "deactivated": None } })
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
+        self.assertEqual(len(recs), 3)
 
     def test_delete_from(self):
         # test delete on unrecognized, non-existent collection
@@ -246,13 +284,66 @@ class TestMongoDBClient(test.TestCase):
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
         self.assertEqual(recs[0].id, id)
 
+    def test_action_log_io(self):
+        self.assertEqual(self.cli.native['action_log'].count_documents({}), 0)
+        self.cli._save_action_data({'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
+        acts = [r for r in self.cli.native['action_log'].find({}, {'_id': False})]
+        self.assertEqual(len(acts), 1)
+        self.assertEqual(acts[0], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
+
+        self.cli._save_action_data({'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
+        acts = [r for r in self.cli.native['action_log'].find({}, {'_id': False})]
+        self.assertEqual(len(acts), 2)
+        self.assertEqual(acts[0], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
+        self.assertEqual(acts[1], {'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
+
+        self.assertEqual(self.cli.native['action_log'].count_documents({'subject': 'grp0001'}), 0)
+        self.cli._save_action_data({'subject': 'grp0001', 'dylan': 'bob'})
+        self.assertEqual(self.cli.native['action_log'].count_documents({}), 3)
+        acts = [r for r in self.cli.native['action_log'].find({'subject': 'grp0001'}, {'_id': False})]
+        self.assertEqual(len(acts), 1)
+        self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
+
+        # _select_actions_for() will return the actions sorted by timestamp
+        acts = self.cli._select_actions_for("goob:gurn")
+        self.assertEqual(len(acts), 2)
+        self.assertEqual(acts[0], {'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
+        self.assertEqual(acts[1], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
+        acts = self.cli._select_actions_for("grp0001")
+        self.assertEqual(len(acts), 1)
+        self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
+
+        self.cli._delete_actions_for("grp0001")
+        self.assertEqual(self.cli.native['action_log'].count_documents({}), 2)
+        self.assertEqual(self.cli.native['action_log'].count_documents({'subject': 'grp0001'}), 0)
+        self.cli._delete_actions_for("goob:gurn")
+        self.assertEqual(self.cli.native['action_log'].count_documents({}), 0)
+
+        self.assertEqual(self.cli._select_actions_for("goob:gurn"), [])
+        self.assertEqual(self.cli._select_actions_for("grp0001"), [])
+
+    def test_save_history(self):
+        self.assertEqual(self.cli.native['history'].count_documents({}), 0)
+        self.cli._save_history({'recid': 'goob:gurn', 'foo': 'bar'})
+        self.cli._save_history({'recid': 'pdr0:0001', 'alice': 'bob'})
+
+        data = [r for r in self.cli.native['history'].find({}, {'_id': False})]
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0], {'recid': 'goob:gurn', 'foo': 'bar'})
+        self.assertEqual(data[1], {'recid': 'pdr0:0001', 'alice': 'bob'})
+
+
+        
+        
+        
+
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
 class TestMongoProjectRecord(test.TestCase):
 
     def setUp(self):
         self.fact = mongo.MongoDBClientFactory({}, dburl)
         self.user = "nist0:ava1"
-        self.cli = self.fact.create_client(base.DRAFT_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DRAFT_PROJECTS, {}, self.user)
         self.rec = base.ProjectRecord(base.DRAFT_PROJECTS,
                                       {"id": "pdr0:2222", "name": "brains", "owner": self.user}, self.cli)
 
@@ -310,7 +401,7 @@ class TestMongoDBGroups(test.TestCase):
         self.cfg = { "default_shoulder": "pdr0" }
         self.fact = mongo.MongoDBClientFactory(self.cfg, dburl)
         self.user = "nist0:ava1"
-        self.cli = self.fact.create_client(base.DMP_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
         self.dbg = self.cli.groups
         
     def tearDown(self):
@@ -345,7 +436,7 @@ class TestMongoDBGroups(test.TestCase):
         with self.assertRaises(base.NotAuthorized):
             grp = self.dbg.create_group("friends", "alice")
 
-        self.cfg['superusers'] = [self.user]
+        self.cli._cfg['superusers'] = [self.user]
         grp = self.dbg.create_group("friends", "alice")
         self.assertEqual(grp.name, "friends")
         self.assertEqual(grp.owner, "alice")
@@ -397,7 +488,7 @@ class TestMongoDBGroups(test.TestCase):
 
         self.assertIsNone(self.dbg.get_by_name("friends", "alice"))
 
-        self.cfg['superusers'] = [self.user]
+        self.cli._cfg['superusers'] = [self.user]
         grp = self.dbg.create_group("friends", "alice")
         grp = self.dbg.get_by_name("friends", "alice")
         self.assertEqual(grp.id, "grp0:alice:friends")

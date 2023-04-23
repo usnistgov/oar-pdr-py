@@ -1,11 +1,11 @@
 """
 dbio:  a module for accessing information from a common database.  
 
-In the MIDAS framework, a common database model can be used for storing different types of records 
-that can be created by users.  There are two key types supported currently: *DMPs* (Data Management 
-Plans) and *draft EDIs* (Enterprise Data Inventory records).  This module provides an interface to 
-access and update those records through the life cycle of the records.  This includes managing 
-authorization to access or update the records.
+In the MIDAS framework, a common database model can be used for storing different types of _project 
+records_ that can be created by users.  There are two key types supported currently: *DMPs* (Data 
+Management Plans) and *draft EDIs* (Enterprise Data Inventory records).  This module provides an 
+interface to access and update those records through the life cycle of the records.  This includes 
+managing authorization to access or update the records.
 
 ----------------------
 Typical Use
@@ -22,10 +22,11 @@ you indicate the type of record you want to access and the identity of the end u
    from nistoar.midas import dbio
 
    # the factory will need a configuration (see CLIENT CONFIGURATION section)
+   storeconfig = { "mongodb//localhost:27017/MIDAS" }  # storage-specific configuration
    config = { "default_shoulder": "mdst" }
 
    # connect to the DMP collection
-   client = dbio.MIDASDBClientFactory(config).create_client(dbio.DMP_PROJECTS, userid)
+   client = dbio.MIDASDBClientFactory(storeconfig).create_client(dbio.DMP_PROJECTS, config, userid)
 
    # create a new record:
    rec = client.create_record(user_specified_rec_name)
@@ -45,9 +46,9 @@ Database Model
 The database is made up of various *collections* to hold the different types of records.  (The nature 
 of the collections depends on the implementation of the database backend; for example, if the backend 
 is an SQL relational database, then a collection would be represented by a table or interlinked tables.)
-In particular, each *key* (or *project*) record type (dmp or draft) has its own collection associated 
+In particular, each *key* (or *project*) record type (dmp or dap) has its own collection associated 
 with it; these collections have logical names (accessible via ``dbio.DMP_PROJECTS`` and 
-``dbio.DRAFT_PROJECTS``).  Other collections are supported as well, including one that tracks 
+``dbio.DAP_PROJECTS``).  Other collections are supported as well, including one that tracks 
 user-defined user groups and another capturing people that can servce as authors or collaborators in a 
 project.
 
@@ -133,13 +134,13 @@ All backend types support the following configuration properties:
 ``default_shoulder``
     the identifier prefix--i.e. the ID *shoulder*--that will be used to create the identifier for 
     a new project record if one is not specified in the call to 
-    :py:method:`~nistoar.midas.dbio.DBClient.create_client`.  This is effectively a required 
+    :py:method:`~nistoar.midas.dbio.DBClient.create_record`.  This is effectively a required 
     parameter; however, if not specified, ``allowed_project_shoulders`` must be set to create new 
     project records.
 
 ``allowed_project_shoulders``
     a list of shoulders that one can request when creating new project records via 
-    :py:method:`~nistoar.midas.dbio.DBClient.create_client`.  Note that the value the of 
+    :py:method:`~nistoar.midas.dbio.DBClient.create_record`.  Note that the value the of 
     ``default_shoulder`` is implicitly added to this list; thus, if not specified, the 
     default is the ``default_shoulder``.
 
@@ -195,8 +196,12 @@ other implementations are available:
    fact = fsbased.FSBasedDBClientFactory(config, "./db")
 
 """
-from .base import *
-from . import mongo
+from .base    import *
+from .mongo   import MongoDBClientFactory
+from .inmem   import InMemoryDBClientFactory
+from .fsbased import FSBasedDBClientFactory
 
-MIDASDBClientFactory = mongo.MongoDBClientFactory
+MIDASDBClientFactory = MongoDBClientFactory
 
+from .project import (ProjectService, ProjectServiceFactory, InvalidRecord, InvalidUpdate,
+                      PartNotAccessible, NotEditable, NotSubmitable)

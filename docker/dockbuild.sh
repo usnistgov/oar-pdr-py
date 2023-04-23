@@ -23,14 +23,15 @@ PACKAGE_NAME=oar-pdr-py
 ## containers to be built.  List them in dependency order (where a latter one
 ## depends the former ones).  
 #
-DOCKER_IMAGE_DIRS="pymongo jqfromsrc ejsonschema pyenv pdrpytest pdpserver"
+DEP_DOCKER_IMAGE_DIRS="pymongo jqfromsrc ejsonschema pyenv"
+EXEC_DOCKER_IMAGE_DIRS="pdrpytest pdpserver midasserver"
 
-[ -d "$codedir/metadata/oar-build" ] || {
+[ -d "$codedir/metadata/docker" ] || {
     echo ${prog}: Missing metadata submodule
     echo Clone the oar-metadata repo in this directory\; name it "'metadata'"
     exit 3
 }
-. $codedir/metadata/oar-build/_dockbuild.sh
+. $codedir/oar-build/_dockbuild.sh
 
 # Override, if need be, the UID of the user to run as in the container; the 
 # default is the user running this script.
@@ -56,4 +57,8 @@ fi
 if { echo " $BUILD_IMAGES " | grep -qs " pdpserver "; }; then
     echo '+' docker build $BUILD_OPTS -t $PACKAGE_NAME/pdpserver pdpserver | logit
     docker build $BUILD_OPTS -t $PACKAGE_NAME/pdpserver pdpserver 2>&1 | logit
+fi
+if { echo " $BUILD_IMAGES " | grep -qs " midasserver "; }; then
+    echo '+' docker build $BUILD_OPTS -t $PACKAGE_NAME/midasserver midasserver | logit
+    docker build $BUILD_OPTS -t $PACKAGE_NAME/midasserver midasserver 2>&1 | logit
 fi

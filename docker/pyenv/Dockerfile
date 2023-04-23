@@ -13,7 +13,7 @@ FROM oar-metadata/ejsonschema
 
 RUN apt-get update && apt-get install -y python-yaml curl wget less sudo zip \
                                          p7zip-full ca-certificates git
-RUN pip install --upgrade pip setuptools
+# RUN pip install --upgrade pip setuptools
 RUN pip install funcsigs 'bagit>=1.6.3,<2.0' 'fs>=2.0.21' jsonpatch mako
 
 # install multibag from source
