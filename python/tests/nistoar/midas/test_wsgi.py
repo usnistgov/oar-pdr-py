@@ -3,7 +3,7 @@ from collections import OrderedDict
 from io import StringIO
 from pathlib import Path
 import unittest as test
-import yaml
+import yaml, jwt
 
 from nistoar.midas.dbio import inmem, fsbased, base
 from nistoar.midas import wsgi as app
@@ -641,6 +641,9 @@ class TestMIDASServer(test.TestCase):
         self.config['working_dir'] = self.workdir
         self.config['services']['dap']['conventions']['mds3']['nerdstorage']['store_dir'] = \
             os.path.join(self.workdir, 'nerdm')
+        self.config['jwt_auth'] = { "key": "XXXXX", "algorithm": "HS256" }
+        self.config['client_agents'] = {'ark:/88434/tl0-0001': ["Unit testing agent"]}
+
         self.clifact = fsbased.FSBasedDBClientFactory({}, self.dbdir)
         self.app = app.MIDASApp(self.config, self.clifact)
 
@@ -661,6 +664,31 @@ class TestMIDASServer(test.TestCase):
         self.assertTrue(os.path.isdir(self.workdir))
         self.assertTrue(os.path.isdir(os.path.join(self.workdir, 'dbfiles')))
         self.assertTrue(not os.path.exists(os.path.join(self.workdir, 'dbfiles', 'nextnum')))
+
+    def test_authenticate(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/dmp'
+        }
+        who = self.app.authenticate(req)
+        self.assertEqual(who.group, "public")
+        self.assertEqual(who.actor, "anonymous")
+        self.assertEqual(who.agents, ['(unknown)'])
+
+        req['HTTP_AUTHORIZATION'] = "Bearer goober"  # bad token
+        req['HTTP_OAR_CLIENT_ID'] = 'ark:/88434/tl0-0001'
+        who = self.app.authenticate(req)
+        self.assertEqual(who.group, "invalid")
+        self.assertEqual(who.actor, "anonymous")
+        self.assertEqual(who.agents, ["Unit testing agent"])
+
+        token = jwt.encode({"subject": "fed@nist.gov"}, self.config['jwt_auth']['key'], algorithm="HS256")
+        req['HTTP_AUTHORIZATION'] = "Bearer "+token
+        who = self.app.authenticate(req)
+        self.assertEqual(who.group, "nist")
+        self.assertEqual(who.actor, "fed")
+        self.assertEqual(who.agents, ["Unit testing agent"])
+
 
     def test_create_dmp(self):
         req = {

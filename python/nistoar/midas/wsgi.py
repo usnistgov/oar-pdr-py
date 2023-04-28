@@ -121,6 +121,8 @@ from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Callable
 from copy import deepcopy
 
+import jwt
+
 from . import system
 from .dbio.base import DBClientFactory
 from .dbio.wsgi import project as prj, SubApp, Handler, DBIOHandler
@@ -517,12 +519,36 @@ class MIDASApp:
         :return:  a representation of the requesting user
                   :rtype: PubAgent
         """
-        # TODO: support JWT cookie for authentication
+        # get client id, if present
+        client_id = env.get('HTTP_OAR_CLIENT_ID','(unknown)')
+        agents = self.cfg.get('client_agents', {}).get(client_id, [client_id])
+        allowed = self.cfg.get('allowed_clients')
+        if allowed is not None and client_id not in allowed:
+            return PubAgent("invalid", PubAgent.UNKN, "anonymous", agents)
 
-        # TODO: support optional client 
+        # ensure an authenticated identity
+        auth = env.get('HTTP_AUTHORIZATION', "x").split()
+        jwtcfg = self.cfg.get('jwt_auth')
+        if jwtcfg and auth[0] == "Bearer":
+            try:
+                userinfo = jwt.decode(auth[1], jwtcfg.get("key", ""),
+                                      algorithms=[jwtcfg.get("algorithm", "HS256")])
+            except jwt.InvalidTokenError as ex:
+                log.warning("Invalid token can not be decoded: %s", str(ex))
+                return PubAgent("invalid", PubAgent.UNKN, "anonymous", agents)
+
+            return self._agent_from_claimset(userinfo, agents)
 
         # anonymous user
-        return PubAgent("public", PubAgent.UNKN, "anonymous")
+        return PubAgent("public", PubAgent.UNKN, "anonymous", agents)
+
+    def _agent_from_claimset(self, userinfo: dict, agents=None):
+        subj = userinfo.get('subject')
+        group = "public"
+        if subj.endswith("@nist.gov"):
+            group = "nist"
+            subj = subj[:-1*len("@nist.gov")]
+        return PubAgent(group, PubAgent.USER, subj, agents)
 
     def handle_request(self, env, start_resp):
         path = env.get('PATH_INFO', '/').strip('/').split('/')
