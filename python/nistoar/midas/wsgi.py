@@ -505,6 +505,9 @@ class MIDASApp:
         factory = SubAppFactory(self.cfg, subapp_factory_funcs)
         self.subapps = factory.create_suite(log, dbio_client_factory)
 
+        if not self.cfg.get('jwt_auth'):
+            log.warning("JWT Authentication is not configured")
+
         # Add the groups endpoint
         # TODO
 
@@ -545,7 +548,9 @@ class MIDASApp:
     def _agent_from_claimset(self, userinfo: dict, agents=None):
         subj = userinfo.get('subject')
         group = "public"
-        if subj.endswith("@nist.gov"):
+        if not subj:
+            subject = "anonymous"
+        elif subj.endswith("@nist.gov"):
             group = "nist"
             subj = subj[:-1*len("@nist.gov")]
         return PubAgent(group, PubAgent.USER, subj, agents)
