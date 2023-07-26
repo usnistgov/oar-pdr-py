@@ -546,7 +546,7 @@ class MIDASApp:
         return PubAgent("public", PubAgent.UNKN, "anonymous", agents)
 
     def _agent_from_claimset(self, userinfo: dict, agents=None):
-        subj = userinfo.get('subject')
+        subj = userinfo.get('sub')
         group = "public"
         if not subj:
             subject = "anonymous"

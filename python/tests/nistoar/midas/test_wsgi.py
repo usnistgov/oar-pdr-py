@@ -682,7 +682,7 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(who.actor, "anonymous")
         self.assertEqual(who.agents, ["Unit testing agent"])
 
-        token = jwt.encode({"subject": "fed@nist.gov"}, self.config['jwt_auth']['key'], algorithm="HS256")
+        token = jwt.encode({"sub": "fed@nist.gov"}, self.config['jwt_auth']['key'], algorithm="HS256")
         req['HTTP_AUTHORIZATION'] = "Bearer "+token
         who = self.app.authenticate(req)
         self.assertEqual(who.group, "nist")
