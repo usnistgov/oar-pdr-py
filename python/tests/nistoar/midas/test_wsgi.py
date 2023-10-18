@@ -641,7 +641,7 @@ class TestMIDASServer(test.TestCase):
         self.config['working_dir'] = self.workdir
         self.config['services']['dap']['conventions']['mds3']['nerdstorage']['store_dir'] = \
             os.path.join(self.workdir, 'nerdm')
-        self.config['jwt_auth'] = { "key": "XXXXX", "algorithm": "HS256" }
+        self.config['jwt_auth'] = { "key": "XXXXX", "algorithm": "HS256", "require_expiration": False }
         self.config['client_agents'] = {'ark:/88434/tl0-0001': ["Unit testing agent"]}
 
         self.clifact = fsbased.FSBasedDBClientFactory({}, self.dbdir)

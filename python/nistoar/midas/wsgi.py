@@ -507,6 +507,12 @@ class MIDASApp:
 
         if not self.cfg.get('jwt_auth'):
             log.warning("JWT Authentication is not configured")
+        else:
+            if not isinstance(self.cfg['jwt_auth'], Mapping):
+                raise ConfigurationException("Config param, jwt_auth, not a dictionary: "+
+                                             str(self.cfg['jwt_auth']))
+            if not self.cfg['jwt_auth'].get('require_expiration', True):
+                log.warning("JWT Authentication: token expiration is not required")
 
         # Add the groups endpoint
         # TODO
@@ -538,6 +544,12 @@ class MIDASApp:
                                       algorithms=[jwtcfg.get("algorithm", "HS256")])
             except jwt.InvalidTokenError as ex:
                 log.warning("Invalid token can not be decoded: %s", str(ex))
+                return PubAgent("invalid", PubAgent.UNKN, "anonymous", agents)
+
+            # make sure the token has an expiration date
+            if jwtcfg.get('require_expiration', True) and not userinfo.get('exp'):
+                # Note expiration was checked implicitly by the above jwt.decode() call
+                log.warning("Rejecting non-expiring token for user %s", userinfo.get('sub', "(unknown)"))
                 return PubAgent("invalid", PubAgent.UNKN, "anonymous", agents)
 
             return self._agent_from_claimset(userinfo, agents)

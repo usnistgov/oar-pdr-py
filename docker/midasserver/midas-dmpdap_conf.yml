@@ -6,6 +6,9 @@ about:
    title: "MIDAS Authoring Services"
    describedBy: "http://localhost:9091/midas/docs"
    href: "http://localhost:9091/midas/"
+jwt_auth:
+   key: "tokensecret"
+   require_expiration: false
 services: 
    dap:
       about: 
