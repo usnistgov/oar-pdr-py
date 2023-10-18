@@ -273,6 +273,7 @@ class DAPService(ProjectService):
             raise
 
         self._record_action(Action(Action.CREATE, prec.id, self.who, prec.status.message))
+        self.log.info("Created %s record %s (%s) for %s", self.dbcli.project, prec.id, prec.name, self.who)
         return prec
 
     def _new_data_for(self, recid, meta=None, schemaid=None):
@@ -619,6 +620,8 @@ class DAPService(ProjectService):
                 raise
 
         self._save_data(self._summarize(nerd), prec, message, set_action and self.STATUS_ACTION_UPDATE)
+        self.log.info("Updated data for %s record %s (%s) for %s",
+                      self.dbcli.project, prec.id, prec.name, self.who)
         return data
 
     def _summarize(self, nerd: NERDResource):
@@ -1637,6 +1640,7 @@ class DAPService(ProjectService):
         return data
 
     def _filter_props(self, obj, props):
+        # remove all properties from obj that are not listed in props
         delprops = [k for k in obj if k not in props or (not obj.get(k) and obj.get(k) is not False)]
         for k in delprops:
             del obj[k]
@@ -2041,7 +2045,7 @@ class DAPProjectDataHandler(ProjectDataHandler):
                 return self.send_error_resp(405, "POST not allowed",
                                             "POST not supported on path")
 
-        except dbio.NotAuthorized as ex:
+        except NotAuthorized as ex:
             return self.send_unauthorized()
         except ObjectNotFound as ex:
             return send.send_error_resp(404, "Path not found",

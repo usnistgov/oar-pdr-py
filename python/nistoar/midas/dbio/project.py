@@ -139,6 +139,7 @@ class ProjectService(MIDASSystem):
             prec.save()
 
         self._record_action(Action(Action.CREATE, prec.id, self.who, prec.status.message))
+        self.log.info("Created %s record %s (%s) for %s", self.dbcli.project, prec.id, prec.name, self.who)
         return prec
 
     def _get_id_shoulder(self, user: PubAgent):
@@ -310,7 +311,9 @@ class ProjectService(MIDASSystem):
 
         finally:
             self._record_action(provact)
-        
+
+        self.log.info("Updated data for %s record %s (%s) for %s",
+                      self.dbcli.project, _prec.id, _prec.name, self.who)
         return self._extract_data_part(data, part)
 
     def _jsondiff(self, old, new):
@@ -450,6 +453,8 @@ class ProjectService(MIDASSystem):
         else:
             self._record_action(provact)
 
+        self.log.info("Replaced data for %s record %s (%s) for %s",
+                      self.dbcli.project, _prec.id, _prec.name, self.who)
         return self._extract_data_part(data, part)
 
     def _save_data(self, indata: Mapping, prec: ProjectRecord,
@@ -570,6 +575,8 @@ class ProjectService(MIDASSystem):
 
         finally:
             self._record_action(provact)
+        self.log.info("Cleared out data for %s record %s (%s) for %s",
+                      self.dbcli.project, _prec.id, _prec.name, self.who)
 
 
     def update_status_message(self, id: str, message: str, _prec=None) -> status.RecordStatus:
@@ -655,6 +662,8 @@ class ProjectService(MIDASSystem):
             stat.act(self.STATUS_ACTION_FINALIZE, message or defmsg)
             _prec.save()
 
+        self.log.info("Finalized %s record %s (%s) for %s",
+                      self.dbcli.project, _prec.id, _prec.name, self.who)
         return stat.clone()
 
     MAJOR_VERSION_LEV = 0
@@ -789,6 +798,8 @@ class ProjectService(MIDASSystem):
             stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg)
             _prec.save()
 
+        self.log.info("Submitted %s record %s (%s) for %s",
+                      self.dbcli.project, _prec.id, _prec.name, self.who)
         return stat.clone()
             
 

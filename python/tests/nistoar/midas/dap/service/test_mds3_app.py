@@ -170,7 +170,8 @@ class TestMDS3DAPApp(test.TestCase):
 
 
         self.resp = []
-        req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": {"fn": "Gurn Cranston"} },
+        req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": {"fn": "Gurn Cranston"},
+                                                           "keyword": [ "testing" ] },
                                                  "meta": { "creatorisContact": "false",
                                                            "softwareLink": "https://sw.ex/gurn" },
                                                  "name": "Gurn's Penultimate" }))
@@ -189,7 +190,8 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertIs(resp['meta']["creatorisContact"], False)
         self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0002')
         self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0002')
-        self.assertNotIn('contactPoint', resp['data'])  # because ['data'] is just a summary
+        self.assertNotIn('keyword', resp['data'])    # because ['data'] is just a summary
+        self.assertIn('contactPoint', resp['data'])  # this is included in ['data'] summary
 
         self.resp = []
         path = resp['id'] + '/data'
@@ -213,7 +215,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertIn('_extensionSchemas', resp)
         self.assertEqual(len(resp.get('components',[])), 1)
         self.assertEqual(resp['components'][0]['accessURL'], "https://sw.ex/gurn")
-        self.assertEqual(len(resp), 8)
+        self.assertEqual(len(resp), 9)
 
     def test_put_patch(self):
         testnerd = read_nerd(pdr2210)
@@ -229,7 +231,8 @@ class TestMDS3DAPApp(test.TestCase):
             'REQUEST_METHOD': 'POST',
             'PATH_INFO': self.rootpath + path
         }
-        req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": res['contactPoint'] },
+        req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": res['contactPoint'],
+                                                           "keyword": [ "testing" ] },
                                                  "meta": { "creatorisContact": "false" },
                                                  "name": "OptSortSph" }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
@@ -246,7 +249,8 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertIs(resp['meta']["creatorisContact"], False)
         self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
         self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
-        self.assertNotIn('contactPoint', resp['data'])  # because ['data'] is just a summary
+        self.assertNotIn('keyword', resp['data'])    # because ['data'] is just a summary
+        self.assertIn('contactPoint', resp['data'])  # this is included in ['data'] summary
         
         self.resp = []
         id = resp['id']
@@ -274,7 +278,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertNotIn('authors', resp)
         self.assertNotIn('description', resp)
         self.assertNotIn('rights', resp)
-        self.assertEqual(len(resp), 7)
+        self.assertEqual(len(resp), 8)
 
         self.resp = []
         req = {

@@ -761,6 +761,13 @@ class DBClient(ABC):
         self._dbgroups = DBGroups(self)
 
     @property
+    def project(self) -> str:
+        """
+        return the name of the project collection/type that this client handles records for
+        """
+        return self._projcoll
+
+    @property
     def user_id(self) -> str:
         """
         the identifier of the user that this client is acting on behalf of

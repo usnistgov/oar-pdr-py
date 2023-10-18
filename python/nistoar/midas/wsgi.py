@@ -547,12 +547,15 @@ class MIDASApp:
 
     def _agent_from_claimset(self, userinfo: dict, agents=None):
         subj = userinfo.get('sub')
+        email = userinfo.get('userEmail','')
         group = "public"
         if not subj:
-            subject = "anonymous"
+            subj = "anonymous"
         elif subj.endswith("@nist.gov"):
             group = "nist"
             subj = subj[:-1*len("@nist.gov")]
+        elif email.endswith("@nist.gov"):
+            group = "nist"
         return PubAgent(group, PubAgent.USER, subj, agents)
 
     def handle_request(self, env, start_resp):

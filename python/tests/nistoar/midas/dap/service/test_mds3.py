@@ -484,7 +484,7 @@ class TestMDS3DAPService(test.TestCase):
             ref = self.svc._moderate_reference({"location": "doi:10.18434/example", "refType": "myown",
                                                 "title": "A Resource", "@id": "#doi:ex",
                                                 "abbrev": ["SRB-400"], "citation": "C",
-                                                "label": "drink me", "inprep": False, 
+                                                "label": "drink me", "inPreparation": False, 
                                                 "goob": "gurn"})
         except InvalidUpdate as ex:
             self.fail("Validation Error: "+ex.format_errors())
@@ -492,7 +492,7 @@ class TestMDS3DAPService(test.TestCase):
                                "title": "A Resource", "@id": "#doi:ex",
                                "@type": ['deo:BibliographicReference'],
                                "abbrev": ["SRB-400"], "citation": "C",
-                               "label": "drink me", "inprep": False})
+                               "label": "drink me", "inPreparation": False})
 
     def test_replace_update_references(self):
         self.create_service()
