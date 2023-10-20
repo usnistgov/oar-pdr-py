@@ -204,7 +204,7 @@ class FileManager:
         """
         return self.handle_request(
             requests.get,
-            f"{self.base_url}/scan-files/scan-status/{task_id}"
+            f"{self.base_url}/scan-status/{task_id}"
         )
 
     def manage_permissions(self, user_name, record_name, perm_type="No permissions (No access to the file or folder)",
@@ -241,3 +241,33 @@ class FileManager:
             url
         )
 
+    def upload_file(self, file_obj, destination_path=''):
+        """
+        Upload a file in a given directory.
+        If the directory doesn't exist, an error is thrown.
+
+        Args:
+        - file_obj (file-like object): The file to be uploaded.
+        - destination_path (str, optional): The path to the directory where the file will be uploaded.
+            Defaults to an empty string, which means the root directory.
+
+        Returns:
+        - dict: The parsed JSON response from the API.
+
+        Raises:
+        - Exception: If the API request results in an error.
+        """
+        # Determine the correct URL based on the destination_path
+        if destination_path:
+            url = f"{self.base_url}/file/{destination_path}"
+        else:
+            url = f"{self.base_url}/file"
+
+        # Use files parameter of requests to send file data
+        files = {'file': file_obj}
+
+        return self.handle_request(
+            requests.post,
+            url,
+            files=files
+        )
