@@ -149,6 +149,23 @@ class FileManagerTest(test.TestCase):
 
         self.assertEqual(response['message'], 'scan initiated')
 
+    @patch('requests.post')
+    def test_upload_file(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {
+            'success': 'POST',
+            'message': "Created file 'sample.txt' in '/path/to/dir' successfully!"
+        }
+        mock_post.return_value = mock_response
+
+        # Invoke the upload_file method
+        destination_path = "/path/to/dir"
+        response = self.file_manager.upload_file(destination_path)
+
+        # Verify that the response matches the expected message
+        self.assertEqual(response['message'], "Created file 'sample.txt' in '/path/to/dir' successfully!")
+
 
 if __name__ == '__main__':
     test.main()
