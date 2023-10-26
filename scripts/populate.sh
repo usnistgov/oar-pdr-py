@@ -26,7 +26,7 @@ Help()
 
 
 create_dmp(){
-    mkdir ../midasdata/dbio/dbfiles/dmp/
+    mkdir ../midasdata/dbfiles/dmp/
     for((i=1;i<=$1;i++))
 do
 data='{ "id": "mdm1:0'$i'",
@@ -117,13 +117,13 @@ data='{ "id": "mdm1:0'$i'",
     "curators": []
 }
 '
-touch ../midasdata/dbio/dbfiles/dmp/mdm1:00"$i".json
-echo $data > ../midasdata/dbio/dbfiles/dmp/mdm1:00"$i".json
+touch ../midasdata/dbfiles/dmp/mdm1:00"$i".json
+echo $data > ../midasdata/dbfiles/dmp/mdm1:00"$i".json
 done
 }
 
 create_dap(){
-    mkdir ../midas/data/midas/dbio/dbfiles/dap/
+    mkdir ../midasdata/dbfiles/dap/
     for((i=1;i<=$1;i++))
 do
 data='{
@@ -180,8 +180,8 @@ data='{
     "type": "dap"
   }'
 
-touch ../midasdata/dbio/dbfiles/dap/mds3:00"$i".json
-echo $data > ../midasdata/dbio/dbfiles/dap/"$i".json
+touch ../midasdata/dbfiles/dap/mds3:00"$i".json
+echo $data > ../midasdata/dbfiles/dap/mds3:00"$i".json
 done
 }
 
@@ -197,7 +197,7 @@ case $model in
     dmp)    
         case $action in
         # clear all existing dmp
-            clear) `rm -rf ../midasdata/dbio/dbfiles/dmp/*.json`;;
+            clear) `rm -rf ../midasdata/dbfiles/dmp/*.json`;;
         # create n dmps
             create) `create_dmp $number`;;
 
@@ -205,7 +205,7 @@ case $model in
     dap)
         case $action in 
         # clear all existing dap
-            clear) `rm -rf ../midasdata/dbio/dbfiles/dap/*.json`;;
+            clear) `rm -rf ../midasdata/dbfiles/dap/*.json`;;
         # create n daps 
             create) `create_dap $number`;;
         esac;;
