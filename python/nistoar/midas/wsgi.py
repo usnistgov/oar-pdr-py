@@ -49,6 +49,26 @@ The configuration that is expected by ``MIDASApp`` is a (JSON) object with the f
                           includes a ``factory`` property whose string value identifies the type of 
                           backend storage to use ("mongo", "fsbased", or "inmem").  The other properties
                           are the parameters that are specific to the backend storage.
+``jwt_auth``
+    (object) an object that provides configuration related to JWT-based authentication to the service
+    endpoints.  If set, a JWT token (presented via the Authorization HTTP header) will be used to 
+    determine the client user identity and attributes; if a token is not included with requests, the 
+    user will be set to "anonymous".  If this configuration is not set, all client users will be 
+    considered anonymous.  
+
+The supported subproperties for ``jwt_auth`` are as follows:
+
+``key``
+    (str) _required_.  The secret key shared with the token generator (usually a separate service) used to 
+    encrypt the token.
+
+``algorithm``
+    (str) _optional_.  The name of the encryption algorithm to encrypt the token.  Currently, only one value 
+    is support (the default): "HS256".
+
+``require_expiration``
+    (bool) _optional_.  If True (default), any JWT token that does not include an expiration time will be 
+    rejected, and the client user will be set to anonymous.
 
 Most of the properties in a service configuration object will be treated as default configuration 
 parameters for configuring a particular version, or _convention_, of the service.  Convention-level 
