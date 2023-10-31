@@ -44,6 +44,9 @@ setup_build
 
 log_intro   # record start of build into log
 
+if { echo $BUILD_IMAGES | grep -qs pymongo; }; then
+    cp_ca_certs_to ../metadata/docker
+fi
 $codedir/metadata/docker/dockbuild.sh $BUILD_IMAGES
 
 if { echo " $BUILD_IMAGES " | grep -qs " pyenv "; }; then
