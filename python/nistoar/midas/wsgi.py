@@ -553,6 +553,7 @@ class MIDASApp:
         agents = self.cfg.get('client_agents', {}).get(client_id, [client_id])
         allowed = self.cfg.get('allowed_clients')
         if allowed is not None and client_id not in allowed:
+            log.warning("Client %s is not recongized among %s", client_id, str(allowed))
             return PubAgent("invalid", PubAgent.UNKN, "anonymous", agents)
 
         # ensure an authenticated identity
@@ -575,6 +576,8 @@ class MIDASApp:
             return self._agent_from_claimset(userinfo, agents)
 
         # anonymous user
+        if jwtcfg and auth[0] != "Bearer":
+            log.warning("Client %s did not provide an authentication token as expected", client_id)
         return PubAgent("public", PubAgent.UNKN, "anonymous", agents)
 
     def _agent_from_claimset(self, userinfo: dict, agents=None):
