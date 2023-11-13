@@ -170,12 +170,11 @@ class FileManager:
             f"{self.base_url}/record-space/{record_name}"
         )
 
-    def scan_files(self, user_name, record_name):
+    def scan_files(self, record_name):
         """
-        Initiates a file scan for a given user and record name.
+        Initiates a scan of all files for a given record name.
 
         Args:
-        - user_name (str): The username associated with the record.
         - record_name (str): The name of the record to be scanned.
 
         Returns:
@@ -186,7 +185,7 @@ class FileManager:
         """
         return self.handle_request(
             requests.put,
-            f"{self.base_url}/scan-files/{user_name}/{record_name}"
+            f"{self.base_url}/scan-files/{record_name}"
         )
 
     def scan_status(self, task_id):
