@@ -43,14 +43,17 @@ directives_by_file = {
     },
     "nerdm-pub-schema.json": {
         "derequire": [ "PublicDataResource", "Person" ]
+    },
+    "nerdm-rls-schema.json": {
+        "derequire": [ "ReleasedResource" ]
     }
 }
 
 try:
-    import nistoar.nerdm.utils as utils
+    import nistoar.nerdm.utils as nerdm_utils
 except ImportError:
     sys.path.insert(0, find_nistoar_code())
-    import nistoar.nerdm.utils as utils
+    import nistoar.nerdm.utils as nerdm_utils
 
 def find_nistoar_code():
     execdir = Path(__file__).resolve().parents[0]
@@ -77,20 +80,13 @@ def loosen_schema(schema: Mapping, directives: Mapping, opts=None):
     :param dict directives:  the dictionary of directives to apply
     :param opt:              an options object (containing scripts command-line options)
     """
-    dedoc = directives.get("dedocument", True)
-    if opts and not opts.dedoc:
-        dedoc = False
-    if dedoc:
-        utils.declutter_schema(schema)
-
-    p2020 = False
     if opts:
-        p2020 = opts.post2020
-    deftag = "$defs" if p2020 else "definitions"
+        if not opts.dedoc:
+            directives["dedocument"] = False
+        directives["post2020"] = opts.post2020
 
-    dereqtps = [ deftag+'.'+t for t in directives.get("derequire", []) ]
-    utils.unrequire_props_in(schema, dereqtps, p2020)
-
+    nerdm_utils.loosen_schema(schema, directives)
+    
 def process_nerdm_schemas(srcdir, destdir, opts=None):
     """
     process all NERDm schemas (core and extensions) found in the source directory
