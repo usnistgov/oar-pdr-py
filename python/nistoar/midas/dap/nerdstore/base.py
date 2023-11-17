@@ -4,7 +4,7 @@ Abstract base classes providing the interface to metadata storage.
 import logging, re
 from abc import ABC, ABCMeta, abstractproperty, abstractmethod
 from collections.abc import MutableMapping, Mapping, MutableSequence
-from typing import Iterable, Iterator, NewType, List
+from typing import Iterable, Iterator, NewType, List, Union, Any
 from logging import Logger
 
 import nistoar.nerdm.utils as nerdmutils
@@ -12,13 +12,16 @@ from nistoar.pdr.preserve.bagit.builder import (DATAFILE_TYPE, SUBCOLL_TYPE, DOW
 
 __all__ = [ "NERDResource", "NERDAuthorList", "NERDRefList", "NERDNonFileComps", "NERDFileComps",
             "NERDStorageException", "MismatchedIdentifier", "RecordDeleted", "ObjectNotFound",
-            "StorageFormatException", "CollectionRemovalDissallowed", "NERDResourceStorage" ]
+            "StorageFormatException", "CollectionRemovalDissallowed", "NERDResourceStorage", "IDorPos" ]
 
+# Forward declarations of the NERDResource model types
 NERDResource     = NewType("NERDResource", ABC)
 NERDAuthorList   = NewType("NERDAuthorList", NERDResource)
 NERDRefList      = NewType("NERDRefList", NERDResource)
 NERDFileComps    = NewType("NERDFileComps", NERDResource)
 NERDNonFileComps = NewType("NERDNonFileComps", NERDResource)
+
+IDorPos = Union[Any, int]
 
 class NERDResource(ABC):
     """
@@ -34,14 +37,14 @@ class NERDResource(ABC):
     client.  Once an update is made via this interface, it is expected to be immediately persisted to
     the underlying storage.  
     """
-    def __init__(self, id: str, parentlog: logging.Logger = None):
+    def __init__(self, id, parentlog: logging.Logger = None):
         self._id = id
 
         if not id:
             raise ValueError("NERDResource: base init requires id")
         if not parentlog:
             parentlog = logging.getLogger("nerdstore")
-        self.log = parentlog.getChild(id)
+        self.log = parentlog.getChild(str(id))
 
     @property
     def id(self):
@@ -80,14 +83,14 @@ class NERDResource(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def replace_res_data(self, md): 
+    def replace_res_data(self, md: Mapping): 
         """
         replace all resource-level properties excluding `components`, `authors`, and `references`
         from the provided metadata.  
         """
         raise NotImplementedError()
 
-    def replace_all_data(self, md):
+    def replace_all_data(self, md: Mapping):
         """
         replace all data provide in the given metadata model
         """
@@ -164,7 +167,7 @@ class _NERDOrderedObjectList(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def _get_item_by_id(self, id: str):
+    def _get_item_by_id(self, id):
         """
         return the author description with the given identifier assigned to it
         :raise KeyError: if an author with the given identifier is not part of this list
@@ -208,7 +211,7 @@ class _NERDOrderedObjectList(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def _set_item(self, id: str, md: Mapping, pos: int=None):
+    def _set_item(self, id, md: Mapping, pos: int=None):
         """
         commit the given metadata into storage with the specified key and position
         :param str     id:  the identifier to assign to the item being added; if this item exists 
@@ -228,7 +231,7 @@ class _NERDOrderedObjectList(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def _remove_item(self, id: str):
+    def _remove_item(self, id):
         """
         delete and return the item from the list with the given identiifer
         """
@@ -256,21 +259,21 @@ class _NERDOrderedObjectList(metaclass=ABCMeta):
         for id in ids:
             yield self._get_item_by_id(id)
 
-    def set(self, key, md):
+    def set(self, key: IDorPos, md: Mapping):
         if isinstance(key, int):
             itm = self._get_item_by_pos(key)
             key = itm.get('@id') if itm else None
             
         self._set_item(key, md)
 
-    def _select_id_for(self, md):
+    def _select_id_for(self, md: Mapping):
         id = md.get('@id')
         if not id:
             id = self._get_default_id_for(md)
         return id
 
     @abstractmethod
-    def _get_default_id_for(self, md):
+    def _get_default_id_for(self, md: Mapping):
         """
         determine an appropriate identifier for the given list item metadata; this is usually the 
         value of a particular, custom property.  If a value cannot be determined based on the metadata,
@@ -291,7 +294,7 @@ class _NERDOrderedObjectList(metaclass=ABCMeta):
         """
         raise NotImplementedError()
         
-    def insert(self, pos, md):
+    def insert(self, pos: int, md: Mapping):
         """
         inserts a new item into the specified position in the list.  If the item has an '@id' property
         and that identifier is already in the list, the identifier will be replaced with a new one. (Use
@@ -343,28 +346,28 @@ class _NERDOrderedObjectList(metaclass=ABCMeta):
         return self._remove_item(key)
 
     @abstractmethod
-    def move(self, idorpos: str, pos: int = None, rel: int = 0) -> int:
+    def move(self, idorpos: IDorPos, pos: int = None, rel: Union[bool,int] = 0) -> int:
         """
-        move an item currently in the list to a new position.  The `rel` parameter allows one to 
+        move an item currently in the list to a new position.  The ``rel`` parameter allows one to 
         push an item up or down in the order.  
 
-        :param idorpos:  the target item to move, either as the string identifier or its current 
+        :param idorpos:  the target item to move, either as its identifier or its current (int)
                          position
-        :param int pos:  the new position of the item (where `rel` controls whether this is an 
+        :param int pos:  the new position of the item (where ``rel`` controls whether this is an 
                          absolute or relative position).  If the absolute position is zero or less,
                          the item will be moved to the beginning of the list; if it is a value greater
                          or equal to the number of items in the list, it will be move to the end of the
                          list.  Zero as an absolute value is the first position in the list.  If `pos`
-                         is set to `None`, the item will be moved to the end of the list (regardless,
-                         of the value of rel.  
-        :param int|bool rel:  if value evaluates as False (default), then `pos` will be interpreted
+                         is set to ``None``, the item will be moved to the end of the list (regardless,
+                         of the value of ``rel``.  
+        :param int|bool rel:  if value evaluates as False (default), then ``pos`` will be interpreted
                          as an absolute value.  Otherwise, it will be treated as a position 
                          relative to its current position.  A positive number will cause the item 
-                         to be move `pos` places toward the end of the list; a negative number moves 
+                         to be move ``pos`` places toward the end of the list; a negative number moves 
                          it toward the beginning of the list.  Any other non-numeric value that 
                          evaluates to True behaves as a value of +1.  
         :raises KeyError:  if the target item is not found in the list
-        :return:  the new (absolute) position of the item after the move (taking into `rel`).
+        :return:  the new (absolute) position of the item after the move (taking into ``rel``).
                   :rtype: int
         """
         raise NotImplementedError()
@@ -386,7 +389,7 @@ class NERDAuthorList(_NERDOrderedObjectList):
     list of authors via :py:property:`ids`, followed by a call to :py:method:`set_order`, passing in 
     the reordered list of identifiers.  
     """
-    def get_author_by_id(self, id: str):
+    def get_author_by_id(self, id):
         """
         return the author description with the given identifier assigned to it.  
         :raise KeyError: if an author with the given identifier is not part of this list
@@ -400,7 +403,7 @@ class NERDAuthorList(_NERDOrderedObjectList):
         """
         return self._get_item_by_pos(pos)
 
-    def _get_default_id_for(self, md):
+    def _get_default_id_for(self, md: Mapping):
         out = md.get('orcid')
         if out:
             out = re.sub(r'^https://orcid.org/', 'doi:', out)
@@ -426,7 +429,7 @@ class NERDRefList(_NERDOrderedObjectList):
     the reordered list of identifiers.  
     """
 
-    def get_reference_by_id(self, id: str):
+    def get_reference_by_id(self, id):
         """
         return the author description with the given identifier assigned to it.  
         :raise KeyError: if an author with the given identifier is not part of this list
@@ -440,7 +443,7 @@ class NERDRefList(_NERDOrderedObjectList):
         """
         return self._get_item_by_pos(pos)
 
-    def _get_default_id_for(self, md):
+    def _get_default_id_for(self, md: Mapping):
         out = md.get('doi')
         if out:
             out = re.sub(r'^https://doi.org/', 'doi:', out)
@@ -471,7 +474,7 @@ class NERDNonFileComps(_NERDOrderedObjectList):
     list of components via :py:property:`ids`, followed by a call to :py:method:`set_order`, passing in 
     the reordered list of identifiers.  
     """
-    def get_component_by_id(self, id: str):
+    def get_component_by_id(self, id):
         """
         return the author description with the given identifier assigned to it.  
         :raise KeyError: if an author with the given identifier is not part of this list
@@ -485,7 +488,7 @@ class NERDNonFileComps(_NERDOrderedObjectList):
         """
         return self._get_item_by_pos(pos)
 
-    def _get_default_id_for(self, md):
+    def _get_default_id_for(self, md: Mapping):
         return self._new_id()
 
 
@@ -516,7 +519,7 @@ class NERDFileComps(metaclass=ABCMeta):
         self.is_collection = iscollf
 
     @staticmethod
-    def file_object_is_subcollection(md):
+    def file_object_is_subcollection(md: Mapping):
         """
         return True if the given description is recognized as describing a subcollection.  
         False is returned if the object lacks any marker indicating its type.
@@ -524,7 +527,7 @@ class NERDFileComps(metaclass=ABCMeta):
         return nerdmutils.is_type(md, "Subcollection")
 
     @abstractmethod
-    def get_file_by_id(self, id: str) -> Mapping:
+    def get_file_by_id(self, id) -> Mapping:
         """
         return the component in the file list that has the given (location-independent) identifier
         :raises ObjectNotFound:  if no file exists in this set with the given identifier
@@ -615,7 +618,7 @@ class NERDFileComps(metaclass=ABCMeta):
 #        raise NotImplementedError()
 
     @abstractmethod
-    def set_file_at(md, filepath: str=None, id=None, as_coll: bool=None) -> str:
+    def set_file_at(md: Mapping, filepath: str=None, id=None, as_coll: bool=None) -> str:
         """
         add or update a file component.  If `id` is given (or otherwise included in the metadata as 
         the `@id` property) and it already exists in the file list, its metadata will be replaced
@@ -684,7 +687,7 @@ class NERDFileComps(metaclass=ABCMeta):
         return comp.get('@id')
 
     @abstractmethod
-    def delete_file(self, id: str) -> bool:
+    def delete_file(self, id) -> bool:
         """
         remove a file from this set.  
         :returns:  False if the file was not found in this collection; True, otherwise
@@ -701,7 +704,7 @@ class NERDFileComps(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def exists(self, id: str) -> bool:
+    def exists(self, id) -> bool:
         """
         return True if the stored files include one with the given identifier
         """
@@ -714,7 +717,7 @@ class NERDFileComps(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    def __contains__(self, idorpath: str) -> bool:
+    def __contains__(self, idorpath: IDorPos) -> bool:
         return self.exists(idorpath) or self.path_exists(idorpath)
 
     @abstractmethod
@@ -845,7 +848,7 @@ class NERDResourceStorage(ABC):
         raise NotImplementedError()
         
     @abstractmethod
-    def open(self, id: str=None) -> NERDResource:
+    def open(self, id=None) -> NERDResource:
         """
         Open a resource record having the given identifier.  If a record with `id` does not exist (or 
         was deleted), a new record should be created and the identifier assigned to it.  If `id` is 
@@ -854,7 +857,7 @@ class NERDResourceStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def load_from(self, rec: Mapping, id: str=None):
+    def load_from(self, rec: Mapping, id=None):
         """
         place an existing NERDm Resource record into storage.
         :param Mapping rec:  the NERDm Resource record as a JSON-ready dictionary
@@ -866,14 +869,14 @@ class NERDResourceStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def exists(self, id: str) -> bool:
+    def exists(self, id) -> bool:
         """
         return True if there is a record in the storage with the given identifier
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def delete(self, id: str) -> bool:
+    def delete(self, id) -> bool:
         """
         delete the record with the given identifier from the storage.  If the record with that identifer
         does not exist, do nothing (except return False)

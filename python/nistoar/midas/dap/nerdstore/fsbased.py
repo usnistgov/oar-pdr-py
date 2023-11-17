@@ -160,7 +160,7 @@ class FSBasedObjectList(_NERDOrderedObjectList):
         self._order = neworder
         self._cache_ids()
 
-    def move(self, idorpos: str, pos: int = None, rel: int = 0) -> int:
+    def move(self, idorpos: IDorPos, pos: int = None, rel: int = 0) -> int:
         if pos is None:
             pos = self.count
             rel = 0
