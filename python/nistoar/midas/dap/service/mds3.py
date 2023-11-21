@@ -17,7 +17,7 @@ The key features of the mds3 conventions are:
 Support for the web service frontend is provided via :py:class:`DAPApp` class, an implementation
 of the WSGI-based :ref:class:`~nistoar.pdr.publish.service.wsgi.SubApp`.
 """
-import os, re, pkg_resources
+import os, re, pkg_resources, random, string
 from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence, Callable
@@ -91,6 +91,10 @@ LINK_DELIM = const.LINKCMP_EXTENSION.lstrip('/')
 AGG_DELIM = const.AGGCMP_EXTENSION.lstrip('/')
 RES_DELIM = const.RESONLY_EXTENSION.lstrip('/')
 EXTSCHPROP = "_extensionSchemas"
+
+def random_id(prefix: str="", n: int=8):
+    r = ''.join(random.choices(string.ascii_uppercase + string.digits, k=n))
+    return prefix+r
 
 class DAPService(ProjectService):
     """
@@ -1737,6 +1741,11 @@ class DAPService(ProjectService):
         except AttributeError as ex:
             raise InvalidUpdate("location or proxyFor: value is not a string", sys=self) from ex
 
+        # Penultimately, add an id if doesn't already have one
+        if not ref.get("@id"):
+            ref['@id'] = "REPLACE"
+        #    ref['@id'] = random_id("ref:")
+
         # Finally, validate (if requested)
         schemauri = NERDM_SCH_ID + "/definitions/BibliographicReference"
         if ref.get("_schema"):
@@ -1747,6 +1756,8 @@ class DAPService(ProjectService):
         if doval:
             self.validate_json(ref, schemauri)
 
+        if ref.get("@id") == "REPLACE":
+            del ref['@id']
         return ref
 
     def _moderate_file(self, cmp, doval=True):
@@ -1980,6 +1991,8 @@ class DAPApp(MIDASProjectApp):
 class DAPProjectDataHandler(ProjectDataHandler):
     """
     A :py:class:`~nistoar.midas.wsgi.project.ProjectDataHandler` specialized for editing NERDm records.
+
+    Note that this implementation inherits its PUT, PATCH, and DELETE handling from its super-class.
     """
     _allowed_post_paths = "authors references components".split() + [FILE_DELIM, LINK_DELIM]
 
