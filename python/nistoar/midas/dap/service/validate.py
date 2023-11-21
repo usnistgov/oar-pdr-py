@@ -1,12 +1,45 @@
 """
 validation utilities specialized for DAP editing
 """
+import re
+
 from nistoar.nerdm.validate import *
 from nistoar.nerdm.constants import core_schema_base as CORE_SCHEMA_BASE
+import nistoar.nerdm.utils as nerdm_utils
 
 PUB_SCHEMA_BASE = CORE_SCHEMA_BASE + "pub/"
+RLS_SCHEMA_BASE = CORE_SCHEMA_BASE + "rls/"
+
+directives_by_uribase = {
+    CORE_SCHEMA_BASE: {
+        "derequire": [ "Resource", "Organization" ]
+    },
+    PUB_SCHEMA_BASE: {
+        "derequire": [ "PublicDataResource", "Person" ]
+    },
+    RLS_SCHEMA_BASE: {
+        "derequire": [ "ReleasedResource" ]
+    }
+}
+_verre = re.compile(r"/v\d.*$")
 
 class LenientSchemaLoader(ejs.SchemaLoader):
+    """
+    this modifies the schema definitions on selected schemas to be more lenient for records 
+    intended for use in the DAP Authoring API.
+    """
+    def load_schema(self, uri):
+        out = super().load_schema(uri)
+
+        if out.get("id", "").startswith(CORE_SCHEMA_BASE):
+            base = _verre.sub("/", out['id'])
+            directives = directives_by_uribase.get(base, {})
+            nerdm_utils.loosen_schema(out, directives)
+
+        return out
+                
+
+class OldLenientSchemaLoader(ejs.SchemaLoader):
     """
     this modifies the schema definitions on selected schemas to be more lenient for records 
     intended for use in the DAP Authoring API.
