@@ -781,6 +781,11 @@ class DAPService(ProjectService):
             for fmd in files:
                 nerd.files.set_file_at(fmd)
 
+        except InvalidUpdate as ex:
+            self.log.error("Invalid update to NERDm data not saved: %s: %s", prec.id, str(ex))
+            if ex.errors:
+                self.log.error("Errors include:\n  "+("\n  ".join([str(e) for e in ex.errors])))
+            raise
         except Exception as ex:
             provact.message = "Failed to save NERDm data update due to internal error"
             self.log.error("Failed to save NERDm metadata: "+str(ex))
@@ -1020,6 +1025,11 @@ class DAPService(ProjectService):
 
         except PartNotAccessible:
             # client request error; don't record action
+            raise
+        except InvalidUpdate as ex:
+            self.log.error("Invalid update to NERDm data not saved: %s: %s", prec.id, str(ex))
+            if ex.errors:
+                self.log.error("Errors include:\n  "+("\n  ".join([str(e) for e in ex.errors])))
             raise
         except Exception as ex:
             self.log.error("Failed to save update to NERDm data, %s: %s", prec.id, str(ex))

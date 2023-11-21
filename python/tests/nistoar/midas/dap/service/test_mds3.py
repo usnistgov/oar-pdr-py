@@ -928,6 +928,15 @@ class TestMDS3DAPService(test.TestCase):
         self.assertNotIn("references", nerd)
         self.assertEqual(len(nerd["components"]), 2)
 
+    def test_set_landingpage(self):
+        self.create_service()
+        prec = self.svc.create_record("goob")
+        id = prec.id
+        nerd = self.svc._store.open(id)
+
+        self.svc.replace_data(id, "https://example.com/", part="landingPage")
+        res = nerd.get_res_data()
+        self.assertEqual(res.get('landingPage'), "https://example.com/")
         
                 
         
