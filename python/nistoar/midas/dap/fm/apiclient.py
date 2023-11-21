@@ -170,7 +170,7 @@ class FileManager:
             f"{self.base_url}/record-space/{record_name}"
         )
 
-    def scan_files(self, record_name):
+    def post_scan_files(self, record_name):
         """
         Initiates a scan of all files for a given record name.
 
@@ -184,16 +184,16 @@ class FileManager:
         - Exception: If the API request results in an error.
         """
         return self.handle_request(
-            requests.put,
-            f"{self.base_url}/scan-files/{record_name}"
+            requests.post,
+            f"{self.base_url}/scans/{record_name}"
         )
 
-    def scan_status(self, task_id):
+    def get_scan_files(self, scan_id):
         """
-        Retrieves the status of a scan task by its task ID.
+        Retrieves the status and content of a scan by its scan ID.
 
         Args:
-        - task_id (str): The unique identifier of the scan task.
+        - scan_id (str): The unique identifier of the scan.
 
         Returns:
         - dict: The parsed JSON response from the API.
@@ -203,7 +203,25 @@ class FileManager:
         """
         return self.handle_request(
             requests.get,
-            f"{self.base_url}/scan-status/{task_id}"
+            f"{self.base_url}/scans/id/{scan_id}"
+        )
+
+    def delete_scan_files(self, scan_id):
+        """
+        Delete the report of a scan by its scan ID.
+
+        Args:
+        - scan_id (str): The unique identifier of the scan.
+
+        Returns:
+        - dict: The parsed JSON response from the API.
+
+        Raises:
+        - Exception: If the API request results in an error.
+        """
+        return self.handle_request(
+            requests.delete,
+            f"{self.base_url}/scans/id/{scan_id}"
         )
 
     def manage_permissions(self, user_name, record_name, perm_type="No permissions (No access to the file or folder)",
