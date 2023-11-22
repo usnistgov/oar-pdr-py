@@ -266,15 +266,16 @@ class TestMIDASProjectApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("405 ", self.resp[0])
 
-        self.resp = []
-        path = "mdm1:0001"
-        req = {
-            'REQUEST_METHOD': 'DELETE',
-            'PATH_INFO': self.rootpath + path
-        }
-        hdlr = self.app.create_handler(req, self.start, path, nistr)
-        body = hdlr.handle()
-        self.assertIn("405 ", self.resp[0])
+# DELETE is now allowed        
+#        self.resp = []
+#        path = "mdm1:0001"
+#        req = {
+#            'REQUEST_METHOD': 'DELETE',
+#            'PATH_INFO': self.rootpath + path
+#        }
+#        hdlr = self.app.create_handler(req, self.start, path, nistr)
+#        body = hdlr.handle()
+#        self.assertIn("405 ", self.resp[0])
 
     def test_create(self):
         path = ""
@@ -304,6 +305,86 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertEqual(resp['id'], "mdm1:0003")
         self.assertEqual(resp['data'], {"color": "red"})
         self.assertEqual(resp['meta'], {})
+
+    def test_delete(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "big", "owner": "nobody",
+                                                 "data": {"color": "red", "pos": {"x": 0, "y": 1}}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['data'], {"color": "red", "pos": {"x": 0, "y": 1}})
+        recid = resp['id']
+
+        self.resp = []
+        path = recid+"/data/pos/x"
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIs(resp, True)
+
+        self.resp = []
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIs(resp, False)
+
+        self.resp = []
+        path = recid+"/data"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp, {"color": "red", "pos": {"y": 1}})
+
+        self.resp = []
+        path = recid+"/data"
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIs(resp, True)
+
+        self.resp = []
+        path = recid+"/data"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp, {})
+
+        self.resp = []
+        path = recid
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("501 ", self.resp[0])
 
 
     def test_search(self):

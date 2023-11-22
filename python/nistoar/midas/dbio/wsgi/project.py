@@ -2,13 +2,39 @@
 A web service interface to various MIDAS project records.  
 
 A _project record_ is a persistable record that is compliant with the MIDAS Common Database project 
-data model, where examples of "project record" types include DMP records and data publication drafts.
+data model, where examples of a "project record" types include DMP records and data publication drafts.
 The :py:class:`MIDASProjectApp` encapsulates the handling of requests to create and manipulate project 
-records.  If desired, this class can be specialized for a particular project type, and the easiest way 
-to do that is by sub-classing the :py:class:`~nistoar.midas.dbio.wsgi.project.ProjectRecordBroker` and 
-passing that class to the :py:class:`MIDASProjectApp` constructor.  This is because the 
-:py:class:`~nistoar.midas.dbio.wsgi.project.ProjectRecordBroker` class isolates the business logic for 
-retrieving and manipulating project records.  
+records.  If desired, this class can be specialized for a particular project type; as an example, see
+:py:mod:`nistoar.midas.dap.service.mds3`.
+
+This implementation uses the simple :py:mod:`nistoar-internal WSGI 
+framework<nistoar.pdr.publish.service.wsgi>` to handle the specific web service endpoints.  The 
+:py:class:`MIDASProjectApp` is the router for the Project collection endpoint: it analyzes the relative 
+URL path and delegates the handling to a more specific handler class.  In particular, these endpoints
+are handled accordingly:
+
+``/`` -- :py:class:`ProjectSelectionHandler`
+     responds to to project search queries to find project records matching search criteria (GET) 
+     as well as accepts requests to create new records (POST).
+
+``/{projid}`` -- :py:class:`ProjectHandler`
+     returns the full project record (GET) or deletes it (DELETE).
+
+``/{projid}/name`` -- :py:class:`ProjectNameHandler`
+     returns (GET) or updates (PUT) the user-supplied name of the record.
+
+``/{projid}/data[/...]`` -- :py:class:`ProjectDataHandler`
+     returns (GET), updates (PUT, PATCH), or clears (DELETE) the data content of the record.  This
+     implementation supports updating individual parts of the data object via PUT, PATCH, DELETE 
+     based on the path relative to ``data``.   Subclasses (e.g. with the 
+     :py:mod:`DAP specialization<nistoar.midas.dap.service.mds3>`) may also support POST for certain
+     array-type properties within ``data``.  
+
+``/{projid}/acls[/...]`` -- :py:class:`ProjectACLsHandler`
+     returns (GET) or updates (PUT, PATCH, POST, DELETE) access control lists for the record.
+
+``/{projid}/*`` -- :py:class`ProjectInfoHandler`
+     returns other non-editable parts of the record via GET (including the ``meta`` property).
 """
 from logging import Logger
 from collections import OrderedDict
@@ -86,7 +112,7 @@ class ProjectHandler(ProjectRecordHandler):
             raise ValueError("Missing ProjectRecord id")
 
     def do_OPTIONS(self, path):
-        return self.send_options(["GET"])
+        return self.send_options(["GET", "DELETE"])
 
     def do_GET(self, path, ashead=False):
         try:
@@ -98,7 +124,22 @@ class ProjectHandler(ProjectRecordHandler):
                                         self._id, ashead=ashead)
 
         return self.send_json(prec.to_dict(), ashead=ashead)
-    
+
+    def do_DELETE(self, path):
+        try:
+            prec = self.svc.get_record(self._id)
+            out = prec.to_dict()
+            self.svc.delete_record(self._id)
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
+                                        self._id)
+        except NotImplementedError as ex:
+            return self.send_error(501, "Not Implemented")
+
+        return self.send_json(out, "Deleted")
+
 
 class ProjectInfoHandler(ProjectRecordHandler):
     """
@@ -261,7 +302,7 @@ class ProjectDataHandler(ProjectRecordHandler):
             raise ValueError("Missing ProjectRecord id")
 
     def do_OPTIONS(self, path):
-        return self.send_options(["GET", "PUT", "PATCH"])
+        return self.send_options(["GET", "PUT", "PATCH", "DELETE"])
 
     def do_GET(self, path, ashead=False):
         """
@@ -282,6 +323,28 @@ class ProjectDataHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id, ashead=ashead)
         return self.send_json(out, ashead=ashead)
+
+    def do_DELETE(self, path):
+        """
+        respond to a DELETE request.  This is used to clear the value of a particular property 
+        within the project data or otherwise reset the project data to its initial defaults.
+        :param str path:  a path to the portion of the data to clear
+        """
+        try:
+            cleared = self.svc.clear_data(self._id, path)
+        except dbio.NotAuthorized as ex:
+            return self._send_unauthorized()
+        except dbio.PartNotAccessible as ex:
+            return self.send_error_resp(405, "Data part not deletable",
+                                        "Requested part of data cannot be deleted")
+        except dbio.ObjectNotFound as ex:
+            if ex.record_part:
+                return self.send_error_resp(404, "Data property not found",
+                                            "No data found at requested property", self._id, ashead=ashead)
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found", self._id, ashead=ashead)
+
+        return self.send_json(cleared, "Cleared", 201)
 
     def do_PUT(self, path):
         try:
@@ -650,7 +713,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
             try:
                 prec.acls.revoke_perm_from(parts[0], parts[1])
                 prec.save()
-                return self.send_ok()
+                return self.send_ok(message="ID removed")
             except dbio.NotAuthorized as ex:
                 return self.send_unauthorized()
 
@@ -787,7 +850,7 @@ class ProjectStatusHandler(ProjectRecordHandler):
         
 class MIDASProjectApp(SubApp):
     """
-    a base web app for an interface handling project record
+    a base web app for an interface handling project record.
     """
     _selection_handler = ProjectSelectionHandler
     _update_handler = ProjectHandler

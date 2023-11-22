@@ -142,6 +142,14 @@ class ProjectService(MIDASSystem):
         self.log.info("Created %s record %s (%s) for %s", self.dbcli.project, prec.id, prec.name, self.who)
         return prec
 
+    def delete_record(self, id) -> ProjectRecord:
+        """
+        delete the draft record.  This may leave a stub record in place if, for example, the record 
+        has been published previously.  
+        """
+        # TODO:  handling previously published records
+        raise NotImplementedError()
+
     def _get_id_shoulder(self, user: PubAgent):
         """
         return an ID shoulder that is appropriate for the given user agent
@@ -231,7 +239,7 @@ class ProjectService(MIDASSystem):
         """
         merge the given data into the currently save data content for the record with the given identifier.
         :param str      id:  the identifier for the record whose data should be updated.
-        :param str newdata:  the data to save as the new content.  
+        :param str|dict|list newdata:  the data to save as the new content.  
         :param str    part:  the slash-delimited pointer to an internal data property.  If provided, 
                              the given ``newdata`` is a value that should be set to the property pointed 
                              to by ``part``.  
@@ -498,13 +506,16 @@ class ProjectService(MIDASSystem):
     def _validate_data(self, data):
         pass
 
-    def clear_data(self, id: str, part: str=None, message: str=None, prec=None):
+    def clear_data(self, id: str, part: str=None, message: str=None, prec=None) -> bool:
         """
-        remove the stored data content of the record and reset it to its defaults.  
+        remove the stored data content of the record and reset it to its defaults.  Note that
+        no change is recorded if the requested data does not exist yet.
         :param str      id:  the identifier for the record whose data should be cleared.
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
                              only that property will be cleared (either removed or set to an initial
                              default).
+        :return:  True the data was properly cleared; return False if ``part`` was specified but does not
+                  yet exist in the data.
         :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to `id`.
                              If this is not provided, the record will by fetched anew based on the `id`.  
         :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
@@ -518,7 +529,7 @@ class ProjectService(MIDASSystem):
             set_state = True
             prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
-        if _prec.status.state not in [status.EDIT, status.READY]:
+        if prec.status.state not in [status.EDIT, status.READY]:
             raise NotEditable(id)
 
         initdata = self._new_data_for(prec.id, prec.meta)
@@ -541,7 +552,7 @@ class ProjectService(MIDASSystem):
                     elif prop not in data:
                         data[prop] = {}
                 elif prop not in data:
-                    break
+                    return False
                 elif not steps:
                     del data[prop]
                     break
@@ -576,7 +587,8 @@ class ProjectService(MIDASSystem):
         finally:
             self._record_action(provact)
         self.log.info("Cleared out data for %s record %s (%s) for %s",
-                      self.dbcli.project, _prec.id, _prec.name, self.who)
+                      self.dbcli.project, prec.id, prec.name, self.who)
+        return True
 
 
     def update_status_message(self, id: str, message: str, _prec=None) -> status.RecordStatus:
