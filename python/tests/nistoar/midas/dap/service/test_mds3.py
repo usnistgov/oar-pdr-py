@@ -813,6 +813,45 @@ class TestMDS3DAPService(test.TestCase):
             "accessURL": "https://bitbucket.com/foo/bar"
         })
 
+    def test_clear_data(self):
+        self.create_service()
+        prec = self.svc.create_record("goob")
+        pdrid = "ark:/88434/%s-%s" % tuple(prec.id.split(":"))
+        nerd = self.svc.get_nerdm_data(prec.id)
+        self.assertEqual(set(nerd.keys()),
+                         {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type"})
+
+        nerd = self.svc.update_data(prec.id,
+                             {"landingPage": "https://example.com",
+                              "contactPoint": { "fn": "Gurn Cranston", "hasEmail": "mailto:gjc1@nist.gov"}})
+        self.assertEqual(set(nerd.keys()),
+                         {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type",
+                          "contactPoint", "landingPage"})
+        self.assertEqual(set(nerd["contactPoint"].keys()), {"@type", "fn", "hasEmail"})
+
+        with self.assertRaises(PartNotAccessible):
+            self.assertIs(self.svc.clear_data(prec.id, "goober"), False)
+        with self.assertRaises(PartNotAccessible):
+            self.assertIs(self.svc.clear_data(prec.id, "contactPoint/hasEmail"), True)
+        nerd = self.svc.get_nerdm_data(prec.id)
+        self.assertEqual(set(nerd.keys()),
+                         {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type",
+                          "contactPoint", "landingPage"})
+        self.assertEqual(set(nerd["contactPoint"].keys()), {"@type", "fn", "hasEmail"})
+
+        self.assertIs(self.svc.clear_data(prec.id, "landingPage"), True)
+        nerd = self.svc.get_nerdm_data(prec.id)
+        self.assertEqual(set(nerd.keys()),
+                         {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type",
+                          "contactPoint"})
+        self.assertIs(self.svc.clear_data(prec.id, "references"), False)
+
+        self.assertIs(self.svc.clear_data(prec.id), True)
+        nerd = self.svc.get_nerdm_data(prec.id)
+        self.assertEqual(set(nerd.keys()),
+                         {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type"})
+        
+
     def test_update(self):
         rec = read_nerd(pdr2210)
         self.create_service()

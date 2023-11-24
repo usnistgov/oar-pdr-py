@@ -485,13 +485,15 @@ class DAPService(ProjectService):
         """
         return self._update_data(id, newdata, part, replace=False, message="", prec=_prec)
 
-    def clear_data(self, id, part=None, _prec=None):
+    def clear_data(self, id, part=None, message: str=None, _prec=None) -> bool:
         """
         remove the stored data content of the record and reset it to its defaults.  
         :param str      id:  the identifier for the record whose data should be cleared.
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
                              only that property will be cleared (either removed or set to an initial
                              default).
+        :return:  True the data was properly cleared; return False if ``part`` was specified but does not
+                  yet exist in the data.
         :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to 
                              ``id``.  If this is not provided, the record will by fetched anew based on 
                              the ``id``.  
@@ -513,44 +515,61 @@ class DAPService(ProjectService):
             self._store.load_from(nerd)
         nerd = self._store.open(id)
 
+        provact = None
         try:
             if part:
                 what = part
                 if part == "authors":
+                    if nerd.authors.count == 0:
+                        return False
                     nerd.authors.empty()
                 elif part == "references":
+                    if nerd.references.count == 0:
+                        return False
                     nerd.references.empty()
                 elif part == FILE_DELIM:
+                    if nerd.files.count == 0:
+                        return False
                     what = "files"
                     nerd.files.empty()
                 elif part == LINK_DELIM:
+                    if nerd.nonfiles.count == 0:
+                        return False
                     what = "links"
                     nerd.nonfiles.empty()
                 elif part == "components":
+                    if nerd.nonfiles.count == 0 and nerd.files.count == 0:
+                        return False
                     nerd.files.empty()
                     nerd.nonfiles.empty()
-                elif part in "title rights disclaimer description".split():
+                elif part in "title rights disclaimer description landingPage keyword".split():
                     resmd = nerd.get_res_data()
+                    if part not in resmd:
+                        return False
                     del resmd[part]
                     nerd.replace_res_data(resmd)
                 else:
-                    raise PartNotAccessible(_prec.id, path, "Clearing %s not allowed" % path)
+                    raise PartNotAccessible(_prec.id, part, "Clearing %s not allowed" % part)
 
-                provact = Action(Action.PATCH, _prec.id, self.who, "clearing "+what)
+                if not message:
+                    message = "clearing "+what
+                provact = Action(Action.PATCH, _prec.id, self.who, message)
                 part = ("/"+part) if part.startswith("pdr:") else ("."+part)
                 provact.add_subaction(Action(Action.DELETE, _prec.id+"#data"+part, self.who,
-                                             "clearing "+what))
-                prec.status.act(self.STATUS_ACTION_CLEAR, "cleared "+what)
+                                             message))
+                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared "+what)
 
             else:
                 nerd.authors.empty()
                 nerd.references.empty()
                 nerd.files.empty()
                 nerd.nonfiles.empty()
-                nerd.replace_res_data(self._new_data_for(_prec.id, prec.meta))
+                nerd.replace_res_data(self._new_data_for(_prec.id, _prec.meta))
 
-                provact = Action(Action.PATCH, _prec.id, self.who, "clearing all NERDm data")
-                prec.status.act(self.STATUS_ACTION_CLEAR, "cleared all NERDm data")
+                if not message:
+                    message = "clearing all NERDm data"
+                provact = Action(Action.PATCH, _prec.id, self.who, message)
+                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared all NERDm data")
 
         except PartNotAccessible:
             # client request error; don't record action
@@ -559,28 +578,30 @@ class DAPService(ProjectService):
         except Exception as ex:
             self.log.error("Failed to clear requested NERDm data, %s: %s", _prec.id, str(ex))
             self.log.warning("Partial update is possible")
-            provact.message = "Failed to clear requested NERDm data"
-            self._record_action(provact)
+            if provact:
+                provact.message = "Failed to clear requested NERDm data"
+                self._record_action(provact)
             
-            prec.status.act(self.STATUS_ACTION_CLEAR, "Failed to clear NERDm data")
-            prec.set_state(status.EDIT)
-            prec.data = self._summarize(nerd)
-            self._try_save(prec)
+            _prec.status.act(self.STATUS_ACTION_CLEAR, "Failed to clear NERDm data")
+            _prec.set_state(status.EDIT)
+            _prec.data = self._summarize(nerd)
+            self._try_save(_prec)
             raise
 
-        prec.data = self._summarize(nerd)
+        _prec.data = self._summarize(nerd)
         if set_state:
-            prec.status.set_state(status.EDIT)
+            _prec.status.set_state(status.EDIT)
 
         try:
-            prec.save()
+            _prec.save()
 
         except Exception as ex:
             self.log.error("Failed to saved DBIO record, %s: %s", prec.id, str(ex))
             raise
 
         finally:
-            self._record_action(provact)            
+            self._record_action(provact)
+        return True
             
 
     def _update_data(self, id, newdata, part=None, prec=None, nerd=None, replace=False, message=""):
