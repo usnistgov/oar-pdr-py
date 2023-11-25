@@ -30,8 +30,6 @@ echo Installing python libraries into $PY_LIBDIR...
 
 $oarmd_pkg/scripts/install_extras.sh --install-dir=$INSTALL_DIR
 mkdir -p $INSTALL_DIR/etc/midas/schemas
-echo $execdir/loosen_nerdm.py $INSTALL_DIR/etc/schemas $INSTALL_DIR/etc/midas/schemas
-$execdir/loosen_nerdm.py $INSTALL_DIR/etc/schemas $INSTALL_DIR/etc/midas/schemas
 
 mkdir -p $INSTALL_DIR/var/logs
 echo cp -r $SOURCE_DIR/etc $INSTALL_DIR

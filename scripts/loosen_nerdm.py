@@ -49,17 +49,17 @@ directives_by_file = {
     }
 }
 
-try:
-    import nistoar.nerdm.utils as nerdm_utils
-except ImportError:
-    sys.path.insert(0, find_nistoar_code())
-    import nistoar.nerdm.utils as nerdm_utils
-
 def find_nistoar_code():
     execdir = Path(__file__).resolve().parents[0]
     basedir = execdir.parents[0]
     mdpydir = basedir / "metadata" / "python"
     return mdpydir
+
+try:
+    import nistoar.nerdm.utils as nerdm_utils
+except ImportError:
+    sys.path.insert(0, str(find_nistoar_code()))
+    import nistoar.nerdm.utils as nerdm_utils
 
 def loosen_schema(schema: Mapping, directives: Mapping, opts=None):
     """
