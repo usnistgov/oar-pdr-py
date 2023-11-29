@@ -58,6 +58,23 @@ class TestChecksum(test.TestCase):
         self.assertEqual(utils.checksum_of(dfile), self.syssum(dfile))
         dfile = os.path.join(testdatadir2,"trial3/trial3a.json")
         self.assertEqual(utils.checksum_of(dfile), self.syssum(dfile))
+        dfile = os.path.join(testdatadir3,"3A1EE2F169DD3B8CE0531A570681DB5D1491.json")
+        self.assertEqual(utils.checksum_of(dfile), self.syssum(dfile))
+
+    def test_bufsize(self):
+        dfile = os.path.join(testdatadir3,"3A1EE2F169DD3B8CE0531A570681DB5D1491.json")
+        syssum = self.syssum(dfile)
+        self.assertEqual(utils.checksum_of(dfile, 10240), syssum)
+        self.assertEqual(utils.checksum_of(dfile, 1024), syssum)
+        self.assertEqual(utils.checksum_of(dfile, 10), syssum)
+        self.assertEqual(utils.checksum_of(dfile, 1), syssum)
+
+        with self.assertRaises(ValueError):
+            utils.checksum_of(dfile, 0)
+        with self.assertRaises(ValueError):
+            utils.checksum_of(dfile, -20)
+        with self.assertRaises(TypeError):
+            utils.checksum_of(dfile, "1024")
 
     def syssum(self, filepath):
         cmd = ["sha256sum", filepath]

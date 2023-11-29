@@ -79,15 +79,23 @@ def build_mime_type_map(filelist):
         update_mimetypes_from_file(out, file)
     return out
 
-def checksum_of(filepath):
+def checksum_of(filepath, bufsize: int=10240000):
     """
     return the checksum for the given file
+
+    :param str|Path filepath:  the path of the file to calculate the checksum for
+    :param int       bufsize:  the memory buffer size to use when reading the file.
+                               The default is 10 MB; multithreaded applications should 
+                               consider a smaller value.
     """
-    bfsz = 10240000   # 10 MB buffer
+    if not isinstance(bufsize, int):
+        raise TypeError("checksum_of(): bufsize arg must be an integer")
+    if bufsize < 1:
+        raise ValueError("checksum_of(): bufsize arg must be a positive integer")
     sum = hashlib.sha256()
     with open(filepath, mode='rb') as fd:
         while True:
-            buf = fd.read(bfsz)
+            buf = fd.read(bufsize)
             if not buf: break
             sum.update(buf)
     return sum.hexdigest()
