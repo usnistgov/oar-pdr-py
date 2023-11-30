@@ -1732,7 +1732,8 @@ class DAPService(ProjectService):
         return auth
 
     _refprops = set(("@id _schema _extensionSchemas title abbrev proxyFor location label "+
-                     "description citation refType doi inPreparation vol volNumber pages publishYear").split())
+                     "description citation refType doi inPreparation vol volNumber pages "+
+                     "authors publishYear").split())
     _reftypes = set(("IsDocumentedBy IsSupplementTo IsSupplementedBy IsCitedBy Cites IsReviewedBy "+
                      "IsReferencedBy References IsSourceOf IsDerivedFrom "+
                      "IsNewVersionOf IsPreviousVersionOf").split())
