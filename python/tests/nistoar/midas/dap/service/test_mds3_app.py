@@ -383,7 +383,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertNotIn("downloadURL", resp)
 
         self.resp = []
-        path = id + '/data/components[file_1]'
+        path = id + '/data/components/file_1'
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path
@@ -442,6 +442,93 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertNotIn('authors', resp)
         self.assertIn('description', resp)
         self.assertEqual(resp['rights'], "What ever.")
+
+    def test_delete(self):
+        testnerd = read_nerd(pdr2210)
+        res = deepcopy(testnerd)
+        del res['references']
+        del res['components']
+        del res['@id']
+        del res['_schema']
+        del res['_extensionSchemas']
+
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": res['contactPoint'],
+                                                           "keyword": [ "testing" ],
+                                                           "landingPage": "https://example.com/" },
+                                                 "meta": { "creatorisContact": "false" },
+                                                 "name": "OptSortSph" }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "OptSortSph")
+        self.assertEqual(resp['id'], "mds3:0001")
+        self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
+        recid = resp['id']
+        
+        self.resp = []
+        path = recid + '/data'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['doi'], 'doi:10.88888/mds3-0001')
+        self.assertEqual(resp['contactPoint'],
+                         {"fn": "Zachary Levine", "@type": "vcard:Contact",
+                          "hasEmail": "mailto:zachary.levine@nist.gov"      })
+        self.assertEqual(resp['@type'],
+                         [ "nrdp:PublicDataResource", "dcat:Resource" ])
+        self.assertEqual(resp['landingPage'], "https://example.com/")
+        self.assertEqual(resp['keyword'], ["testing"])
+        
+        self.resp = []
+        path = recid + '/data/landingPage'
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "landingPage")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIs(resp, True)
+
+        
+        self.resp = []
+        path = recid + '/data'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertNotIn("landingPage", resp)
+
+
+
 
 
         

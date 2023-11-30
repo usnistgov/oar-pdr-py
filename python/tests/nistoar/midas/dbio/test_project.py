@@ -230,6 +230,32 @@ class TestProjectService(test.TestCase):
 
         self.assertEqual(len(self.project.dbcli._db.get(base.PROV_ACT_LOG, {}).get(prec.id,[])), 6)
 
+    def test_clear_data(self):
+        self.create_service()
+        prec = self.project.create_record("goob")
+        self.assertEqual(prec.data, {})
+        
+        data = self.project.update_data(prec.id, {"color": "red", "pos": {"x": 23, "y": 12, "grid": "A"}})
+        self.assertEqual(data, {"color": "red", "pos": {"x": 23, "y": 12, "grid": "A"}})
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data, {"color": "red", "pos": {"x": 23, "y": 12, "grid": "A"}})
+
+        self.assertIs(self.project.clear_data(prec.id, "color"), True)
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data, {"pos": {"x": 23, "y": 12, "grid": "A"}})
+
+        self.assertIs(self.project.clear_data(prec.id, "color"), False)
+        self.assertIs(self.project.clear_data(prec.id, "gurn/goob/gomer"), False)
+
+        self.assertIs(self.project.clear_data(prec.id, "pos/y"), True)
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data, {"pos": {"x": 23, "grid": "A"}})
+
+        self.assertIs(self.project.clear_data(prec.id), True)
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data, {})
+        
+
     def test_finalize(self):
         self.create_service()
         prec = self.project.create_record("goob")

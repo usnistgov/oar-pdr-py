@@ -17,7 +17,7 @@ The key features of the mds3 conventions are:
 Support for the web service frontend is provided via :py:class:`DAPApp` class, an implementation
 of the WSGI-based :ref:class:`~nistoar.pdr.publish.service.wsgi.SubApp`.
 """
-import os, re, pkg_resources
+import os, re, pkg_resources, random, string
 from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence, Callable
@@ -91,6 +91,10 @@ LINK_DELIM = const.LINKCMP_EXTENSION.lstrip('/')
 AGG_DELIM = const.AGGCMP_EXTENSION.lstrip('/')
 RES_DELIM = const.RESONLY_EXTENSION.lstrip('/')
 EXTSCHPROP = "_extensionSchemas"
+
+def random_id(prefix: str="", n: int=8):
+    r = ''.join(random.choices(string.ascii_uppercase + string.digits, k=n))
+    return prefix+r
 
 class DAPService(ProjectService):
     """
@@ -481,13 +485,15 @@ class DAPService(ProjectService):
         """
         return self._update_data(id, newdata, part, replace=False, message="", prec=_prec)
 
-    def clear_data(self, id, part=None, _prec=None):
+    def clear_data(self, id, part=None, message: str=None, _prec=None) -> bool:
         """
         remove the stored data content of the record and reset it to its defaults.  
         :param str      id:  the identifier for the record whose data should be cleared.
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
                              only that property will be cleared (either removed or set to an initial
                              default).
+        :return:  True the data was properly cleared; return False if ``part`` was specified but does not
+                  yet exist in the data.
         :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to 
                              ``id``.  If this is not provided, the record will by fetched anew based on 
                              the ``id``.  
@@ -509,44 +515,61 @@ class DAPService(ProjectService):
             self._store.load_from(nerd)
         nerd = self._store.open(id)
 
+        provact = None
         try:
             if part:
                 what = part
                 if part == "authors":
+                    if nerd.authors.count == 0:
+                        return False
                     nerd.authors.empty()
                 elif part == "references":
+                    if nerd.references.count == 0:
+                        return False
                     nerd.references.empty()
                 elif part == FILE_DELIM:
+                    if nerd.files.count == 0:
+                        return False
                     what = "files"
                     nerd.files.empty()
                 elif part == LINK_DELIM:
+                    if nerd.nonfiles.count == 0:
+                        return False
                     what = "links"
                     nerd.nonfiles.empty()
                 elif part == "components":
+                    if nerd.nonfiles.count == 0 and nerd.files.count == 0:
+                        return False
                     nerd.files.empty()
                     nerd.nonfiles.empty()
-                elif part in "title rights disclaimer description".split():
+                elif part in "title rights disclaimer description landingPage keyword".split():
                     resmd = nerd.get_res_data()
+                    if part not in resmd:
+                        return False
                     del resmd[part]
                     nerd.replace_res_data(resmd)
                 else:
-                    raise PartNotAccessible(_prec.id, path, "Clearing %s not allowed" % path)
+                    raise PartNotAccessible(_prec.id, part, "Clearing %s not allowed" % part)
 
-                provact = Action(Action.PATCH, _prec.id, self.who, "clearing "+what)
+                if not message:
+                    message = "clearing "+what
+                provact = Action(Action.PATCH, _prec.id, self.who, message)
                 part = ("/"+part) if part.startswith("pdr:") else ("."+part)
                 provact.add_subaction(Action(Action.DELETE, _prec.id+"#data"+part, self.who,
-                                             "clearing "+what))
-                prec.status.act(self.STATUS_ACTION_CLEAR, "cleared "+what)
+                                             message))
+                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared "+what)
 
             else:
                 nerd.authors.empty()
                 nerd.references.empty()
                 nerd.files.empty()
                 nerd.nonfiles.empty()
-                nerd.replace_res_data(self._new_data_for(_prec.id, prec.meta))
+                nerd.replace_res_data(self._new_data_for(_prec.id, _prec.meta))
 
-                provact = Action(Action.PATCH, _prec.id, self.who, "clearing all NERDm data")
-                prec.status.act(self.STATUS_ACTION_CLEAR, "cleared all NERDm data")
+                if not message:
+                    message = "clearing all NERDm data"
+                provact = Action(Action.PATCH, _prec.id, self.who, message)
+                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared all NERDm data")
 
         except PartNotAccessible:
             # client request error; don't record action
@@ -555,28 +578,30 @@ class DAPService(ProjectService):
         except Exception as ex:
             self.log.error("Failed to clear requested NERDm data, %s: %s", _prec.id, str(ex))
             self.log.warning("Partial update is possible")
-            provact.message = "Failed to clear requested NERDm data"
-            self._record_action(provact)
+            if provact:
+                provact.message = "Failed to clear requested NERDm data"
+                self._record_action(provact)
             
-            prec.status.act(self.STATUS_ACTION_CLEAR, "Failed to clear NERDm data")
-            prec.set_state(status.EDIT)
-            prec.data = self._summarize(nerd)
-            self._try_save(prec)
+            _prec.status.act(self.STATUS_ACTION_CLEAR, "Failed to clear NERDm data")
+            _prec.set_state(status.EDIT)
+            _prec.data = self._summarize(nerd)
+            self._try_save(_prec)
             raise
 
-        prec.data = self._summarize(nerd)
+        _prec.data = self._summarize(nerd)
         if set_state:
-            prec.status.set_state(status.EDIT)
+            _prec.status.set_state(status.EDIT)
 
         try:
-            prec.save()
+            _prec.save()
 
         except Exception as ex:
             self.log.error("Failed to saved DBIO record, %s: %s", prec.id, str(ex))
             raise
 
         finally:
-            self._record_action(provact)            
+            self._record_action(provact)
+        return True
             
 
     def _update_data(self, id, newdata, part=None, prec=None, nerd=None, replace=False, message=""):
@@ -777,6 +802,11 @@ class DAPService(ProjectService):
             for fmd in files:
                 nerd.files.set_file_at(fmd)
 
+        except InvalidUpdate as ex:
+            self.log.error("Invalid update to NERDm data not saved: %s: %s", prec.id, str(ex))
+            if ex.errors:
+                self.log.error("Errors include:\n  "+("\n  ".join([str(e) for e in ex.errors])))
+            raise
         except Exception as ex:
             provact.message = "Failed to save NERDm data update due to internal error"
             self.log.error("Failed to save NERDm metadata: "+str(ex))
@@ -1016,6 +1046,11 @@ class DAPService(ProjectService):
 
         except PartNotAccessible:
             # client request error; don't record action
+            raise
+        except InvalidUpdate as ex:
+            self.log.error("Invalid update to NERDm data not saved: %s: %s", prec.id, str(ex))
+            if ex.errors:
+                self.log.error("Errors include:\n  "+("\n  ".join([str(e) for e in ex.errors])))
             raise
         except Exception as ex:
             self.log.error("Failed to save update to NERDm data, %s: %s", prec.id, str(ex))
@@ -1697,7 +1732,8 @@ class DAPService(ProjectService):
         return auth
 
     _refprops = set(("@id _schema _extensionSchemas title abbrev proxyFor location label "+
-                     "description citation refType doi inPreparation vol volNumber pages publishYear").split())
+                     "description citation refType doi inPreparation vol volNumber pages "+
+                     "authors publishYear").split())
     _reftypes = set(("IsDocumentedBy IsSupplementTo IsSupplementedBy IsCitedBy Cites IsReviewedBy "+
                      "IsReferencedBy References IsSourceOf IsDerivedFrom "+
                      "IsNewVersionOf IsPreviousVersionOf").split())
@@ -1737,6 +1773,11 @@ class DAPService(ProjectService):
         except AttributeError as ex:
             raise InvalidUpdate("location or proxyFor: value is not a string", sys=self) from ex
 
+        # Penultimately, add an id if doesn't already have one
+        if not ref.get("@id"):
+            ref['@id'] = "REPLACE"
+        #    ref['@id'] = random_id("ref:")
+
         # Finally, validate (if requested)
         schemauri = NERDM_SCH_ID + "/definitions/BibliographicReference"
         if ref.get("_schema"):
@@ -1747,6 +1788,8 @@ class DAPService(ProjectService):
         if doval:
             self.validate_json(ref, schemauri)
 
+        if ref.get("@id") == "REPLACE":
+            del ref['@id']
         return ref
 
     def _moderate_file(self, cmp, doval=True):
@@ -1980,6 +2023,8 @@ class DAPApp(MIDASProjectApp):
 class DAPProjectDataHandler(ProjectDataHandler):
     """
     A :py:class:`~nistoar.midas.wsgi.project.ProjectDataHandler` specialized for editing NERDm records.
+
+    Note that this implementation inherits its PUT, PATCH, and DELETE handling from its super-class.
     """
     _allowed_post_paths = "authors references components".split() + [FILE_DELIM, LINK_DELIM]
 
