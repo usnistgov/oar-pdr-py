@@ -46,6 +46,12 @@ m2repo
 .pydevproject
 .settings
 
+python/ejsonschema-master/
+python/ejsonschema.zip
+python/nistoar/midas/version.py
+python/nistoar/pdr/version.py
+python/pynoid-master/
+python/pynoid.zip
 # Mac OSX
 .DS_Store
 
