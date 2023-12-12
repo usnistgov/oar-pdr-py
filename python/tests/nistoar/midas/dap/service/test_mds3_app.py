@@ -545,25 +545,98 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['action'], '')
         self.assertNotIn('file_count', resp)  # file manager not engaged
 
+    def test_put_title(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Gurn's Opus" }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "Gurn's Opus")
+        self.assertEqual(resp['id'], "mds3:0001")
+        self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
+        self.assertEqual(resp['data']['@type'], [ "nrdp:PublicDataResource", "dcat:Resource" ])
+        self.assertEqual(resp['data'].get('title',''), '')
+        id = resp['id']
+
+        self.resp = []
+        path = id + '/data'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['doi'], 'doi:10.88888/mds3-0001')
+        self.assertEqual(resp['@type'], [ "nrdp:PublicDataResource", "dcat:Resource" ])
+        self.assertEqual(resp.get('title',''), '')
+
+        self.resp = []
+        path = id + '/data/title'
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO('"My way"')
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "title")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "My way")
+
+        self.resp = []
+        path = id + '/data'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['doi'], 'doi:10.88888/mds3-0001')
+        self.assertEqual(resp['@type'], [ "nrdp:PublicDataResource", "dcat:Resource" ])
+        self.assertEqual(resp.get('title',''), 'My way')
+
+        self.resp = []
+        path = id
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['id'], 'mds3:0001')
+        self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
+        self.assertEqual(resp['data']['@type'], [ "nrdp:PublicDataResource", "dcat:Resource" ])
+        self.assertEqual(resp['data']['title'], 'My way')
+        self.assertEqual(resp['data']['author_count'], 0)
         
         
 
-
-
-        
-        
-
-                
-
-        
         
 
         
-
-        
-
-
-                         
 if __name__ == '__main__':
     test.main()
         

@@ -49,6 +49,9 @@ ARGUMENTS
                                 Defaut: docker/midasserver/midas-dmp_config.yml
   -B, --bg                      Run the server in the background (returning the 
                                 command prompt after successful launch)
+  -l FILE, --log-file FILE      Send server messages to FILE, overriding the 
+                                configuration.  Default: midas.log
+                                in the data directory.
   -M, --use-mongodb             Use a MongoDB backend; DIR must also be provided.
                                 If not set, a file-based database (using JSON 
                                 files) will be used, stored under DIR/dbfiles.
@@ -80,9 +83,10 @@ PORT=9091
 DOPYBUILD=
 DODOCKBUILD=
 CONFIGFILE=
+LOGFILE=
 USEMONGO=
 STOREDIR=
-DBTYPE=
+DBTYPE=inmem
 ADDNSD=
 DETACH=
 PPLDATADIR=
@@ -94,6 +98,9 @@ while [ "$1" != "" ]; do
             ;;
         -D|--docker-build)
             DODOCKBUILD="-D"
+            ;;
+        -B|--bg|--detach)
+            DETACH="--detach"
             ;;
         -c)
             shift
@@ -111,6 +118,12 @@ while [ "$1" != "" ]; do
             ;;
         -B|--bg|--detach)
             DETACH="--detach"
+        -l)
+            shift
+            LOGFILE=$1
+            ;;
+        --log-file=*)
+            LOGFILE=`echo $1 | sed -e 's/[^=]*=//'`
             ;;
         -M|--use-mongo)
             DBTYPE="mongo"
@@ -155,6 +168,7 @@ while [ "$1" != "" ]; do
                 false
             }
             STOREDIR=$1
+            DBTYPE=fsbased
             ;;
     esac
     shift
@@ -205,6 +219,21 @@ configparent=`dirname $CONFIGFILE`
 configfile=`(cd $configparent; pwd)`/`basename $CONFIGFILE`
 VOLOPTS="$VOLOPTS -v ${configfile}:/app/midas-config.${configext}:ro"
 ENVOPTS="-e OAR_MIDASSERVER_CONFIG=/app/midas-config.${configext}"
+
+[ -z "$LOGFILE" ] || {
+    dir=`dirname $LOGFILE`
+    lf=`basename $LOGFILE`
+    [ "$dir" = "." ] || {
+        [ -d "$dir" ] || {
+            echo "${prog}:" Log file parent directory does not exist: $dir
+            false
+        }
+        dir=`(cd $dir; echo $PWD)`
+        touch $dir/$lf
+        VOLOPTS="$VOLOPTS -v $dir/${lf}:/tmp/$lf"
+        ENVOPTS="$ENVOPTS -e OAR_LOG_FILE=/tmp/$lf"
+    }
+}
 
 if [ -d "$repodir/docs" ]; then
     VOLOPTS="$VOLOPTS -v $repodir/docs:/docs"

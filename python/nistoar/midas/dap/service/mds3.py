@@ -384,6 +384,7 @@ class DAPService(ProjectService):
             # create a record in the metadata store
             if self._store.exists(prec.id):
                 self.log.warning("NERDm data for id=%s unexpectedly found in metadata store", prec.id)
+                self._store.delete(prec.id)
             self._store.load_from(self._new_data_for(prec.id, prec.meta, schemaid), prec.id)
             nerd = self._store.open(prec.id)
             if prec._data.get('file_space') and self._fmcli and hasattr(nerd.files, 'update_hierarchy'):
@@ -682,36 +683,82 @@ class DAPService(ProjectService):
         provact = None
         try:
             if part:
+                parts = part.split('/')
                 what = part
-                if part == "authors":
-                    if nerd.authors.count == 0:
-                        return False
-                    nerd.authors.empty()
-                elif part == "references":
-                    if nerd.references.count == 0:
-                        return False
-                    nerd.references.empty()
-                elif part == FILE_DELIM:
-                    if nerd.files.count == 0:
-                        return False
-                    what = "files"
-                    nerd.files.empty()
-                elif part == LINK_DELIM:
-                    if nerd.nonfiles.count == 0:
-                        return False
-                    what = "links"
-                    nerd.nonfiles.empty()
-                elif part == "components":
-                    if nerd.nonfiles.count == 0 and nerd.files.count == 0:
-                        return False
-                    nerd.files.empty()
-                    nerd.nonfiles.empty()
-                elif part in "title rights disclaimer description landingPage keyword".split():
-                    resmd = nerd.get_res_data()
-                    if part not in resmd:
-                        return False
-                    del resmd[part]
-                    nerd.replace_res_data(resmd)
+                if len(parts) == 1:
+                    if part == "authors":
+                        if nerd.authors.count == 0:
+                            return False
+                        nerd.authors.empty()
+                    elif part == "references":
+                        if nerd.references.count == 0:
+                            return False
+                        nerd.references.empty()
+                    elif part == FILE_DELIM:
+                        if nerd.files.count == 0:
+                            return False
+                        what = "files"
+                        nerd.files.empty()
+                    elif part == LINK_DELIM:
+                        if nerd.nonfiles.count == 0:
+                            return False
+                        what = "links"
+                        nerd.nonfiles.empty()
+                    elif part == "components":
+                        if nerd.nonfiles.count == 0 and nerd.files.count == 0:
+                            return False
+                        nerd.files.empty()
+                        nerd.nonfiles.empty()
+                    elif part in "title rights disclaimer description landingPage keyword".split():
+                        resmd = nerd.get_res_data()
+                        if part not in resmd:
+                            return False
+                        del resmd[part]
+                        nerd.replace_res_data(resmd)
+                    else:
+                        raise PartNotAccessible(_prec.id, part, "Clearing %s not allowed" % part)
+
+                elif len(parts) == 2:
+                    # refering to an element of a list or file set
+                    key = parts[1]
+                    m = re.search(r'^\[([\+\-]?\d+)\]$', key)
+                    if m:
+                        try:
+                            key = int(m.group(1))
+                        except ValueError as ex:
+                            raise PartNotAccessible(id, path, "Accessing %s not supported" % path)
+
+                    if parts[0] == "authors":
+                        if nerd.authors.count == 0:
+                            return False
+                        try:
+                            nerd.authors.pop(key)
+                        except (KeyError, IndexError) as ex:
+                            return False
+                    elif parts[0] == "references":
+                        try:
+                            nerd.references.pop(key)
+                        except (KeyError, IndexError) as ex:
+                            return False
+                    elif parts[0] == LINK_DELIM:
+                        try:
+                            nerd.nonfiles.pop(parts[1])
+                        except (KeyError) as ex:
+                            return False
+                    elif parts[0] == "components" or parts[0] == FILE_DELIM:
+                        out = None
+                        if parts[0] != FILE_DELIM:
+                            try:
+                                out = nerd.nonfiles.pop(parts[1])
+                            except (KeyError) as ex:
+                                pass
+                        if not out:
+                            try:
+                                nerd.files.delete_file(parts[1])
+                            except (KeyError) as ex:
+                                return False
+                    else:
+                        raise PartNotAccessible(_prec.id, part, "Clearing %s not allowed" % part)
                 else:
                     raise PartNotAccessible(_prec.id, part, "Clearing %s not allowed" % part)
 
@@ -2236,7 +2283,8 @@ class DAPApp(MIDASProjectApp):
             project_coll = DAP_PROJECTS
         uselog = log.getChild(project_coll)
         if not service_factory:
-            service_factory = DAPServiceFactory(dbcli_factory, config, uselog, project_coll=project_coll)
+            nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), uselog)
+            service_factory = DAPServiceFactory(dbcli_factory, config, uselog, nerdstore, project_coll)
         super(DAPApp, self).__init__(service_factory, uselog, config)
         self._data_update_handler = DAPProjectDataHandler
         self._info_update_handler = DAPProjectInfoHandler

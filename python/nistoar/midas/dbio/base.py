@@ -899,6 +899,16 @@ class DBClient(ABC):
 
     def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS,
                  peopsvc: PeopleService = None):
+        """
+        initialize the base client.
+        :param dict  config:  the configuration data for the client
+        :param str projcoll:  the type of project to connect with (i.e. the project collection name)
+        :param nativeclient:  where applicable, the native client object to use to connect the back
+                              end database.  The type and use of this client is implementation-specific
+        :param str  foruser:  the user identity to connect as.  This will control what records are 
+                              accessible via this instance's methods.
+        :param PeopleService peopsvc:  a PeopleService to incorporate into this client
+        """
         self._cfg = config
         self._native = nativeclient
         self._projcoll = projcoll
