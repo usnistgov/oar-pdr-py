@@ -115,13 +115,13 @@ class FileManager:
 
     def create_record_space(self, user_name, record_name):
         """
-        Creates a record space for a given user and record name.
+        Creates a record space for a given user and unique record name.
         Creates the user if it doesn't exist.
         Gives 'Share' permissions to user.
 
         Args:
         - user_name (str): The username associated with the record space.
-        - record_name (str): The name of the record space to be created.
+        - record_name (str): The name of the unique record space to be created.
 
         Returns:
         - dict: The parsed JSON response from the API.
@@ -131,7 +131,7 @@ class FileManager:
         """
         return self.handle_request(
             requests.post,
-            f"{self.base_url}/record-space/{user_name}/{record_name}"
+            f"{self.base_url}/record-space/{record_name}/user/{user_name}"
         )
 
     def get_record_space(self, record_name):
@@ -139,7 +139,7 @@ class FileManager:
         Retrieves details of a record space by its name.
 
         Args:
-        - record_name (str): The name of the record space to be retrieved.
+        - record_name (str): The name of the unique record space to be retrieved.
 
         Returns:
         - dict: The parsed JSON response from the API.
@@ -157,7 +157,7 @@ class FileManager:
         Deletes a record space by its name.
 
         Args:
-        - record_name (str): The name of the record space to be deleted.
+        - record_name (str): The name of the unique record space to be deleted.
 
         Returns:
         - dict: The parsed JSON response from the API.
@@ -175,7 +175,7 @@ class FileManager:
         Initiates a scan of all files for a given record name.
 
         Args:
-        - record_name (str): The name of the record to be scanned.
+        - record_name (str): The name of the unique record to be scanned.
 
         Returns:
         - dict: The parsed JSON response from the API.
@@ -185,14 +185,15 @@ class FileManager:
         """
         return self.handle_request(
             requests.post,
-            f"{self.base_url}/scans/{record_name}"
+            f"{self.base_url}/record-space/{record_name}/scan"
         )
 
-    def get_scan_files(self, scan_id):
+    def get_scan_files(self, record_name, scan_id):
         """
         Retrieves the status and content of a scan by its scan ID.
 
         Args:
+        - record_name (str): The name of the unique record scanned.
         - scan_id (str): The unique identifier of the scan.
 
         Returns:
@@ -203,14 +204,15 @@ class FileManager:
         """
         return self.handle_request(
             requests.get,
-            f"{self.base_url}/scans/id/{scan_id}"
+            f"{self.base_url}/record-space/{record_name}/scan/{scan_id}"
         )
 
-    def delete_scan_files(self, scan_id):
+    def delete_scan_files(self, record_name, scan_id):
         """
         Delete the report of a scan by its scan ID.
 
         Args:
+        - record_name (str): The name of the unique record to be scanned.
         - scan_id (str): The unique identifier of the scan.
 
         Returns:
@@ -221,17 +223,17 @@ class FileManager:
         """
         return self.handle_request(
             requests.delete,
-            f"{self.base_url}/scans/id/{scan_id}"
+            f"{self.base_url}/record-space/{record_name}/scan/{scan_id}"
         )
 
     def manage_permissions(self, user_name, record_name, perm_type="No permissions (No access to the file or folder)",
                            method="POST"):
         """
-        Manages permissions associated with a given user and record name.
+        Manages permissions associated with a given user and unique record name.
 
         Args:
         - user_name (str): The username associated with the record.
-        - record_name (str): The name of the record for which permissions are managed.
+        - record_name (str): The name of the unique record for which permissions are managed.
         - perm_type (str, optional): Permissions types are organized hierarchically from the weakest to the strongest.
         Each subsequent permission level includes the rights of the previous levels.
             - No permissions (No access to the file or folder)
@@ -248,7 +250,7 @@ class FileManager:
         Raises:
         - Exception: If the API request results in an error.
         """
-        url = f"{self.base_url}/permissions/{user_name}/{record_name}"
+        url = f"{self.base_url}/record-space/{record_name}/user/{user_name}/permissions"
         if perm_type and method in ["POST", "PUT"]:
             url += f"/{perm_type}"
 
