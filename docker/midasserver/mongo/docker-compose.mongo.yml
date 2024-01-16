@@ -1,0 +1,30 @@
+version: "3"
+services:
+  mongodb:
+    image: mongo:${MONGO_VERSION}
+    container_name: midas_mongodb
+    restart: always
+    ports:
+      - 27017:27017
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${OAR_MONGODB_ADMIN_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${OAR_MONGODB_ADMIN_PASS}
+      - MONGO_INITDB_DATABASE=${OAR_MONGODB_DBNAME}
+      - MONGO_USER=${OAR_MONGODB_USER}
+      - MONGO_PASS=${OAR_MONGODB_PASS}
+    volumes:
+      - ${OAR_MONGODB_DBDIR}:/data/db
+      - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh:ro
+    command: "--auth"
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - 8081:8081
+    links:
+      - mongodb
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${OAR_MONGODB_ADMIN_USER}
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${OAR_MONGODB_ADMIN_PASS}
+      ME_CONFIG_MONGODB_URL: mongodb://${OAR_MONGODB_ADMIN_USER}:${OAR_MONGODB_ADMIN_PASS}@mongodb:27017/

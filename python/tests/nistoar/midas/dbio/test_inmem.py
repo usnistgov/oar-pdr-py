@@ -3,6 +3,9 @@ from pathlib import Path
 import unittest as test
 
 from nistoar.midas.dbio import inmem, base
+from nistoar.pdr.publish.prov import Action, PubAgent
+
+testuser = PubAgent("test", PubAgent.AUTO, "tester")
 
 class TestInMemoryDBClientFactory(test.TestCase):
 
@@ -13,14 +16,14 @@ class TestInMemoryDBClientFactory(test.TestCase):
     def test_ctor(self):
         self.assertEqual(self.fact._cfg, self.cfg)
         self.assertTrue(self.fact._db)
-        self.assertEqual(self.fact._db.get(base.DRAFT_PROJECTS), {})
+        self.assertEqual(self.fact._db.get(base.DAP_PROJECTS), {})
         self.assertEqual(self.fact._db.get(base.DMP_PROJECTS), {})
         self.assertEqual(self.fact._db.get(base.GROUPS_COLL), {})
         self.assertEqual(self.fact._db.get(base.PEOPLE_COLL), {})
         self.assertEqual(self.fact._db.get("nextnum"), {"hank": 2})
 
     def test_create_client(self):
-        cli = self.fact.create_client(base.DMP_PROJECTS, "ava1")
+        cli = self.fact.create_client(base.DMP_PROJECTS, {}, "ava1")
         self.assertEqual(cli._db, self.fact._db)
         self.assertEqual(cli._cfg, self.fact._cfg)
         self.assertEqual(cli._projcoll, base.DMP_PROJECTS)
@@ -33,9 +36,9 @@ class TestInMemoryDBClientFactory(test.TestCase):
 class TestInMemoryDBClient(test.TestCase):
 
     def setUp(self):
-        self.cfg = {}
+        self.cfg = { "default_shoulder": "mds3" }
         self.user = "nist0:ava1"
-        self.cli = inmem.InMemoryDBClientFactory({}).create_client(base.DMP_PROJECTS, self.user)
+        self.cli = inmem.InMemoryDBClientFactory({}).create_client(base.DMP_PROJECTS, self.cfg, self.user)
 
     def test_next_recnum(self):
         self.assertEqual(self.cli._next_recnum("goob"), 1)
@@ -44,6 +47,15 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(self.cli._next_recnum("gary"), 1)
         self.assertEqual(self.cli._next_recnum("goober"), 1)
         self.assertEqual(self.cli._next_recnum("gary"), 2)
+
+        self.assertEqual(self.cli._db["nextnum"]["goob"], 3)
+        self.cli._try_push_recnum("goob", 2)
+        self.assertEqual(self.cli._db["nextnum"]["goob"], 3)
+        self.assertNotIn("hank", self.cli._db["nextnum"])
+        self.cli._try_push_recnum("hank", 2)
+        self.assertNotIn("hank", self.cli._db["nextnum"])
+        self.cli._try_push_recnum("goob", 3)
+        self.assertEqual(self.cli._db["nextnum"]["goob"], 2)
 
     def test_get_from_coll(self):
         # test query on non-existent collection
@@ -96,6 +108,16 @@ class TestInMemoryDBClient(test.TestCase):
         recs = list(self.cli._select_from_coll(base.GROUPS_COLL, hobby="whittling"))
         self.assertEqual(len(recs), 2)
 
+        # test deactivated filter
+        self.cli._db[base.GROUPS_COLL]["p:gang"] = {"id": "p:gang", "owner": "p:bob", "deactivated": 1.2 }
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob"))
+        self.assertEqual(len(recs), 1)
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, incl_deact=True, owner="p:bob"))
+        self.assertEqual(len(recs), 2)
+        self.cli._db[base.GROUPS_COLL]["p:gang"]["deactivated"] = None
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob"))
+        self.assertEqual(len(recs), 2)
+
     def test_select_prop_contains(self):
         # test query on non-existent collection
         it = self.cli._select_prop_contains("alice", "hobbies", "whittling")
@@ -123,6 +145,16 @@ class TestInMemoryDBClient(test.TestCase):
         recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
         self.assertEqual(len(recs), 2)
         self.assertEqual(set([r.get('id') for r in recs]), set("p:bob stars".split()))
+
+        # test deactivated filter
+        self.cli._db[base.GROUPS_COLL]["p:gang"] = {"id": "p:gang", "members": ["p:bob"], "deactivated": 1.2}
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
+        self.assertEqual(len(recs), 2)
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob", incl_deact=True))
+        self.assertEqual(len(recs), 3)
+        self.cli._db[base.GROUPS_COLL]["p:gang"]["deactivated"] = None
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
+        self.assertEqual(len(recs), 3)
 
     def test_delete_from(self):
         # test query on non-existent collection
@@ -185,9 +217,80 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
         self.assertEqual(recs[0].id, id)
 
+    def test_action_log_io(self):
+        with self.assertRaises(ValueError):
+            self.cli._save_action_data({'goob': 'gurn'})
+
+        self.cli._save_action_data({'subject': 'goob:gurn', 'foo': 'bar'})
+        self.assertTrue('prov_action_log' in self.cli._db)
+        self.assertTrue('goob:gurn' in self.cli._db['prov_action_log'])
+        self.assertEqual(len(self.cli._db['prov_action_log']['goob:gurn']), 1)
+        self.assertEqual(self.cli._db['prov_action_log']['goob:gurn'][0], 
+                         {'subject': 'goob:gurn', 'foo': 'bar'})
+
+        self.cli._save_action_data({'subject': 'goob:gurn', 'bob': 'alice'})
+        self.assertEqual(len(self.cli._db['prov_action_log']['goob:gurn']), 2)
+        self.assertEqual(self.cli._db['prov_action_log']['goob:gurn'][0], 
+                         {'subject': 'goob:gurn', 'foo': 'bar'})
+        self.assertEqual(self.cli._db['prov_action_log']['goob:gurn'][1], 
+                         {'subject': 'goob:gurn', 'bob': 'alice'})
+        
+        self.cli._save_action_data({'subject': 'grp0001', 'dylan': 'bob'})
+        self.assertTrue('prov_action_log' in self.cli._db)
+        self.assertTrue('grp0001' in self.cli._db['prov_action_log'])
+        self.assertEqual(len(self.cli._db['prov_action_log']['grp0001']), 1)
+        self.assertEqual(self.cli._db['prov_action_log']['grp0001'][0], 
+                         {'subject': 'grp0001', 'dylan': 'bob'})
+
+        acts = self.cli._select_actions_for("goob:gurn")
+        self.assertEqual(len(acts), 2)
+        self.assertEqual(acts[0], {'subject': 'goob:gurn', 'foo': 'bar'})
+        self.assertEqual(acts[1], {'subject': 'goob:gurn', 'bob': 'alice'})
+        acts = self.cli._select_actions_for("grp0001")
+        self.assertEqual(len(acts), 1)
+        self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
+
+        self.cli._delete_actions_for("goob:gurn")
+        self.assertTrue('prov_action_log' in self.cli._db)
+        self.assertTrue('goob:gurn' not in self.cli._db['prov_action_log'])
+        self.assertEqual(len(self.cli._db['prov_action_log']['grp0001']), 1)
+        self.assertEqual(self.cli._db['prov_action_log']['grp0001'][0], 
+                         {'subject': 'grp0001', 'dylan': 'bob'})
+
+        self.cli._delete_actions_for("grp0001")
+        self.assertTrue('prov_action_log' in self.cli._db)
+        self.assertTrue('goob:gurn' not in self.cli._db['prov_action_log'])
+        self.assertTrue('grp0001' not in self.cli._db['prov_action_log'])
+
+        self.assertEqual(self.cli._select_actions_for("goob:gurn"), [])
+        self.assertEqual(self.cli._select_actions_for("grp0001"), [])
+
+    def test_save_history(self):
+        with self.assertRaises(ValueError):
+            self.cli._save_history({'goob': 'gurn'})
+
+        self.cli._save_history({'recid': 'goob:gurn', 'foo': 'bar'})
+        self.cli._save_history({'recid': 'goob:gurn', 'alice': 'bob'})
+
+        self.assertTrue('history' in self.cli._db)
+        self.assertTrue('goob:gurn' in self.cli._db['history'])
+        self.assertEqual(len(self.cli._db['history']['goob:gurn']), 2)
+        self.assertEqual(self.cli._db['history']['goob:gurn'][0],
+                         {'recid': 'goob:gurn', 'foo': 'bar'})
+        self.assertEqual(self.cli._db['history']['goob:gurn'][1],
+                         {'recid': 'goob:gurn', 'alice': 'bob'})
+
+    def test_record_action(self):
+        rec = self.cli.create_record("mine1")
+        self.cli.record_action(Action(Action.CREATE, "mds3:0001", testuser, "created"))
+        self.cli.record_action(Action(Action.COMMENT, "mds3:0001", testuser, "i'm hungry"))
+        acts = self.cli._select_actions_for("mds3:0001")
+        self.assertEqual(len(acts), 2)
+        self.assertEqual(acts[0]['type'], Action.CREATE)
+        self.assertEqual(acts[1]['type'], Action.COMMENT)
         
         
-                         
+
 if __name__ == '__main__':
     test.main()
         

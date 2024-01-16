@@ -106,6 +106,10 @@ class NERDmBasedBagger(SIPBagger):
 
         self._histfile = None
 
+    def __del__(self):
+        if self.bagbldr:
+            del self.bagbldr
+
     @property
     def sipid(self):
         "the identifier of the SIP being operated on"

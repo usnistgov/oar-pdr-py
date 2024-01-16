@@ -1,4 +1,4 @@
-import os, json, pdb, logging
+import os, json, pdb, logging, time
 from pathlib import Path
 import unittest as test
 
@@ -10,7 +10,7 @@ class TestGroup(test.TestCase):
         self.cfg = { "default_shoulder": "pdr0" }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
-        self.cli = self.fact.create_client(base.DMP_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
         self.rec = base.Group({"id": "g:ava1:friends", "name": "friends", "owner": self.user}, self.cli)
 
     def test_ctor(self):
@@ -77,6 +77,21 @@ class TestGroup(test.TestCase):
         self.assertFalse(self.rec.authorized(base.ACLs.ADMIN, "gary"))
         self.assertFalse(self.rec.authorized(base.ACLs.DELETE, "gary"))
         self.assertFalse(self.rec.authorized([base.ACLs.READ, base.ACLs.WRITE], "gary"))
+
+    def test_deactivate(self):
+        self.assertFalse(self.rec.deactivated)
+        self.rec.save()
+        self.assertTrue(self.cli.groups.name_exists("friends"))
+        self.assertTrue(self.rec.deactivate())
+        self.assertFalse(self.rec.deactivate())
+        self.rec.save()
+        self.assertFalse(not self.rec.deactivated)
+        self.assertTrue(self.cli.groups.name_exists("friends"))
+        self.assertTrue(self.rec.reactivate())
+        self.assertFalse(self.rec.reactivate())
+        self.assertFalse(self.rec.deactivated)
+        self.rec.save()
+        self.assertTrue(self.cli.groups.name_exists("friends"))
         
 class TestDBGroups(test.TestCase):
 
@@ -84,7 +99,7 @@ class TestDBGroups(test.TestCase):
         self.cfg = { "default_shoulder": "pdr0" }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
-        self.cli = self.fact.create_client(base.DMP_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
         self.dbg = self.cli.groups
 
     def test_ctor(self):
@@ -105,6 +120,9 @@ class TestDBGroups(test.TestCase):
         self.assertEqual(grp.owner, self.user)
         self.assertEqual(grp.id, id)
         self.assertTrue(grp.is_member(self.user))
+        self.assertGreater(grp.created, 0)
+        self.assertLess(grp.created, time.time())
+        self.assertGreaterEqual(grp.modified, grp.created)
 
         self.assertTrue(grp.authorized(base.ACLs.OWN))
 
@@ -117,7 +135,7 @@ class TestDBGroups(test.TestCase):
         with self.assertRaises(base.NotAuthorized):
             grp = self.dbg.create_group("friends", "alice")
 
-        self.cfg['superusers'] = [self.user]
+        self.cli._cfg['superusers'] = [self.user]
         grp = self.dbg.create_group("friends", "alice")
         self.assertEqual(grp.name, "friends")
         self.assertEqual(grp.owner, "alice")
@@ -166,10 +184,12 @@ class TestDBGroups(test.TestCase):
         self.assertEqual(grp.id, "grp0:nist0:ava1:enemies")
         self.assertEqual(grp.name, "enemies")
         self.assertEqual(grp.owner, "nist0:ava1")
+        self.assertGreater(grp.created, 0)
+        self.assertGreaterEqual(grp.modified, grp.created)
 
         self.assertIsNone(self.dbg.get_by_name("friends", "alice"))
 
-        self.cfg['superusers'] = [self.user]
+        self.cli._cfg['superusers'] = [self.user]
         grp = self.dbg.create_group("friends", "alice")
         grp = self.dbg.get_by_name("friends", "alice")
         self.assertEqual(grp.id, "grp0:alice:friends")
@@ -202,6 +222,7 @@ class TestDBGroups(test.TestCase):
         grp.save()
         self.assertTrue(self.dbg.exists("grp0:nist0:ava1:enemies"))
         self.assertTrue(self.dbg.exists("grp0:nist0:ava1:friends"))
+        self.assertGreater(grp.modified, grp.created)
 
     def test_select_ids_for_user(self):
         for s in "abcdefghijklmnopqrstuvwxyz":
@@ -271,7 +292,6 @@ class TestDBGroups(test.TestCase):
         self.assertIn(ns+"t", matches)
         self.assertIn(base.PUBLIC_GROUP, matches)
         self.assertEqual(len(matches), 4)
-
 
                          
 if __name__ == '__main__':

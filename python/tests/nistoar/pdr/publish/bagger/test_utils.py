@@ -6,6 +6,7 @@ from nistoar.testing import *
 from nistoar.pdr.publish.bagger import utils as bagut
 from nistoar.nerdm.constants import CORE_SCHEMA_URI, PUB_SCHEMA_URI
 
+# Note: Version and cmp_versions() have moved to nistoar.id.versions
 class TestVersion(test.TestCase):
 
     def test_ctor(self):

@@ -75,8 +75,8 @@ paths:
         submitted metadata will be filtered, expanded according to policy.  The modified
         metadata that actually gets saved will be returned. 
       parameters:
-        "$ref": "#/components/parameters/action"
-        summary:  the additional action to take after creating the SIP
+        - "$ref": "#/components/parameters/action"
+          summary:  the additional action to take after creating the SIP
       requestBody:
         "$ref": "#/components/requestBodies/SIPResource"
         summary:  the initial description metadata for the SIP to create

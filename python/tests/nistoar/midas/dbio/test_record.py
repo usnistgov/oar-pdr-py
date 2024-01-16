@@ -10,18 +10,22 @@ class TestProjectRecord(test.TestCase):
         self.cfg = { "default_shoulder": "pdr0" }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
-        self.cli = self.fact.create_client(base.DRAFT_PROJECTS, self.user)
+        self.cli = self.fact.create_client(base.DRAFT_PROJECTS, {}, self.user)
         self.rec = base.ProjectRecord(base.DRAFT_PROJECTS,
                                       {"id": "pdr0:2222", "name": "brains", "owner": self.user}, self.cli)
 
     def test_ctor(self):
+        self.rec = base.ProjectRecord(base.DRAFT_PROJECTS,
+                                      {"id": "pdr0:2222", "name": "brains", "owner": self.user}, self.cli)
         self.assertIs(self.rec._cli, self.cli)
         self.assertEqual(self.rec.id, "pdr0:2222")
         self.assertEqual(self.rec.name, "brains")
         self.assertEqual(self.rec.owner, self.user)
         self.assertGreater(self.rec.created, 0)
+        self.assertEqual(self.rec.modified, self.rec.created)
         self.assertTrue(self.rec.created_date.startswith("20"))
         self.assertNotIn('.', self.rec.created_date)
+        self.assertFalse(self.rec.deactivated)
         self.assertEqual(self.rec.data, {})
         self.assertEqual(self.rec.meta, {})
         # self.assertEqual(self.rec.curators, [])
@@ -43,6 +47,8 @@ class TestProjectRecord(test.TestCase):
         self.assertNotIn("pdr0:2222", self.cli._db[base.DRAFT_PROJECTS])
         
         self.rec.save()
+        self.assertGreaterEqual(self.rec.modified, self.rec.created)
+        oldmod = self.rec.modified
         self.assertIn("pdr0:2222", self.cli._db[base.DRAFT_PROJECTS])
         self.assertEqual(self.cli._db[base.DRAFT_PROJECTS]["pdr0:2222"]['name'], "brains")
         self.assertEqual(self.cli._db[base.DRAFT_PROJECTS]["pdr0:2222"]['data'], {})
@@ -53,6 +59,7 @@ class TestProjectRecord(test.TestCase):
         self.rec.meta['type'] = 'software'
         self.rec.acls.grant_perm_to(base.ACLs.READ, "alice")
         self.rec.save()
+        self.assertGreater(self.rec.modified, oldmod)
         self.assertEqual(self.cli._db[base.DRAFT_PROJECTS]["pdr0:2222"]['meta'], {"type": "software"})
         self.assertEqual(self.cli._db[base.DRAFT_PROJECTS]["pdr0:2222"]['acls'][base.ACLs.READ],
                          [self.user, "alice"])
@@ -73,7 +80,20 @@ class TestProjectRecord(test.TestCase):
         self.assertFalse(self.rec.authorized(base.ACLs.DELETE, "gary"))
         self.assertFalse(self.rec.authorized([base.ACLs.READ, base.ACLs.WRITE], "gary"))
 
-
+    def test_deactivate(self):
+        self.assertFalse(self.rec.deactivated)
+        self.rec.save()
+        self.assertTrue(self.cli.name_exists("brains"))
+        self.assertTrue(self.rec.deactivate())
+        self.assertFalse(self.rec.deactivate())
+        self.rec.save()
+        self.assertFalse(not self.rec.deactivated)
+        self.assertTrue(self.cli.name_exists("brains"))
+        self.assertTrue(self.rec.reactivate())
+        self.assertFalse(self.rec.reactivate())
+        self.assertFalse(self.rec.deactivated)
+        self.rec.save()
+        self.assertTrue(self.cli.name_exists("brains"))
 
                          
 if __name__ == '__main__':

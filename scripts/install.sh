@@ -22,13 +22,18 @@ oarmd_pkg=$base/metadata
 #install the PDR python library
 mkdir -p $PY_LIBDIR
 echo Installing python libraries into $PY_LIBDIR...
-(cd $SOURCE_DIR/python && python setup.py install --install-purelib=$PY_LIBDIR --install-scripts=$BINDIR)
+(cd $PY_LIBDIR && PY_LIBDIR=$PWD)
+(cd $SOURCE_DIR/python && python3 setup.py install --install-purelib=$PY_LIBDIR --install-scripts=$BINDIR)
 
 #install the JAVA jars
 # None at this time
 
 $oarmd_pkg/scripts/install_extras.sh --install-dir=$INSTALL_DIR
+mkdir -p $INSTALL_DIR/etc/midas/schemas
 
 mkdir -p $INSTALL_DIR/var/logs
 echo cp -r $SOURCE_DIR/etc $INSTALL_DIR
 cp -r $SOURCE_DIR/etc $INSTALL_DIR
+
+mkdir -p $INSTALL_DIR/docs
+cp $SOURCE_DIR/docs/*-openapi.yml $SOURCE_DIR/docs/*-elements.html $INSTALL_DIR/docs

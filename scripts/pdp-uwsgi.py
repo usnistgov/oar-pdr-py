@@ -1,7 +1,7 @@
 """
 the uWSGI script for launching the PDP web service.
 
-This script launches an ID resolver as a web service using uwsgi.  For example, one can 
+This script launches the web service using uwsgi.  For example, one can 
 launch the service with the following command:
 
   uwsgi --plugin python3 --http-socket :9090 --wsgi-file pdp-uwsgi.py \
@@ -50,7 +50,7 @@ elif 'oar_config_service' in uwsgi.opt:
 elif config.service:
     config.service.wait_until_up(int(os.environ.get('OAR_CONFIG_TIMEOUT', 10)),
                                  True, sys.stderr)
-    cfg = config.service.get(os.environ.get('OAR_CONFIG_APP', 'pdr-resolve'))
+    cfg = config.service.get(os.environ.get('OAR_CONFIG_APP', 'pdr-pdp'))
 
 else:
     raise config.ConfigurationException("resolver: nist-oar configuration not provided")

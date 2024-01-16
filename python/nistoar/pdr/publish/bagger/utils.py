@@ -16,6 +16,7 @@ from copy import deepcopy
 
 from ...preserve.bagit.builder import (NERDM_SCH_ID_BASE, NERDM_SCH_VER, NERDMPUB_SCH_VER,
                                        NERDMBIB_SCH_ID_BASE, NERDMBIB_SCH_VER)
+from nistoar.id.versions import Version, cmp_versions
 
 DEF_MBAG_VERSION = "0.4"
 DEF_NIST_PROF_VERSION = "0.4"
@@ -164,73 +165,6 @@ def multibag_version_of(name):
         return re.sub(r'_', ".", parse_bag_name(name)[2])
     except ValueError as ex:
         return ''
-
-_ver_delim = re.compile(r"[\._]")
-_proper_ver = re.compile(r"^\d+([\._]\d+)*$")
-
-class Version(object):
-    """
-    a version class that can facilitate comparisons
-    """
-
-    def _toint(self, field):
-        try:
-            return int(field)
-        except ValueError:
-            return field
-
-    def __init__(self, vers):
-        """
-        convert a version string to a Version instance
-        """
-        self._vs = vers
-        self.fields = [self._toint(n) for n in _ver_delim.split(self._vs)]
-
-    def __str__(self):
-        return self._vs
-
-    def __eq__(self, other):
-        if not isinstance(other, Version):
-            other = Version(other)
-        return self.fields == other.fields
-
-    def __lt__(self, other):
-        if not isinstance(other, Version):
-            other = Version(other)
-        return self.fields < other.fields
-
-    def __le__(self, other):
-        if not isinstance(other, Version):
-            other = Version(other)
-        return self < other or self == other
-
-    def __ge__(self, other):
-        return not (self < other)
-    def __gt__(self, other):
-        return not self.__le__(other)
-    def __ne__(self, other):
-        return not (self == other)
-
-    @classmethod
-    def is_proper_version(cls, vers):
-        """
-        return true if the given version string is of the form M.M.M... where
-        each M is any non-negative number.   
-        """
-        return _proper_ver.match(vers) is not None
-
-def cmp_versions(ver1, ver2):
-    """
-    compare two version strings for their order.
-    :return int:  -1 if v1 < v2, 0 if v1 = v2, and +1 if v1 > v2
-    """
-    a = Version(ver1)
-    b = Version(ver2)
-    if a < b:
-        return -1
-    elif a == b:
-        return 0
-    return +1
 
 class BagName(object):
     """

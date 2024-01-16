@@ -1,0 +1,16 @@
+#! /bin/bash
+#
+# midasserver -- launch a docker container running the midas web server
+#
+# Usage: midasserver [-h|--help] [-b|--build] [-D|--docker-build] 
+#                    [-c|--config-file FILE] [-M|--use-mongodb] [DIR] [start|stop]
+#
+# Type "midasserver -h" print help on arguments/options.
+#
+prog=`basename $0`
+execdir=`dirname $0`
+[ "$execdir" = "" -o "$execdir" = "." ] && execdir=$PWD
+export CODEDIR=`(cd $execdir/.. > /dev/null 2>&1; pwd)`
+export DOCKERDIR=$CODEDIR/docker
+
+exec $DOCKERDIR/midasserver/run.sh "$@"

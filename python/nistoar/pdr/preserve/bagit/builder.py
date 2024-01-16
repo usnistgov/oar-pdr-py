@@ -281,8 +281,8 @@ class BagBuilder(PreservationSystem):
     def _handles_logfile(self, handler, logfilepath):
         # return True if the handler is set to write to a file with the given
         # name
-        return hasattr(handler,'stream') and hasattr(handler.stream, 'name') \
-               and os.path.abspath(handler.stream.name) == os.path.abspath(logfilepath)
+        return hasattr(handler,'stream') and hasattr(handler, 'baseFilename') \
+               and os.path.abspath(handler.baseFilename) == os.path.abspath(logfilepath)
 
     def _get_log_handler(self, logfilepath):
         if logfilepath not in self._log_handlers:
