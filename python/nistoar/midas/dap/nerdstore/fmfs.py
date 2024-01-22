@@ -5,6 +5,7 @@ file manager for the files that should be part of the resource.
 import os
 from copy import deepcopy
 from collections import OrderedDict
+from collections.abc import Mapping
 from json import JSONDecodeError
 
 from .fsbased import *
@@ -113,6 +114,14 @@ class FMFSResource(FSBasedResource):
             self._files = FMFSFileComps(self, dir, self._fmcli)
         return self._files
 
+_NO_FM_STATUS = OrderedDict([
+    ("resource_uri", None),
+    ("file_count", -1),
+    ("folder_count", -1),
+    ("syncing", False),
+    ("last_modified", "(unknown)")
+])
+
 class FMFSFileComps(FSBasedFileComps):
     """
     an file-based implementation of the NERDFileComps interface that leverages a remote file-manager
@@ -127,15 +136,17 @@ class FMFSFileComps(FSBasedFileComps):
         self._fmcli = fmcli
         self.update_hierarchy()
 
-    def update_hierarchy(self):
+    def update_hierarchy(self) -> Mapping:
         if self._fmcli:
             scan = self._scan_files()
             self._last_scan_id = scan['id']
-            self._update_files_from_scan(scan)
+            return self._update_files_from_scan(scan)
+        return _NO_FM_STATUS
 
-    def update_metadata(self):
+    def update_metadata(self) -> Mapping:
         if self._fmcli:
-            self._update_files_from_scan(self._get_filescan())
+            return self._update_files_from_scan(self._get_filescan())
+        return _NO_FM_STATUS
 
     def _scan_files(self):
         # trigger a remote scan of the files (done at construction time)
@@ -256,6 +267,7 @@ class FMFSFileComps(FSBasedFileComps):
         scfolders = {}      # the folders found in the scan (id -> path)
         scfiles = {}        # the files found in the scan (id -> path)
         reqfolders = set()  # the folders required as implied by the paths
+        total_size = 0
         for entry in scanmd.get("contents", []):
             if not entry.get('fileid'):
                 failed += 1
@@ -339,13 +351,21 @@ class FMFSFileComps(FSBasedFileComps):
 
         # Create or update any the files (in alphabetical order)
         for entry in sorted(scfiles.values(), key=lambda e: e['path']):
+            if 'size' in entry and isinstance(entry['size'], str):
+                try:
+                    entry['size'] = int(entry['size'])
+                    total_size += entry['size']
+                except ValueError:
+                    self._res.log.warning("%s: scanned size is not an integer: %s",
+                                          fmd['filepath'], entry['size'])
+
             if not self.exists(entry['fileid']):
                 fmd = new_file_md(entry['fileid'], entry['path'], entry.get('size'), entry.get('checksum'))
             else:
                 fmd = self._get_file_by_id(entry['fileid'])
                 fmd['filepath'] = entry['path']
-                if entry.get('size'):
-                    fmd['size'] = entry['size']
+                if 'size' in entry and entry['size'] is not None:
+                    fmd['size'] = int(entry['size'])
                 if entry.get('checksum'):
                     fmd['checksum'] = OrderedDict([
                         ('hash', entry['checksum']),
@@ -364,4 +384,17 @@ class FMFSFileComps(FSBasedFileComps):
                                 len(missing), "s" if len(missing) > 1 else "", missing[0])
             self._res.log.warning("File hierarchy may be incomplete")
             raise RuntimeError("Failed add/update files due to missing folders")
+
+        if scanmd.get("is_complete"):
+            self._fmcli.delete_scan_files(self._last_scan_id)
+            self._last_scan_id = None
+
+        return OrderedDict([
+            ("file_count", len(scfiles)),
+            ("folder_count", len(scfolders)),
+            ("syncing", bool(self._last_scan_id)),
+            ("last_scan_started", scanmd.get("scan_datetime", "(unknown)")),
+            ("usage", total_size),
+            ("last_modified", scanmd.get("last_modified", "(unknown)")),
+        ])
 
