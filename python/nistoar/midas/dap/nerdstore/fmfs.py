@@ -115,7 +115,6 @@ class FMFSResource(FSBasedResource):
         return self._files
 
 _NO_FM_STATUS = OrderedDict([
-    ("resource_uri", None),
     ("file_count", -1),
     ("folder_count", -1),
     ("syncing", False),
@@ -129,10 +128,13 @@ class FMFSFileComps(FSBasedFileComps):
     collection and how they are organized.  
     """
     _comp_types = deepcopy(BagBuilder._comp_types)
+    _last_scan_file = "_last_scan_id.json"
     
     def __init__(self, resource: NERDResource, filedir: str, fmcli: FileManager=None, iscollf=None):
         super(FMFSFileComps, self).__init__(resource, filedir, iscollf)
         self._last_scan_id = None
+        self._lsidf = self._dir / self._last_scan_file
+        self._load_last_scan_id()
         self._fmcli = fmcli
         self.update_hierarchy()
 
@@ -148,17 +150,35 @@ class FMFSFileComps(FSBasedFileComps):
             return self._update_files_from_scan(self._get_filescan())
         return _NO_FM_STATUS
 
+    @property
+    def last_scan_id(self) -> str:
+        return self._last_scan_id
+
+    @last_scan_id.setter
+    def last_scan_id(self, id: str):
+        self._last_scan_id = id
+        self._cache_last_scan_id(id)
+
+    def _cache_last_scan_id(self, id):
+        write_json(id, self._lsidf)
+
+    def _load_last_scan_id(self):
+        if self._lsidf.is_file():
+            self._last_scan_id = read_json(self._lsidf)
+        else:
+            self._last_scan_id = None
+
     def _scan_files(self):
         # trigger a remote scan of the files (done at construction time)
 
         # delete last scan
-        if self._last_scan_id:
+        if self.last_scan_id:
             try:
-                self._fmcli.delete_scan_files(self._res.id, self._last_scan_id)
+                self._fmcli.delete_scan_files(self._res.id, self.last_scan_id)
             except Exception as ex:
-                self._res.log.warning("Failed to delete old scan (id=%s)", self._last_scan_id)
+                self._res.log.warning("Failed to delete old scan (id=%s)", self.last_scan_id)
             finally:
-                self._last_scan_id = None
+                self.last_scan_id = None
 
         try:
             resp = self._fmcli.post_scan_files(self._res.id)
@@ -174,8 +194,8 @@ class FMFSFileComps(FSBasedFileComps):
                 raise RemoteStorageException("%s: failed to get file scan report (no scan id returned)" %
                                              self._res.id)
 
-            self._last_scan_id = resp['scan_id']
-            if not self._last_scan_id:
+            self.last_scan_id = resp['scan_id']
+            if not self.last_scan_id:
                 self._res.log.error("Unexpected response from scan request: empty scan_id")
                 raise RemoteStorageException("%s: Failed to get scan report (empty scan id returned)" %
                                              self._res.id)
@@ -195,11 +215,11 @@ class FMFSFileComps(FSBasedFileComps):
 
     def _get_file_scan(self):
         # pull the result of a directory scan (without triggering)
-        if not self._last_scan_id:
+        if not self.last_scan_id:
             return self._fmcli.scan_files(self._res.id)
 
         try:
-            resp = self._fmcli.get_scan_files(self._res.id, self._last_scan_id)
+            resp = self._fmcli.get_scan_files(self._res.id, self.last_scan_id)
             if 'message' in resp:
                 resp = resp['message']
 
@@ -386,8 +406,8 @@ class FMFSFileComps(FSBasedFileComps):
             raise RuntimeError("Failed add/update files due to missing folders")
 
         if scanmd.get("is_complete"):
-            self._fmcli.delete_scan_files(self._last_scan_id)
-            self._last_scan_id = None
+            self._fmcli.delete_scan_files(self.last_scan_id)
+            self.last_scan_id = None
 
         return OrderedDict([
             ("file_count", len(scfiles)),

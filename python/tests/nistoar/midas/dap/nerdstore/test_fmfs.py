@@ -83,6 +83,8 @@ class TestFMFSFileComps(test.TestCase):
         self.assertIn('contents', scan)
         self.assertEqual(len(scan['contents']), 8)
 
+        self.assertFalse(self.cmps._lsidf.is_file())
+
     def test_scan_files(self):
         self.cmps._fmcli = self.fm
         self.assertIsNone(self.cmps._last_scan_id)
@@ -93,6 +95,9 @@ class TestFMFSFileComps(test.TestCase):
         self.assertEqual(scan['scan_id'], self.scanid)
         self.assertIn('contents', scan)
         self.assertEqual(len(scan['contents']), 8)
+
+        self.assertTrue(self.cmps._lsidf.is_file())
+        self.assertEqual(read_json(self.cmps._lsidf), self.scanid)
 
     def test_update_files_from_scan(self):
         self.cmps._fmcli = self.fm
@@ -109,6 +114,9 @@ class TestFMFSFileComps(test.TestCase):
         self.assertTrue(self.cmps.path_exists("previews"))
         self.assertTrue(self.cmps.path_exists("previews/ngc7793-cont.gif"))
         self.assertTrue(self.cmps.path_exists("previews/ngc7793-HIm1.gif"))
+
+        self.assertTrue(self.cmps._lsidf.is_file())
+        self.assertIsNone(read_json(self.cmps._lsidf))    # cause is_complete = True
 
         scan = read_scan()
         stat = self.cmps._update_files_from_scan(scan)
