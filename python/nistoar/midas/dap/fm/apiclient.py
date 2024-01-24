@@ -5,9 +5,49 @@ This module provides a client class, FileManager, designed to interact with the 
 which is a REST API offering file management capabilities. The client handles authentication, manages records,
 scans files, and controls permissions.
 """
+from urllib.parse import urlsplit, unquote
+
+from nistoar.base.config import ConfigurationException
 
 import requests
 
+class FileSpaceException(Exception):
+    """
+    an exception indicating a failure access a file space
+    """
+
+    def __init__(self, message: str, status: int=0, space_id: str=None):
+        super(FileSpaceException, self).__init__(message)
+        self.status = status
+        self.space_id = space_id
+
+class FileSpaceServerError(FileSpaceException):
+    """
+    an exception indicating that a failure occured in the remote file space server
+    while trying to access the space.
+    """
+    pass
+
+class FileSpaceNotFound(FileSpaceException):
+    """
+    an exception reflecting access to a file space that does not exist in the file store
+    """
+    def __init__(self, space_id: str, message: str=None, status: int=404):
+        if not message:
+            message = f"{space_id}: file space not found"
+        super(FileSpaceNotFound, self).__init__(message, status, space_id)
+
+class AuthenticationFailure(FileSpaceException):
+    """
+    an exception indicating that invalid authentication credentials were sent with a 
+    request
+    """
+    def __init__(self, message: str=None, status: int=401):
+        if not message:
+            message = "Invalid authentication credentials"
+        super(AuthenticationFailure, self).__init__(message, status)
+
+    
 
 class FileManager:
     """
@@ -30,12 +70,20 @@ class FileManager:
         Args:
         - config (dict): A configuration dictionary with keys:
             - base_url (str): The base URL for the API.
-            - authentication_user (str): The username for authentication (Nextcloud instance superuser).
-            - authentication_password (str): The password for authentication (Nextcloud instance superuser password).
+            - auth.user (str): The username for authentication (Nextcloud instance superuser).
+            - auth.password (str): The password for authentication (Nextcloud instance superuser password).
+          The config may contain other keys that can provide other information to users of this 
+          client via its cfg attribute
         """
-        self.base_url = config['base_url']
-        self.auth_user = config['authentication_user']
-        self.auth_pass = config['authentication_password']
+        self.cfg = config
+        self.base_url = config['dap_app_base_url']
+        self.dav_base = config['dav_base_url']
+        authcfg = config.get('auth', {})
+        if not authcfg.get('username') or not authcfg.get('password'):
+            raise ConfigurationException("FileManager: Missing required config param: "+
+                                         "auth.username and/or auth.password")
+        self.auth_user = authcfg['username']
+        self.auth_pass = authcfg['password']
         self.token = self.authenticate()
 
     def authenticate(self):
@@ -57,9 +105,10 @@ class FileManager:
         if 'message' in data and response.status_code == 200:
             return data['message']
         elif response.status_code == 401:
-            raise Exception(data.get('message', 'Authentication failed'))
+            raise AuthenticationFailure(data.get('message', 'Authentication failed'))
         else:
-            raise Exception('Unknown error during authentication.')
+            raise FileSpaceException('Failed to obtain authentication token from server: '+
+                                     response.reason, response.status_code)
 
     def headers(self):
         """
@@ -94,10 +143,16 @@ class FileManager:
             response = method(url, headers=self.headers(), **kwargs)  # Retry the request
         elif response.status_code == 400:  # Bad Request
             error_msg = response.json().get('message', 'API request failed with a Bad Request')
-            raise Exception(error_msg)
+            raise FileSpaceException(error_msg)
+        elif response.status_code == 404:  # Not Found
+            error_msg = response.json().get('message', 'Record space not found')
+            raise FileSpaceNotFound(message=error_msg)
+        elif response.status_code >= 500:
+            error_msg = response.json().get('message', response.reason)
+            raise FileSpaceException(error_msg, response.status_code)
         elif response.status_code >= 400:
-            error_msg = response.json().get('message', 'API request failed')
-            raise Exception(error_msg)
+            error_msg = response.json().get('message', response.reason)
+            raise FileSpaceException(error_msg, response.status_code)
 
         return response.json()
 
@@ -151,6 +206,58 @@ class FileManager:
             requests.get,
             f"{self.base_url}/record-space/{record_name}"
         )
+
+    def get_uploads_directory(self, record_name):
+        """
+        return information about the uploads directory
+        """
+        path = "{record_name}/{record_name}"
+        url = "f{self.dav_base}/{path}"
+        auth = (self.auth_user, self.auth_pass)
+        header = {"Depth": "0", "Content-type": "application/xml"}
+
+        try:
+            resp = requests.request("PROPFIND", url, data=webdav.info_request,
+                                    headers=header, auth=auth)
+        except requests.RequestException as ex:
+            raise FileSpaceConnectionError("Problem communicating with file manaager: "+str(ex))
+
+        if resp.status_code == 401:  # Expired token or authentication failure
+            raise AuthenticationFailure("File manager credentials not accepted")
+        elif resp.status_code == 404:  # Not Found
+            raise FileSpaceNotFound("Requested file-space (or uploads folder) does not exist")
+        elif resp.status_code >= 500:
+            raise FileSpaceException("File manager server error: {resp.reason}")
+        elif resp.status_code >= 400:
+            msg = resp.reason
+            if '/json' in resp.headers.get("content-header"):
+                body = response.json()
+                if isinstance(body, Mapping) and 'message' in body:
+                    msg = body['message']
+            elif '/xml' in resp.headers.get("content-header"):
+                body = xmltosimpledict(resp.content.decode())
+                if body.get("d:error", {}).get("s:message"):
+                    msg = body["d:error"]["s:message"]
+            raise FileSpaceException(msg, resp.status_code)
+
+        try:
+            return webdav.parse_propfind(resp.text, path, self.dav_base)
+        except RemoteResourceNotFound as ex:
+            raise FileSpaceNotFound(record_name)
+        except etree.XMLSyntaxError as ex:
+            raise FileSpaceServerError("Server returned unparseable XML")
+
+
+    def determine_uploads_url(self, record_name):
+        """
+        return the expected URL for the browser-based view of a record space's uploads directory.
+        """
+        # the nextcloud URL requires the directory's file ID
+        fileid = self.get_uploads_folder(record_name).get('fileid')
+        if not fileid:
+            raise FileSpaceException(f"Unable to obtain the upload folder's ID for space={record_name}")
+        return f"{self.cfg.get('web_base')}/{fileid}?dir=/{record_name}/{record_name}"
+
 
     def delete_record_space(self, record_name):
         """

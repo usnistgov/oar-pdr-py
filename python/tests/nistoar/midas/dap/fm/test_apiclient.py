@@ -1,14 +1,22 @@
+import json
 import unittest as test
 from unittest.mock import patch, Mock
+from pathlib import Path
 from nistoar.midas.dap.fm.apiclient import FileManager
 
+datadir = Path(__file__).parents[1] / "data"  # tests/nistoar/midas/dap/data
+scanackf = datadir / "scan-req-ack.json"
+scanrepf = datadir / "scan-report.json"
 
 class FileManagerTest(test.TestCase):
     def setUp(self):
         self.config = {
-            'base_url': 'http://file-manager:5000/api',
-            'authentication_user': 'service_api',
-            'authentication_password': 'service_pwd'
+            'dap_app_base_url': 'http://localhost:5000/api',
+            'auth': {
+                'username': 'service_api',
+                'password': 'service_pwd'
+            },
+            'dav_base_url': 'http://localhost:8000/remote.php/dav/files/oar_api'
         }
 
         self.mock_response_200 = Mock()
@@ -129,25 +137,34 @@ class FileManagerTest(test.TestCase):
         self.assertEqual(response['message'], 'permission deleted')
 
     @patch('requests.get')
-    def test_scan_status(self, mock_get):
-        self.mock_response_200.json.return_value = {'status': 'completed'}
+    def test_get_scan_files(self, mock_get):
+        with open(scanrepf) as fd:
+            scanrep = json.load(fd)
+        
+        self.mock_response_200.json.return_value = {
+            "success": "GET",
+            "message": scanrep,
+        }
         mock_get.return_value = self.mock_response_200
 
-        task_id = "12345"
-        response = self.file_manager.scan_status(task_id)
+        task_id = "914e479a-e344-4152-a340-f62947d7adbd"
+        response = self.file_manager.get_scan_files("TestRecord", task_id)
 
-        self.assertEqual(response['status'], 'completed')
+        self.assertTrue(response['message']["is_complete"])
 
-    @patch('requests.put')
+    @patch('requests.post')
     def test_scan_files(self, mock_put):
-        self.mock_response_200.json.return_value = {'message': 'scan initiated'}
+        with open(scanackf) as fd:
+            ackmsg = json.load(fd)
+        self.mock_response_200.json.return_value = ackmsg
         mock_put.return_value = self.mock_response_200
 
         user_name = "TestUser"
         record_name = "TestRecord"
-        response = self.file_manager.scan_files(user_name, record_name)
+        response = self.file_manager.post_scan_files(record_name)
 
-        self.assertEqual(response['message'], 'scan initiated')
+        self.assertEqual(response['message'], 'Scanning successfully started!')
+        self.assertIn("scan_id", response)
 
     @patch('requests.post')
     def test_upload_file(self, mock_post):
