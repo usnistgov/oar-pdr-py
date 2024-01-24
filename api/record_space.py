@@ -1,13 +1,17 @@
 """
 /record-space endpoint manages user record spaces
 """
+import logging
 import re
 from datetime import datetime
 
 from flask_jwt_extended import jwt_required
 from flask_restful import Resource
 
+import helpers
 from app.utils import users, files
+
+logging.basicConfig(level=logging.INFO)
 
 
 class RecordSpace(Resource):
@@ -15,18 +19,21 @@ class RecordSpace(Resource):
     def post(self, user_name, record_name):
         try:
             # Instantiate dirs
-            parent_dir = f"mds2-{record_name}"
-            system_dir = f"{parent_dir}/mds2-{record_name}-sys"
-            user_dir = f"{parent_dir}/mds2-{record_name}"
+            parent_dir = record_name
+            system_dir = f"{parent_dir}/{record_name}-sys"
+            user_dir = f"{parent_dir}/{record_name}"
 
             # Check if parent_dir exists
             if files.is_directory(parent_dir):
-                message = f"Record name '{record_name}' already exists!'"
-                raise Exception(message)
+                logging.error(f"Record name '{record_name}' already exists")
+                return {"error": "Conflict", "message": f"Record name '{record_name}' already exists!"}, 409
 
             # Create user if user_name does not exist
             if not users.is_user(user_name):
-                users.post_user(user_name)
+                user_creation_response = users.post_user(user_name)
+                if not user_creation_response:
+                    logging.error(f"Failed to create user '{user_name}'")
+                    return {"error": "Internal Server Error", "message": "Failed to create user"}, 500
 
             # Create record space
             parent_dir_response = files.post_directory(parent_dir)
@@ -34,34 +41,33 @@ class RecordSpace(Resource):
             user_dir_response = files.post_directory(user_dir)
 
             # Check requests were successful
-            if not (parent_dir_response == system_dir_response == user_dir_response and system_dir_response[
-                'status'] == 200):
-                message = f"parent_dir_response: '{parent_dir_response}',\n" \
-                          f"system_dir_response: '{system_dir_response}',\n" \
-                          f"user_dir_response: '{user_dir_response}'"
-                raise Exception(message)
+            if not all(response['status'] == 200 for response in
+                       [parent_dir_response, system_dir_response, user_dir_response]):
+                logging.error("Failed to create directories")
+                return {"error": "Internal Server Error", "message": "Failed to create directories"}, 500
 
             # Share space with user
-            response = files.post_userpermissions(user_name, 16, user_dir)
+            permissions_response = files.post_userpermissions(user_name, 16, user_dir)
+            status_code = helpers.extract_status_code(permissions_response)
+            if not permissions_response or status_code != 200:
+                logging.error(f"Failed to set permissions for user '{user_name}'")
+                return {"error": "Internal Server Error", "message": "Failed to set user permissions"}, 500
 
             success_response = {
                 'success': 'POST',
                 'message': f"Created user '{user_name}' Record space '{record_name}' successfully!"
             }
-
+            logging.info(f"Record space '{record_name}' created successfully for user '{user_name}'")
             return success_response, 201
 
         except Exception as error:
-            error_response = {
-                'error': 'Bad Request',
-                'message': str(error)
-            }
-            return error_response, 400
+            logging.exception("An unexpected error occurred")
+            return {"error": "Internal Server Error", "message": str(error)}, 500
 
     @jwt_required()
     def get(self, record_name):
         try:
-            dir_name = f"mds2-{record_name}/mds2-{record_name}"
+            dir_name = f"{record_name}/{record_name}"
             response = files.get_directory(dir_name)
             response = ''.join(response)
 
@@ -76,14 +82,17 @@ class RecordSpace(Resource):
 
             # Extract directory size
             size_matches = re.findall(r'<d:quota-used-bytes>(\d+)<\/d:quota-used-bytes>', response)
-            if size_matches:
-                size = str(int(size_matches[0]) / 1000) + 'KB'
-            else:
-                size = None
+            size = str(int(size_matches[0]) / 1000) + 'KB' if size_matches else None
 
             if size is None or last_modified is None:
-                message = f"Record name '{record_name}' does not exist!'"
-                raise Exception(message)
+                logging.error(f"Record name '{record_name}' does not exist or missing information")
+                return {"error": "Not Found",
+                        "message": f"Record name '{record_name}' does not exist or is missing information"}, 404
+
+            if size is None or last_modified is None:
+                logging.error(f"Record name '{record_name}' does not exist or missing information")
+                return {"error": "Not Found",
+                        "message": f"Record name '{record_name}' does not exist or is missing information"}, 404
 
             dir_info = {
                 'last_modified': last_modified,
@@ -95,40 +104,41 @@ class RecordSpace(Resource):
                 'success': 'GET',
                 'message': dir_info
             }
+
+            logging.info(f"Directory information retrieved for '{record_name}'")
             return success_response, 200
 
+        except re.error as regex_error:
+            logging.error(f"Regex error while processing response: {regex_error}")
+            return {"error": "Internal Server Error", "message": "Failed to process directory information"}, 500
         except Exception as error:
-            error_response = {
-                'error': 'Bad Request',
-                'message': str(error)
-            }
-            return error_response, 404
+            logging.exception("An unexpected error occurred")
+            return {"error": "Internal Server Error", "message": str(error)}, 500
 
     @jwt_required()
     def delete(self, record_name):
         try:
-            dir_name = f"mds2-{record_name}"
+            dir_name = record_name
             response = files.delete_directory(dir_name)
 
             if 'status' in response:
                 if response['status'] != 200:
-                    message = f"Unknown error: status {str(response['status'])}"
-                    raise Exception(message)
+                    logging.error(f"Failed to delete '{dir_name}' with status code {response['status']}")
+                    return {"error": "Internal Server Error",
+                            "message": f"Unknown error: status {str(response['status'])}"}, 500
 
             response = str(response)
-            if 'error' in response:
-                message = f"Record name '{record_name}' does not exist!'"
-                raise Exception(message)
+            if 'error' in str(response):
+                logging.error(f"Record name '{record_name}' does not exist")
+                return {"error": "Not Found", "message": f"Record name '{record_name}' does not exist!"}, 404
 
             success_response = {
                 'success': 'DELETE',
                 'message': f"Record space '{record_name}' deleted successfully!"
             }
+            logging.info(f"Record space '{record_name}' deleted successfully")
             return success_response, 200
 
         except Exception as error:
-            error_response = {
-                'error': 'Bad Request',
-                'message': str(error)
-            }
-            return error_response, 400
+            logging.exception("An unexpected error occurred")
+            return {"error": "Internal Server Error", "message": str(error)}, 500
