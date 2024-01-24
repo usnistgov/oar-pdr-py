@@ -7,6 +7,7 @@ from nistoar.midas.dap.fm.apiclient import FileManager
 datadir = Path(__file__).parents[1] / "data"  # tests/nistoar/midas/dap/data
 scanackf = datadir / "scan-req-ack.json"
 scanrepf = datadir / "scan-report.json"
+pfrespf = datadir / "webdav-propfind.xml"
 
 class FileManagerTest(test.TestCase):
     def setUp(self):
@@ -182,6 +183,38 @@ class FileManagerTest(test.TestCase):
 
         # Verify that the response matches the expected message
         self.assertEqual(response['message'], "Created file 'sample.txt' in '/path/to/dir' successfully!")
+
+    @patch('requests.request')
+    def test_get_uploads_directory(self, mock_request):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        with open(pfrespf) as fd:
+            mock_response.text = fd.read()
+        mock_request.return_value = mock_response
+
+        props = self.file_manager.get_uploads_directory("mds3-0012")
+        self.assertEqual(props.get('type'), "folder")
+        self.assertEqual(props.get('fileid'), "192")
+        self.assertEqual(props.get('size'), "4997166")
+        self.assertEqual(props.get('permissions'), "RGDNVCK")
+        self.assertIn("created", props)
+        self.assertIn("modified", props)
+
+    @patch('requests.request')
+    def test_determine_uploads_url(self, mock_request):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        with open(pfrespf) as fd:
+            mock_response.text = fd.read()
+        mock_request.return_value = mock_response
+
+        self.assertEqual(self.file_manager.determine_uploads_url("mds3-0012"),
+                         "/192?dir=/mds3-0012/mds3-0012")
+        self.file_manager.web_base = "http://goober.net/nc"
+        self.assertEqual(self.file_manager.determine_uploads_url("mds3-0012"),
+                         "http://goober.net/nc/192?dir=/mds3-0012/mds3-0012")
+        
+                
 
 
 if __name__ == '__main__':
