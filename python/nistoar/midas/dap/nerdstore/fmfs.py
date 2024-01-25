@@ -11,7 +11,7 @@ from json import JSONDecodeError
 from .fsbased import *
 from .base import (DATAFILE_TYPE, SUBCOLL_TYPE, DOWNLOADABLEFILE_TYPE,
                    RemoteStorageException, NERDStorageException, ObjectNotFound)
-from ..fm import FileManager
+from ..fm import FileManager, FileSpaceException
 from nistoar.nerdm.constants import core_schema_base, schema_versions
 from nistoar.pdr.preserve.bagit.builder import (NERD_DEF, NERDM_CONTEXT, BagBuilder)
 
@@ -44,45 +44,27 @@ class FMFSResourceStorage(FSBasedResourceStorage):
         if not config.get('store_dir'):
             raise ConfigurationException("Missing required configuration parameter: store_dir")
 
-        fmcfg = not config.get('file_manager')
+        fm = None
+        fmcfg = config.get('file_manager')
+        if fmcfg:
+            fm = FileManager(fmcfg)
         
-        return cls(config['store_dir'], config.get("default_shoulder", "nrd"),
-                   fmcfg.get('base_url'), fmcfg.get('auth'), logger)
+        return cls(config['store_dir'], fm, config.get("default_shoulder", "nrd"), logger)
 
-    def __init__(self, storeroot: str, newidprefix: str="nrd",
-                 fmappbaseurl: str=None, fmauth: dict=None, logger: Logger=None):
+    def __init__(self, storeroot: str, fmclient: FileManager=None, newidprefix: str="nrd", 
+                 logger: Logger=None):
         """
-        initialize a factory with with the resource data storage rooted at a given directory
+        initialize a factory with with the resource data storage rooted at a given directory.
         When used, this implementation is expecting ``username`` and ``password`` properties for
         
         :param str    storeroot:  the root directory under which all JSON files will be stored
         :param str  newidprefix:  a prefix to use when minting new identifiers
-        :param str fmappbaseurl:  the base URL for the file-manager.  If ``None``, a file manager 
-                                  will not be used
-        :param dict   fmappauth:  the data needed for authentication.  If ``None`` (or empty),
-                                  authentication credentials will be not be sent in file-manager 
-                                  requests.
+        :param FileManager fmclient:  the file manager service client to use; if None, syncing with
+                                  the file manager will not be done.
         :param Logger    logger:  the Logger to use for messages
         """
         super(FMFSResourceStorage, self).__init__(storeroot, newidprefix, logger)
-        self._fmbase = fmappbaseurl
-        if self._fmbase and self._fmbase.endswith('/'):
-            self._fmbase = self._fmbase.rstrip('/')
-        self._fmauth = None
-        self._fmcli = None
-
-        if self._fmbase:
-            if fmappauth:
-                if not fmauth.get('username') or not fmappauth.get('password') or \
-                   (fmappauth.get('type') and fmappauth.get('type') != 'basic'):
-                    raise ConfigurationException("Unsupported file-manager authentication: "+str(fmappauth))
-                self._fmauth = fmappauth
-
-            self._fmcli = FileManager({
-                'base_url': self._fmbase,
-                'authentication_user': self._fmauth.get('username'),
-                'authentication_password': self._fmauth.get('password')
-            })
+        self._fmcli = fmclient
         if not self._fmcli:
             self._log.warning("FMFSResourceStorage: no file manager client set; proceding without access")
 
@@ -114,11 +96,13 @@ class FMFSResource(FSBasedResource):
             self._files = FMFSFileComps(self, dir, self._fmcli)
         return self._files
 
-_NO_FM_STATUS = OrderedDict([
+_NO_FM_SUMMARY = OrderedDict([
     ("file_count", -1),
     ("folder_count", -1),
+    ("usage", -1),
     ("syncing", False),
-    ("last_modified", "(unknown)")
+    ("last_modified", "(unknown)"),
+    ("last_scan_id", None)
 ])
 
 class FMFSFileComps(FSBasedFileComps):
@@ -128,45 +112,60 @@ class FMFSFileComps(FSBasedFileComps):
     collection and how they are organized.  
     """
     _comp_types = deepcopy(BagBuilder._comp_types)
-    _last_scan_file = "_last_scan_id.json"
+    _fm_summary_file = "_fm_summary.json"
     
     def __init__(self, resource: NERDResource, filedir: str, fmcli: FileManager=None, iscollf=None):
         super(FMFSFileComps, self).__init__(resource, filedir, iscollf)
-        self._last_scan_id = None
-        self._lsidf = self._dir / self._last_scan_file
-        self._load_last_scan_id()
         self._fmcli = fmcli
-        self.update_hierarchy()
+        self._fmsumf = self._dir / self._fm_summary_file
+        self._summary = deepcopy(_NO_FM_SUMMARY)
+        self._load_fm_summary()
+#        if self._fmcli and self.last_scan_id and self._summary['file_count'] < 0:
+#            try:
+#                self.update_metadata()
+#            except FileSpaceException as ex:
+#                self._res.log.error("Failed to update get files update from file manager: %s", str(ex))
 
     def update_hierarchy(self) -> Mapping:
         if self._fmcli:
             scan = self._scan_files()
-            self._last_scan_id = scan['id']
-            return self._update_files_from_scan(scan)
-        return _NO_FM_STATUS
+            self.last_scan_id = scan['id']
+            self._summary = self._update_files_from_scan(scan)
+            self._cache_fm_summary(self._summary)
+        return self.fm_summary
 
     def update_metadata(self) -> Mapping:
-        if self._fmcli:
-            return self._update_files_from_scan(self._get_filescan())
-        return _NO_FM_STATUS
+        if self._fmcli and (self.last_scan_id or self._summary['file_count'] < 1):
+            self._summary = self._update_files_from_scan(self._get_file_scan())
+            self._cache_fm_summary(self._summary)
+        return self.fm_summary
+
+    def _cache_fm_summary(self, summary):
+        write_json(summary, self._fmsumf)
+
+    def _load_fm_summary(self):
+        if self._fmsumf.is_file():
+            self._summary = read_json(self._fmsumf)
+        else:
+            if not self._summary:
+                self._summary = deepcopy(_NO_FM_SUMMARY)
+            self._cache_fm_summary(self._summary)
+
+    @property
+    def fm_summary(self) -> Mapping:
+        return deepcopy(self._summary)
 
     @property
     def last_scan_id(self) -> str:
-        return self._last_scan_id
+        return self._summary['last_scan_id']
 
     @last_scan_id.setter
     def last_scan_id(self, id: str):
-        self._last_scan_id = id
         self._cache_last_scan_id(id)
 
-    def _cache_last_scan_id(self, id):
-        write_json(id, self._lsidf)
-
-    def _load_last_scan_id(self):
-        if self._lsidf.is_file():
-            self._last_scan_id = read_json(self._lsidf)
-        else:
-            self._last_scan_id = None
+    def _cache_last_scan_id(self, scanid):
+        self._summary['last_scan_id'] = scanid
+        self._cache_fm_summary(self._summary)
 
     def _scan_files(self):
         # trigger a remote scan of the files (done at construction time)
@@ -216,7 +215,7 @@ class FMFSFileComps(FSBasedFileComps):
     def _get_file_scan(self):
         # pull the result of a directory scan (without triggering)
         if not self.last_scan_id:
-            return self._fmcli.scan_files(self._res.id)
+            return self._scan_files()
 
         try:
             resp = self._fmcli.get_scan_files(self._res.id, self.last_scan_id)
@@ -412,9 +411,10 @@ class FMFSFileComps(FSBasedFileComps):
         return OrderedDict([
             ("file_count", len(scfiles)),
             ("folder_count", len(scfolders)),
-            ("syncing", bool(self._last_scan_id)),
+            ("syncing", not bool(scanmd.get("is_complete", False))),
             ("last_scan_started", scanmd.get("scan_datetime", "(unknown)")),
+            ("last_scan_id", self.last_scan_id),
+            ("last_scan_is_complete", scanmd.get("is_complete", False)),
             ("usage", total_size),
             ("last_modified", scanmd.get("last_modified", "(unknown)")),
         ])
-

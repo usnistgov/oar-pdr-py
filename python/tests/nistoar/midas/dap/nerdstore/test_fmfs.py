@@ -1,4 +1,5 @@
 import os, json, pdb, tempfile, logging, re
+from copy import deepcopy
 from pathlib import Path
 import unittest as test
 from unittest.mock import Mock, patch
@@ -73,31 +74,39 @@ class TestFMFSFileComps(test.TestCase):
         self.assertEqual(self.cmps._nxtseq, 0)
         self.assertEqual(self.cmps.count, 0)
 
+        self.assertEqual(self.cmps.fm_summary['file_count'], -1)
+        self.assertEqual(self.cmps.fm_summary['folder_count'], -1)
+        self.assertEqual(self.cmps.fm_summary['usage'], -1)
+        self.assertFalse(self.cmps.fm_summary['syncing'])
+
     def test_get_file_scan(self):
         self.cmps._fmcli = self.fm
-        self.assertIsNone(self.cmps._last_scan_id)
-        self.cmps._last_scan_id = self.scanid
+        self.assertIsNone(self.cmps.last_scan_id)
+        self.cmps.last_scan_id = self.scanid
         scan = self.cmps._get_file_scan()
         self.fm.scan_files.assert_not_called()
         self.assertEqual(scan['scan_id'], self.scanid)
         self.assertIn('contents', scan)
         self.assertEqual(len(scan['contents']), 8)
 
-        self.assertFalse(self.cmps._lsidf.is_file())
+        self.assertTrue(self.cmps._fmsumf.is_file())
+        summ = read_json(self.cmps._fmsumf)
+        self.assertIsNotNone(summ['last_scan_id'])
 
     def test_scan_files(self):
         self.cmps._fmcli = self.fm
-        self.assertIsNone(self.cmps._last_scan_id)
+        self.assertIsNone(self.cmps.last_scan_id)
         scan = self.cmps._scan_files()
-        self.assertEqual(self.cmps._last_scan_id, self.scanid)
+        self.assertEqual(self.cmps.last_scan_id, self.scanid)
         self.fm.delete_scan_files.assert_not_called()
         self.fm.post_scan_files.assert_called()
         self.assertEqual(scan['scan_id'], self.scanid)
         self.assertIn('contents', scan)
         self.assertEqual(len(scan['contents']), 8)
 
-        self.assertTrue(self.cmps._lsidf.is_file())
-        self.assertEqual(read_json(self.cmps._lsidf), self.scanid)
+        self.assertTrue(self.cmps._fmsumf.is_file())
+        summ = read_json(self.cmps._fmsumf)
+        self.assertEqual(summ.get('last_scan_id'), self.scanid)
 
     def test_update_files_from_scan(self):
         self.cmps._fmcli = self.fm
@@ -115,8 +124,7 @@ class TestFMFSFileComps(test.TestCase):
         self.assertTrue(self.cmps.path_exists("previews/ngc7793-cont.gif"))
         self.assertTrue(self.cmps.path_exists("previews/ngc7793-HIm1.gif"))
 
-        self.assertTrue(self.cmps._lsidf.is_file())
-        self.assertIsNone(read_json(self.cmps._lsidf))    # cause is_complete = True
+        self.assertTrue(self.cmps._fmsumf.is_file())
 
         scan = read_scan()
         stat = self.cmps._update_files_from_scan(scan)
@@ -530,6 +538,42 @@ class TestFMFSFileComps(test.TestCase):
         self.assertEqual(file['@id'], "file_3")
         self.assertEqual(file['filepath'], "trial4/trial4a.json")
 
+    def test_update_metadataa_not_on_ctor(self):
+        self.cmps = fmfs.FMFSFileComps(inmem.InMemoryResource("pdr0:0001"), self.outdir.name, self.fm)
+        self.assertTrue(self.cmps._fmsumf.is_file())
+        summ = read_json(self.cmps._fmsumf)
+        self.assertEqual(summ['file_count'], -1)
+        self.assertIsNone(summ['last_scan_id'])
+        self.assertEqual(self.cmps.count, 0)
+
+        self.cmps.update_metadata()
+        self.assertEqual(self.cmps.count, 9)
+        self.assertEqual(self.cmps.fm_summary['file_count'], 7)
+        self.assertEqual(self.cmps.fm_summary['folder_count'], 2)
+        self.assertEqual(self.cmps.fm_summary['usage'], 4997166)
+        self.assertFalse(self.cmps.fm_summary['syncing'])
+
+        # simulate constructing while (slow) scanning is still in progress
+        summ = deepcopy(fmfs._NO_FM_SUMMARY)
+        ack = read_scan_reply()
+        summ['last_scan_id'] = ack['scan_id']
+        summ['last_scan_is_complete'] = False
+        self.cmps.empty()
+        self.cmps._fmsumf.unlink()
+        write_json(summ, self.cmps._fmsumf)
+        self.assertEqual(self.cmps.count, 0)
+        self.fm.get_scan_files.return_value = read_scan()
+
+        self.cmps = fmfs.FMFSFileComps(inmem.InMemoryResource("pdr0:0001"), self.outdir.name, self.fm)
+        self.assertEqual(self.cmps.count, 0)
+
+        self.cmps.update_metadata()
+        self.assertEqual(self.cmps.count, 9)
+        self.assertEqual(self.cmps.fm_summary['file_count'], 7)
+        self.assertEqual(self.cmps.fm_summary['folder_count'], 2)
+        self.assertEqual(self.cmps.fm_summary['usage'], 4997166)
+        self.assertFalse(self.cmps.fm_summary['syncing'])
+
 
 class TestFMFSResource(test.TestCase):
     def setUp(self):
@@ -662,7 +706,6 @@ class TestFMFSResourceStorage(test.TestCase):
         self.assertTrue(self.fact.delete("pdr02p1s"))
         self.assertTrue(not self.fact.exists("pdr02p1s"))
 
-        
 
 
 if __name__ == '__main__':
