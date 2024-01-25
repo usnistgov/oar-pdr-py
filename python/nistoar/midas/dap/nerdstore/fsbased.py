@@ -762,10 +762,10 @@ class FSBasedFileComps(NERDFileComps):
         if self._chldp.is_file():
             self._chldp.unlink()
 
-        for id in os.listdir(self._dir):
+        for jf in os.listdir(self._dir):
             if jf.endswith(".json") and not jf.startswith(".") and not jf.startswith("_"):
-                if file.is_file():
-                    file.unlink()
+                if os.path.isfile(jf):
+                    os.unlink(jf)
 
         self._cache_children()
 
