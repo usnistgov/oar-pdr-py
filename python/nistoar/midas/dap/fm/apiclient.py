@@ -8,8 +8,13 @@ scans files, and controls permissions.
 from urllib.parse import urlsplit, unquote
 
 from nistoar.base.config import ConfigurationException
+from . import webdav
 
 import requests
+from lxml import etree
+
+__all__ = [ "FileManager", "FileSpaceException", "FileSpaceServerError", "FileSpaceConnectionError",
+            "FileSpaceNotFound", "AuthenticationFailure" ]
 
 class FileSpaceException(Exception):
     """
@@ -22,6 +27,13 @@ class FileSpaceException(Exception):
         self.space_id = space_id
 
 class FileSpaceServerError(FileSpaceException):
+    """
+    an exception indicating that a failure occured in the remote file space server
+    while trying to access the space.
+    """
+    pass
+
+class FileSpaceConnectionError(FileSpaceServerError):
     """
     an exception indicating that a failure occured in the remote file space server
     while trying to access the space.
@@ -76,8 +88,9 @@ class FileManager:
           client via its cfg attribute
         """
         self.cfg = config
-        self.base_url = config['dap_app_base_url']
-        self.dav_base = config['dav_base_url']
+        self.base_url = config['dap_app_base_url'].rstrip('/')
+        self.dav_base = config['dav_base_url'].rstrip('/')
+        self.web_base = config.get('web_base_url', '').rstrip('/')
         authcfg = config.get('auth', {})
         if not authcfg.get('username') or not authcfg.get('password'):
             raise ConfigurationException("FileManager: Missing required config param: "+
@@ -211,8 +224,8 @@ class FileManager:
         """
         return information about the uploads directory
         """
-        path = "{record_name}/{record_name}"
-        url = "f{self.dav_base}/{path}"
+        path = f"{record_name}/{record_name}"
+        url = f"{self.dav_base}/{path}"
         auth = (self.auth_user, self.auth_pass)
         header = {"Depth": "0", "Content-type": "application/xml"}
 
@@ -235,9 +248,13 @@ class FileManager:
                 if isinstance(body, Mapping) and 'message' in body:
                     msg = body['message']
             elif '/xml' in resp.headers.get("content-header"):
-                body = xmltosimpledict(resp.content.decode())
-                if body.get("d:error", {}).get("s:message"):
-                    msg = body["d:error"]["s:message"]
+                try:
+                    body = etree.parse(resp.text).getroot()
+                    msgel = body.find(".//{DAV:}message")
+                    if msgel:
+                        msg = msgel.text
+                except Exception as ex:
+                    msg += " (no parseable message in response body)"
             raise FileSpaceException(msg, resp.status_code)
 
         try:
@@ -253,10 +270,10 @@ class FileManager:
         return the expected URL for the browser-based view of a record space's uploads directory.
         """
         # the nextcloud URL requires the directory's file ID
-        fileid = self.get_uploads_folder(record_name).get('fileid')
+        fileid = self.get_uploads_directory(record_name).get('fileid')
         if not fileid:
             raise FileSpaceException(f"Unable to obtain the upload folder's ID for space={record_name}")
-        return f"{self.cfg.get('web_base')}/{fileid}?dir=/{record_name}/{record_name}"
+        return f"{self.web_base}/{fileid}?dir=/{record_name}/{record_name}"
 
 
     def delete_record_space(self, record_name):
