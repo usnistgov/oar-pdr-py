@@ -129,7 +129,6 @@ class FMFSFileComps(FSBasedFileComps):
     def update_hierarchy(self) -> Mapping:
         if self._fmcli:
             scan = self._scan_files()
-            self.last_scan_id = scan['id']
             self._summary = self._update_files_from_scan(scan)
             self._cache_fm_summary(self._summary)
         return self.fm_summary
