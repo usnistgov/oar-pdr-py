@@ -97,7 +97,7 @@ class FileManager:
                                          "auth.username and/or auth.password")
         self.auth_user = authcfg['username']
         self.auth_pass = authcfg['password']
-        self.token = self.authenticate()
+        self.token = None
 
     def authenticate(self):
         """
@@ -130,6 +130,8 @@ class FileManager:
         Returns:
         - dict: Dictionary containing the headers.
         """
+        if not self.token:
+            self.authenticate()
         return {
             'Authorization': f"Bearer {self.token}"
         }
