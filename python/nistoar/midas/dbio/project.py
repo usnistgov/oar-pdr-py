@@ -75,7 +75,7 @@ class ProjectService(MIDASSystem):
     STATUS_ACTION_FINALIZE = _STATUS_ACTION_FINALIZE
     STATUS_ACTION_SUBMIT   = _STATUS_ACTION_SUBMIT  
 
-    def __init__(self, project_type: str, dbclient_factory: DBClient, config: Mapping={},
+    def __init__(self, project_type: str, dbclient_factory: DBClientFactory, config: Mapping={},
                  who: PubAgent=None, log: Logger=None, _subsys=None, _subsysabbrev=None):
         """
         create the service
