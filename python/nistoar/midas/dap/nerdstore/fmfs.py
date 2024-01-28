@@ -23,7 +23,7 @@ class FMFSResourceStorage(FSBasedResourceStorage):
     """
 
     @classmethod
-    def from_config(cls, config: Mapping, logger: Logger):
+    def from_config(cls, config: Mapping, logger: Logger=None):
         """
         an class method for creatng an FSBasedResourceStorage instance from configuration data.
 
@@ -129,7 +129,7 @@ class FMFSFileComps(FSBasedFileComps):
     def update_hierarchy(self) -> Mapping:
         if self._fmcli:
             scan = self._scan_files()
-            self._summary = self._update_files_from_scan(scan)
+            self._summary = self._update_files_from_scan(deepcopy(scan))
             self._cache_fm_summary(self._summary)
         return self.fm_summary
 
@@ -404,7 +404,7 @@ class FMFSFileComps(FSBasedFileComps):
             raise RuntimeError("Failed add/update files due to missing folders")
 
         if scanmd.get("is_complete"):
-            self._fmcli.delete_scan_files(self.last_scan_id)
+            self._fmcli.delete_scan_files(self._res.id, self.last_scan_id)
             self.last_scan_id = None
 
         return OrderedDict([

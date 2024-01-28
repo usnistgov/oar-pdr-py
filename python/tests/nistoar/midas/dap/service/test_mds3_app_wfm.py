@@ -1,5 +1,7 @@
 import os, json, pdb, logging, tempfile, pathlib
 import unittest as test
+from unittest.mock import MagicMock, patch, DEFAULT
+from pathlib import Path
 from io import StringIO
 from copy import deepcopy
 from collections import OrderedDict
@@ -7,9 +9,10 @@ from collections import OrderedDict
 from nistoar.midas.dbio import inmem, base, AlreadyExists, InvalidUpdate, ObjectNotFound, PartNotAccessible
 from nistoar.midas.dbio.wsgi import project as prj
 from nistoar.midas.dap.service import mds3
-from nistoar.midas.dap.nerdstore.inmem import InMemoryResourceStorage
+from nistoar.midas.dap.fm import FileManager
+from nistoar.midas.dap.nerdstore.fmfs import FMFSResourceStorage
 from nistoar.pdr.publish import prov
-from nistoar.pdr.utils import read_nerd
+from nistoar.pdr.utils import read_nerd, read_json
 from nistoar.nerdm.constants import CORE_SCHEMA_URI
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_mds3.")
@@ -39,6 +42,15 @@ nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
 testdir = pathlib.Path(__file__).parents[0]
 pdr2210 = testdir.parents[2] / 'pdr' / 'describe' / 'data' / 'pdr2210.json'
 ncnrexp0 = testdir.parents[2] / 'pdr' / 'publish' / 'data' / 'ncnrexp0.json'
+daptestdir = Path(__file__).parents[1] / 'data' 
+
+def read_scan(id=None):
+    return read_json(daptestdir/"scan-report.json")
+
+def read_scan_reply(id=None):
+    return read_json(daptestdir/"scan-req-ack.json")
+
+_recspace_summ = { "fileid": "129", "type": "folder", "size": "0" }
 
 class TestMDS3DAPApp(test.TestCase):
 
@@ -53,7 +65,21 @@ class TestMDS3DAPApp(test.TestCase):
     def tostr(self, resplist):
         return [e.decode() for e in resplist]
 
+    @patch.multiple('nistoar.midas.dap.fm.FileManager',
+                    post_scan_files=MagicMock(return_value=read_scan_reply()),
+                    get_scan_files=MagicMock(return_value=read_scan()),
+                    authenticate=MagicMock(),
+                    get_record_space=MagicMock(return_value=_recspace_summ))
     def setUp(self):
+        self.nerddir = tempfile.TemporaryDirectory(prefix="nerdstore.", dir=tmpdir.name)
+        self.fmcfg = {
+            'dap_app_base_url': 'http://localhost:5000/api',
+            'auth': {
+                'username': 'service_api',
+                'password': 'service_pwd'
+            },
+            'dav_base_url': 'http://localhost:8000/remote.php/dav/files/oar_api'
+        }
         self.cfg = {
             "clients": {
                 "midas": {
@@ -70,19 +96,27 @@ class TestMDS3DAPApp(test.TestCase):
             },
             "assign_doi": "always",
             "doi_naan": "10.88888",
+            "file_manager": self.fmcfg,
             "nerdstorage": {
-#                "type": "fsbased",
-#                "store_dir": os.path.join(tmpdir.name)
-                "type": "inmem",
+                "type": "fsbased",
+                "store_dir": os.path.join(self.nerddir.name),
+                "file_manager": self.fmcfg
+#                "type": "inmem",
             }
         }
+
+        self.fm = None
+        ack = read_scan_reply()
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mds3": 0 }})
-        self.nerdstore = InMemoryResourceStorage(self.cfg["nerdstorage"])
+        self.nerdstore = FMFSResourceStorage.from_config(self.cfg["nerdstorage"])
         self.svcfact = mds3.DAPServiceFactory(self.dbfact, self.cfg, rootlog.getChild("midas.dap"),
                                               self.nerdstore)
         self.app = mds3.DAPApp(self.dbfact, rootlog.getChild("midas"), self.cfg, self.svcfact)
         self.resp = []
         self.rootpath = "/midas/dap/mds3"
+
+    def tearDown(self):
+        self.nerddir.cleanup()
 
     def create_record(self, name="goob", meta=None):
         cli = self.dbfact.create_client(base.DAP_PROJECTS, self.cfg["dbio"], nistr.actor)
@@ -130,6 +164,12 @@ class TestMDS3DAPApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("404 ", self.resp[0])
 
+    @patch.multiple('nistoar.midas.dap.fm.FileManager',
+                    post_scan_files=MagicMock(return_value=read_scan_reply()),
+                    get_scan_files=MagicMock(return_value=read_scan()),
+                    authenticate=MagicMock(),
+                    delete_scan_files=MagicMock(return_value={}),
+                    get_record_space=MagicMock(return_value=_recspace_summ))
     def test_create(self):
         path = ""
         req = {
@@ -213,10 +253,16 @@ class TestMDS3DAPApp(test.TestCase):
                          [ "nrdp:PublicDataResource", "dcat:Resource" ])
         self.assertIn('_schema', resp)
         self.assertIn('_extensionSchemas', resp)
-        self.assertEqual(len(resp.get('components',[])), 1)
+        self.assertEqual(len(resp.get('components',[])), 10)
         self.assertEqual(resp['components'][0]['accessURL'], "https://sw.ex/gurn")
         self.assertEqual(len(resp), 9)
 
+    @patch.multiple('nistoar.midas.dap.fm.FileManager',
+                    post_scan_files=MagicMock(return_value=read_scan_reply()),
+                    get_scan_files=MagicMock(return_value=read_scan()),
+                    authenticate=MagicMock(),
+                    delete_scan_files=MagicMock(return_value={}),
+                    get_record_space=MagicMock(return_value=_recspace_summ))
     def test_put_patch(self):
         testnerd = read_nerd(pdr2210)
         res = deepcopy(testnerd)
@@ -274,11 +320,10 @@ class TestMDS3DAPApp(test.TestCase):
                          [ "nrdp:PublicDataResource", "dcat:Resource" ])
         self.assertIn('_schema', resp)
         self.assertIn('_extensionSchemas', resp)
-        self.assertNotIn('components', resp)
         self.assertNotIn('authors', resp)
         self.assertNotIn('description', resp)
         self.assertNotIn('rights', resp)
-        self.assertEqual(len(resp), 8)
+        self.assertEqual(len(resp), 9)
 
         self.resp = []
         req = {
@@ -379,7 +424,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         resp = self.body2dict(body)
         self.assertEqual(resp['filepath'], "trial3")
-        self.assertEqual(resp['@id'], "coll_2")
+        self.assertEqual(resp['@id'], "file_3")
         self.assertNotIn("downloadURL", resp)
 
         self.resp = []
@@ -393,7 +438,7 @@ class TestMDS3DAPApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("200 ", self.resp[0])
         resp = self.body2dict(body)
-        self.assertEqual(resp['filepath'], "trial2.json")
+        self.assertEqual(resp['filepath'], "trial1.json")
         self.assertEqual(resp['@id'], "file_1")
         
         self.resp = []
@@ -443,6 +488,12 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertIn('description', resp)
         self.assertEqual(resp['rights'], "What ever.")
 
+    @patch.multiple('nistoar.midas.dap.fm.FileManager',
+                    post_scan_files=MagicMock(return_value=read_scan_reply()),
+                    get_scan_files=MagicMock(return_value=read_scan()),
+                    authenticate=MagicMock(),
+                    delete_scan_files=MagicMock(return_value={}),
+                    get_record_space=MagicMock(return_value=_recspace_summ))
     def test_delete(self):
         testnerd = read_nerd(pdr2210)
         res = deepcopy(testnerd)
@@ -527,27 +578,163 @@ class TestMDS3DAPApp(test.TestCase):
         resp = self.body2dict(body)
         self.assertNotIn("landingPage", resp)
 
+    @patch.multiple('nistoar.midas.dap.fm.FileManager',
+                    post_scan_files=MagicMock(return_value=read_scan_reply()),
+                    get_scan_files=MagicMock(return_value=read_scan()),
+                    authenticate=MagicMock(),
+                    delete_scan_files=MagicMock(return_value={}),
+                    get_record_space=MagicMock(return_value=_recspace_summ))
     def test_get_fs_info(self):
-        path = "pdr1:0001/file_space"
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"meta": { "resourceType": "Software",
+                                                           "creatorisContact": "false",
+                                                           "softwareLink": "https://sw.ex/gurn" },
+                                                 "name": "Gurn's Opus" }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "Gurn's Opus")
+        self.assertEqual(resp['id'], "mds3:0001")
+
+        self.resp = []
+        path = "mds3:0001/file_space"
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, mds3.DAPProjectInfoHandler))
-        prec = self.create_record("goob")
         body = hdlr.handle()
         self.assertIn("200 ", self.resp[0])
         resp = self.body2dict(body)
         self.assertIn('id', resp)
         self.assertIn('action', resp)
         self.assertEqual(resp['action'], '')
-        self.assertNotIn('file_count', resp)  # file manager not engaged
+        self.assertEqual(resp['file_count'], 7)
+        self.assertEqual(resp['folder_count'], 2)
 
+
+    @patch.multiple('nistoar.midas.dap.fm.FileManager',
+                    post_scan_files=MagicMock(return_value=read_scan_reply()),
+                    get_scan_files=MagicMock(return_value=read_scan()),
+                    authenticate=MagicMock(),
+                    delete_scan_files=MagicMock(return_value={}),
+                    get_record_space=MagicMock(return_value=_recspace_summ))
+    def test_putpatch_fs_info(self):
+        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 0)
+        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 0)
+        
+        # create the record
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"meta": { "resourceType": "Software",
+                                                           "creatorisContact": "false",
+                                                           "softwareLink": "https://sw.ex/gurn" },
+                                                 "name": "Gurn's Opus" }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "Gurn's Opus")
+        self.assertEqual(resp['id'], "mds3:0001")
+
+        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 1)
+        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 1)
+        
+        self.resp = []
+        path = "mds3:0001/file_space"
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, mds3.DAPProjectInfoHandler))
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIn('id', resp)
+        self.assertIn('action', resp)
+        self.assertEqual(resp['action'], 'sync')
+        self.assertEqual(resp['file_count'], 7)
+        self.assertEqual(resp['folder_count'], 2)
+
+        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 2)
+        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 2)
+        
+        self.resp = []
+        action = json.dumps({"action": "sync"})
+        path = "mds3:0001/file_space"
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path,
+            'CONTENT_LENGTH': len(action)
+        }
+        req['wsgi.input'] = StringIO(action)
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, mds3.DAPProjectInfoHandler))
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIn('id', resp)
+        self.assertIn('action', resp)
+        self.assertEqual(resp['action'], 'sync')
+        self.assertEqual(resp['file_count'], 7)
+        self.assertEqual(resp['folder_count'], 2)
+
+        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 3)
+        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 3)
+        
+        self.resp = []
+        action = json.dumps({"action": "blowup"})
+        path = "mds3:0001/file_space"
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': self.rootpath + path,
+            'CONTENT_LENGTH': len(action),
+            'CONTENT_TYPE': "application/json"
+        }
+        req['wsgi.input'] = StringIO(action)
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, mds3.DAPProjectInfoHandler))
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+
+        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 3)
+        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 3)
         
         
+        self.resp = []
+        action = json.dumps({"action": "sync"})
+        path = "mds3:0001/file_space"
+        req = {
+            'REQUEST_METHOD': 'PATCH',
+            'PATH_INFO': self.rootpath + path,
+            'CONTENT_LENGTH': len(action),
+            'CONTENT_TYPE': "text/xml"
+        }
+        req['wsgi.input'] = StringIO(action)
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, mds3.DAPProjectInfoHandler))
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
 
-
+        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 3)
+        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 3)
+        
 
         
         

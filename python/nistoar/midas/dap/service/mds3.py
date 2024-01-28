@@ -29,7 +29,7 @@ from urllib.parse import urlparse
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
                      InvalidUpdate, ObjectNotFound, PartNotAccessible,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
-from ...dbio.wsgi.project import MIDASProjectApp, ProjectDataHandler, SubApp
+from ...dbio.wsgi.project import MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler, SubApp
 from ...dbio import status
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
@@ -371,7 +371,7 @@ class DAPService(ProjectService):
                 self.log.warning("NERDm data for id=%s unexpectedly found in metadata store", prec.id)
             self._store.load_from(self._new_data_for(prec.id, prec.meta, schemaid), prec.id)
             nerd = self._store.open(prec.id)
-            if prec._data.get('file_space'):
+            if prec._data.get('file_space') and self._fmcli:
                 prec._data['file_space'].update(nerd.files.update_hierarchy())  # the space should be empty
                 if prec.file_space.get('file_count', -2) < 0:
                     self.log.warning("Failed to initialize file listing from file manager")
@@ -522,7 +522,7 @@ class DAPService(ProjectService):
                     out = None
                     try:
                         out = nerd.nonfiles.get(key)
-                    except (KeyError, IndexError) as ex:
+                    except (KeyError, IndexError, nerdstore.ObjectNotFound) as ex:
                         pass
                     if not out:
                         try:
@@ -1324,7 +1324,7 @@ class DAPService(ProjectService):
         :raises FileSpaceException:  if syncing failed for an unexpected reason
         """
         if not self._fmcli:
-            return false
+            return {}
         prec = to_DAPRec(self.dbcli.get_record_for(id, ACLs.WRITE), self._fmcli)   # may raise exc
         nerd = self._store.open(id)
 
@@ -1339,7 +1339,7 @@ class DAPService(ProjectService):
                     # a scan is still in progress, so just get the latests updates; don't start a new scan
                     prec.file_space.update(files.update_metadata())
                 prec.save()
-        return prec.file_space.get("usage", -2) > -1
+        return prec.file_space
             
 
     def add_nonfile_component(self, id: str, cmpmd: Mapping):
@@ -1537,7 +1537,7 @@ class DAPService(ProjectService):
             if not replace and item.get("@id"):
                 try:
                     olditem = objlist.get(item["@id"])
-                except KeyError:
+                except (KeyError, nerdstore.ObjectNotFound):
                     pass
 
             if olditem:
@@ -2165,6 +2165,7 @@ class DAPApp(MIDASProjectApp):
             service_factory = DAPServiceFactory(dbcli_factory, config, uselog, project_coll=project_coll)
         super(DAPApp, self).__init__(service_factory, uselog, config)
         self._data_update_handler = DAPProjectDataHandler
+        self._info_update_handler = DAPProjectInfoHandler
 
 class DAPProjectDataHandler(ProjectDataHandler):
     """
@@ -2248,3 +2249,76 @@ class DAPProjectDataHandler(ProjectDataHandler):
                                         "Requested part of data cannot be updated", self._id)
 
         return self.send_json(out, "Added", 201)
+
+class DAPProjectInfoHandler(ProjectInfoHandler):
+    """
+    A :py:class:`~nistoar.midas.wsgi.project.ProjectInfoHandler` specialized for editing DAP records.
+    In particular, it supporst PATCHing actions onto the ``file_space`` property to trigger
+    synchronization with the associated space in the file manager.
+    """
+    FILE_SPACE = "file_space"
+
+    def do_OPTIONS(self, path):
+        if path == self.FILE_SPACE:
+            return self.send_options(["GET", "PUT", "PATCH"])
+        return self.send_options(["GET"])
+
+    def do_PUT(self, path):
+        return self.do_PATCH(path)
+
+    def do_PATCH(self, path):
+        if path != self.FILE_SPACE:
+            return self.send_error_resp(405, "Method Not Allowed",
+                                        f"This attribute of a draft record cannot be updated directly",
+                                        self._id)
+
+        # handle the PATCH on file_space
+        # get the record
+        try:
+            prec = self.svc.get_record(self._id)
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found",
+                                        self._id, ashead=ashead)
+
+        # get the action request
+        action = "sync"   # the default action (if there is not input doc)
+        req = {}
+        try:
+            contlen = int(self._env.get('CONTENT_LENGTH', 0))
+        except ValueError as ex:
+            return self.send_error_resp(400, "Bad Content Length value")
+
+        if contlen > 0:
+            if self._env.get('CONTENT_TYPE') and "/json" not in self._env['CONTENT_TYPE']:
+                return self.send_error_resp(400, "Input is not JSON",
+                                            "Non-JSON content-type is not supported", self._id)
+            try:
+                req = self.get_json_body()
+            except self.FatalError as ex:
+                return self.send_fatal_error(ex)
+
+        if req.get('action'):
+            action = req['action']
+
+        return self._apply_fs_action(action)
+
+    def _apply_fs_action(self, action):
+        fssumm = {}
+        try:
+            if action == "sync":
+                fssumm = self.svc.sync_to_file_space(self._id)
+            else:
+                return self.send_error_resp(400, "Unrecognized action",
+                                            "Unrecognized action requested")
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found")
+        except dbio.NotEditable as ex:
+            return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit or ready")
+
+        return self.send_json(fssumm)
+
