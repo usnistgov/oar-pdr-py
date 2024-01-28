@@ -27,6 +27,7 @@ class FileManagerTest(test.TestCase):
         # from making a real HTTP request upon object instantiation
         with patch.object(FileManager, 'authenticate', return_value='mock_token'):
             self.file_manager = FileManager(self.config)
+            self.file_manager.token = "token"
 
     @patch('requests.post')
     def test_authenticate_success(self, mock_post):
