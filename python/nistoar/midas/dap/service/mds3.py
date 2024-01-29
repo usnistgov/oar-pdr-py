@@ -27,7 +27,7 @@ from copy import deepcopy
 from urllib.parse import urlparse
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
-                     InvalidUpdate, ObjectNotFound, PartNotAccessible,
+                     InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler, SubApp
 from ...dbio import status
@@ -2276,9 +2276,9 @@ class DAPProjectInfoHandler(ProjectInfoHandler):
         # get the record
         try:
             prec = self.svc.get_record(self._id)
-        except dbio.NotAuthorized as ex:
+        except NotAuthorized as ex:
             return self.send_unauthorized()
-        except dbio.ObjectNotFound as ex:
+        except ObjectNotFound as ex:
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found",
                                         self._id, ashead=ashead)
@@ -2313,11 +2313,11 @@ class DAPProjectInfoHandler(ProjectInfoHandler):
             else:
                 return self.send_error_resp(400, "Unrecognized action",
                                             "Unrecognized action requested")
-        except dbio.NotAuthorized as ex:
+        except NotAuthorized as ex:
             return self.send_unauthorized()
-        except dbio.ObjectNotFound as ex:
+        except ObjectNotFound as ex:
             return self.send_error_resp(404, "ID not found")
-        except dbio.NotEditable as ex:
+        except NotEditable as ex:
             return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit or ready")
 
         return self.send_json(fssumm)
