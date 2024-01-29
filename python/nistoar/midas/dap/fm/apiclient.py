@@ -44,9 +44,10 @@ class FileSpaceNotFound(FileSpaceException):
     """
     an exception reflecting access to a file space that does not exist in the file store
     """
-    def __init__(self, space_id: str, message: str=None, status: int=404):
+    def __init__(self, space_id: str=None, message: str=None, status: int=404):
         if not message:
-            message = f"{space_id}: file space not found"
+            message = f"{space_id}: " if space_id else ''
+            message += "file space not found"
         super(FileSpaceNotFound, self).__init__(message, status, space_id)
 
 class AuthenticationFailure(FileSpaceException):
@@ -131,7 +132,7 @@ class FileManager:
         - dict: Dictionary containing the headers.
         """
         if not self.token:
-            self.authenticate()
+            self.token = self.authenticate()
         return {
             'Authorization': f"Bearer {self.token}"
         }
@@ -217,10 +218,15 @@ class FileManager:
         Raises:
         - Exception: If the API request results in an error.
         """
-        return self.handle_request(
-            requests.get,
-            f"{self.base_url}/record-space/{record_name}"
-        )
+        try:
+            return self.handle_request(
+                requests.get,
+                f"{self.base_url}/record-space/{record_name}"
+            )
+        except FileSpaceNotFound as ex:
+            if not ex.space_id:
+                raise FileSpaceNotFound(record_name, str(ex))
+            raise
 
     def get_uploads_directory(self, record_name):
         """
