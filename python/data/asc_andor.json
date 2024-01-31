@@ -1,0 +1,15 @@
+{
+    "$and": [
+        {
+            "$or": [
+                {
+                    "name": [
+                        "test 2",
+                        "test3"
+                    ]
+                }
+            ],
+            "status/action": "create"
+        }
+    ]
+}

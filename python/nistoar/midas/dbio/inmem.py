@@ -72,11 +72,14 @@ class InMemoryDBClient(base.DBClient):
         return not exists
 
     def select_cst_records(self, **cst) -> Iterator[base.ProjectRecord]:
-        print('===ww====')
         print(cst)
         for rec in self._db[self._projcoll].values():
             rec = base.ProjectRecord(self._projcoll, rec, self)
-            rec.searched(cst)
+            if (rec.searched(cst) == True):
+                print(rec)
+                yield deepcopy(rec)
+            else:
+                print("NO GOOD")
 
     def select_records(self, perm: base.Permissions = base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):

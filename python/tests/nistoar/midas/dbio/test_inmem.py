@@ -10,11 +10,19 @@ from nistoar.pdr.publish.prov import Action, PubAgent
 import json
 
 testuser = PubAgent("test", PubAgent.AUTO, "tester")
-asc_path = 'data/asc.json'
+asc_andor = 'data/asc_andor.json'
+asc_and = 'data/asc_and.json'
+asc_or = 'data/asc_or.json'
 dmp_path = 'data/dmp.json'
 
-with open(asc_path, 'r') as file:
-    cst = json.load(file)
+with open(asc_or, 'r') as file:
+    cst_or = json.load(file)
+
+with open(asc_and, 'r') as file:
+    cst_and = json.load(file)
+
+with open(asc_andor, 'r') as file:
+    cst_andor = json.load(file)
 
 with open(dmp_path, 'r') as file:
     dmp = json.load(file)
@@ -250,30 +258,56 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(rec2, {"id": "p:bob", "members": ["p:bob", "alice"]})
 
     def test_select_cst_records(self):
-        print("SELECTTT CSTT")
         # inject some data into the database
         id = "pdr0:0002"
         rec = base.ProjectRecord(
-            base.DMP_PROJECTS, {"id": id, "name": "test 1"}, self.cli)
+            base.DMP_PROJECTS, {"id": id, "name": "test 1", "deactivated": "null", "status": {
+                "created": 1689021185.5037804,
+                "state": "create",
+                "action": "create",
+                "since": 1689021185.5038593,
+                "modified": 1689021185.5050585,
+                "message": "draft created"
+            }}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
         id = "pdr0:0006"
         rec = base.ProjectRecord(
-            base.DMP_PROJECTS, {"id": id, "name": "test 2"}, self.cli)
+            base.DMP_PROJECTS, {"id": id, "name": "test 2", "status": {
+                "created": 1689021185.5037804,
+                "state": "edit",
+                "action": "create",
+                "since": 1689021185.5038593,
+                "modified": 1689021185.5050585,
+                "message": "draft created"
+            }}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
         id = "pdr0:0003"
         rec = base.ProjectRecord(
-            base.DMP_PROJECTS, {"id": id, "name": "test3"}, self.cli)
+            base.DMP_PROJECTS, {"id": id, "name": "test3", "status": {
+                "created": 1689021185.5037804,
+                "state": "edit",
+                "action": "create",
+                "since": 1689021185.5038593,
+                "modified": 1689021185.5050585,
+                "message": "draft created"
+            }}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
-
-        recs = list(self.cli.select_cst_records(**cst))
-        self.assertEqual(len(recs), 3)
-        self.assertTrue(isinstance(recs[0], base.ProjectRecord))
+        recs = list(self.cli.select_cst_records(**cst_or))
+        self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0002")
+        self.assertEqual(recs[1].id, "pdr0:0003")
+
+        recs = list(self.cli.select_cst_records(**cst_and))
+        self.assertEqual(len(recs), 1)
+        self.assertEqual(recs[0].id, "pdr0:0003")
+        recs = list(self.cli.select_cst_records(**cst_andor))
+        self.assertEqual(len(recs), 2)
+        self.assertEqual(recs[0].id, "pdr0:0006")
+        self.assertEqual(recs[1].id, "pdr0:0003")
 
     def test_select_records(self):
-        print("SELECTTT")
         # test query on existing but empty collection
         it = self.cli.select_records(base.ACLs.READ)
 

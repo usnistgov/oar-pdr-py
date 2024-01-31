@@ -375,7 +375,8 @@ class ProtectedRecord(ABC):
                         f"full_text_search_column LIKE '%{text_search}%'")
                 else:
                     # Need to change depending on db
-                    conditions.append(f"{key} = '{value}'")
+                    if (rec[f"{key}"] == f"{value}"):
+                        return True
         return conditions
 
     def searched(self, cst: CST):
@@ -385,31 +386,78 @@ class ProtectedRecord(ABC):
 
         :param is a dict of constraints for the records 
         """
-        print("======== cst =========")
-        print(cst)
         # parse the query
-        conditions = []
+        or_conditions = {}
+        and_conditions = {}
         for condition in cst["$and"]:
             for key, value in condition.items():
+                print(value)
                 if key == "$or":
-                    or_conditions = []
                     for or_condition in value:
+                        print(or_condition)
                         for or_key, or_value in or_condition.items():
                             # Need to change depending on db
-                            or_conditions.append(f"{or_key} = '{or_value}'")
+                            or_conditions[or_key] = or_value
                     # Need to change depending on db
-                    conditions.append(f"({' OR '.join(or_conditions)})")
-                elif key == "$text":
-                    text_search = value["$search"]
-                    # Need to change depending on db
-                    conditions.append(
-                        f"full_text_search_column LIKE '%{text_search}%'")
                 else:
                     # Need to change depending on db
-                    conditions.append(f"{key} = '{value}'")
+                    and_conditions[key] = value
 
-        print("======== conditions =========")
-        print(conditions)
+        print("======== and_conditions =========")
+        for key, value in and_conditions.items():
+            print(f"{key}: {value}")
+        print("======== or_conditions =========")
+        for key, value in or_conditions.items():
+            print(f"{key}: {value}")
+        """print("========DMP=======")
+        for key, value in self._data.items():
+            if isinstance(value, dict):
+                # If the value is a dictionary, iterate over its items
+                print(f"{key}: (Nested Dictionary)")
+                for sub_key, sub_value in value.items():
+                    print(f"  {sub_key}: {sub_value}")
+            else:
+                # If the value is not a dictionary, print it directly
+                print(f"{key}: {value}")
+        """
+        rec = self._data
+        and_met = all(rec.get(key) == value for key,
+                      value in and_conditions.items())
+        # or_met = any(all(rec.get(key) == value for key,
+        #                 value in optional)for optional in or_conditions.items())
+        print(or_conditions.items())
+        for key, value in or_conditions.items():
+            for v in value:
+                # print('===')
+                # print(v)
+                if rec.get(key) == v:
+                    or_met = True
+                else:
+                    print("no true")
+
+        # or_met = any(all(rec.get(key) == value for value in lists)
+        #             for key, lists in or_conditions.items())
+
+        print("AND FINAL")
+        print(and_conditions)
+        print("OR FINAL")
+        print(or_conditions)
+        if and_met:
+            print("AND True")
+        else:
+            print("AND False")
+        if or_met:
+            print("Or True")
+        else:
+            print("Or False")
+        print('=====')
+        print(not or_conditions)
+        print(or_met)
+        print(and_met)
+        if (not or_conditions or or_met) and and_met:
+            print()
+            return True
+        return False
 
     def validate(self, errs=None, data=None) -> List[str]:
         """
