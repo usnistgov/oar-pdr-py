@@ -345,6 +345,29 @@ class TestMongoDBClient(test.TestCase):
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
         self.assertEqual(recs[0].id, id)
 
+    def test_select_cst_records(self):
+
+        # inject some data into the database
+        print(id)
+        id = "pdr0:0002"
+        rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id}, self.cli)
+        self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
+        print(id)
+        id = "pdr0:0003"
+        rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id}, self.cli)
+        self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
+
+        rec = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": "goob", "owner": "alice"}, self.cli)
+        self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
+
+        recs = list(self.cli.select_records(base.ACLs.READ))
+        print(len(recs))
+
+        self.assertEqual(len(recs), 2)
+        self.assertTrue(isinstance(recs[0], base.ProjectRecord))
+        self.assertEqual(recs[0].id, id)
+
     def test_action_log_io(self):
         self.assertEqual(self.cli.native['action_log'].count_documents({}), 0)
         self.cli._save_action_data(
