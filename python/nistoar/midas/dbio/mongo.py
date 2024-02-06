@@ -11,7 +11,7 @@ from pymongo import MongoClient, ASCENDING
 
 from nistoar.base.config import ConfigurationException, merge_config
 
-_dburl_re = re.compile(r"^mongodb://(\w+(:\S+)?@)?\w+(\.\w+)*(:\d+)?/\w+$")
+_dburl_re = re.compile(r"^mongodb://(\w+(:\S+)?@)?\w+(\.\w+)*(:\d+)?/\w+(\?\w.*)?$")
 
 class MongoDBClient(base.DBClient):
     """
