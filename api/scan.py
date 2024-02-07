@@ -482,11 +482,13 @@ class ScanFiles(Resource):
             # Instantiate dirs
             space_id = record_name
             fm_system_path = os.path.join(space_id, f"{space_id}-sys")
+            fm_space_path = os.path.join(space_id, f"{space_id}")
             root_dir_from_disk = Config.NEXTCLOUD_ROOT_DIR_PATH
+            user_dir = os.path.join(root_dir_from_disk, fm_space_path)
             full_sys_dir = os.path.join(root_dir_from_disk, fm_system_path)
 
             # Retrieve nextcloud metadata
-            nextcloud_md = helpers.parse_nextcloud_scan_xml(files.put_scandir(fm_system_path))
+            nextcloud_md = helpers.parse_nextcloud_scan_xml(user_dir, files.put_scandir(fm_system_path))
             for file_md in nextcloud_md:
                 if scan_id in file_md['path']:
                     file_path = helpers.get_correct_path(
