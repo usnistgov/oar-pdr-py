@@ -39,7 +39,7 @@ from nistoar.pdr.publish.prov import PubAgent, Action
 
 from . import validate
 from .. import nerdstore
-from ..nerdstore import NERDResource, NERDResourceStorage, NERDResourceStorageFactory
+from ..nerdstore import NERDResource, NERDResourceStorage, NERDResourceStorageFactory, NERDStorageException
 from ..fm import FileManager, FileSpaceNotFound, FileSpaceException
 
 ASSIGN_DOI_NEVER   = 'never'
@@ -371,10 +371,14 @@ class DAPService(ProjectService):
                 self.log.warning("NERDm data for id=%s unexpectedly found in metadata store", prec.id)
             self._store.load_from(self._new_data_for(prec.id, prec.meta, schemaid), prec.id)
             nerd = self._store.open(prec.id)
-            if prec._data.get('file_space') and self._fmcli:
-                prec._data['file_space'].update(nerd.files.update_hierarchy())  # the space should be empty
-                if prec.file_space.get('file_count', -2) < 0:
-                    self.log.warning("Failed to initialize file listing from file manager")
+            if prec._data.get('file_space') and self._fmcli and hasattr(nerd.files, 'update_hierarchy'):
+                try:
+                    prec._data['file_space'].update(nerd.files.update_hierarchy())  # space should be empty
+                    if prec.file_space.get('file_count', -2) < 0:
+                        self.log.warning("Failed to initialize file listing from file manager")
+                except Exception as ex:
+                    self.log.error("Failed to initialize file listing: problem accessing file manager: %s",
+                                   str(ex))
             prec.data = self._summarize(nerd)
 
             if data:
@@ -2319,6 +2323,10 @@ class DAPProjectInfoHandler(ProjectInfoHandler):
             return self.send_error_resp(404, "ID not found")
         except NotEditable as ex:
             return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit or ready")
+        except (FileSpaceException, NERDStorageException) as ex:
+            self.log.error("Trouble communicating with file manager: %s", str(ex))
+            return self.send_error_resp(500, "File manager service error",
+                                        "Trouble communicating with file manager")
 
         return self.send_json(fssumm)
 
