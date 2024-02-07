@@ -69,6 +69,7 @@ class TestMDS3DAPApp(test.TestCase):
                     post_scan_files=MagicMock(return_value=read_scan_reply()),
                     get_scan_files=MagicMock(return_value=read_scan()),
                     authenticate=MagicMock(),
+                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
                     get_record_space=MagicMock(return_value=_recspace_summ))
     def setUp(self):
         self.nerddir = tempfile.TemporaryDirectory(prefix="nerdstore.", dir=tmpdir.name)
@@ -78,7 +79,8 @@ class TestMDS3DAPApp(test.TestCase):
                 'username': 'service_api',
                 'password': 'service_pwd'
             },
-            'dav_base_url': 'http://localhost:8000/remote.php/dav/files/oar_api'
+            'dav_base_url': 'http://localhost:8000/remote.php/dav/files/oar_api',
+            'web_base_url': 'https://nextcloud/apps/files/files'
         }
         self.cfg = {
             "clients": {
@@ -169,6 +171,7 @@ class TestMDS3DAPApp(test.TestCase):
                     get_scan_files=MagicMock(return_value=read_scan()),
                     authenticate=MagicMock(),
                     delete_scan_files=MagicMock(return_value={}),
+                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
                     get_record_space=MagicMock(return_value=_recspace_summ))
     def test_create(self):
         path = ""
@@ -262,6 +265,7 @@ class TestMDS3DAPApp(test.TestCase):
                     get_scan_files=MagicMock(return_value=read_scan()),
                     authenticate=MagicMock(),
                     delete_scan_files=MagicMock(return_value={}),
+                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
                     get_record_space=MagicMock(return_value=_recspace_summ))
     def test_put_patch(self):
         testnerd = read_nerd(pdr2210)
@@ -493,6 +497,7 @@ class TestMDS3DAPApp(test.TestCase):
                     get_scan_files=MagicMock(return_value=read_scan()),
                     authenticate=MagicMock(),
                     delete_scan_files=MagicMock(return_value={}),
+                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
                     get_record_space=MagicMock(return_value=_recspace_summ))
     def test_delete(self):
         testnerd = read_nerd(pdr2210)
@@ -583,6 +588,7 @@ class TestMDS3DAPApp(test.TestCase):
                     get_scan_files=MagicMock(return_value=read_scan()),
                     authenticate=MagicMock(),
                     delete_scan_files=MagicMock(return_value={}),
+                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
                     get_record_space=MagicMock(return_value=_recspace_summ))
     def test_get_fs_info(self):
         path = ""
@@ -620,6 +626,9 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['action'], '')
         self.assertEqual(resp['file_count'], 7)
         self.assertEqual(resp['folder_count'], 2)
+        self.assertEqual(resp['uploads_dav_url'],
+                         self.fmcfg['dav_base_url'].rstrip('/') + "/mds3:0001/mds3:0001")
+        self.assertEqual(resp['location'], self.fmcfg['web_base_url']+"/129?dir=/mds3:0001/mds3:0001")
 
 
     @patch.multiple('nistoar.midas.dap.fm.FileManager',
@@ -627,6 +636,7 @@ class TestMDS3DAPApp(test.TestCase):
                     get_scan_files=MagicMock(return_value=read_scan()),
                     authenticate=MagicMock(),
                     delete_scan_files=MagicMock(return_value={}),
+                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
                     get_record_space=MagicMock(return_value=_recspace_summ))
     def test_putpatch_fs_info(self):
         self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 0)

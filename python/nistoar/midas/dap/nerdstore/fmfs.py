@@ -119,14 +119,25 @@ class FMFSFileComps(FSBasedFileComps):
         self._fmcli = fmcli
         self._fmsumf = self._dir / self._fm_summary_file
         self._summary = deepcopy(_NO_FM_SUMMARY)
+        self._upl_dir_id = None
         self._load_fm_summary()
+        self._upl_dir_id = self._summary.get('uploads_dir_id')
 #        if self._fmcli and self.last_scan_id and self._summary['file_count'] < 0:
 #            try:
 #                self.update_metadata()
 #            except FileSpaceException as ex:
 #                self._res.log.error("Failed to update get files update from file manager: %s", str(ex))
 
+    def _ensure_uploads_id(self) -> str:
+        if not self._upl_dir_id and self._fmcli:
+            try:
+                self._upl_dir_id = self._fmcli.get_uploads_directory(self._res.id).get('fileid')
+            except FileSpaceException as ex:
+                self._res.log.error("Failed to determine uploads directory id for %s", self._res.id)
+        return str(self._upl_dir_id) if self._upl_dir_id is not None else None
+
     def update_hierarchy(self) -> Mapping:
+        self._ensure_uploads_id()
         if self._fmcli:
             scan = self._scan_files()
             self._summary = self._update_files_from_scan(deepcopy(scan))
@@ -134,12 +145,15 @@ class FMFSFileComps(FSBasedFileComps):
         return self.fm_summary
 
     def update_metadata(self) -> Mapping:
+        self._ensure_uploads_id()
         if self._fmcli and (self.last_scan_id or self._summary['file_count'] < 1):
             self._summary = self._update_files_from_scan(self._get_file_scan())
             self._cache_fm_summary(self._summary)
         return self.fm_summary
 
     def _cache_fm_summary(self, summary):
+        if self._upl_dir_id:
+            summary['uploads_dir_id'] = self._upl_dir_id
         write_json(summary, self._fmsumf)
 
     def _load_fm_summary(self):

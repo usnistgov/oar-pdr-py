@@ -161,13 +161,22 @@ class DAPProjectRecord(ProjectRecord):
                 self._data['file_space']['creator'] = who
                 self._data['file_space']['id'] = self.id  # the ID of the space is the same as the rec
 
+    def determine_uploads_url(self):
+        """
+        return the expected URL for the browser-based view of a record space's uploads directory.
+        """
+        fs = self.file_space
+        if self._fmcli and fs and fs.get('uploads_dir_id'):
+            return f"{self._fmcli.web_base}/{fs['uploads_dir_id']}?dir=/{self.id}/{self.id}"
+        else:
+            return f"/{self.id}/{self.id}"
+
     def to_dict(self):
         out = super().to_dict()
         if self._fmcli and out.get('file_space') and out['file_space'].get('id'):
-            if self._fmcli.cfg.get('web_base_url'):
-                out['file_space']['location'] = \
-                    '/'.join([self._fmcli.cfg['web_base_url'].rstrip('/'),
-                              out['file_space'].get('id'), out['file_space'].get('id')])
+
+            out['file_space']['location'] = self.determine_uploads_url()
+
             if self._fmcli.cfg.get('dav_base_url'):
                 out['file_space']['uploads_dav_url'] = \
                     '/'.join([self._fmcli.cfg['dav_base_url'].rstrip('/'),
@@ -315,7 +324,7 @@ class DAPService(ProjectService):
         :raises ObjectNotFound:  if a record with that ID does not exist
         :raises NotAuthorized:   if the record exists but the current user is not authorized to read it.
         """
-        return to_DAPRec(super().get_record(id))
+        return to_DAPRec(super().get_record(id), self._fmcli)
 
     def create_record(self, name, data=None, meta=None) -> ProjectRecord:
         """
@@ -1343,7 +1352,7 @@ class DAPService(ProjectService):
                     # a scan is still in progress, so just get the latests updates; don't start a new scan
                     prec.file_space.update(files.update_metadata())
                 prec.save()
-        return prec.file_space
+        return prec.to_dict().get('file_space', {})
             
 
     def add_nonfile_component(self, id: str, cmpmd: Mapping):
