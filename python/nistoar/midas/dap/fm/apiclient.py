@@ -270,7 +270,7 @@ class FileManager:
             base = urljoin(self.cfg['public_prefix'], urlparse(base).path.lstrip('/'))
 
         try:
-            return webdav.parse_propfind(resp.text, path, self.dav_base)
+            return webdav.parse_propfind(resp.text, path, base)
         except webdav.RemoteResourceNotFound as ex:
             raise FileSpaceNotFound(record_name)
         except etree.XMLSyntaxError as ex:
