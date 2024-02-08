@@ -267,7 +267,7 @@ class FileManager:
 
         try:
             return webdav.parse_propfind(resp.text, path, self.dav_base)
-        except RemoteResourceNotFound as ex:
+        except webdav.RemoteResourceNotFound as ex:
             raise FileSpaceNotFound(record_name)
         except etree.XMLSyntaxError as ex:
             raise FileSpaceServerError("Server returned unparseable XML")

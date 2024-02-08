@@ -133,7 +133,8 @@ class FMFSFileComps(FSBasedFileComps):
             try:
                 self._upl_dir_id = self._fmcli.get_uploads_directory(self._res.id).get('fileid')
             except FileSpaceException as ex:
-                self._res.log.error("Failed to determine uploads directory id for %s", self._res.id)
+                self._res.log.error("Failed to determine uploads directory id for %s: %s",
+                                    self._res.id, str(ex))
         return str(self._upl_dir_id) if self._upl_dir_id is not None else None
 
     def update_hierarchy(self) -> Mapping:
