@@ -5,7 +5,7 @@ This module provides a client class, FileManager, designed to interact with the 
 which is a REST API offering file management capabilities. The client handles authentication, manages records,
 scans files, and controls permissions.
 """
-from urllib.parse import urlsplit, unquote, urljoin
+from urllib.parse import urlsplit, unquote, urljoin, urlparse
 
 from nistoar.base.config import ConfigurationException
 from . import webdav
