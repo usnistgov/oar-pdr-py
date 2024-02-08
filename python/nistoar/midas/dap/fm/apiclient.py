@@ -5,7 +5,7 @@ This module provides a client class, FileManager, designed to interact with the 
 which is a REST API offering file management capabilities. The client handles authentication, manages records,
 scans files, and controls permissions.
 """
-from urllib.parse import urlsplit, unquote
+from urllib.parse import urlsplit, unquote, urljoin
 
 from nistoar.base.config import ConfigurationException
 from . import webdav
@@ -264,6 +264,10 @@ class FileManager:
                 except Exception as ex:
                     msg += " (no parseable message in response body)"
             raise FileSpaceException(msg, resp.status_code)
+
+        base = self.dav_base
+        if self.cfg.get('public_prefix'):
+            base = urljoin(self.cfg['public_prefix'], urlparse(base).path.lstrip('/'))
 
         try:
             return webdav.parse_propfind(resp.text, path, self.dav_base)
