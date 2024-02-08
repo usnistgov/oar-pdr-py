@@ -1,7 +1,7 @@
 {
     "$and": [
         {
-            "status/state": "edit"
+            "status.state": "edit"
         },
         {
             "name": "test3"

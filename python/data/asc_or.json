@@ -3,10 +3,10 @@
         {
             "$or": [
                 {
-                    "name": [
-                        "test 1",
-                        "test3"
-                    ]
+                    "name": "test 2"
+                },
+                {
+                    "name": "test3"
                 }
             ]
         }

@@ -16,6 +16,23 @@ dburl = None
 if os.environ.get('MONGO_TESTDB_URL'):
     dburl = os.environ.get('MONGO_TESTDB_URL')
 
+asc_andor = 'data/asc_andor.json'
+asc_and = 'data/asc_and.json'
+asc_or = 'data/asc_or.json'
+dmp_path = 'data/dmp.json'
+
+with open(asc_or, 'r') as file:
+    cst_or = json.load(file)
+
+with open(asc_and, 'r') as file:
+    cst_and = json.load(file)
+
+with open(asc_andor, 'r') as file:
+    cst_andor = json.load(file)
+
+with open(dmp_path, 'r') as file:
+    dmp = json.load(file)
+
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
 class TestInMemoryDBClientFactory(test.TestCase):
@@ -325,11 +342,11 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(len(recs), 0)
 
         # inject some data into the database
-        print(id)
+
         id = "pdr0:0002"
         rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
-        print(id)
+
         id = "pdr0:0003"
         rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
@@ -343,51 +360,93 @@ class TestMongoDBClient(test.TestCase):
 
         self.assertEqual(len(recs), 2)
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
-        self.assertEqual(recs[0].id, id)
+        self.assertEqual(recs[1].id, id)
 
     def test_select_cst_records(self):
 
         # inject some data into the database
-        print(id)
+
         id = "pdr0:0002"
-        rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id}, self.cli)
+        rec = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": id, "name": "test 1", "deactivated": "null", "status": {
+                "created": 1689021185.5037804,
+                "state": "create",
+                "action": "create",
+                "since": 1689021185.5038593,
+                "modified": 1689021185.5050585,
+                "message": "draft created"
+            }}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
-        print(id)
+
+        id = "pdr0:0006"
+        rec = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": id, "name": "test 2", "status": {
+                "created": 1689021185.5037804,
+                "state": "edit",
+                "action": "create",
+                "since": 1689021185.5038593,
+                "modified": 1689021185.5050585,
+                "message": "draft created"
+            }}, self.cli)
+        self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
+
         id = "pdr0:0003"
-        rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id}, self.cli)
+        rec = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": id, "name": "test3", "status": {
+                "created": 1689021185.5037804,
+                "state": "edit",
+                "action": "create",
+                "since": 1689021185.5038593,
+                "modified": 1689021185.5050585,
+                "message": "draft created"
+            }}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
 
         rec = base.ProjectRecord(
             base.DMP_PROJECTS, {"id": "goob", "owner": "alice"}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
 
-        recs = list(self.cli.select_records(base.ACLs.READ))
-        print(len(recs))
-
+        recs = list(self.cli.select_cst_records(**cst_or))
         self.assertEqual(len(recs), 2)
-        self.assertTrue(isinstance(recs[0], base.ProjectRecord))
-        self.assertEqual(recs[0].id, id)
+        self.assertEqual(recs[0].id, "pdr0:0006")
+        self.assertEqual(recs[1].id, "pdr0:0003")
+
+        recs = list(self.cli.select_cst_records(**cst_and))
+        self.assertEqual(len(recs), 1)
+        self.assertEqual(recs[0].id, "pdr0:0003")
+        recs = list(self.cli.select_cst_records(**cst_andor))
+        self.assertEqual(len(recs), 2)
+        self.assertEqual(recs[0].id, "pdr0:0006")
+        self.assertEqual(recs[1].id, "pdr0:0003")
 
     def test_action_log_io(self):
-        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 0)
-        self.cli._save_action_data({'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
-        acts = [r for r in self.cli.native['prov_action_log'].find({}, {'_id': False})]
+        self.assertEqual(
+            self.cli.native['prov_action_log'].count_documents({}), 0)
+        self.cli._save_action_data(
+            {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
+        acts = [r for r in self.cli.native['prov_action_log'].find({}, {
+                                                                   '_id': False})]
         self.assertEqual(len(acts), 1)
         self.assertEqual(
             acts[0], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
 
-        self.cli._save_action_data({'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
-        acts = [r for r in self.cli.native['prov_action_log'].find({}, {'_id': False})]
+        self.cli._save_action_data(
+            {'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
+        acts = [r for r in self.cli.native['prov_action_log'].find({}, {
+                                                                   '_id': False})]
         self.assertEqual(len(acts), 2)
         self.assertEqual(
             acts[0], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
         self.assertEqual(
             acts[1], {'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
 
-        self.assertEqual(self.cli.native['prov_action_log'].count_documents({'subject': 'grp0001'}), 0)
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents(
+            {'subject': 'grp0001'}), 0)
         self.cli._save_action_data({'subject': 'grp0001', 'dylan': 'bob'})
-        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 3)
-        acts = [r for r in self.cli.native['prov_action_log'].find({'subject': 'grp0001'}, {'_id': False})]
+        self.assertEqual(
+            self.cli.native['prov_action_log'].count_documents({}), 3)
+        acts = [r for r in self.cli.native['prov_action_log'].find(
+            {'subject': 'grp0001'}, {'_id': False})]
         self.assertEqual(len(acts), 1)
         self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
 
@@ -403,10 +462,13 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
 
         self.cli._delete_actions_for("grp0001")
-        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 2)
-        self.assertEqual(self.cli.native['prov_action_log'].count_documents({'subject': 'grp0001'}), 0)
+        self.assertEqual(
+            self.cli.native['prov_action_log'].count_documents({}), 2)
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents(
+            {'subject': 'grp0001'}), 0)
         self.cli._delete_actions_for("goob:gurn")
-        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 0)
+        self.assertEqual(
+            self.cli.native['prov_action_log'].count_documents({}), 0)
 
         self.assertEqual(self.cli._select_actions_for("goob:gurn"), [])
         self.assertEqual(self.cli._select_actions_for("grp0001"), [])

@@ -296,7 +296,7 @@ class TestInMemoryDBClient(test.TestCase):
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
         recs = list(self.cli.select_cst_records(**cst_or))
         self.assertEqual(len(recs), 2)
-        self.assertEqual(recs[0].id, "pdr0:0002")
+        self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")
 
         recs = list(self.cli.select_cst_records(**cst_and))
