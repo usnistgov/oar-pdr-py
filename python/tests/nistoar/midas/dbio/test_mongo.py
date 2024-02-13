@@ -405,7 +405,11 @@ class TestMongoDBClient(test.TestCase):
         rec = base.ProjectRecord(
             base.DMP_PROJECTS, {"id": "goob", "owner": "alice"}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
-
+        cst_orr = {'$a,nkd': [
+            {'$okn,r': [{'name': 'test 2'}, {'name': 'test3'}]}]}
+        with self.assertRaises(SyntaxError) as context:
+            recs = list(self.cli.select_cst_records(**cst_orr))
+        self.assertEqual(str(context.exception), "Wrong query format")
         recs = list(self.cli.select_cst_records(**cst_or))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")

@@ -295,6 +295,11 @@ class TestInMemoryDBClient(test.TestCase):
             }}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
         recs = list(self.cli.select_cst_records(**cst_or))
+        cst_orr = {'$a,nkd': [
+            {'$okn,r': [{'name': 'test 2'}, {'name': 'test3'}]}]}
+        with self.assertRaises(SyntaxError) as context:
+            recs = list(self.cli.select_cst_records(**cst_orr))
+        self.assertEqual(str(context.exception), "Wrong query format")
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")
