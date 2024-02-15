@@ -1,6 +1,6 @@
 import os, json, pdb, logging, tempfile, pathlib
 import unittest as test
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, PropertyMock
 from pathlib import Path
 
 from nistoar.midas.dbio import inmem, base, AlreadyExists, InvalidUpdate, ObjectNotFound, PartNotAccessible
@@ -63,6 +63,11 @@ class TestDAPProjectRecord(test.TestCase):
                 "type": "folder",
                 "size": "0"
             }
+            self.fm.get_uploads_directory.return_value = {
+                "fileid": "130",
+                "type": "folder",
+                "size": "0"
+            }
         self.fm.cfg = {
             'dap_app_base_url': 'http://localhost:5000/api',
             'auth': {
@@ -102,7 +107,7 @@ class TestDAPProjectRecord(test.TestCase):
         self.assertIn('file_space', rec)
         self.assertFalse(rec['file_space'].get('creator'))
         self.assertTrue(rec['file_space'].get('uploads_dav_url'))
-        self.assertFalse(rec['file_space'].get('location'))
+        self.assertEqual(rec['file_space'].get('location'), f"/{self.prec.id}/{self.prec.id}")
 
     def test_ensure_file_space(self):
         fs = self.prec.file_space
@@ -180,6 +185,12 @@ class TestMDS3DAPServiceWithFM(test.TestCase):
                 "type": "folder",
                 "size": "0"
             }
+            self.fm.get_uploads_directory.return_value = {
+                "fileid": "130",
+                "type": "folder",
+                "size": "0"
+            }
+            type(self.fm).cfg = PropertyMock(return_value={'dav_base_url': 'base'})
 
     def create_service(self):
         self.svc = mds3.DAPService(self.dbfact, self.cfg, nistr, rootlog.getChild("mds3"))

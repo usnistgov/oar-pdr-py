@@ -57,6 +57,11 @@ class TestFMFSFileComps(test.TestCase):
             self.fm = mock.return_value
             self.fm.post_scan_files.return_value = ack
             self.fm.get_scan_files.return_value = read_scan()
+            self.fm.get_uploads_directory.return_value = {
+                "fileid": "130",
+                "type": "folder",
+                "size": "0"
+            }
         self.cmps = fmfs.FMFSFileComps(inmem.InMemoryResource("pdr0:0001"), self.outdir.name)
         
     def tearDown(self):

@@ -22,14 +22,15 @@ from datetime import datetime
 from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence, Callable
-from typing import List, Union
+from typing import List, Union, Iterator
 from copy import deepcopy
 from urllib.parse import urlparse
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
                      InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
-from ...dbio.wsgi.project import MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler, SubApp
+from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
+                                  ProjectSelectionHandler, SubApp)
 from ...dbio import status
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
@@ -2179,6 +2180,7 @@ class DAPApp(MIDASProjectApp):
         super(DAPApp, self).__init__(service_factory, uselog, config)
         self._data_update_handler = DAPProjectDataHandler
         self._info_update_handler = DAPProjectInfoHandler
+        self._selection_handler = DAPProjectSelectionHandler
 
 class DAPProjectDataHandler(ProjectDataHandler):
     """
@@ -2339,3 +2341,30 @@ class DAPProjectInfoHandler(ProjectInfoHandler):
 
         return self.send_json(fssumm)
 
+class DAPProjectSelectionHandler(ProjectSelectionHandler):
+    """
+    A :py:class:`~nistoar.midas.wsgi.project.ProjectSelectionHandler` specialized for selecting DAP records.
+    In particular, it ensures that the records returned from a search are full DAP records (including 
+    the information computed on the fly).
+    """
+
+    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable,
+                 who: PubAgent, config: dict=None, log: Logger=None):
+        super(DAPProjectSelectionHandler, self).__init__(service, subapp, wsgienv, start_resp, who,
+                                                         config, log)
+        self._fmcli = None
+        if hasattr(service, '_fmcli'):
+            self._fmcli = service._fmcli
+        
+    def _select_records(self, perms) -> Iterator[ProjectRecord]:
+        """
+        submit a search query in a project specific way.  This implementation ensures that 
+        DAPProjectRecords are returned.
+        :return:  an iterator for the matched records
+        """
+        for rec in self._dbcli.select_records(perms):
+            yield to_DAPRec(rec, self._fmcli)
+
+
+
+    

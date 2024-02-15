@@ -630,6 +630,56 @@ class TestMDS3DAPApp(test.TestCase):
                          self.fmcfg['dav_base_url'].rstrip('/') + "/mds3:0001/mds3:0001")
         self.assertEqual(resp['location'], self.fmcfg['web_base_url']+"/129?dir=/mds3:0001/mds3:0001")
 
+        self.resp = []
+        path = "mds3:0001"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectHandler))
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIn('file_space', resp)
+
+        resp = resp['file_space']
+        self.assertIn('id', resp)
+        self.assertIn('action', resp)
+        self.assertEqual(resp['action'], '')
+        self.assertEqual(resp['file_count'], 7)
+        self.assertEqual(resp['folder_count'], 2)
+        self.assertEqual(resp['uploads_dav_url'],
+                         self.fmcfg['dav_base_url'].rstrip('/') + "/mds3:0001/mds3:0001")
+        self.assertEqual(resp['location'], self.fmcfg['web_base_url']+"/129?dir=/mds3:0001/mds3:0001")
+
+        self.resp = []
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, mds3.DAPProjectSelectionHandler))
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertTrue(isinstance(resp, list))
+        self.assertGreater(len(resp), 0)
+
+        resp = resp[0]
+        self.assertIn('file_space', resp)
+
+        resp = resp['file_space']
+        self.assertIn('id', resp)
+        self.assertIn('action', resp)
+        self.assertEqual(resp['action'], '')
+        self.assertEqual(resp['file_count'], 7)
+        self.assertEqual(resp['folder_count'], 2)
+        self.assertEqual(resp['uploads_dav_url'],
+                         self.fmcfg['dav_base_url'].rstrip('/') + "/mds3:0001/mds3:0001")
+        self.assertEqual(resp['location'], self.fmcfg['web_base_url']+"/129?dir=/mds3:0001/mds3:0001")
+
 
     @patch.multiple('nistoar.midas.dap.fm.FileManager',
                     post_scan_files=MagicMock(return_value=read_scan_reply()),
