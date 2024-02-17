@@ -47,7 +47,7 @@ class RecordSpace(Resource):
                 return {"error": "Internal Server Error", "message": "Failed to create directories"}, 500
 
             # Share space with user
-            permissions_response = files.post_userpermissions(user_name, 16, user_dir)
+            permissions_response = files.post_userpermissions(user_name, 31, user_dir)
             status_code = helpers.extract_status_code(permissions_response)
             if not permissions_response or status_code != 200:
                 logging.error(f"Failed to set permissions for user '{user_name}'")
