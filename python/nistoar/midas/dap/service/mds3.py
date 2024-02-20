@@ -803,7 +803,8 @@ class DAPService(ProjectService):
 
     _handsoff = ("@id @context publisher issued firstIssued revised annotated version " + \
                  "bureauCode programCode systemOfRecords primaryITInvestmentUII "       + \
-                 "doi ediid releaseHistory status theme").split()
+                 "doi ediid releaseHistory status").split()   # temporarily allow theme editing
+#                 "doi ediid releaseHistory status theme").split()  
 
     def _update_all_nerd(self, prec: ProjectRecord, nerd: NERDResource,
                          data: Mapping, provact: Action, replace=False):
@@ -1145,6 +1146,21 @@ class DAPService(ProjectService):
                 old = res.get(path)
 
                 res[path] = self._moderate_keyword(data, res, doval=doval, replace=replace)  # InvalidUpdate
+                provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
+                                             prec.id+"#data."+path, self.who, "updating "+path,
+                                             self._jsondiff(old, res[path])))
+                nerd.replace_res_data(res)
+                data = res[path]
+
+            # NOTE!!: Temporary support for updating theme
+            elif path == "theme":
+                if not isinstance(data, (list, str)):
+                    raise InvalidUpdate(part+" data is not a list of strings", sys=self)
+                res = nerd.get_res_data()
+                old = res.get(path)
+
+                res[path] = self._moderate_keyword(data, res, doval=doval, replace=replace,
+                                                   kwpropname='theme')  # may raise InvalidUpdate
                 provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
                                              prec.id+"#data."+path, self.who, "updating "+path,
                                              self._jsondiff(old, res[path])))
@@ -1675,7 +1691,7 @@ class DAPService(ProjectService):
             raise InvalidUpdate("description value is not a string or array of strings", sys=self)
         return [self._moderate_text(t, resmd, doval=doval) for t in val if t]
 
-    def _moderate_keyword(self, val, resmd=None, doval=True, replace=True):
+    def _moderate_keyword(self, val, resmd=None, doval=True, replace=True, kwpropname='keyword'):
         if val is None:
             val = []
         if isinstance(val, str):
@@ -1684,7 +1700,7 @@ class DAPService(ProjectService):
             raise InvalidUpdate("keywords value is not a string or array of strings", sys=self)
 
         # uniquify list
-        out = resmd.get('keyword', []) if resmd and not replace else []
+        out = resmd.get(kwpropname, []) if resmd and not replace else []
         for v in val:
             if v not in out:
                 out.append(self._moderate_text(v, resmd, doval=doval))
