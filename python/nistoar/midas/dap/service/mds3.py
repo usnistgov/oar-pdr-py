@@ -1347,11 +1347,11 @@ class DAPService(ProjectService):
             files = nerd.files
             if hasattr(files, 'update_hierarchy'):
                 prec.file_space['action'] = 'sync'
-                if files.fm_summary.get('last_scan_is_complete', True):
-                    prec.file_space.update(files.update_hierarchy())  # may raise FileSpaceException
-                else:
+                if files.fm_summary.get('syncing') == "in_progress":
                     # a scan is still in progress, so just get the latests updates; don't start a new scan
                     prec.file_space.update(files.update_metadata())
+                else:
+                    prec.file_space.update(files.update_hierarchy())  # may raise FileSpaceException
                 prec.save()
         return prec.to_dict().get('file_space', {})
             

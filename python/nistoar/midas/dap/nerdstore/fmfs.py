@@ -102,7 +102,8 @@ _NO_FM_SUMMARY = OrderedDict([
     ("usage", -1),
     ("syncing", False),
     ("last_modified", "(unknown)"),
-    ("last_scan_id", None)
+    ("last_scan_id", None),
+    ("syncing", "unsynced")
 ])
 
 class FMFSFileComps(FSBasedFileComps):
@@ -418,17 +419,17 @@ class FMFSFileComps(FSBasedFileComps):
             self._res.log.warning("File hierarchy may be incomplete")
             raise RuntimeError("Failed add/update files due to missing folders")
 
-        if scanmd.get("is_complete"):
+        if scanmd.get("status") and scanmd["status"] != "in_progress" and scanmd["status"] != "unsynced":
             self._fmcli.delete_scan_files(self._res.id, self.last_scan_id)
             self.last_scan_id = None
 
         return OrderedDict([
             ("file_count", len(scfiles)),
             ("folder_count", len(scfolders)),
-            ("syncing", not bool(scanmd.get("is_complete", False))),
+            ("syncing", scanmd.get("status", "unknown")),
             ("last_scan_started", scanmd.get("scan_datetime", "(unknown)")),
             ("last_scan_id", self.last_scan_id),
-            ("last_scan_is_complete", scanmd.get("is_complete", False)),
+            ("last_scan_is_complete", scanmd.get("is_complete", True)),
             ("usage", total_size),
             ("last_modified", scanmd.get("last_modified", "(unknown)")),
         ])
