@@ -420,7 +420,10 @@ class FMFSFileComps(FSBasedFileComps):
             raise RuntimeError("Failed add/update files due to missing folders")
 
         if scanmd.get("status") and scanmd["status"] != "in_progress" and scanmd["status"] != "unsynced":
-            self._fmcli.delete_scan_files(self._res.id, self.last_scan_id)
+            try:
+                self._fmcli.delete_scan_files(self._res.id, self.last_scan_id)
+            except Exception as ex:
+                self._res.log.error("Failed to delete scan report, %s: %s", self.last_scan_id, str(ex))
             self.last_scan_id = None
 
         return OrderedDict([
