@@ -39,6 +39,7 @@ are handled accordingly:
 from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence, Callable
+from typing import Iterator
 from urllib.parse import parse_qs
 
 from nistoar.pdr.publish.service.wsgi import SubApp, Handler  # same infrastructure as publishing service
@@ -422,6 +423,14 @@ class ProjectSelectionHandler(ProjectRecordHandler):
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "POST"])
 
+    def _select_records(self, perms) -> Iterator[ProjectRecord]:
+        """
+        submit a search query in a project specific way.  This implementation passes the query
+        directly to the generic DBClient instance.
+        :return:  a generator that iterates through the matched records
+        """
+        return self._dbcli.select_records(perms)
+
     def do_GET(self, path, ashead=False):
         """
         respond to a GET request, interpreted as a search for records accessible by the user
@@ -439,7 +448,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
 
         # sort the results by the best permission type permitted
         selected = OrderedDict()
-        for rec in self._dbcli.select_records(perms):
+        for rec in self._select_records(perms):
             maxperm = ''
             if rec.owner == self._dbcli.user_id:
                 maxperm = "owner"

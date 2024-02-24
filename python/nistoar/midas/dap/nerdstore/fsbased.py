@@ -602,6 +602,8 @@ class FSBasedFileComps(NERDFileComps):
         if oldfile and not id:
             id = oldfile.get('@id')
 
+        if as_coll is None and self.is_collection(md):
+            as_coll = True
         as_coll = [SUBCOLL_TYPE] if as_coll is True else None
 
         md = self._import_file(md, filepath, id, as_coll)  # assigns an @id if needed
@@ -762,10 +764,10 @@ class FSBasedFileComps(NERDFileComps):
         if self._chldp.is_file():
             self._chldp.unlink()
 
-        for id in os.listdir(self._dir):
+        for jf in os.listdir(self._dir):
             if jf.endswith(".json") and not jf.startswith(".") and not jf.startswith("_"):
-                if file.is_file():
-                    file.unlink()
+                if os.path.isfile(jf):
+                    os.unlink(jf)
 
         self._cache_children()
 
@@ -925,7 +927,7 @@ class FSBasedResource(NERDResource):
             out['components'] = []
             if self.nonfiles.count > 0:
                 out['components'].extend(self.nonfiles.get_data())
-            if self.files.count > 0:
+            if inclfiles and self.files.count > 0:
                 out['components'].extend(self.files.get_files())
         return out
         

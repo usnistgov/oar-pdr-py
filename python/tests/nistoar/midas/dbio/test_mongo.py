@@ -65,7 +65,7 @@ class TestMongoDBClient(test.TestCase):
             client.get_database = client.get_default_database
         db = client.get_database()
         for coll in [base.GROUPS_COLL, base.PEOPLE_COLL, base.DMP_PROJECTS, base.DRAFT_PROJECTS,
-                     "nextnum", "about", "action_log", "history"]:
+                     "nextnum", "about", "prov_action_log", "history"]:
             if coll in db.list_collection_names():
                 db.drop_collection(coll)
 
@@ -285,22 +285,22 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(recs[0].id, id)
 
     def test_action_log_io(self):
-        self.assertEqual(self.cli.native['action_log'].count_documents({}), 0)
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 0)
         self.cli._save_action_data({'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
-        acts = [r for r in self.cli.native['action_log'].find({}, {'_id': False})]
+        acts = [r for r in self.cli.native['prov_action_log'].find({}, {'_id': False})]
         self.assertEqual(len(acts), 1)
         self.assertEqual(acts[0], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
 
         self.cli._save_action_data({'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
-        acts = [r for r in self.cli.native['action_log'].find({}, {'_id': False})]
+        acts = [r for r in self.cli.native['prov_action_log'].find({}, {'_id': False})]
         self.assertEqual(len(acts), 2)
         self.assertEqual(acts[0], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
         self.assertEqual(acts[1], {'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
 
-        self.assertEqual(self.cli.native['action_log'].count_documents({'subject': 'grp0001'}), 0)
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({'subject': 'grp0001'}), 0)
         self.cli._save_action_data({'subject': 'grp0001', 'dylan': 'bob'})
-        self.assertEqual(self.cli.native['action_log'].count_documents({}), 3)
-        acts = [r for r in self.cli.native['action_log'].find({'subject': 'grp0001'}, {'_id': False})]
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 3)
+        acts = [r for r in self.cli.native['prov_action_log'].find({'subject': 'grp0001'}, {'_id': False})]
         self.assertEqual(len(acts), 1)
         self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
 
@@ -314,10 +314,10 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
 
         self.cli._delete_actions_for("grp0001")
-        self.assertEqual(self.cli.native['action_log'].count_documents({}), 2)
-        self.assertEqual(self.cli.native['action_log'].count_documents({'subject': 'grp0001'}), 0)
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 2)
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({'subject': 'grp0001'}), 0)
         self.cli._delete_actions_for("goob:gurn")
-        self.assertEqual(self.cli.native['action_log'].count_documents({}), 0)
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 0)
 
         self.assertEqual(self.cli._select_actions_for("goob:gurn"), [])
         self.assertEqual(self.cli._select_actions_for("grp0001"), [])

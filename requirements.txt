@@ -13,6 +13,9 @@ funcsigs
 bagit>=1.6.3,<2.0
 fs>=2.0.21
 jsonpatch
+jsonpath_ng
+lxml
+webdavclient3
 mako
 pyjwt
 ejsonschema @ https://github.com/usnistgov/ejsonschema/archive/master.zip

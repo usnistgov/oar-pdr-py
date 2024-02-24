@@ -585,6 +585,7 @@ class MIDASApp:
         email = userinfo.get('userEmail','')
         group = "public"
         if not subj:
+            log.warning("User token is missing subject identifier; defaulting to anonymous")
             subj = "anonymous"
         elif subj.endswith("@nist.gov"):
             group = "nist"

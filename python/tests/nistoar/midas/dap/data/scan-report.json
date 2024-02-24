@@ -1,0 +1,91 @@
+{
+    "space_id": "mds3-0012",
+    "scan_id": "914e479a-e344-4152-a340-f62947d7adbd",
+    "scan_time": 1705612136.8156767,
+    "scan_datetime": "2024-01-18T21:08:56.815677",
+    "user_dir": "/shared/data/oar_api/files/mds3-0012/mds3-0012",
+    "fm_system_path": "mds3-0012/mds3-0012-sys",
+    "status": "successful",
+    "contents": [
+        {
+            "fileid": "196",
+            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/ngc7793-HIcube.fits",
+            "size": "4083840",
+            "last_modified": "2009-03-26T13:03:29+00:00",
+            "resource_type": "file",
+            "scan_errors": [],
+            "checksum": "7d845d97864702f5e3a9163ed19197cb0a0787094d1837b7348b1d027cc751a2",
+            "last_checksum_date": "2024-01-18T18:44:59.122495"
+        },
+        {
+            "fileid": "203",
+            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/ngc7793-HIm0.fits",
+            "size": "152640",
+            "last_modified": "2009-03-26T13:03:31+00:00",
+            "resource_type": "file",
+            "scan_errors": [],
+            "checksum": "b0c56548becfd6791533fc3d2fc2a25309c27405106ba60d170f935300fc67bf",
+            "last_checksum_date": "2024-01-18T18:44:59.122495"
+        },
+        {
+            "fileid": "229",
+            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/ngc7793-HIm1.fits",
+            "size": "146880",
+            "last_modified": "2009-03-26T13:03:34+00:00",
+            "resource_type": "file",
+            "scan_errors": [],
+            "checksum": "132ee0a64d679a3a8a045985e74754abda563ae84ed3c53fe0571dd8a9d2f56a",
+            "last_checksum_date": "2024-01-18T18:44:59.122495"
+        },
+        {
+            "fileid": "194",
+            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/ngc7793-cont.fits",
+            "size": "581760",
+            "last_modified": "2009-03-26T12:59:08+00:00",
+            "resource_type": "file",
+            "scan_errors": [],
+            "checksum": "72f9e215f2b5ef637087a0355466f9279ce403b1310162775d04d99282af28ce",
+            "last_checksum_date": "2024-01-18T18:44:59.122495"
+        },
+        {
+            "fileid": "284",
+            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/analysis/",
+            "size": "32046",
+            "last_modified": "2024-01-18T21:08:09+00:00",
+            "resource_type": "folder",
+            "scan_errors": []
+        },
+        {
+            "fileid": "301",
+            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/previews/ngc7793-cont.gif",
+            "size": "22502",
+            "last_modified": "2009-03-26T12:59:08+00:00",
+            "resource_type": "file",
+            "scan_errors": [],
+            "checksum": "0c03f1e1da1ff3bf6689260d3ecdd0c9888d7b8cb22ac485ee1faa92fcba4280",
+            "last_checksum_date": "2024-01-18T18:44:59.122495"
+        },
+        {
+            "fileid": "302",
+            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/previews/ngc7793-HIm0.gif",
+            "size": "4769",
+            "last_modified": "2009-03-26T12:59:08+00:00",
+            "resource_type": "file",
+            "scan_errors": [],
+            "checksum": "5d4153ce664bf8176f967203a887de257ccca63c95e342191f63f071536b16d2",
+            "last_checksum_date": "2024-01-18T18:44:59.122495"
+        },
+        {
+            "fileid": "303",
+            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/previews/ngc7793-HIm1.gif",
+            "size": "4775",
+            "last_modified": "2009-03-26T12:59:08+00:00",
+            "resource_type": "file",
+            "scan_errors": [],
+            "checksum": "d14ae274c57302b3f08d0fc4accf4185d3468c1707db8c4766a657d6c0ee3dcc",
+            "last_checksum_date": "2024-01-18T18:44:59.122495"
+        }
+    ],
+    "last_modified": "2024-01-18T21:08:09+00:00",
+    "is_complete": true
+}

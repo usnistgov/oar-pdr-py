@@ -683,7 +683,7 @@ class InMemoryResource(NERDResource):
             out['components'] = []
             if self._nonfiles.count > 0:
                 out['components'].extend(self._nonfiles.get_data())
-            if self._files.count > 0:
+            if inclfiles and self._files.count > 0:
                 out['components'].extend(self._files.get_files())
         return out
         
