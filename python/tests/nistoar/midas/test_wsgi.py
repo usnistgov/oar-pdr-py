@@ -688,6 +688,17 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(who.group, "nist")
         self.assertEqual(who.actor, "fed")
         self.assertEqual(who.agents, ["Unit testing agent"])
+        self.assertIsNone(who.get_prop("email"))
+
+        token = jwt.encode({"sub": "fed", "userEmail": "fed@nist.gov", "OU": "61"},
+                           self.config['jwt_auth']['key'], algorithm="HS256")
+        req['HTTP_AUTHORIZATION'] = "Bearer "+token
+        who = self.app.authenticate(req)
+        self.assertEqual(who.group, "nist")
+        self.assertEqual(who.actor, "fed")
+        self.assertEqual(who.agents, ["Unit testing agent"])
+        self.assertEqual(who.get_prop("email"), "fed@nist.gov")
+        self.assertEqual(who.get_prop("OU"), "61")
 
 
     def test_create_dmp(self):
