@@ -28,6 +28,24 @@ class TestPubAgent(test.TestCase):
         self.assertEqual(agent.actor_type, "auto")
         self.assertEqual(agent.actor, "pdp")
         self.assertEqual(agent.agents, ["thing1", "thing2"])
+        self.assertEqual(dict(agent.iter_props()), {})
+
+    def test_props(self):
+        agent = prov.PubAgent("ncnr", prov.PubAgent.AUTO, "pdp", ("thing1", "thing2"),
+                              email="a@b.com", lunch="tacos", likes=["mom"])
+        self.assertEqual(agent.agents, ["thing1", "thing2"])
+        self.assertEqual(dict(agent.iter_props()),
+                         {"email": "a@b.com", "lunch": "tacos", "likes": ["mom"]})
+        self.assertEqual(agent.get_prop("email"), "a@b.com")
+        self.assertEqual(agent.get_prop("lunch"), "tacos")
+        self.assertEqual(agent.get_prop("likes", "beer"), ["mom"])
+        self.assertIsNone(agent.get_prop("hairdo"))
+        self.assertEqual(agent.get_prop("hairdo", "cueball"), "cueball")
+        agent.set_prop("hairdo", "piece")
+        self.assertEqual(agent.get_prop("hairdo", "cueball"), "piece")
+        agent.set_prop("likes", "beer")
+        self.assertEqual(agent.get_prop("likes"), "beer")
+        
 
     def test_add_agent(self):
         agent = prov.PubAgent("ncnr", prov.PubAgent.AUTO, "pdp")

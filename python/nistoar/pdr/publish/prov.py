@@ -27,7 +27,8 @@ class PubAgent(object):
     AUTO: str = "auto"
     UNKN: str = ""
 
-    def __init__(self, group: str, actortype: str, actor: str = None, agents: Iterable[str] = None):
+    def __init__(self, group: str, actortype: str, actor: str = None, agents: Iterable[str] = None,
+                 **kwargs):
         self._group = group
         if actortype not in [self.USER, self.AUTO, self.UNKN]:
             raise ValueError("PubAgent: actortype not one of "+str((self.USER, self.AUTO)))
@@ -36,6 +37,7 @@ class PubAgent(object):
         if agents:
             self._agents = list(agents)
         self._actor= actor
+        self._md = OrderedDict((k,v) for k,v in kwargs.items() if v is not None)
 
     @property
     def group(self) -> str:
@@ -83,7 +85,35 @@ class PubAgent(object):
         if agent:
             self._agents.append(agent)
 
-    def to_dict(self) -> Mapping:
+    def get_prop(self, propname: str, defval=None):
+        """
+        return an actor property with the given name.  These arbitrary properties are typically 
+        set at construction time from authentication credentials, but others can be set via 
+        :py:meth:`set_prop`.  
+        :param str propname: the name of the actor property to return
+        :param Any    deval: the value to return if the property is not set (defaults to None)
+        :return:  the property value
+                  :rtype: Any
+        """
+        return self._md.get(propname, defval)
+
+    def set_prop(self, propname: str, val):
+        """
+        set an actor property with the given name to a given value.  To unset a property, provide 
+        None as the value.  
+        """
+        if val is None and propname in self._md:
+            del self._md[propname]
+        else:
+            self._md[propname] = val
+
+    def iter_props(self) -> Iterable[tuple]:
+        """
+        iterate through the attached actor properties, returning them a (property, value) tuples
+        """
+        return self._md.items()
+
+    def to_dict(self, withmd=False) -> Mapping:
         """
         return a dictionary describing this agent that can be converted to JSON directly via the 
         json module.  This implementation returns an OrderedDict which provides a preferred ordering 
@@ -96,18 +126,22 @@ class PubAgent(object):
         ])
         if self._agents:
             out['agents'] = self.agents
+        if withmd and self._md:
+            out['actor_md'] = deepcopy(self._md)
         return out
     
-    def serialize(self, indent=None):
+    def serialize(self, indent=None, withmd=False):
         """
         serialize this agent to a JSON string
         :param int indent:  use the given value as the desired indentation.  If None, the output will 
                             include no newline characters (and thus no indentation)
+        :param bool withmd: if True, include all extra user properties stored in this instance; 
+                            default: True
         """
         kw = {}
         if indent:
             kw['indent'] = indent
-        return json.dumps(self.to_dict(), **kw)
+        return json.dumps(self.to_dict(withmd), **kw)
 
     def __str__(self):
         return "PubAgent(%s:%s)" % (self.group, self.actor)
