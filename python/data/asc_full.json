@@ -1,0 +1,53 @@
+{
+    "$and": [
+        {
+            "$or": [
+                {
+                    "meta.assocPageType": "stand-alone"
+                },
+                {
+                    "$and": [
+                        {
+                            "data.nonfile_count": {
+                                "$lte": 12
+                            }
+                        },
+                        {
+                            "file_space.usage": {
+                                "$gt": 50
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "data.@type": {
+                "$regex": "Public"
+            }
+        },
+        {
+            "data.author_cout": {
+                "$gt": 2
+            }
+        },
+        {
+            "name": {
+                "$regex": "^S",
+                "$options": "i"
+            }
+        },
+        {
+            "$or": [
+                {
+                    "file_space.message": {
+                        "$text": "blabla"
+                    }
+                },
+                {
+                    "file_space.syncing": false
+                }
+            ]
+        }
+    ]
+}
