@@ -81,13 +81,20 @@ class InMemoryDBClient(base.DBClient):
                     yield deepcopy(rec)
                     break
     
-    def select_constraint_records(self, **cst) -> Iterator[base.ProjectRecord]:
+    def select_constraint_records(self,perm: base.Permissions=base.ACLs.OWN, **cst) -> Iterator[base.ProjectRecord]:
         if(base.DBClient.check_query_structure(cst) == True):
             try:
+                if isinstance(perm, str):
+                    perm = [perm]
+                if isinstance(perm, (list, tuple)):
+                    perm = set(perm)
                 for rec in self._db[self._projcoll].values():
                     rec = base.ProjectRecord(self._projcoll, rec, self)
-                    if (rec.searched(cst) == True):
-                        yield deepcopy(rec)
+                    for p in perm:
+                        if(rec.authorized(p)):
+                            if (rec.searched(cst) == True):
+                                yield deepcopy(rec)
+                                break
             except Exception as ex:
                 raise base.DBIOException(
                     "Failed while selecting records: " + str(ex), cause=ex)

@@ -271,6 +271,9 @@ class TestInMemoryDBClient(test.TestCase):
             }}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
+        
+        
+
         id = "pdr0:0006"
         rec = base.ProjectRecord(
             base.DMP_PROJECTS, {"id": id, "name": "test 2", "status": {
@@ -295,10 +298,22 @@ class TestInMemoryDBClient(test.TestCase):
             }}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
+        id = "pdr0:0005"
+        rec = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": id, "name": "test 2", "deactivated": "null","owner":"not_self", "status": {
+                "created": 1689021185.5037804,
+                "state": "create",
+                "action": "create",
+                "since": 1689021185.5038593,
+                "modified": 1689021185.5050585,
+                "message": "draft created"
+            }}, self.cli)
+        self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
+
         constraint_wrong = {'$a,nkd': [
             {'$okn,r': [{'name': 'test 2'}, {'name': 'test3'}]}]}
         with self.assertRaises(SyntaxError) as context:
-            recs = list(self.cli.select_constraint_records(**constraint_wrong))
+            recs = list(self.cli.select_constraint_records(base.ACLs.READ,**constraint_wrong))
         self.assertEqual(str(context.exception), "Wrong query format")
         recs = list(self.cli.select_constraint_records(**constraint_or))
         self.assertEqual(len(recs), 2)
@@ -308,7 +323,7 @@ class TestInMemoryDBClient(test.TestCase):
         recs = list(self.cli.select_constraint_records(**constraint_and))
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0].id, "pdr0:0003")
-        recs = list(self.cli.select_constraint_records(**constraint_andor))
+        recs = list(self.cli.select_constraint_records(base.ACLs.READ,**constraint_andor))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")
@@ -339,10 +354,14 @@ class TestInMemoryDBClient(test.TestCase):
             base.DMP_PROJECTS, {"id": id, "name": "test3"}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
-        # not working because owner is not self
         rec = base.ProjectRecord(
             base.DMP_PROJECTS, {"id": "pdr0:0004", "name": "test4"}, self.cli)
         self.cli._db[base.DMP_PROJECTS]["pdr0:0004"] = rec.to_dict()
+
+        # not working because owner is not self
+        rec = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": "pdr0:0014", "name": "test5","owner":"not_self"}, self.cli)
+        self.cli._db[base.DMP_PROJECTS]["pdr0:0014"] = rec.to_dict()
 
         recs = list(self.cli.select_records(base.ACLs.READ))
         self.assertEqual(len(recs), 4)

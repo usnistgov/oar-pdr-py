@@ -195,7 +195,6 @@ class MongoDBClient(base.DBClient):
                 constraints["$or"].append({"acls."+p: {"$in": idents}})
         else:
             constraints = {"acls."+perm.pop(): {"$in": idents}}
-            
         try:
             coll = self.native[self._projcoll]
 
@@ -206,9 +205,25 @@ class MongoDBClient(base.DBClient):
             raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
         
     
-    def select_constraint_records(self, **cst) -> Iterator[base.ProjectRecord]:
+    def select_constraint_records(self, perm: base.Permissions=base.ACLs.OWN, **cst) -> Iterator[base.ProjectRecord]:
         if(base.DBClient.check_query_structure(cst) == True):
+            if isinstance(perm, str):
+                perm = [perm]
+            if isinstance(perm, (list, tuple)):
+                perm = set(perm)
+            idents = [self.user_id] + list(self.user_groups)
+
+            if len(perm) > 1:
+                constraints = {"$or": []}
+                for p in perm:
+                    constraints["$or"].append({"acls."+p: {"$in": idents}})
+            else:
+                constraints = {"acls."+perm.pop(): {"$in": idents}}
+                
+            cst["$and"].append(constraints)
+                
             try:
+                
                 coll = self.native[self._projcoll]
                 for rec in coll.find(cst):
                     yield base.ProjectRecord(self._projcoll, rec)

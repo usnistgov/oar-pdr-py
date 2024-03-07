@@ -335,7 +335,7 @@ class TestMongoDBClient(test.TestCase):
 
     def test_select_records(self):
         # test query on a recognized but empty collection
-        it = self.cli.select_records(base.ACLs.READ)
+        it = self.cli.select_records()
         self.assertTrue(hasattr(it, "__next__"),
                         "selection not in the form of an iterator")
         recs = list(it)
@@ -355,8 +355,7 @@ class TestMongoDBClient(test.TestCase):
             base.DMP_PROJECTS, {"id": "goob", "owner": "alice"}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
 
-        recs = list(self.cli.select_records(base.ACLs.READ))
-        print(len(recs))
+        recs = list(self.cli.select_records())
 
         self.assertEqual(len(recs), 2)
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
@@ -402,16 +401,25 @@ class TestMongoDBClient(test.TestCase):
             }}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
 
+        id = "pdr0:0007"
         rec = base.ProjectRecord(
-            base.DMP_PROJECTS, {"id": "goob", "owner": "alice"}, self.cli)
+            base.DMP_PROJECTS, {"id": id, "name": "test3", "owner": "alice", "status": {
+                "created": 1689021185.5037804,
+                "state": "edit",
+                "action": "create",
+                "since": 1689021185.5038593,
+                "modified": 1689021185.5050585,
+                "message": "draft created"
+            }}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
+
 
         constraint_wrong = {'$a,nkd': [
             {'$okn,r': [{'name': 'test 2'}, {'name': 'test3'}]}]}
         with self.assertRaises(SyntaxError) as context:
             recs = list(self.cli.select_constraint_records(**constraint_wrong))
         self.assertEqual(str(context.exception), "Wrong query format")
-        recs = list(self.cli.select_constraint_records(**constraint_or))
+        recs = list(self.cli.select_constraint_records(base.ACLs.READ,**constraint_or))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")
@@ -419,7 +427,7 @@ class TestMongoDBClient(test.TestCase):
         recs = list(self.cli.select_constraint_records(**constraint_and))
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0].id, "pdr0:0003")
-        recs = list(self.cli.select_constraint_records(**constraint_andor))
+        recs = list(self.cli.select_constraint_records(base.ACLs.READ,**constraint_andor))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")

@@ -1056,16 +1056,18 @@ class DBClient(ABC):
         raise NotImplementedError()
     
     @abstractmethod
-    def select_constraint_records(self, **cst) -> Iterator[ProjectRecord]:
+    def select_constraint_records(self, perm: Permissions = ACLs.OWN, **cst) -> Iterator[ProjectRecord]:
         """
-        return an iterator of project records for which the given user has at least one of the given 
-        permissions
+        return an iterator of project records for which the given user has at least one of the
+        permissions and the records meet all the constraints given
 
         :param str       user:  the identity of the user that wants access to the records.  
         :param str|[str] perm:  the permissions the user requires for the selected record.  For
                                 each record returned the user will have at least one of these
                                 permissions.  The value can either be a single permission value
                                 (a str) or a list/tuple of permissions
+        :param str       **cst: a json that describes all the constraints the records should meet. 
+                                the schema of this json is the query structure used by mongodb.
         """
         raise NotImplementedError()
 
