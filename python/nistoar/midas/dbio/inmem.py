@@ -10,7 +10,6 @@ from . import base
 
 from nistoar.base.config import merge_config
 
-
 class InMemoryDBClient(base.DBClient):
     """
     an in-memory DBClient implementation 
@@ -18,8 +17,7 @@ class InMemoryDBClient(base.DBClient):
 
     def __init__(self, dbdata: Mapping, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS):
         self._db = dbdata
-        super(InMemoryDBClient, self).__init__(
-            config, projcoll, self._db, foruser)
+        super(InMemoryDBClient, self).__init__(config, projcoll, self._db, foruser)
 
     def _next_recnum(self, shoulder):
         if shoulder not in self._db['nextnum']:
@@ -71,17 +69,7 @@ class InMemoryDBClient(base.DBClient):
         self._db[coll][recdata['id']] = deepcopy(recdata)
         return not exists
 
-    def select_cst_records(self, **cst) -> Iterator[base.ProjectRecord]:
-        print(cst)
-        for rec in self._db[self._projcoll].values():
-            rec = base.ProjectRecord(self._projcoll, rec, self)
-            if (rec.searched(cst) == True):
-                print(rec)
-                yield deepcopy(rec)
-            else:
-                print("NO GOOD")
-
-    def select_records(self, perm: base.Permissions = base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+    def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
             perm = [perm]
         if isinstance(perm, (list, tuple)):
@@ -92,18 +80,30 @@ class InMemoryDBClient(base.DBClient):
                 if rec.authorized(p):
                     yield deepcopy(rec)
                     break
+    
+    def select_constraint_records(self, **cst) -> Iterator[base.ProjectRecord]:
+        if(base.DBClient.check_query_structure(cst) == True):
+            try:
+                for rec in self._db[self._projcoll].values():
+                    rec = base.ProjectRecord(self._projcoll, rec, self)
+                    if (rec.searched(cst) == True):
+                        yield deepcopy(rec)
+            except Exception as ex:
+                raise base.DBIOException(
+                    "Failed while selecting records: " + str(ex), cause=ex)
+        else:
+            raise SyntaxError('Wrong query format')
 
     def _save_action_data(self, actdata: Mapping):
         if 'subject' not in actdata:
-            raise ValueError(
-                "_save_action_data(): Missing subject property in action data")
+            raise ValueError("_save_action_data(): Missing subject property in action data")
         id = actdata['subject']
         if base.PROV_ACT_LOG not in self._db:
             self._db[base.PROV_ACT_LOG] = {}
         if id not in self._db[base.PROV_ACT_LOG]:
             self._db[base.PROV_ACT_LOG][id] = []
         self._db[base.PROV_ACT_LOG][id].append(actdata)
-
+                
     def _select_actions_for(self, id: str) -> List[Mapping]:
         if base.PROV_ACT_LOG not in self._db or id not in self._db[base.PROV_ACT_LOG]:
             return []
@@ -116,15 +116,14 @@ class InMemoryDBClient(base.DBClient):
 
     def _save_history(self, histrec):
         if 'recid' not in histrec:
-            raise ValueError(
-                "_save_history(): Missing recid property in history data")
+            raise ValueError("_save_history(): Missing recid property in history data")
         if 'history' not in self._db:
             self._db['history'] = {}
         if histrec['recid'] not in self._db['history']:
             self._db['history'][histrec['recid']] = []
         self._db['history'][histrec['recid']].append(histrec)
 
-
+                
 class InMemoryDBClientFactory(base.DBClientFactory):
     """
     a DBClientFactory that creates InMemoryDBClient instances in which records are stored in data
@@ -132,7 +131,7 @@ class InMemoryDBClientFactory(base.DBClientFactory):
     clients it creates.  
     """
 
-    def __init__(self, config: Mapping, _dbdata=None):
+    def __init__(self, config: Mapping, _dbdata = None):
         """
         Create the factory with the given configuration.
 
@@ -151,9 +150,11 @@ class InMemoryDBClientFactory(base.DBClientFactory):
         }
         if _dbdata:
             self._db.update(deepcopy(_dbdata))
+            
 
-    def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
+    def create_client(self, servicetype: str, config: Mapping={}, foruser: str = base.ANONYMOUS):
         cfg = merge_config(config, deepcopy(self._cfg))
         if servicetype not in self._db:
             self._db[servicetype] = {}
         return InMemoryDBClient(self._db, cfg, servicetype, foruser)
+        

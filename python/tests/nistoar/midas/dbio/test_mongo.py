@@ -22,13 +22,13 @@ asc_or = 'data/asc_or.json'
 dmp_path = 'data/dmp.json'
 
 with open(asc_or, 'r') as file:
-    cst_or = json.load(file)
+    constraint_or = json.load(file)
 
 with open(asc_and, 'r') as file:
-    cst_and = json.load(file)
+    constraint_and = json.load(file)
 
 with open(asc_andor, 'r') as file:
-    cst_andor = json.load(file)
+    constraint_andor = json.load(file)
 
 with open(dmp_path, 'r') as file:
     dmp = json.load(file)
@@ -362,7 +362,7 @@ class TestMongoDBClient(test.TestCase):
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
         self.assertEqual(recs[1].id, id)
 
-    def test_select_cst_records(self):
+    def test_select_constraint_records(self):
 
         # inject some data into the database
 
@@ -405,20 +405,21 @@ class TestMongoDBClient(test.TestCase):
         rec = base.ProjectRecord(
             base.DMP_PROJECTS, {"id": "goob", "owner": "alice"}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
-        cst_orr = {'$a,nkd': [
+
+        constraint_wrong = {'$a,nkd': [
             {'$okn,r': [{'name': 'test 2'}, {'name': 'test3'}]}]}
         with self.assertRaises(SyntaxError) as context:
-            recs = list(self.cli.select_cst_records(**cst_orr))
+            recs = list(self.cli.select_constraint_records(**constraint_wrong))
         self.assertEqual(str(context.exception), "Wrong query format")
-        recs = list(self.cli.select_cst_records(**cst_or))
+        recs = list(self.cli.select_constraint_records(**constraint_or))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")
 
-        recs = list(self.cli.select_cst_records(**cst_and))
+        recs = list(self.cli.select_constraint_records(**constraint_and))
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0].id, "pdr0:0003")
-        recs = list(self.cli.select_cst_records(**cst_andor))
+        recs = list(self.cli.select_constraint_records(**constraint_andor))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")

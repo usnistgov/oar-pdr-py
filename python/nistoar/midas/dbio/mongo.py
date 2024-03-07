@@ -180,6 +180,7 @@ class MongoDBClient(base.DBClient):
 
         except Exception as ex:
             raise base.DBIOException("Failed while deleting record with id=%s: %s" % (id, str(ex)))
+         
 
     def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
@@ -203,6 +204,20 @@ class MongoDBClient(base.DBClient):
 
         except Exception as ex:
             raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
+        
+    
+    def select_constraint_records(self, **cst) -> Iterator[base.ProjectRecord]:
+        if(base.DBClient.check_query_structure(cst) == True):
+            try:
+                coll = self.native[self._projcoll]
+                for rec in coll.find(cst):
+                    yield base.ProjectRecord(self._projcoll, rec)
+
+            except Exception as ex:
+                raise base.DBIOException(
+                    "Failed while selecting records: " + str(ex), cause=ex)
+        else:
+            raise SyntaxError('Wrong query format')
 
     def _save_action_data(self, actdata: Mapping):
         try:
@@ -283,4 +298,3 @@ class MongoDBClientFactory(base.DBClientFactory):
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
         cfg = merge_config(config, deepcopy(self._cfg))
         return MongoDBClient(self._dburl, cfg, servicetype, foruser)
-
