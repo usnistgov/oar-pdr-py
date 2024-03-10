@@ -138,14 +138,12 @@ class TestMongoDBClient(test.TestCase):
         self.assertIsNone(self.cli._get_from_coll(base.GROUPS_COLL, "p:mine"))
 
         # put in some test data into the underlying database
-        self.cli.native[base.GROUPS_COLL].insert_one(
-            {"id": "p:bob", "owner": "alice"})
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:bob", "owner": "alice"})
         self.assertIsNone(self.cli._get_from_coll(base.GROUPS_COLL, "p:mine"))
         self.assertEqual(self.cli._get_from_coll(base.GROUPS_COLL, "p:bob"),
                          {"id": "p:bob", "owner": "alice"})
 
-        self.cli.native[base.GROUPS_COLL].insert_one(
-            {"id": "p:mine", "owner": "p:bob"})
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:mine", "owner": "p:bob"})
         self.assertEqual(self.cli._get_from_coll(base.GROUPS_COLL, "p:mine"),
                          {"id": "p:mine", "owner": "p:bob"})
         self.assertEqual(self.cli._get_from_coll(base.GROUPS_COLL, "p:bob"),
@@ -164,8 +162,7 @@ class TestMongoDBClient(test.TestCase):
 
         # test query on a recognized but existing collection
         self.cli.native[base.GROUPS_COLL].insert_one({"id": "blah", "owner": "meh"})
-        recs = list(self.cli._select_from_coll(
-            base.GROUPS_COLL, owner="p:bob", hobby="knitting"))
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob", hobby="knitting"))
         self.assertEqual(len(recs), 0)
 
         # put in some test data into the underlying database
@@ -186,7 +183,8 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(len(recs), 2)
 
         # test deactivated filter
-        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:gang", "owner": "p:bob", "deactivated": 1.2})
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:gang",
+                                                      "owner": "p:bob", "deactivated": 1.2})
         recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob"))
         self.assertEqual(len(recs), 1)
         recs = list(self.cli._select_from_coll(base.GROUPS_COLL, incl_deact=True, owner="p:bob"))
@@ -239,7 +237,7 @@ class TestMongoDBClient(test.TestCase):
         recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob", incl_deact=True))
         self.assertEqual(len(recs), 3)
         self.cli.native[base.GROUPS_COLL].find_one_and_update({"id": "p:gang"},
-                                                              {"$set": {"deactivated": None}})
+                                                              { "$set": { "deactivated": None } })
         recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
         self.assertEqual(len(recs), 3)
 
