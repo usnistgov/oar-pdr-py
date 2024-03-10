@@ -1,8 +1,4 @@
-import os
-import json
-import pdb
-import logging
-import tempfile
+import os, json, pdb, logging, tempfile
 from pathlib import Path
 import unittest as test
 
@@ -16,10 +12,13 @@ dburl = None
 if os.environ.get('MONGO_TESTDB_URL'):
     dburl = os.environ.get('MONGO_TESTDB_URL')
 
-asc_andor = 'data/asc_andor.json'
-asc_and = 'data/asc_and.json'
-asc_or = 'data/asc_or.json'
-dmp_path = 'data/dmp.json'
+testdir = Path(__file__).parents[0]
+datadir = testdir / "data"
+
+asc_andor = datadir / 'asc_andor.json'
+asc_and   = datadir / 'asc_and.json'
+asc_or    = datadir / 'asc_or.json'
+dmp_path  = datadir / 'dmp.json'
 
 with open(asc_or, 'r') as file:
     constraint_or = json.load(file)
@@ -80,8 +79,7 @@ class TestMongoDBClient(test.TestCase):
     def setUp(self):
         self.cfg = {}
         self.user = "nist0:ava1"
-        self.cli = mongo.MongoDBClient(
-            dburl, self.cfg, base.DMP_PROJECTS, self.user)
+        self.cli = mongo.MongoDBClient(dburl, self.cfg, base.DMP_PROJECTS, self.user)
 
     def tearDown(self):
         client = MongoClient(dburl)
@@ -124,11 +122,9 @@ class TestMongoDBClient(test.TestCase):
         slot = self.cli.native.nextnum.find_one({"slot": "goob"})
         self.assertEqual(slot["next"], 4)
 
-        self.assertEqual(
-            self.cli.native.nextnum.count_documents({"slot": "hank"}), 0)
+        self.assertEqual(self.cli.native.nextnum.count_documents({"slot": "hank"}), 0)
         self.cli._try_push_recnum("hank", 2)
-        self.assertEqual(
-            self.cli.native.nextnum.count_documents({"slot": "hank"}), 0)
+        self.assertEqual(self.cli.native.nextnum.count_documents({"slot": "hank"}), 0)
 
         self.cli._try_push_recnum("goob", 3)
         slot = self.cli.native.nextnum.find_one({"slot": "goob"})
@@ -161,120 +157,90 @@ class TestMongoDBClient(test.TestCase):
 
     def test_select_from_coll(self):
         # test query on unrecognized collection
-        it = self.cli._select_from_coll(
-            "alice", owner="p:bob", hobby="knitting")
-        self.assertTrue(hasattr(it, "__next__"),
-                        "selection not in the form of an iterator")
+        it = self.cli._select_from_coll("alice", owner="p:bob", hobby="knitting")
+        self.assertTrue(hasattr(it, "__next__"), "selection not in the form of an iterator")
         recs = list(it)
         self.assertEqual(len(recs), 0)
 
         # test query on a recognized but existing collection
-        self.cli.native[base.GROUPS_COLL].insert_one(
-            {"id": "blah", "owner": "meh"})
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "blah", "owner": "meh"})
         recs = list(self.cli._select_from_coll(
             base.GROUPS_COLL, owner="p:bob", hobby="knitting"))
         self.assertEqual(len(recs), 0)
 
         # put in some test data into the underlying database
-        self.cli.native[base.GROUPS_COLL].insert_one(
-            {"id": "p:bob", "owner": "alice", "hobby": "whittling"})
-        it = self.cli._select_from_coll(
-            base.GROUPS_COLL, owner="p:bob", hobby="knitting")
-        self.assertTrue(hasattr(it, "__next__"),
-                        "selection not in the form of an iterator")
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:bob", "owner": "alice", "hobby": "whittling"})
+        it = self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob", hobby="knitting")
+        self.assertTrue(hasattr(it, "__next__"), "selection not in the form of an iterator")
         recs = list(it)
         self.assertEqual(len(recs), 0)
-        recs = list(self.cli._select_from_coll(
-            base.GROUPS_COLL, owner="alice", hobby="whittling"))
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="alice", hobby="whittling"))
         self.assertEqual(len(recs), 1)
-        self.assertEqual(
-            recs[0], {"id": "p:bob", "owner": "alice", "hobby": "whittling"})
+        self.assertEqual(recs[0], {"id": "p:bob", "owner": "alice", "hobby": "whittling"})
 
-        self.cli.native[base.GROUPS_COLL].insert_one(
-            {"id": "p:mine", "owner": "p:bob", "hobby": "whittling"})
-        recs = list(self.cli._select_from_coll(
-            base.GROUPS_COLL, owner="alice", hobby="whittling"))
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:mine", "owner": "p:bob", "hobby": "whittling"})
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="alice", hobby="whittling"))
         self.assertEqual(len(recs), 1)
-        self.assertEqual(
-            recs[0], {"id": "p:bob", "owner": "alice", "hobby": "whittling"})
-        recs = list(self.cli._select_from_coll(
-            base.GROUPS_COLL, hobby="whittling"))
+        self.assertEqual(recs[0], {"id": "p:bob", "owner": "alice", "hobby": "whittling"})
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, hobby="whittling"))
         self.assertEqual(len(recs), 2)
 
         # test deactivated filter
-        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:gang",
-                                                      "owner": "p:bob", "deactivated": 1.2})
-        recs = list(self.cli._select_from_coll(
-            base.GROUPS_COLL, owner="p:bob"))
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:gang", "owner": "p:bob", "deactivated": 1.2})
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob"))
         self.assertEqual(len(recs), 1)
-        recs = list(self.cli._select_from_coll(
-            base.GROUPS_COLL, incl_deact=True, owner="p:bob"))
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, incl_deact=True, owner="p:bob"))
         self.assertEqual(len(recs), 2)
         self.cli.native[base.GROUPS_COLL].find_one_and_update({"id": "p:gang"},
-                                                              {"$set": {"deactivated": None}})
-        recs = list(self.cli._select_from_coll(
-            base.GROUPS_COLL, owner="p:bob"))
+                                                              { "$set": { "deactivated": None } })
+        recs = list(self.cli._select_from_coll(base.GROUPS_COLL, owner="p:bob"))
         self.assertEqual(len(recs), 2)
 
     def test_select_prop_contains(self):
         # test query on unrecognized collection
         it = self.cli._select_prop_contains("alice", "hobbies", "whittling")
-        self.assertTrue(hasattr(it, "__next__"),
-                        "selection not in the form of an iterator")
+        self.assertTrue(hasattr(it, "__next__"), "selection not in the form of an iterator")
         recs = list(it)
         self.assertEqual(len(recs), 0)
 
         # test query on a recognized and existing collection
-        self.cli.native[base.GROUPS_COLL].insert_one(
-            {"id": "blah", "owner": "meh"})
-        recs = list(self.cli._select_prop_contains(
-            base.GROUPS_COLL, "members", "alice"))
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "blah", "owner": "meh"})
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "alice"))
         self.assertEqual(len(recs), 0)
 
         # put in some test data into the underlying database
-        self.cli.native[base.GROUPS_COLL].insert_one(
-            {"id": "p:bob", "members": ["p:bob"]})
-        self.cli.native[base.GROUPS_COLL].insert_one(
-            {"id": "stars", "members": ["p:tom", "p:bob"]})
-        recs = list(self.cli._select_prop_contains(
-            base.GROUPS_COLL, "members", "alice"))
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:bob", "members": ["p:bob"]})
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "stars", "members": ["p:tom", "p:bob"]})
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "alice"))
         self.assertEqual(len(recs), 0)
-        ids = [r["id"] for r in self.cli._select_prop_contains(
-            base.GROUPS_COLL, "members", "p:bob")]
+        ids = [r["id"] for r in self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob")]
         self.assertIn("p:bob", ids)
         self.assertIn("stars", ids)
         self.assertEqual(len(ids), 2)
 
         self.cli.native[base.GROUPS_COLL].find_one_and_update({"id": "p:bob"},
                                                               {"$push": {"members": "alice"}})
-        it = self.cli._select_prop_contains(
-            base.GROUPS_COLL, "members", "alice")
-        self.assertTrue(hasattr(it, "__next__"),
-                        "selection not in the form of an iterator")
+        it = self.cli._select_prop_contains(base.GROUPS_COLL, "members", "alice")
+            
+        self.assertTrue(hasattr(it, "__next__"), "selection not in the form of an iterator")
         recs = list(it)
         self.assertEqual(len(recs), 1)
-        self.assertEqual(
-            recs[0], {"id": "p:bob", "members": ["p:bob", "alice"]})
+        self.assertEqual(recs[0], {"id": "p:bob", "members": ["p:bob", "alice"]})
 
-        recs = list(self.cli._select_prop_contains(
-            base.GROUPS_COLL, "members", "p:bob"))
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
         self.assertEqual(len(recs), 2)
-        self.assertEqual(set([r.get('id') for r in recs]),
-                         set("p:bob stars".split()))
+        self.assertEqual(set([r.get('id') for r in recs]), set("p:bob stars".split()))
 
         # test deactivated filter
         self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:gang",
                                                       "members": ["p:bob"], "deactivated": 1.2})
-        recs = list(self.cli._select_prop_contains(
-            base.GROUPS_COLL, "members", "p:bob"))
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
         self.assertEqual(len(recs), 2)
-        recs = list(self.cli._select_prop_contains(
-            base.GROUPS_COLL, "members", "p:bob", incl_deact=True))
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob", incl_deact=True))
         self.assertEqual(len(recs), 3)
         self.cli.native[base.GROUPS_COLL].find_one_and_update({"id": "p:gang"},
                                                               {"$set": {"deactivated": None}})
-        recs = list(self.cli._select_prop_contains(
-            base.GROUPS_COLL, "members", "p:bob"))
+        recs = list(self.cli._select_prop_contains(base.GROUPS_COLL, "members", "p:bob"))
         self.assertEqual(len(recs), 3)
 
     def test_delete_from(self):
@@ -282,25 +248,18 @@ class TestMongoDBClient(test.TestCase):
         self.assertFalse(self.cli._delete_from("alice", "p:bob"))
 
         # test query on existing but empty collection
-        self.cli.native[base.GROUPS_COLL].insert_one(
-            {"id": "blah", "owner": "meh"})
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "blah", "owner": "meh"})
         self.assertFalse(self.cli._delete_from(base.GROUPS_COLL, "p:bob"))
 
-        self.cli.native[base.GROUPS_COLL].insert_one(
-            {"id": "p:bob", "members": ["p:bob"]})
-        self.cli.native[base.GROUPS_COLL].insert_one(
-            {"id": "stars", "members": ["p:tom", "p:bob"]})
-        self.assertTrue(
-            self.cli.native[base.GROUPS_COLL].find_one({"id": "p:bob"}))
-        self.assertTrue(
-            self.cli.native[base.GROUPS_COLL].find_one({"id": "stars"}))
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "p:bob", "members": ["p:bob"]})
+        self.cli.native[base.GROUPS_COLL].insert_one({"id": "stars", "members": ["p:tom", "p:bob"]})
+        self.assertTrue(self.cli.native[base.GROUPS_COLL].find_one({"id": "p:bob"}))
+        self.assertTrue(self.cli.native[base.GROUPS_COLL].find_one({"id": "stars"}))
 
         self.assertTrue(self.cli._delete_from(base.GROUPS_COLL, "p:bob"))
-        self.assertTrue(
-            not self.cli.native[base.GROUPS_COLL].find_one({"id": "p:bob"}))
-        self.assertTrue(
-            self.cli.native[base.GROUPS_COLL].find_one({"id": "stars"}))
-
+        self.assertTrue(not self.cli.native[base.GROUPS_COLL].find_one({"id": "p:bob"}))
+        self.assertTrue(self.cli.native[base.GROUPS_COLL].find_one({"id": "stars"}))
+            
     def test_upsert(self):
         # test on a non-existent collection
         self.assertIsNone(self.cli._get_from_coll("about", "p:bob"))
@@ -320,12 +279,10 @@ class TestMongoDBClient(test.TestCase):
 
         # test on a recognized collection
 #        self.cli.native[base.GROUPS_COLL].insert_one({"id": "blah", "owner": "meh"})
-        self.assertIsNone(self.cli._get_from_coll(
-            base.GROUPS_COLL, "g:friends"))
+        self.assertIsNone(self.cli._get_from_coll(base.GROUPS_COLL, "g:friends"))
         self.assertIsNone(self.cli._get_from_coll(base.GROUPS_COLL, "stars"))
 
-        self.assertTrue(self.cli._upsert(base.GROUPS_COLL, {
-                        "id": "p:bob", "members": ["p:bob"]}))
+        self.assertTrue(self.cli._upsert(base.GROUPS_COLL, {"id": "p:bob", "members": ["p:bob"]}))
         rec = self.cli._get_from_coll(base.GROUPS_COLL, "p:bob")
         self.assertEqual(rec, {"id": "p:bob", "members": ["p:bob"]})
         rec['members'].append("alice")
@@ -336,13 +293,11 @@ class TestMongoDBClient(test.TestCase):
     def test_select_records(self):
         # test query on a recognized but empty collection
         it = self.cli.select_records()
-        self.assertTrue(hasattr(it, "__next__"),
-                        "selection not in the form of an iterator")
+        self.assertTrue(hasattr(it, "__next__"), "selection not in the form of an iterator")
         recs = list(it)
         self.assertEqual(len(recs), 0)
 
         # inject some data into the database
-
         id = "pdr0:0002"
         rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
@@ -351,8 +306,7 @@ class TestMongoDBClient(test.TestCase):
         rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
 
-        rec = base.ProjectRecord(
-            base.DMP_PROJECTS, {"id": "goob", "owner": "alice"}, self.cli)
+        rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": "goob", "owner": "alice"}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
 
         recs = list(self.cli.select_records())
@@ -433,55 +387,39 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(recs[1].id, "pdr0:0003")
 
     def test_action_log_io(self):
-        self.assertEqual(
-            self.cli.native['prov_action_log'].count_documents({}), 0)
-        self.cli._save_action_data(
-            {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
-        acts = [r for r in self.cli.native['prov_action_log'].find({}, {
-                                                                   '_id': False})]
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 0)
+        self.cli._save_action_data({'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
+        acts = [r for r in self.cli.native['prov_action_log'].find({}, {'_id': False})]
         self.assertEqual(len(acts), 1)
-        self.assertEqual(
-            acts[0], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
+        self.assertEqual(acts[0], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
 
-        self.cli._save_action_data(
-            {'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
-        acts = [r for r in self.cli.native['prov_action_log'].find({}, {
-                                                                   '_id': False})]
+        self.cli._save_action_data({'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
+        acts = [r for r in self.cli.native['prov_action_log'].find({}, {'_id': False})]
         self.assertEqual(len(acts), 2)
-        self.assertEqual(
-            acts[0], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
-        self.assertEqual(
-            acts[1], {'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
+        self.assertEqual(acts[0], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
+        self.assertEqual(acts[1], {'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
 
-        self.assertEqual(self.cli.native['prov_action_log'].count_documents(
-            {'subject': 'grp0001'}), 0)
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({'subject': 'grp0001'}), 0)
         self.cli._save_action_data({'subject': 'grp0001', 'dylan': 'bob'})
-        self.assertEqual(
-            self.cli.native['prov_action_log'].count_documents({}), 3)
-        acts = [r for r in self.cli.native['prov_action_log'].find(
-            {'subject': 'grp0001'}, {'_id': False})]
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 3)
+        acts = [r for r in self.cli.native['prov_action_log'].find({'subject': 'grp0001'}, {'_id': False})]
         self.assertEqual(len(acts), 1)
         self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
 
         # _select_actions_for() will return the actions sorted by timestamp
         acts = self.cli._select_actions_for("goob:gurn")
         self.assertEqual(len(acts), 2)
-        self.assertEqual(
-            acts[0], {'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
-        self.assertEqual(
-            acts[1], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
+        self.assertEqual(acts[0], {'subject': 'goob:gurn', 'bob': 'alice', 'timestamp': 5})
+        self.assertEqual(acts[1], {'subject': 'goob:gurn', 'foo': 'bar', 'timestamp': 8})
         acts = self.cli._select_actions_for("grp0001")
         self.assertEqual(len(acts), 1)
         self.assertEqual(acts[0], {'subject': 'grp0001', 'dylan': 'bob'})
 
         self.cli._delete_actions_for("grp0001")
-        self.assertEqual(
-            self.cli.native['prov_action_log'].count_documents({}), 2)
-        self.assertEqual(self.cli.native['prov_action_log'].count_documents(
-            {'subject': 'grp0001'}), 0)
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 2)
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({'subject': 'grp0001'}), 0)
         self.cli._delete_actions_for("goob:gurn")
-        self.assertEqual(
-            self.cli.native['prov_action_log'].count_documents({}), 0)
+        self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 0)
 
         self.assertEqual(self.cli._select_actions_for("goob:gurn"), [])
         self.assertEqual(self.cli._select_actions_for("grp0001"), [])
@@ -520,12 +458,10 @@ class TestMongoProjectRecord(test.TestCase):
     def test_save(self):
         self.assertEqual(self.rec.data, {})
         self.assertEqual(self.rec.meta, {})
-        self.assertIsNone(
-            self.cli.native[base.DRAFT_PROJECTS].find_one({"id": "pdr0:2222"}))
+        self.assertIsNone(self.cli.native[base.DRAFT_PROJECTS].find_one({"id": "pdr0:2222"}))
 
         self.rec.save()
-        data = self.cli.native[base.DRAFT_PROJECTS].find_one(
-            {"id": "pdr0:2222"})
+        data = self.cli.native[base.DRAFT_PROJECTS].find_one({"id": "pdr0:2222"})
         self.assertIsNotNone(data)
         self.assertEqual(data['name'], "brains")
         self.assertEqual(data['data'], {})
@@ -535,8 +471,7 @@ class TestMongoProjectRecord(test.TestCase):
         self.rec.meta['type'] = 'software'
         self.rec.acls.grant_perm_to(base.ACLs.READ, "alice")
         self.rec.save()
-        data = self.cli.native[base.DRAFT_PROJECTS].find_one(
-            {"id": "pdr0:2222"})
+        data = self.cli.native[base.DRAFT_PROJECTS].find_one({"id": "pdr0:2222"})
         self.assertEqual(data['meta'], {"type": "software"})
         self.assertEqual(data['acls'][base.ACLs.READ], [self.user, "alice"])
 
@@ -554,15 +489,14 @@ class TestMongoProjectRecord(test.TestCase):
         self.assertTrue(self.rec.authorized(base.ACLs.OWN))
         self.assertFalse(self.rec.authorized(base.ACLs.ADMIN, "gary"))
         self.assertFalse(self.rec.authorized(base.ACLs.DELETE, "gary"))
-        self.assertFalse(self.rec.authorized(
-            [base.ACLs.READ, base.ACLs.WRITE], "gary"))
+        self.assertFalse(self.rec.authorized([base.ACLs.READ, base.ACLs.WRITE], "gary"))
 
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
 class TestMongoDBGroups(test.TestCase):
 
     def setUp(self):
-        self.cfg = {"default_shoulder": "pdr0"}
+        self.cfg = { "default_shoulder": "pdr0" }
         self.fact = mongo.MongoDBClientFactory(self.cfg, dburl)
         self.user = "nist0:ava1"
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
@@ -581,8 +515,7 @@ class TestMongoDBGroups(test.TestCase):
     def test_create_group(self):
         # group does not exist yet
         id = "grp0:nist0:ava1:enemies"
-        self.assertIsNone(
-            self.cli.native[base.GROUPS_COLL].find_one({"id": id}))
+        self.assertIsNone(self.cli.native[base.GROUPS_COLL].find_one({"id": id}))
 
         grp = self.dbg.create_group("enemies")
         self.assertEqual(grp.name, "enemies")
@@ -593,8 +526,7 @@ class TestMongoDBGroups(test.TestCase):
         self.assertTrue(grp.authorized(base.ACLs.OWN))
 
         # group record was saved to db
-        self.assertIsNotNone(
-            self.cli.native[base.GROUPS_COLL].find_one({"id": id}))
+        self.assertIsNotNone(self.cli.native[base.GROUPS_COLL].find_one({"id": id}))
 
         with self.assertRaises(base.AlreadyExists):
             grp = self.dbg.create_group("enemies")
