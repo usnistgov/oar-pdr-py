@@ -1,7 +1,4 @@
-import os
-import json
-import pdb
-import logging
+import os, json, pdb, logging
 from pathlib import Path
 import unittest as test
 
@@ -10,10 +7,13 @@ from nistoar.pdr.publish.prov import Action, PubAgent
 import json
 
 testuser = PubAgent("test", PubAgent.AUTO, "tester")
-asc_andor = 'data/asc_andor.json'
-asc_and = 'data/asc_and.json'
-asc_or = 'data/asc_or.json'
-dmp_path = 'data/dmp.json'
+testdir = Path(__file__).parents[0]
+datadir = testdir / "data"
+
+asc_andor = datadir / 'asc_andor.json'
+asc_and   = datadir / 'asc_and.json'
+asc_or    = datadir / 'asc_or.json'
+dmp_path  = datadir / 'dmp.json'
 
 with open(asc_or, 'r') as file:
     constraint_or = json.load(file)
@@ -345,22 +345,19 @@ class TestInMemoryDBClient(test.TestCase):
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
         id = "pdr0:0006"
-        rec = base.ProjectRecord(
-            base.DMP_PROJECTS, {"id": id, "name": "test 2"}, self.cli)
+        rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id, "name": "test 2"}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
         id = "pdr0:0003"
-        rec = base.ProjectRecord(
-            base.DMP_PROJECTS, {"id": id, "name": "test3"}, self.cli)
+        rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": id, "name": "test3"}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
-        rec = base.ProjectRecord(
-            base.DMP_PROJECTS, {"id": "pdr0:0004", "name": "test4"}, self.cli)
+        rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": "pdr0:0004", "name": "test4"}, self.cli)
         self.cli._db[base.DMP_PROJECTS]["pdr0:0004"] = rec.to_dict()
 
         # not working because owner is not self
-        rec = base.ProjectRecord(
-            base.DMP_PROJECTS, {"id": "pdr0:0014", "name": "test5","owner":"not_self"}, self.cli)
+        rec = base.ProjectRecord(base.DMP_PROJECTS, {"id": "pdr0:0014", "name": "test5","owner":"not_self"},
+                                 self.cli)
         self.cli._db[base.DMP_PROJECTS]["pdr0:0014"] = rec.to_dict()
 
         recs = list(self.cli.select_records(base.ACLs.READ))
@@ -433,10 +430,8 @@ class TestInMemoryDBClient(test.TestCase):
 
     def test_record_action(self):
         rec = self.cli.create_record("mine1")
-        self.cli.record_action(
-            Action(Action.CREATE, "mds3:0001", testuser, "created"))
-        self.cli.record_action(
-            Action(Action.COMMENT, "mds3:0001", testuser, "i'm hungry"))
+        self.cli.record_action(Action(Action.CREATE, "mds3:0001", testuser, "created"))
+        self.cli.record_action(Action(Action.COMMENT, "mds3:0001", testuser, "i'm hungry"))
         acts = self.cli._select_actions_for("mds3:0001")
         self.assertEqual(len(acts), 2)
         self.assertEqual(acts[0]['type'], Action.CREATE)

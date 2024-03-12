@@ -152,6 +152,10 @@ class FSBasedDBClient(base.DBClient):
                         yield rec
                         break
 
+    def select_constraint_records(self, perm: base.Permissions = base.ACLs.OWN,
+                                  **cst) -> Iterator[base.ProjectRecord]:
+        raise NotImplementedError()
+
     def _save_action_data(self, actdata: Mapping):
         self._ensure_collection(base.PROV_ACT_LOG)
         try:
