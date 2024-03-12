@@ -174,6 +174,14 @@ Similarly, `testall.docker` runs the tests in a container:
 Like their non-docker counterparts, these scripts accept product names
 as arguments.
 
+### MONGODB AND LOCAL TEST
+docker-compose up
+export PYTHONPATH=$PATH_TO_LIB
+export MONGO_TESTDB_URL="mongodb://admin:admin@127.0.0.1:27017/midas?authSource=admin"
+python3 setup.py build
+python3 test/nistoar/midas/dbio
+
+
 ## Running the services
 
 The [scripts](scripts) directory contains
