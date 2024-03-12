@@ -17,18 +17,20 @@ The key features of the mds3 conventions are:
 Support for the web service frontend is provided via :py:class:`DAPApp` class, an implementation
 of the WSGI-based :ref:class:`~nistoar.pdr.publish.service.wsgi.SubApp`.
 """
-import os, re, pkg_resources, random, string
+import os, re, pkg_resources, random, string, time, math
+from datetime import datetime
 from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence, Callable
-from typing import List, Union
+from typing import List, Union, Iterator
 from copy import deepcopy
 from urllib.parse import urlparse
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
-                     InvalidUpdate, ObjectNotFound, PartNotAccessible,
+                     InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
-from ...dbio.wsgi.project import MIDASProjectApp, ProjectDataHandler, SubApp
+from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
+                                  ProjectSelectionHandler, SubApp)
 from ...dbio import status
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
@@ -38,7 +40,8 @@ from nistoar.pdr.publish.prov import PubAgent, Action
 
 from . import validate
 from .. import nerdstore
-from ..nerdstore import NERDResource, NERDResourceStorage, NERDResourceStorageFactory
+from ..nerdstore import NERDResource, NERDResourceStorage, NERDResourceStorageFactory, NERDStorageException
+from ..fm import FileManager, FileSpaceNotFound, FileSpaceException
 
 ASSIGN_DOI_NEVER   = 'never'
 ASSIGN_DOI_ALWAYS  = 'always'
@@ -96,6 +99,95 @@ def random_id(prefix: str="", n: int=8):
     r = ''.join(random.choices(string.ascii_uppercase + string.digits, k=n))
     return prefix+r
 
+class DAPProjectRecord(ProjectRecord):
+    """
+    a DBIO record specifically representing a DAP Project
+    """
+
+    def __init__(self, recdata: Mapping, dbclient: DBClient=None, fmclient: FileManager=None):
+        super(DAPProjectRecord, self).__init__(DAP_PROJECTS, recdata, dbclient)
+        self._fmcli = fmclient
+
+    @classmethod
+    def from_dap_record(cls, prec: ProjectRecord, fmclient: FileManager=None):
+        return cls(prec._data, prec._cli, fmclient)
+
+    def _initialize(self, rec: MutableMapping) -> MutableMapping:
+        rec = super(DAPProjectRecord, self)._initialize(rec)
+        
+        if 'file_space' not in rec:
+            rec['file_space'] = OrderedDict([
+                ('id', rec.get('id')),
+                ('action', ''),
+                ('message', '')
+            ])
+
+        return rec
+
+    @property
+    def file_space(self):
+        """
+        a summary of the current status of the file management space associated with this record.
+        An empty object indicates that the space may not exist, yet.
+        """
+        return self._data.get('file_space')
+
+    def file_space_is_ready(self) -> bool:
+        return bool(self.file_space and self.file_space.get('creator'))
+
+    def ensure_file_space(self, who: str=None):
+        """
+        ensure that the file space holding user-uploaded files exist: if it doesn't, create it
+        """
+        if not self._fmcli:
+            return
+        if not self._data.get('file_space', {}).get('creator'):
+            if not who:
+                who = self._cli._who
+            try:
+                self._fmcli.get_record_space(self.id)
+            except FileSpaceNotFound as ex:
+                try:
+                    self._data['file_space']['action'] = "create"
+                    self._fmcli.create_record_space(who, self.id)
+                    self._data['file_space']['created'] = \
+                        datetime.fromtimestamp(math.floor(time.time())).isoformat()
+                    self._data['file_space']['creator'] = who
+
+                except FileSpaceException as ex:
+                    self.log.error("Problem creating file space: %s", str(ex))
+                    self._data['file_space']['message'] = "Failed to create file space"
+                    raise
+            else:
+                self._data['file_space']['creator'] = who
+                self._data['file_space']['id'] = self.id  # the ID of the space is the same as the rec
+
+    def determine_uploads_url(self):
+        """
+        return the expected URL for the browser-based view of a record space's uploads directory.
+        """
+        fs = self.file_space
+        if self._fmcli and fs and fs.get('uploads_dir_id'):
+            return f"{self._fmcli.web_base}/{fs['uploads_dir_id']}?dir=/{self.id}/{self.id}"
+        else:
+            return f"/{self.id}/{self.id}"
+
+    def to_dict(self):
+        out = super().to_dict()
+        if self._fmcli and out.get('file_space') and out['file_space'].get('id'):
+
+            out['file_space']['location'] = self.determine_uploads_url()
+
+            if self._fmcli.cfg.get('dav_base_url'):
+                out['file_space']['uploads_dav_url'] = \
+                    '/'.join([self._fmcli.cfg['dav_base_url'].rstrip('/'),
+                              out['file_space'].get('id'), out['file_space'].get('id')])
+        return out
+
+
+to_DAPRec = DAPProjectRecord.from_dap_record
+
+
 class DAPService(ProjectService):
     """
     a project record request broker class for DAP records.  
@@ -131,25 +223,42 @@ class DAPService(ProjectService):
         resource, ``data/fext2format.json``, under ``nistoar.pdr``.  The format of such files is a 
         JSON-encoded object with file extensions as the keys, and string descriptions of formats
         as values.  
+    ``file_manager``
+        a dictionary of properties configuring access to the file manager; if not used, a file
+        manager will not be used to get file information.  
 
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
     """
 
-    def __init__(self, dbclient_factory: DBClient, config: Mapping={}, who: PubAgent=None,
+    def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: PubAgent=None,
                  log: Logger=None, nerdstore: NERDResourceStorage=None, project_type=DAP_PROJECTS,
-                 minnerdmver=(0, 6)):
+                 minnerdmver=(0, 6), fmcli=None):
         """
-        create a request handler
-        :param DBClient dbclient:  the DBIO client instance to use to access and save project records
-        :param dict       config:  the handler configuration tuned for the current type of project
-        :param dict      wsgienv:  the WSGI request context 
+        create the service
+        :param DBClientFactory dbclient_factory:  the factory to create the DBIO service client from
+        :param dict       config:  the service configuration tuned for the current type of project
+        :param PubAgent      who:  the agent that describe who/what is using this service
         :param Logger        log:  the logger to use for log messages
+        :param NERDResourceStorage nerdstore:  the NERD metadata storage backend to use; if None,
+                                   a backend will be constructed based on the configuration
+        :param str       project:  the type of project being accessed (default: DAP_PROJECTS)
+        :param tuple minnerdmver:  a 2-tuple indicating the minimum version of the core NERDm schema
+                                   required by this implementation; this is intended for use by 
+                                   subclass constructors.
+        :param FileManager fmcli:  The FileManager client to use; if None, one will be constructed 
+                                   from the configuration.
         """
         super(DAPService, self).__init__(project_type, dbclient_factory, config, who, log,
                                          _subsys="Digital Asset Publication Authoring System",
                                          _subsysabbrev="DAP")
 
+        self._fmcli = fmcli
+        if config.get("file_manager"):
+            if not self._fmcli:
+                self._fmcli = self._make_fm_client(config['file_manager'])
+            if config.get("nerdstorage") is not None and not config["nerdstorage"].get("file_manager"):
+                config['nerdstorage']['file_manager'] = config["file_manager"]
         if not nerdstore:
             nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), log)
         self._store = nerdstore
@@ -169,6 +278,9 @@ class DAPService(ProjectService):
         self._formatbyext = None
 
         self._minnerdmver = minnerdmver
+
+    def _make_fm_client(self, fmcfg):
+        return FileManager(fmcfg)
 
     def _choose_mediatype(self, fext):
         defmt = 'application/octet-stream'
@@ -207,6 +319,14 @@ class DAPService(ProjectService):
             return { "description": fmtd }
         return None
 
+    def get_record(self, id) -> ProjectRecord:
+        """
+        fetch the project record having the given identifier
+        :raises ObjectNotFound:  if a record with that ID does not exist
+        :raises NotAuthorized:   if the record exists but the current user is not authorized to read it.
+        """
+        return to_DAPRec(super().get_record(id), self._fmcli)
+
     def create_record(self, name, data=None, meta=None) -> ProjectRecord:
         """
         create a new project record with the given name.  An ID will be assigned to the new record.
@@ -221,9 +341,13 @@ class DAPService(ProjectService):
                                 with this project type).
         """
         shoulder = self._get_id_shoulder(self.who)
-        prec = self.dbcli.create_record(name, shoulder)
+        prec = to_DAPRec(self.dbcli.create_record(name, shoulder), self._fmcli)
         nerd = None
 
+        # create the space in the file-manager
+        if self._fmcli:
+            prec.ensure_file_space(self.who.actor)
+                
         try:
             if meta:
                 meta = self._moderate_metadata(meta, shoulder)
@@ -257,6 +381,14 @@ class DAPService(ProjectService):
                 self.log.warning("NERDm data for id=%s unexpectedly found in metadata store", prec.id)
             self._store.load_from(self._new_data_for(prec.id, prec.meta, schemaid), prec.id)
             nerd = self._store.open(prec.id)
+            if prec._data.get('file_space') and self._fmcli and hasattr(nerd.files, 'update_hierarchy'):
+                try:
+                    prec._data['file_space'].update(nerd.files.update_hierarchy())  # space should be empty
+                    if prec.file_space.get('file_count', -2) < 0:
+                        self.log.warning("Failed to initialize file listing from file manager")
+                except Exception as ex:
+                    self.log.error("Failed to initialize file listing: problem accessing file manager: %s",
+                                   str(ex))
             prec.data = self._summarize(nerd)
 
             if data:
@@ -278,6 +410,7 @@ class DAPService(ProjectService):
 
         self._record_action(Action(Action.CREATE, prec.id, self.who, prec.status.message))
         self.log.info("Created %s record %s (%s) for %s", self.dbcli.project, prec.id, prec.name, self.who)
+
         return prec
 
     def _new_data_for(self, recid, meta=None, schemaid=None):
@@ -403,7 +536,7 @@ class DAPService(ProjectService):
                     out = None
                     try:
                         out = nerd.nonfiles.get(key)
-                    except (KeyError, IndexError) as ex:
+                    except (KeyError, IndexError, nerdstore.ObjectNotFound) as ex:
                         pass
                     if not out:
                         try:
@@ -670,7 +803,8 @@ class DAPService(ProjectService):
 
     _handsoff = ("@id @context publisher issued firstIssued revised annotated version " + \
                  "bureauCode programCode systemOfRecords primaryITInvestmentUII "       + \
-                 "doi ediid releaseHistory status theme").split()
+                 "doi ediid releaseHistory status").split()   # temporarily allow theme editing
+#                 "doi ediid releaseHistory status theme").split()  
 
     def _update_all_nerd(self, prec: ProjectRecord, nerd: NERDResource,
                          data: Mapping, provact: Action, replace=False):
@@ -1018,6 +1152,21 @@ class DAPService(ProjectService):
                 nerd.replace_res_data(res)
                 data = res[path]
 
+            # NOTE!!: Temporary support for updating theme
+            elif path == "theme":
+                if not isinstance(data, (list, str)):
+                    raise InvalidUpdate(part+" data is not a list of strings", sys=self)
+                res = nerd.get_res_data()
+                old = res.get(path)
+
+                res[path] = self._moderate_keyword(data, res, doval=doval, replace=replace,
+                                                   kwpropname='theme')  # may raise InvalidUpdate
+                provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
+                                             prec.id+"#data."+path, self.who, "updating "+path,
+                                             self._jsondiff(old, res[path])))
+                nerd.replace_res_data(res)
+                data = res[path]
+
             elif path == "landingPage":
                 if not isinstance(data, str):
                     raise InvalidUpdate("description data is not a string", sys=self)
@@ -1195,6 +1344,33 @@ class DAPService(ProjectService):
         if not md.get('@id'):
             md['@id'] = id
         return md
+
+    def sync_to_file_space(self, id: str) -> bool:
+        """
+        update the file metadata based on the contents in the file manager space
+        :param str id:  the ID for the DAP project to sync
+        :raises ObjectNotFound:  if the project with the given ID does not exist
+        :raises NotAuthorized:   if the user does not write permission to make this update
+        :raises FileSpaceException:  if syncing failed for an unexpected reason
+        """
+        if not self._fmcli:
+            return {}
+        prec = to_DAPRec(self.dbcli.get_record_for(id, ACLs.WRITE), self._fmcli)   # may raise exc
+        nerd = self._store.open(id)
+
+        if self._fmcli:
+            prec.ensure_file_space(self.who.actor)
+            files = nerd.files
+            if hasattr(files, 'update_hierarchy'):
+                prec.file_space['action'] = 'sync'
+                if files.fm_summary.get('syncing') == "in_progress":
+                    # a scan is still in progress, so just get the latests updates; don't start a new scan
+                    prec.file_space.update(files.update_metadata())
+                else:
+                    prec.file_space.update(files.update_hierarchy())  # may raise FileSpaceException
+                prec.save()
+        return prec.to_dict().get('file_space', {})
+            
 
     def add_nonfile_component(self, id: str, cmpmd: Mapping):
         """
@@ -1391,7 +1567,7 @@ class DAPService(ProjectService):
             if not replace and item.get("@id"):
                 try:
                     olditem = objlist.get(item["@id"])
-                except KeyError:
+                except (KeyError, nerdstore.ObjectNotFound):
                     pass
 
             if olditem:
@@ -1515,7 +1691,7 @@ class DAPService(ProjectService):
             raise InvalidUpdate("description value is not a string or array of strings", sys=self)
         return [self._moderate_text(t, resmd, doval=doval) for t in val if t]
 
-    def _moderate_keyword(self, val, resmd=None, doval=True, replace=True):
+    def _moderate_keyword(self, val, resmd=None, doval=True, replace=True, kwpropname='keyword'):
         if val is None:
             val = []
         if isinstance(val, str):
@@ -1524,7 +1700,7 @@ class DAPService(ProjectService):
             raise InvalidUpdate("keywords value is not a string or array of strings", sys=self)
 
         # uniquify list
-        out = resmd.get('keyword', []) if resmd and not replace else []
+        out = resmd.get(kwpropname, []) if resmd and not replace else []
         for v in val:
             if v not in out:
                 out.append(self._moderate_text(v, resmd, doval=doval))
@@ -2019,6 +2195,8 @@ class DAPApp(MIDASProjectApp):
             service_factory = DAPServiceFactory(dbcli_factory, config, uselog, project_coll=project_coll)
         super(DAPApp, self).__init__(service_factory, uselog, config)
         self._data_update_handler = DAPProjectDataHandler
+        self._info_update_handler = DAPProjectInfoHandler
+        self._selection_handler = DAPProjectSelectionHandler
 
 class DAPProjectDataHandler(ProjectDataHandler):
     """
@@ -2102,3 +2280,107 @@ class DAPProjectDataHandler(ProjectDataHandler):
                                         "Requested part of data cannot be updated", self._id)
 
         return self.send_json(out, "Added", 201)
+
+class DAPProjectInfoHandler(ProjectInfoHandler):
+    """
+    A :py:class:`~nistoar.midas.wsgi.project.ProjectInfoHandler` specialized for editing DAP records.
+    In particular, it supporst PATCHing actions onto the ``file_space`` property to trigger
+    synchronization with the associated space in the file manager.
+    """
+    FILE_SPACE = "file_space"
+
+    def do_OPTIONS(self, path):
+        if path == self.FILE_SPACE:
+            return self.send_options(["GET", "PUT", "PATCH"])
+        return self.send_options(["GET"])
+
+    def do_PUT(self, path):
+        return self.do_PATCH(path)
+
+    def do_PATCH(self, path):
+        if path != self.FILE_SPACE:
+            return self.send_error_resp(405, "Method Not Allowed",
+                                        f"This attribute of a draft record cannot be updated directly",
+                                        self._id)
+
+        # handle the PATCH on file_space
+        # get the record
+        try:
+            prec = self.svc.get_record(self._id)
+        except NotAuthorized as ex:
+            return self.send_unauthorized()
+        except ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found",
+                                        self._id, ashead=ashead)
+
+        # get the action request
+        action = "sync"   # the default action (if there is not input doc)
+        req = {}
+        try:
+            contlen = int(self._env.get('CONTENT_LENGTH', 0))
+        except ValueError as ex:
+            return self.send_error_resp(400, "Bad Content Length value")
+
+        if contlen > 0:
+            if self._env.get('CONTENT_TYPE') and "/json" not in self._env['CONTENT_TYPE']:
+                return self.send_error_resp(400, "Input is not JSON",
+                                            "Non-JSON content-type is not supported", self._id)
+            try:
+                req = self.get_json_body()
+            except self.FatalError as ex:
+                return self.send_fatal_error(ex)
+
+        if req.get('action'):
+            action = req['action']
+
+        return self._apply_fs_action(action)
+
+    def _apply_fs_action(self, action):
+        fssumm = {}
+        try:
+            if action == "sync":
+                fssumm = self.svc.sync_to_file_space(self._id)
+            else:
+                return self.send_error_resp(400, "Unrecognized action",
+                                            "Unrecognized action requested")
+        except NotAuthorized as ex:
+            return self.send_unauthorized()
+        except ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found")
+        except NotEditable as ex:
+            return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit or ready")
+        except (FileSpaceException, NERDStorageException) as ex:
+            self.log.error("Trouble communicating with file manager: %s", str(ex))
+            return self.send_error_resp(500, "File manager service error",
+                                        "Trouble communicating with file manager")
+
+        return self.send_json(fssumm)
+
+class DAPProjectSelectionHandler(ProjectSelectionHandler):
+    """
+    A :py:class:`~nistoar.midas.wsgi.project.ProjectSelectionHandler` specialized for selecting DAP records.
+    In particular, it ensures that the records returned from a search are full DAP records (including 
+    the information computed on the fly).
+    """
+
+    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable,
+                 who: PubAgent, config: dict=None, log: Logger=None):
+        super(DAPProjectSelectionHandler, self).__init__(service, subapp, wsgienv, start_resp, who,
+                                                         config, log)
+        self._fmcli = None
+        if hasattr(service, '_fmcli'):
+            self._fmcli = service._fmcli
+        
+    def _select_records(self, perms) -> Iterator[ProjectRecord]:
+        """
+        submit a search query in a project specific way.  This implementation ensures that 
+        DAPProjectRecords are returned.
+        :return:  an iterator for the matched records
+        """
+        for rec in self._dbcli.select_records(perms):
+            yield to_DAPRec(rec, self._fmcli)
+
+
+
+    

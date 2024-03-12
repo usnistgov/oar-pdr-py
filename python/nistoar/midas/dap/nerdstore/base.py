@@ -563,6 +563,12 @@ class NERDFileComps(metaclass=ABCMeta):
         """
         return [self.get(d) for d in self.ids]
 
+    def get_data(self) -> [Mapping]:
+        """
+        an alias for :py:meth:`get_files`
+        """
+        return self.get_files()
+
     def get(self, idorpath):
         try:
             return self.get_file_by_id(idorpath)
@@ -802,13 +808,14 @@ class ObjectNotFound(NERDStorageException):
     """
     def __init__(self, key=None, message=None):
         """
-        :param str id: the requested object key (identifier or other index) used to locate the object
+        :param str key: the requested object key (identifier or other index) used to locate the object
         """
         if not message:
             message = "NERDm record object not found"
             if key:
                 message += ": %s" % key
         super(ObjectNotFound, self).__init__(message)
+        self.key = key
 
 class CollectionRemovalDissallowed(NERDStorageException):
     """
@@ -830,6 +837,12 @@ class StorageFormatException(NERDStorageException):
     """
     an exception indicating that data in the underlying storage appears missing when expected or 
     otherwise corrupted.
+    """
+    pass
+
+class RemoteStorageException(NERDStorageException):
+    """
+    a general exception indicating trouble accessing the NERDm data from a remote system or service.
     """
     pass
 

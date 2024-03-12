@@ -49,6 +49,8 @@ ARGUMENTS
   -M, --use-mongodb             Use a MongoDB backend; DIR must also be provided.
                                 If not set, a file-based database (using JSON 
                                 files) will be used, stored under DIR/dbfiles.
+  -p, --port NUM                The port that the service should listen to 
+                                (default: 9091)
   -h, --help                    Print this text to the terminal and then exit
 
 EOF
@@ -68,6 +70,7 @@ function build_server_image {
     $dockerdir/dockbuild.sh -d midasserver # > log
 }
 
+PORT=9091
 DOPYBUILD=
 DODOCKBUILD=
 CONFIGFILE=
@@ -88,6 +91,13 @@ while [ "$1" != "" ]; do
             ;;
         --config-file=*)
             CONFIGFILE=`echo $1 | sed -e 's/[^=]*=//'`
+            ;;
+        -p)
+            shift
+            PORT=$1
+            ;;
+        --port=*)
+            PORT=`echo $1 | sed -e 's/[^=]*=//'`
             ;;
         -M|--use-mongo)
             DBTYPE="mongo"
@@ -217,7 +227,7 @@ if [ "$ACTION" = "stop" ]; then
     stop_server || true
     $STOP_MONGO
 else
-    echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
-    docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
+    echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
+    docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
 fi
 
