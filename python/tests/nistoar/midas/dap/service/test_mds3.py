@@ -110,21 +110,59 @@ class TestMDS3DAPService(test.TestCase):
         with self.assertRaises(AlreadyExists):
             self.svc.create_record("goob")
 
-    def hold_test_create_record_withdata(self):
+    def test_create_record_withdata(self):
         self.create_service()
         self.assertTrue(not self.svc.dbcli.name_exists("gurn"))
-        
+
+        # goofy data
         prec = self.svc.create_record("gurn", {"color": "red"},
                                       {"temper": "dark", "creatorisContact": "goob",
                                        "softwarelink": "http://..." })  # misspelled key
         self.assertEqual(prec.name, "gurn")
-        self.assertEqual(prec.id, "mdsx:0003")
+        self.assertEqual(prec.id, "mdsy:0003")
         self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data"})
-        for key in "_schema @context _extensionSchemas".split():
+        for key in "_schema @type author_count file_count reference_count".split():
             self.assertIn(key, prec.data)
-        self.assertEqual(prec.data['color'], "red")
-        self.assertEqual(prec.data['doi'], "doi:88888/mdsx-0003")
-        self.assertEqual(prec.data['@id'], "ark:/88434/mdsx-0003")
+        self.assertNotIn('color', prec.data)
+        self.assertNotIn('contactPoint', prec.data)
+        self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0003")
+        self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0003")
+        self.assertEqual(prec.data['nonfile_count'], 0)
+
+        # some legit metadata but no legit identity info
+        prec = self.svc.create_record("goob", {"title": "test"},
+                                      {"creatorIsContact": "TRUE",
+                                       "softwareLink": "https://github.com/usnistgov/goob" })
+        self.assertEqual(prec.name, "goob")
+        self.assertEqual(prec.id, "mdsy:0004")
+        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
+                                     "softwareLink": "https://github.com/usnistgov/goob"})
+        self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0004")
+        self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0004")
+        self.assertEqual(prec.data['nonfile_count'], 1)
+        self.assertNotIn('contactPoint', prec.data)
+        nerd = self.svc._store.open(prec.id)
+        links = nerd.nonfiles
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links.get(0)['accessURL'], prec.meta['softwareLink'])
+        
+
+        # inject some identity info into service and try again
+        self.svc.who._md.update({"userName": "Gurn", "userLastName": "Cranston", "email": "gurn@thejerk.org"})
+        prec = self.svc.create_record("cranston", {"title": "test"},
+                                      {"creatorIsContact": True,
+                                       "softwareLink": "https://github.com/usnistgov/goob" })
+        self.assertEqual(prec.name, "cranston")
+        self.assertEqual(prec.id, "mdsy:0005")
+        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
+                                     "softwareLink": "https://github.com/usnistgov/goob"})
+        self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0005")
+        self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0005")
+        self.assertEqual(prec.data['nonfile_count'], 1)
+        self.assertIn('contactPoint', prec.data)
+        self.assertEqual(prec.data['contactPoint'], {"@type": "vcard:Contact", "fn": "Gurn Cranston",
+                                                     "hasEmail": "mailto:gurn@thejerk.org"})
+        
     
     def test_moderate_restype(self):
         self.create_service()

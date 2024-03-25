@@ -443,10 +443,15 @@ class DAPService(ProjectService):
                 out['components'] = [swcomp] + out['components']
 
             # contact info
-            # if meta.get("creatorIsContact"):
-            #     # base contact on the currently logged in user
-            # elif meta.get("contactName"):
-            if meta.get("contactName"):
+            if meta.get("creatorisContact"):
+                cp = OrderedDict()
+                if self.who.get_prop("userName") and self.who.get_prop("userLastName"):
+                    cp['fn'] = f"{self.who.get_prop('userName')} {self.who.get_prop('userLastName')}"
+                if self.who.get_prop("email"):
+                    cp['hasEmail'] = self.who.get_prop("email")
+                if cp:
+                    out['contactPoint'] = cp
+            elif meta.get("contactName"):
                 out['contactPoint'] = self._moderate_contactPoint({"fn": meta["contactName"]}, doval=False)
 
         return out
