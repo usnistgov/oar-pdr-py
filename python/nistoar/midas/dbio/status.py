@@ -25,6 +25,8 @@ INPRESS    = "in press"    # Record was submitted to the publishing service and 
 PUBLISHED  = "published"   # Record was successfully preserved and released
 UNWELL     = "unwell"      # Record is in a state that does not allow it to be further processed or
                            #   updated and requires administrative care to restore it to a usable state
+
+# these are keys that access values available as Status properties
 _state_p    = "state"
 _since_p    = "since"
 _action_p   = "action"
@@ -33,6 +35,9 @@ _created_p  = "created"
 _message_p  = "message"
 _creatby_p  = "created_by"
 _bywho_p    = "byWho"
+_last_version_p = "last_version"
+_published_as_p = "published_as"
+_archived_at_p  = "archived_at"
 
 # Common record actions
 # 
@@ -43,6 +48,27 @@ class RecordStatus:
     """
     a class that holds the current status of a record (particularly, a project record), aggregating 
     multiple pieces of information about the record's state and the last action applied to it.  
+
+    This class provides some key information as property values that help determine the status of 
+    the record:
+
+    :py:attr:`state`
+        a controlled value indicating the stage of handling the record is in.  For example, the 
+        ``EDIT`` state indicates that the record is currently being edited.
+
+    :py:attr:`action`
+        a label that indicates the last type of action that was applied to the record
+
+    :py:attr:`published_as`
+        the identifier under which this record was last published as.  This value can be used to 
+        check if the record has been published previously as it will be None if it has never been 
+        published.  
+
+    :py:attr:`message`
+        A brief, user-oriented string that describes what was last done to this record.  This 
+        description may be more specific than what :py:attr:`action` may indicate.  
+
+    See the property documentation for descriptions of other properties.  
     """
     CREATE_ACTION = ACTION_CREATE
     UPDATE_ACTION = ACTION_UPDATE
@@ -184,6 +210,54 @@ class RecordStatus:
     @message.setter
     def message(self, val):
         self._data[_message_p] = val
+
+    @property
+    def published_as(self):
+        """
+        the identifier that this draft record was most recently published as.  If None,
+        this record has never been published.
+        """
+        return self._data.get(_published_as_p)
+
+    @property
+    def last_version(self):
+        """
+        the version string assigned to the most recently published version of the record.
+        This should be None if the record has never been published; however, clients should 
+        rely on the value of :py:attr:`published_as` to determine publishing status.
+        """
+        return self._data.get(_last_version_p)
+
+    @property
+    def archived_at(self):
+        """
+        a URL indicating where the published version was archived; the URL should resolve to the 
+        data content of the record.  This URL may feature a custom (non-standard) scheme to indicate 
+        an internal protocol for accessing the archived artifact and resolving it into the published 
+        content.  If None, clients should assume a default location based on the value of 
+        :py:attr:`published_as`.
+        """
+        return self._data.get(_archived_at_p)
+
+    def publish(self, pub_id: str, version: str, arch_loc: str = None):
+        """
+        set or update the publishing status properties
+        :param str  pub_id:  the identifier that the record has been published as
+        :param str version:  the version that was assigned to that publication
+        :param str arch_loc: a URL that indicates where the publication was archived at.
+                             If None, the associated property is not set, incicating that 
+                             a default location should be assumed.  
+        """
+        if not pub_id or not isinstance(pub_id, str):
+            raise ValueError("Status.publish(): pub_id must be a non-empty str")
+        if not version or not isinstance(version, str):
+            raise ValueError("Status.publish(): version must be a non-empty str")
+        if arch_loc and not isinstance(arch_loc, str):
+            raise ValueError("Status.publish(): arch_loc must be a str or None")
+        self._data[_published_as_p] = pub_id
+        self._data[_last_version_p] = version
+        if arch_loc:
+            self._data[_archived_at_p] = arch_loc
 
     def act(self, action: str, message: str="", who: str=None, when: float=0):
         """

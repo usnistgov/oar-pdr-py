@@ -19,6 +19,9 @@ class TestRecordStatus(test.TestCase):
         self.assertEqual(stat.since_date, "pending")
         self.assertEqual(stat.modified_date, "pending")
         self.assertEqual(stat.created_date, "pending")
+        self.assertIsNone(stat.published_as)
+        self.assertIsNone(stat.last_version)
+        self.assertIsNone(stat.archived_at)
 
     def test_act(self):
         stat = status.RecordStatus("goob", {"state": status.EDIT, "since": -1})
@@ -110,6 +113,22 @@ class TestRecordStatus(test.TestCase):
         self.assertNotEqual(stat.since_date, "pending")
         self.assertNotEqual(stat.modified_date, "pending")
         self.assertNotEqual(stat.created_date, "pending")
+
+    def test_publish(self):
+        stat = status.RecordStatus("goob", {})
+        self.assertIsNone(stat.published_as)
+        self.assertIsNone(stat.last_version)
+        self.assertIsNone(stat.archived_at)
+
+        stat.publish("ark:/88888/goob", "1.0.0")
+        self.assertEqual(stat.published_as, "ark:/88888/goob")
+        self.assertEqual(stat.last_version, "1.0.0")
+        self.assertIsNone(stat.archived_at)
+
+        stat.publish("ark:/88888/goob", "1.2.0", "arch:goob")
+        self.assertEqual(stat.published_as, "ark:/88888/goob")
+        self.assertEqual(stat.last_version, "1.2.0")
+        self.assertEqual(stat.archived_at, "arch:goob")
         
 
 if __name__ == '__main__':
