@@ -1403,6 +1403,17 @@ class DBClient(ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def client_for(self, projcoll: str, foruser: str = None):
+        """
+        create a new DBClient using the same backend as this one but attached to a different collection
+        (and possibly user).
+        :param str projcol:  the project collection name
+        :param str foruser:  the user this should be used on behalf of.  This controls what records the 
+                             client has access to.
+        """
+        raise NotImplementedError()
+
 
 class DBClientFactory(ABC):
     """

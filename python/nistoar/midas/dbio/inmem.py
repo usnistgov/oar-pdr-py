@@ -154,7 +154,19 @@ class InMemoryDBClient(base.DBClient):
             self._db['history'][histrec['recid']] = []
         self._db['history'][histrec['recid']].append(histrec)
 
-                
+    def client_for(self, projcoll: str, foruser: str = None):
+        """
+        create a new DBClient using the same backend as this one but attached to a different collection
+        (and possibly user).
+        :param str projcol:  the project collection name
+        :param str foruser:  the user this should be used on behalf of.  This controls what records the 
+                             client has access to.
+        """
+        if not foruser:
+            foruser = self.user_id
+        return self.__class__(self._db, self._cfg, projcoll, foruser)
+
+
 class InMemoryDBClientFactory(base.DBClientFactory):
     """
     a DBClientFactory that creates InMemoryDBClient instances in which records are stored in data

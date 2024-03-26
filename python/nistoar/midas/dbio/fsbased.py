@@ -220,6 +220,19 @@ class FSBasedDBClient(base.DBClient):
         except Exception as ex:
             raise base.DBIOException(histrec['recid']+": Failed to write history entries: "+str(ex))
 
+    def client_for(self, projcoll: str, foruser: str = None):
+        """
+        create a new DBClient using the same backend as this one but attached to a different collection
+        (and possibly user).
+        :param str projcol:  the project collection name
+        :param str foruser:  the user this should be used on behalf of.  This controls what records the 
+                             client has access to.
+        """
+        if not foruser:
+            foruser = self.user_id
+        return self.__class__(str(self._root), self._cfg, projcoll, foruser)
+
+
 class FSBasedDBClientFactory(base.DBClientFactory):
     """
     a DBClientFactory that creates FSBasedDBClient instances in which records are stored in JSON

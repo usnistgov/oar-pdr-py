@@ -276,7 +276,19 @@ class MongoDBClient(base.DBClient):
         except Exception as ex:
             raise DBIOEception(histrec.get('recid', "id=?")+": Failed to save history entry: "+str(ex)) \
                 from ex
-    
+
+    def client_for(self, projcoll: str, foruser: str = None):
+        """
+        create a new DBClient using the same backend as this one but attached to a different collection
+        (and possibly user).
+        :param str projcol:  the project collection name
+        :param str foruser:  the user this should be used on behalf of.  This controls what records the 
+                             client has access to.
+        """
+        if not foruser:
+            foruser = self.user_id
+        return self.__class__(self._dburl, self._cfg, projcoll, foruser)
+                
 
 class MongoDBClientFactory(base.DBClientFactory):
     """

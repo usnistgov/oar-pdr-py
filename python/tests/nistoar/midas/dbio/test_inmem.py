@@ -61,6 +61,22 @@ class TestInMemoryDBClient(test.TestCase):
         self.cli = inmem.InMemoryDBClientFactory({}).create_client(
             base.DMP_PROJECTS, self.cfg, self.user)
 
+    def test_client_for(self):
+        self.assertTrue(isinstance(self.cli, inmem.InMemoryDBClient))
+
+        sib = self.cli.client_for(f"{base.DMP_PROJECTS}_best")
+        self.assertTrue(isinstance(sib, inmem.InMemoryDBClient))
+        self.assertEqual(sib.project, f"{base.DMP_PROJECTS}_best")
+        self.assertEqual(sib.user_id, self.cli.user_id)
+        self.assertIs(sib._db, self.cli._db)
+
+        sib = self.cli.client_for(f"{base.DMP_PROJECTS}_worst", "goob")
+        self.assertTrue(isinstance(sib, inmem.InMemoryDBClient))
+        self.assertEqual(sib.project, f"{base.DMP_PROJECTS}_worst")
+        self.assertEqual(sib.user_id, "goob")
+        self.assertIs(sib._db, self.cli._db)
+        
+
     def test_next_recnum(self):
         self.assertEqual(self.cli._next_recnum("goob"), 1)
         self.assertEqual(self.cli._next_recnum("goob"), 2)
