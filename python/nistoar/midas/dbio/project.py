@@ -33,6 +33,7 @@ _STATUS_ACTION_UPDATE   = RecordStatus.UPDATE_ACTION
 _STATUS_ACTION_CLEAR    = "clear"
 _STATUS_ACTION_FINALIZE = "finalize"
 _STATUS_ACTION_SUBMIT   = "submit"
+_STATUS_ACTION_UPDATEPREP = "update-prep"
 
 DEF_PUBLISHED_SUFFIX = "_published"
 
@@ -82,6 +83,7 @@ class ProjectService(MIDASSystem):
     STATUS_ACTION_CLEAR    = _STATUS_ACTION_CLEAR   
     STATUS_ACTION_FINALIZE = _STATUS_ACTION_FINALIZE
     STATUS_ACTION_SUBMIT   = _STATUS_ACTION_SUBMIT  
+    STATUS_ACTION_UPDATEPREP = _STATUS_ACTION_UPDATEPREP
 
     def __init__(self, project_type: str, dbclient_factory: DBClientFactory, config: Mapping={},
                  who: Agent=None, log: Logger=None, _subsys=None, _subsysabbrev=None):
@@ -374,6 +376,9 @@ class ProjectService(MIDASSystem):
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
         olddata = None
 
+        if _prec.status.state == status.PUBLISHED:
+            self.log.info("%s: Preparing published record for revision", id)
+            self._prep_for_update(_prec)   # this should change state to EDIT
         if _prec.status.state not in [status.EDIT, status.READY]:
             raise NotEditable(id)
 
@@ -494,6 +499,34 @@ class ProjectService(MIDASSystem):
         out['agent_vehicle'] = self.who.vehicle
         return out
 
+    def _prep_for_update(self, prec: ProjectRecord, message: str=None, reset_state: bool=True):
+        """
+        prepare a record that is currently in the PUBLISHED state to be updated and reset the state
+        to EDIT.  This may involve resetting the content of the data property to that consistent with 
+        the last published version.  
+
+        This implementation assumes that the data property already contains data matching the last 
+        published version.  Subclasses may override this and can safely call this super method to 
+        record the provenance action and reset the state.
+
+        Note that this implementation ignores the presence of the 
+        :py:class:`~nistoar.midas.dbio.status.Status` property, ``archived_at``.  
+
+        :param ProjectRecord prec:  the project record to prepare for an update
+        :param str        message:  A message to record as the status message; if not provided, a 
+                                    default will be set.
+        :param bool   reset_state:  If True (default), the state will be reset to EDIT; if False,
+                                    it will not be changed.  
+        """
+        defmsg = "Previous publication is ready for revision"
+        provact = Action(Action.PROCESS, prec.id, self.who, "trivial prep for update",
+                         {"name": "prep_for_update"})
+        self._record_action(provact)
+        if reset_state:
+            prec.status.set_state(status.EDIT)
+        prec.status.act(self.STATUS_ACTION_UPDATEPREP, message or defmsg)
+        prec.save()
+
     def replace_data(self, id, newdata, part=None, message="", _prec=None):
         """
         Replace the currently stored data content of a record with the given data.  It is expected that 
@@ -519,6 +552,9 @@ class ProjectService(MIDASSystem):
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
         olddata = deepcopy(_prec.data)
 
+        if _prec.status.state == status.PUBLISHED:
+            self.log.info("%s: Preparing published record for revision", id)
+            self._prep_for_update(_prec)   # this should change state to EDIT
         if _prec.status.state not in [status.EDIT, status.READY]:
             raise NotEditable(id)
 
@@ -582,8 +618,8 @@ class ProjectService(MIDASSystem):
                       self.dbcli.project, _prec.id, _prec.name, self.who)
         return self._extract_data_part(data, part)
 
-    def _save_data(self, indata: Mapping, prec: ProjectRecord,
-                   message: str, action: str = _STATUS_ACTION_UPDATE) -> Mapping:
+    def _save_data(self, indata: Mapping, prec: ProjectRecord, message: str, 
+                   action: str = _STATUS_ACTION_UPDATE, update_state: bool = True) -> Mapping:
         """
         expand, validate, and save the data modified by the user as the record's data content.
         
@@ -600,6 +636,10 @@ class ProjectService(MIDASSystem):
         :param str message:  a message to save as the status action message; if None, no message 
                              is saved.
         :param str  action:  the action label to record; if None, the action is not updated.
+        :param bool update_status:  if True (default), that record status will be reset to EDIT;
+                             if False, the status will be unchanged.  False should be used when 
+                             the record is in a state where it cannot be directly editable by 
+                             the end user (e.g. it is being processed for submission)
         :return:  the (transformed) data that was actually saved
                   :rtype: dict
         :raises InvalidUpdate:  if the provided `indata` represents an illegal or forbidden update or 
@@ -614,8 +654,9 @@ class ProjectService(MIDASSystem):
         if action:
             prec.status.act(action, message, self.who.actor)
         elif message is not None:
-            prec.message = message
-        prec.status.set_state(status.EDIT)
+            prec.status.message = message
+        if update_state:
+            prec.status.set_state(status.EDIT)
 
         prec.save();
         return indata

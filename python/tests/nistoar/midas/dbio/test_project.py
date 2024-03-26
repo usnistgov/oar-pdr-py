@@ -2,7 +2,7 @@ import os, json, pdb, logging, tempfile
 import unittest as test
 
 from nistoar.midas.dbio import inmem, base
-from nistoar.midas.dbio import project
+from nistoar.midas.dbio import project, status
 from nistoar.pdr.utils import prov
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_project.")
@@ -183,8 +183,7 @@ class TestProjectService(test.TestCase):
             self.project.get_data(prec.id, "pos/desc/b")
         with self.assertRaises(project.ObjectNotFound):
             self.project.get_data("goober")
-        
-        
+
 
     def test_update_replace_data(self):
         self.create_service()
@@ -250,6 +249,63 @@ class TestProjectService(test.TestCase):
             self.project.update_data(prec.id, 2, "pos/vec/x")
 
         self.assertEqual(len(self.project.dbcli._db.get(base.PROV_ACT_LOG, {}).get(prec.id,[])), 6)
+
+    def test_prep_for_update(self):
+        self.create_service()
+        self.assertTrue(not self.project.dbcli.name_exists("goob"))
+        
+        prec = self.project.create_record("goob")
+        prec.status.set_state(status.PUBLISHED)
+
+        self.project._prep_for_update(prec, "Boom!", False)
+        self.assertEqual(prec.status.state, status.PUBLISHED)
+        self.assertEqual(prec.status.action, "update-prep")
+        self.assertEqual(prec.status.message, "Boom!")
+
+        # status was saved
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.PUBLISHED)
+        self.assertEqual(prec.status.action, "update-prep")
+        self.assertEqual(prec.status.message, "Boom!")
+
+        self.project._prep_for_update(prec)
+        self.assertEqual(prec.status.state, status.EDIT)
+        self.assertEqual(prec.status.action, "update-prep")
+        self.assertNotEqual(prec.status.message, "Boom!")
+        
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.EDIT)
+        self.assertEqual(prec.status.action, "update-prep")
+        self.assertNotEqual(prec.status.message, "Boom!")
+
+
+    def test_revise(self):
+        # tests call to preparation after publication via update_data() or replace_data().
+
+        self.create_service()
+        self.assertTrue(not self.project.dbcli.name_exists("goob"))
+        
+        prec = self.project.create_record("goob")
+        prec.status.set_state(status.PUBLISHED)
+        prec.save()
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.PUBLISHED)
+
+        self.project.update_data(prec.id, {"title": "Hello"})
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.EDIT)
+        self.assertEqual(prec.status.action, "update")
+
+        prec.status.set_state(status.PUBLISHED)
+        prec.save()
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.PUBLISHED)
+
+        self.project.replace_data(prec.id, {"title": "Goodbye"})
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.EDIT)
+        self.assertEqual(prec.status.action, "update")
+
 
     def test_clear_data(self):
         self.create_service()
