@@ -34,6 +34,7 @@ _STATUS_ACTION_CLEAR    = "clear"
 _STATUS_ACTION_FINALIZE = "finalize"
 _STATUS_ACTION_SUBMIT   = "submit"
 _STATUS_ACTION_UPDATEPREP = "update-prep"
+_STATUS_ACTION_RESTORE  = "restore"
 
 DEF_PUBLISHED_SUFFIX = "_published"
 
@@ -84,6 +85,7 @@ class ProjectService(MIDASSystem):
     STATUS_ACTION_FINALIZE = _STATUS_ACTION_FINALIZE
     STATUS_ACTION_SUBMIT   = _STATUS_ACTION_SUBMIT  
     STATUS_ACTION_UPDATEPREP = _STATUS_ACTION_UPDATEPREP
+    STATUS_ACTION_RESTORE  = _STATUS_ACTION_RESTORE  
 
     def __init__(self, project_type: str, dbclient_factory: DBClientFactory, config: Mapping={},
                  who: Agent=None, log: Logger=None, _subsys=None, _subsysabbrev=None):
@@ -207,8 +209,59 @@ class ProjectService(MIDASSystem):
         delete the draft record.  This may leave a stub record in place if, for example, the record 
         has been published previously.  
         """
-        # TODO:  handling previously published records
-        raise NotImplementedError()
+        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+
+        if prec.status.published_as:
+            # restore record to the last published version
+            self._restore_last_published_data(prec,
+                                          "Deleted draft revision (restored previously published version)")
+            return prec
+        else:
+            # can complete forget this record
+            self.dbcli.delete_record(prec.id)
+            return None
+
+    def _restore_last_published_data(self, prec: ProjectRecord, message: str=None, reset_state: bool=True):
+        """
+        use the information in the status of the given record to restore the data content to that
+        of the last published version.  The status data must include a non-empty ``published_as``
+        property.
+
+        This implementation assumes the default publishing strategy and will pull the data from 
+        publish section of the backend store.  Subclasses may override this to handle other strategies.
+        Note that this implementation does not support honoring "archived_at".  
+        """
+        pubid = prec.status.published_as
+        if not pubid:
+            raise ValueError("_restore_last_published_data(): project record is missing "
+                             "published_as property")
+
+        if prec.status.archived_at:
+            self.log.warning("%s: archived_at property is set but will be ignored; assuming default")
+        archived_at = f"dbio_store:{self.dbcli.project}_latest/{self._arkify_recid(prec.id)}"
+
+        # Create restorer from archived_at URL
+        # TODO: this will be replaced with the use of a factory that processes the archived_at URL
+        dbclient = self.dbcli.client_for(f"{self.dbcli.project}_latest")
+        # restorer = DBIOStoreRestorer(dbclient, self._arkify_recid(prec.id))
+        # prec.data = restorer.get_data()
+
+        # Restore data and set into project record
+        pubrec = dbclient.get_record_for(self._arkify_recid(prec.id), ACLs.READ)
+        prec.data = pubrec.data
+
+        # set prov action, status state
+        defmsg = "Restored draft to last published version"
+        provact = Action(Action.PROCESS, prec.id, self.who,
+                         f"restored data to last published ({archived_at})",
+                         {"name": "restore_last_published"})
+        self._record_action(provact)
+        if reset_state:
+            prec.status.set_state(status.PUBLISHED)
+        prec.status.act(self.STATUS_ACTION_RESTORE, message or defmsg)
+        prec.save()
+        
+        
 
     def reassign_record(self, id, recipient: str):
         """
