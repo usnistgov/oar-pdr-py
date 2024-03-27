@@ -209,19 +209,31 @@ class ProjectService(MIDASSystem):
         delete the draft record.  This may leave a stub record in place if, for example, the record 
         has been published previously.  
         """
-        prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        prec = self.dbcli.get_record_for(id, ACLs.DELETE)   # may raise ObjectNotFound/NotAuthorized
 
-        if prec.status.published_as:
-            # restore record to the last published version
-            self._restore_last_published_data(prec,
-                                          "Deleted draft revision (restored previously published version)")
-            return prec
-        else:
-            # can complete forget this record
-            self.dbcli.delete_record(prec.id)
-            return None
+        out = None
+        provact = Action(Action.DELETE, prec.id, self.who, "deleted draft record")
+        try: 
+            if prec.status.published_as:
+                # restore record to the last published version
+                self._restore_last_published_data(prec,
+                                          "Deleted draft revision (restored previously published version)",
+                                                  provact)
+                out = prec
+            else:
+                # can complete forget this record
+                self.dbcli.delete_record(prec.id)
 
-    def _restore_last_published_data(self, prec: ProjectRecord, message: str=None, reset_state: bool=True):
+        except Exception as ex:
+            self.log.error("Failed to delete draft for rec, %s: %s", id, str(ex))
+            provact.message = "Failed to delete draft due to internal error"
+            raise
+        finally:
+            self._record_action(provact)
+        return out
+
+    def _restore_last_published_data(self, prec: ProjectRecord, message: str=None,
+                                     foract: Action = None, reset_state: bool=True):
         """
         use the information in the status of the given record to restore the data content to that
         of the last published version.  The status data must include a non-empty ``published_as``
@@ -240,28 +252,38 @@ class ProjectService(MIDASSystem):
             self.log.warning("%s: archived_at property is set but will be ignored; assuming default")
         archived_at = f"dbio_store:{self.dbcli.project}_latest/{self._arkify_recid(prec.id)}"
 
-        # Create restorer from archived_at URL
-        # TODO: this will be replaced with the use of a factory that processes the archived_at URL
-        dbclient = self.dbcli.client_for(f"{self.dbcli.project}_latest")
-        # restorer = DBIOStoreRestorer(dbclient, self._arkify_recid(prec.id))
-        # prec.data = restorer.get_data()
-
-        # Restore data and set into project record
-        pubrec = dbclient.get_record_for(self._arkify_recid(prec.id), ACLs.READ)
-        prec.data = pubrec.data
-
-        # set prov action, status state
+        # setup prov action
         defmsg = "Restored draft to last published version"
         provact = Action(Action.PROCESS, prec.id, self.who,
                          f"restored data to last published ({archived_at})",
                          {"name": "restore_last_published"})
-        self._record_action(provact)
-        if reset_state:
-            prec.status.set_state(status.PUBLISHED)
-        prec.status.act(self.STATUS_ACTION_RESTORE, message or defmsg)
-        prec.save()
-        
-        
+        if foract:
+            foract.add_subaction(provact)
+
+        try:
+            # Create restorer from archived_at URL
+            # TODO: this will be replaced with the use of a factory that processes the archived_at URL
+            dbclient = self.dbcli.client_for(f"{self.dbcli.project}_latest")
+            # restorer = DBIOStoreRestorer(dbclient, self._arkify_recid(prec.id))
+            # prec.data = restorer.get_data()
+
+            # Restore data and set into project record
+            pubrec = dbclient.get_record_for(self._arkify_recid(prec.id), ACLs.READ)
+            prec.data = pubrec.data
+
+            if reset_state:
+                prec.status.set_state(status.PUBLISHED)
+            prec.status.act(self.STATUS_ACTION_RESTORE, message or defmsg)
+            prec.save()
+            
+        except Exception as ex:
+            self.log.error("Failed to save prepped-for-revision record for project, %s: %s",
+                           prec.id, str(ex))
+            provact.message = "Failed to save prepped-for-revision data due to internal error"
+            raise
+        finally:
+            if not foract:
+                self._record_action(provact)
 
     def reassign_record(self, id, recipient: str):
         """
@@ -574,11 +596,18 @@ class ProjectService(MIDASSystem):
         defmsg = "Previous publication is ready for revision"
         provact = Action(Action.PROCESS, prec.id, self.who, "trivial prep for update",
                          {"name": "prep_for_update"})
-        self._record_action(provact)
         if reset_state:
             prec.status.set_state(status.EDIT)
         prec.status.act(self.STATUS_ACTION_UPDATEPREP, message or defmsg)
-        prec.save()
+
+        try:
+            prec.save()
+        except Exception as ex:
+            self.log.error("Failed to save prepped record for project, %s: %s", prec.id, str(ex))
+            provact.message = "Failed to save prepped record due to internal error"
+            raise
+        finally:
+            self._record_action(provact)
 
     def replace_data(self, id, newdata, part=None, message="", _prec=None):
         """
