@@ -1075,7 +1075,7 @@ class DBClient(ABC):
 
     def _new_record_data(self, id):
         """
-        return a dictionary containing data that will constitue a new ProjectRecord with the given 
+        return a dictionary containing data that will constitute a new ProjectRecord with the given 
         identifier assigned to it.  Generally, this record should not be committed yet.
         """
         return {"id": id, "status": {"created_by": self.user_id}}
@@ -1103,9 +1103,9 @@ class DBClient(ABC):
         except StopIteration:
             return False
 
-    def get_record_by_name(self, name: str, owner: str = None) -> Group:
+    def get_record_by_name(self, name: str, owner: str = None) -> ProjectRecord:
         """
-        return the group assigned the given name by its owner.  This assumes that the given owner 
+        return the project record assigned the given name by its owner.  This assumes that the given owner 
         has created only one group with the given name.  
         """
         if not owner:
