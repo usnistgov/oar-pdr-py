@@ -751,7 +751,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("501 ", self.resp[0])
+        self.assertIn("200 ", self.resp[0])
 
 
     def test_search(self):
@@ -1331,7 +1331,7 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         resp = self.body2dict(body)
 
-        self.assertEqual(resp['state'], 'submitted')
+        self.assertEqual(resp['state'], 'published')
         self.assertEqual(resp['action'], 'submit')
         self.assertIn('modified', resp)
         self.assertIn('since', resp)
