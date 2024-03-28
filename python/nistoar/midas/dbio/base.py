@@ -395,7 +395,7 @@ class ProtectedRecord(ABC):
         """
         if not who:
             who = self._cli.user_id
-        if who in self._cli._cfg.get("superusers", []):
+        if who in (self._cli._cfg.get("superusers", []) + [AUTOADMIN]):
             return True
 
         if isinstance(perm, str):
@@ -1041,7 +1041,8 @@ class DBClient(ABC):
         return self._authorized_create(shoulder, shldrs, who)
 
     def _authorized_create(self, shoulder, shoulders, who):
-        if self._who and who != self._who and self._who not in self._cfg.get("superusers", []):
+        superus = self._cfg.get("superusers", []) + [AUTOADMIN]
+        if self._who and who != self._who and self._who not in superus:
             return False
         return shoulder in shoulders
 

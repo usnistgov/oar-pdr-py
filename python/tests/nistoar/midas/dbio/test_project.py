@@ -12,8 +12,10 @@ def setUpModule():
     global loghdlr
     global rootlog
     rootlog = logging.getLogger()
+    rootlog.setLevel(logging.DEBUG)
     loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_pdp.log"))
     loghdlr.setLevel(logging.DEBUG)
+    loghdlr.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     rootlog.addHandler(loghdlr)
 
 def tearDownModule():
@@ -448,6 +450,9 @@ class TestProjectService(test.TestCase):
         self.assertEqual(pubrec.id, prec.data["@id"])
         self.assertEqual(pubrec.data.get('@version'), "1.0.0")
         self.assertEqual(pubrec.acls._perms['delete'], [])
+        self.assertEqual(pubrec.acls._perms['write'], [])
+        self.assertEqual(pubrec.acls._perms['admin'], [])
+        self.assertEqual(pubrec.acls._perms['read'], ["grp0:public"])
 
         pubcli = self.project.dbcli.client_for(self.project.dbcli.project+"_version")
         vid = prec.data["@id"] + "/pdr:v/" + prec.data["@version"]
@@ -455,6 +460,9 @@ class TestProjectService(test.TestCase):
         self.assertEqual(pubrec.id, vid)
         self.assertEqual(pubrec.data.get('@version'), "1.0.0")
         self.assertEqual(pubrec.acls._perms['delete'], [])
+        self.assertEqual(pubrec.acls._perms['write'], [])
+        self.assertEqual(pubrec.acls._perms['admin'], [])
+        self.assertEqual(pubrec.acls._perms['read'], ["grp0:public"])
 
 class TestProjectServiceFactory(test.TestCase):
 

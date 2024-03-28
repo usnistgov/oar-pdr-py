@@ -18,8 +18,8 @@ from copy import deepcopy
 
 import jsonpatch
 
-from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, PUBLIC_GROUP, RecordStatus, ANONYMOUS,
-                   AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException,
+from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, PUBLIC_GROUP, ANONYMOUS,
+                   RecordStatus, AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException,
                    InvalidUpdate, InvalidRecord)
 from . import status
 from .. import MIDASException, MIDASSystem
@@ -1082,8 +1082,8 @@ class ProjectService(MIDASSystem):
                              (e.g. from a downstream service). 
         """
         try:
-            latestcli = self.dbcli.client_for(f"{self.dbcli.project}_latest")
-            versioncli = self.dbcli.client_for(f"{self.dbcli.project}_version")
+            latestcli = self.dbcli.client_for(f"{self.dbcli.project}_latest", AUTOADMIN)
+            versioncli = self.dbcli.client_for(f"{self.dbcli.project}_version", AUTOADMIN)
 
             recd = prec.to_dict()
             recd['id'] = self._arkify_recid(prec.id)
@@ -1093,21 +1093,14 @@ class ProjectService(MIDASSystem):
 
             # Fix permissions
             for pubrec in (latest, version):
-                # no one can delete
+                # no one can delete, write, or admin (except superusers)
                 pubrec.acls.revoke_perm_from_all(ACLs.DELETE)
-
-                # only administrators of the original draft can overwrite
-                # Q: what if ADMIN perms change on draft record?
                 pubrec.acls.revoke_perm_from_all(ACLs.WRITE)
-                ads = list(pubrec.acls.iter_perm_granted(ACLs.ADMIN))
-                pubrec.acls.grant_perm_to(ACLs.WRITE, *ads)
+                pubrec.acls.revoke_perm_from_all(ACLs.ADMIN)
 
                 # everyone can read
                 pubrec.acls.revoke_perm_from_all(ACLs.READ)
                 pubrec.acls.grant_perm_to(ACLs.READ, PUBLIC_GROUP)
-
-                # no one can administer (except superusers)
-                pubrec.acls.revoke_perm_from_all(ACLs.ADMIN)
 
             version.save()
             latest.save()
