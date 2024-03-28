@@ -41,6 +41,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence, Callable
 from typing import Iterator
 from urllib.parse import parse_qs
+import json
 
 from nistoar.pdr.publish.service.wsgi import SubApp, Handler  # same infrastructure as publishing service
 from nistoar.pdr.publish.prov import PubAgent
@@ -466,13 +467,18 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         """
         try:
             input = self.get_json_body()
+            print("PROJECT.PY DO_POST")
+            print(input)
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
+        print("PATH BEFORE RSTRIP"+path)
         path = path.rstrip('/')
+        print("PATH AFTER RSTRIP"+path)
         if not path:
             return self.create_record(input)
         elif path == ':selected':
+            print("RIGHT CONDITION")
             return self.adv_select_records(input)
         else:
             return send_error_resp(400, "Selection resource not found")
@@ -482,18 +488,29 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         submit a record search 
         :param dict filter:   the search constraints for the search.
         """
+        print(input)
+        print("wesh")
         filter = input.get("filter", {})
+        print(filter)
+        if not filter:
+            print("Noooo filter")
         perms = input.get("permissions", [])
+        print(perms)
         if not perms:
+            print("Noooo perms")
             perms = [ dbio.ACLs.OWN ]
 
         # sort the results by the best permission type permitted
-        sortd = SortByPerm()
+        #sortd = SortByPerm()
+            result=[]
         for rec in self._adv_select_records(filter, perms):
-            sortd.add_record(rec)
-        out = [rec.to_dict() for rec in sortd.sorted()]
+            #sortd.add_record(rec)
+            print(rec)
+            result.append(rec)
 
-        return self.send_json(out, ashead=ashead)
+        #out = [rec.to_dict() for rec in sortd.sorted()]
+
+        return self.send_json(result, ashead=ashead)
 
     def _adv_select_records(self, filter, perms) -> Iterator[ProjectRecord]:
         """
@@ -502,7 +519,11 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         This base implementation passes the query directly to the generic DBClient instance.
         :return:  a generator that iterates through the matched records
         """
-        return self._dbcli.select_contraint_records(filter, perms)
+        print('__ADV_SELECT')
+        print(json.dumps(filter))
+        print("Before json.loads()")
+        print(perms)
+        return self._dbcli.select_constraint_records(filter, perms)
 
     def create_record(self, newdata: Mapping):
         """

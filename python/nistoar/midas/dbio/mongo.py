@@ -205,8 +205,8 @@ class MongoDBClient(base.DBClient):
             raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
         
     
-    def select_constraint_records(self, perm: base.Permissions=base.ACLs.OWN, **cst) -> Iterator[base.ProjectRecord]:
-        if(base.DBClient.check_query_structure(cst) == True):
+    def select_constraint_records(self,filter:dict, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+        if(base.DBClient.check_query_structure(filter) == True):
             if isinstance(perm, str):
                 perm = [perm]
             if isinstance(perm, (list, tuple)):
@@ -220,12 +220,12 @@ class MongoDBClient(base.DBClient):
             else:
                 constraints = {"acls."+perm.pop(): {"$in": idents}}
                 
-            cst["$and"].append(constraints)
+            filter["$and"].append(constraints)
                 
             try:
                 
                 coll = self.native[self._projcoll]
-                for rec in coll.find(cst):
+                for rec in coll.find(filter):
                     yield base.ProjectRecord(self._projcoll, rec)
 
             except Exception as ex:

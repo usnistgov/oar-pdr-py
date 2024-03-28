@@ -81,18 +81,27 @@ class InMemoryDBClient(base.DBClient):
                     yield deepcopy(rec)
                     break
     
-    def select_constraint_records(self,perm: base.Permissions=base.ACLs.OWN, **cst) -> Iterator[base.ProjectRecord]:
-        if(base.DBClient.check_query_structure(cst) == True):
+    def select_constraint_records(self,filter:dict,perm: base.Permissions=base.ACLs.OWN,) -> Iterator[base.ProjectRecord]:
+        print("MORRAY INMEM")
+        print(isinstance(filter,dict))
+        print(filter)
+        print(base.DBClient.check_query_structure(filter))
+        if(base.DBClient.check_query_structure(filter) == True):
             try:
                 if isinstance(perm, str):
                     perm = [perm]
+                    print(perm)
                 if isinstance(perm, (list, tuple)):
                     perm = set(perm)
                 for rec in self._db[self._projcoll].values():
                     rec = base.ProjectRecord(self._projcoll, rec, self)
                     for p in perm:
                         if(rec.authorized(p)):
-                            if (rec.searched(cst) == True):
+                            print("can search")
+                            print(filter)
+                            if (rec.searched(filter) == True):
+                                print('Yessir')
+                                print(rec)
                                 yield deepcopy(rec)
                                 break
             except Exception as ex:
