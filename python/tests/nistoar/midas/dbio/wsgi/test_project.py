@@ -111,7 +111,6 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertTrue(hdlr.acceptable())
 
     def test_select_constraints(self):
-        print('==============================')
         path = ""
         req = {
             'REQUEST_METHOD': 'POST',
@@ -155,13 +154,26 @@ class TestMIDASProjectApp(test.TestCase):
         resp=self.body2dict(body)
         self.assertEqual(resp['data']['title'],'Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy')
 
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name":"Supplementary material for:22",
+                                                 "data": {
+                                                    "title": "Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy"}
+                                                    }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp=self.body2dict(body)
+        self.assertEqual(resp['data']['title'],'Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy')
+
         
-        path = "mdm1:0005/"
+        path = "mdm1:0006/"
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path
         }
-        print('====**************====')
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
         resp = self.body2dict(body)
@@ -172,11 +184,14 @@ class TestMIDASProjectApp(test.TestCase):
             'REQUEST_METHOD': 'POST',
             'PATH_INFO': self.rootpath + path
         }
-        print(json.dumps( {"filter": {"data.title": "Standard Reference Materials"}}))
-        req['wsgi.input'] = StringIO(json.dumps( {"filter": {"$and": [ {"data.title": "Standard Reference Materials"} ]},
+        req['wsgi.input'] = StringIO(json.dumps( {"filter": {"$and": [ {"data.title": "Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy"} ]},
     "permissions": ["read", "write"]} ))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        self.assertEqual(body[0]['data']['title'],"Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy")
+        self.assertEqual(body[1]['data']['title'],"Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy")
+
 
 
         
