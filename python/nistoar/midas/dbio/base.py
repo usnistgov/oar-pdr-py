@@ -107,12 +107,10 @@ class ACLs:
 
     def revoke_perm_from_all(self, perm_name, protect_owner: bool=True):
         """
-        remove the given identities from the list having the given permission.  For each given identity 
-        that does not currently have the permission, nothing is done.  
-        :param str perm_name:  the permission to be revoked
-        :param str ids:        the identities of the users the permission should be revoked from
+        remove all identities from the list having the given permission.  
+        :param str perm_name:  the permission to be revoked from all identities
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
-                               authorized to grant this permission
+                               authorized to grant the permission
         """
         if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")

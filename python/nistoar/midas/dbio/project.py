@@ -18,7 +18,7 @@ from copy import deepcopy
 
 import jsonpatch
 
-from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus, ANONYMOUS,
+from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, PUBLIC_GROUP, RecordStatus, ANONYMOUS,
                    AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException,
                    InvalidUpdate, InvalidRecord)
 from . import status
@@ -1015,14 +1015,14 @@ class ProjectService(MIDASSystem):
                              (e.g. from a downstream service). 
         """
         if not _prec:
-            _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+            _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)   # may raise ObjectNotFound/NotAuthorized
         stat = _prec.status
         self.finalize(id, message, _prec=_prec)  # may raise NotEditable
 
         # this record is ready for submission.  Send the record to its post-editing destination,
         # and update its status accordingly.
         try:
-            defmsg = self._submit(_prec)
+            poststat = self._submit(_prec)
 
         except InvalidRecord as ex:
             emsg = "submit process failed: "+str(ex)
@@ -1043,10 +1043,16 @@ class ProjectService(MIDASSystem):
             raise
 
         else:
-            # record provenance record
-            self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, defmsg, {"name": "submit"}))
+            if not message:
+                if _prec.data.get('@version', '1.0.0') == '1.0.0':
+                    message = "Initial version " + poststat
+                else:
+                    message = "Revision " + postat
 
-            stat.set_state(status.SUBMITTED)
+            # record provenance record
+            self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, message, {"name": "submit"}))
+
+            stat.set_state(poststat)
             stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg, self.who.actor)
             _prec.save()
 
@@ -1062,6 +1068,10 @@ class ProjectService(MIDASSystem):
 
         This method should be overridden to provide project-specific handling.  This generic 
         implementation will simply copy the data contents of the record to another collection.
+
+        This default implement will save the data in a project record with PROJCOLL_latest collection
+        (and the PROJCOLL_version collection).  
+
         :returns:  the label indicating its post-editing state
                    :rtype: str
         :raises NotSubmitable:  if the finalization process produced an invalid record because the record 
@@ -1071,8 +1081,44 @@ class ProjectService(MIDASSystem):
                              not due to anything the client did, but rather reflects a system problem
                              (e.g. from a downstream service). 
         """
-        pass
-        
+        try:
+            latestcli = self.dbcli.client_for(f"{self.dbcli.project}_latest")
+            versioncli = self.dbcli.client_for(f"{self.dbcli.project}_version")
+
+            recd = prec.to_dict()
+            recd['id'] = self._arkify_recid(prec.id)
+            latest = ProjectRecord(latestcli.project, deepcopy(recd), latestcli)
+            recd['id'] += "/pdr:v/" + recd['data'].get("@version", "0")
+            version = ProjectRecord(versioncli.project, deepcopy(recd), versioncli)
+
+            # Fix permissions
+            for pubrec in (latest, version):
+                # no one can delete
+                pubrec.acls.revoke_perm_from_all(ACLs.DELETE)
+
+                # only administrators of the original draft can overwrite
+                # Q: what if ADMIN perms change on draft record?
+                pubrec.acls.revoke_perm_from_all(ACLs.WRITE)
+                ads = list(pubrec.acls.iter_perm_granted(ACLs.ADMIN))
+                pubrec.acls.grant_perm_to(ACLs.WRITE, *ads)
+
+                # everyone can read
+                pubrec.acls.revoke_perm_from_all(ACLs.READ)
+                pubrec.acls.grant_perm_to(ACLs.READ, PUBLIC_GROUP)
+
+                # no one can administer (except superusers)
+                pubrec.acls.revoke_perm_from_all(ACLs.ADMIN)
+
+            version.save()
+            latest.save()
+
+        except Exception as ex:
+            # TODO: back out version?
+            self.log.error("%s: Problem with default publication submission: %s", prec.id, str(ex))
+            raise SubmissionFailed() from ex
+
+        return status.PUBLISHED
+
 
                     
 
@@ -1165,4 +1211,17 @@ class NotSubmitable(InvalidRecord):
             message = "%s: not in an submitable state" % recid
         super(NotSubmitable, self).__init__(message, recid, errors, sys=sys)
 
+class SubmissionFailed(DBIORecordException):
+    """
+    An error indicating that the process of submitting a record failed due to a system problem
+    (rather than a problem with the record; see :py:class:`NotSubmitable`).
+    """
+    def __init__(self, recid, message=None, sys=None):
+        """
+        initialize the exception
+        """
+        if not message:
+            message = "%s: system error occurred while submitting record" % recid
+        super(DBIORecordException, self).__init__(recid, message, sys=sys)
+    
 

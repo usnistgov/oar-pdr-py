@@ -411,10 +411,16 @@ class TestProjectService(test.TestCase):
         prec = self.project.create_record("goob")
         self.assertEqual(prec.status.state, "edit")
         self.assertIn("created", prec.status.message)
+        self.assertNotIn("@version", prec.data)
+        self.assertNotIn("@id", prec.data)
+        
         data = self.project.update_data(prec.id, {"color": "red", "pos": {"x": 23, "y": 12, "grid": "A"}})
         self.project.finalize(prec.id)
         stat = self.project.get_status(prec.id)
         self.assertEqual(stat.state, "ready")
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data.get("@version"), "1.0.0")
+        self.assertEqual(prec.data.get("@id"), "ark:/88434/mdm1-0003")
         self.assertTrue(stat.message.startswith("draft is ready for submission as "))
 
         prec = self.project.get_record(prec.id)
@@ -423,8 +429,32 @@ class TestProjectService(test.TestCase):
         with self.assertRaises(project.NotEditable):
             self.project.finalize(prec.id)
         
+    def test_submit(self):
+        self.create_service()
+        prec = self.project.create_record("goob")
+        self.assertEqual(prec.status.state, "edit")
+        self.assertIn("created", prec.status.message)
+        self.assertNotIn("@version", prec.data)
+        self.assertNotIn("@id", prec.data)
         
+        self.project.submit(prec.id)
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data.get("@version"), "1.0.0")
+        self.assertEqual(prec.data.get("@id"), "ark:/88434/mdm1-0003")
+        self.assertEqual(prec.status.state, "published")
 
+        pubcli = self.project.dbcli.client_for(self.project.dbcli.project+"_latest")
+        pubrec = pubcli.get_record_for(prec.data["@id"])
+        self.assertEqual(pubrec.id, prec.data["@id"])
+        self.assertEqual(pubrec.data.get('@version'), "1.0.0")
+        self.assertEqual(pubrec.acls._perms['delete'], [])
+
+        pubcli = self.project.dbcli.client_for(self.project.dbcli.project+"_version")
+        vid = prec.data["@id"] + "/pdr:v/" + prec.data["@version"]
+        pubrec = pubcli.get_record_for(vid)
+        self.assertEqual(pubrec.id, vid)
+        self.assertEqual(pubrec.data.get('@version'), "1.0.0")
+        self.assertEqual(pubrec.acls._perms['delete'], [])
 
 class TestProjectServiceFactory(test.TestCase):
 
