@@ -1331,7 +1331,7 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         resp = self.body2dict(body)
 
-        self.assertEqual(resp['state'], 'published')
+        self.assertEqual(resp['state'], 'submitted')
         self.assertEqual(resp['action'], 'submit')
         self.assertIn('modified', resp)
         self.assertIn('since', resp)
