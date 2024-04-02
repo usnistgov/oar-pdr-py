@@ -53,6 +53,8 @@ ARGUMENTS
                                 midasserver).
   -p, --port NUM                The port that the service should listen to 
                                 (default: 9091)
+  -u, --for-unit-tests          print a message indicating the MongoDB URL to use 
+                                with for running unit tests
   -h, --help                    Print this text to the terminal and then exit
 
 EOF
@@ -80,6 +82,7 @@ USEMONGO=1
 STOREDIR=
 DETACH=
 DATADIR=
+PRINTURL=
 while [ "$1" != "" ]; do
     case "$1" in
         -b|--build)
@@ -114,6 +117,9 @@ while [ "$1" != "" ]; do
             ;;
         --port=*)
             PORT=`echo $1 | sed -e 's/[^=]*=//'`
+            ;;
+        -u|--for-unit-tests)
+            PRINTURL=1
             ;;
         -h|--help)
             usage
@@ -246,12 +252,26 @@ function stop_server {
 }
 trap "{ stop_server; $STOP_MONGO; }" TERM STOP
 
+function print_unittest_url {
+    echo "Set environment for unit tests: $SHELL"
+    if [[ "$SHELL" == *csh ]]; then
+        echo "  setenv MONGO_TESTDB_URL 'mongodb://admin:admin@localhost:27017/nsdtest?authSource=admin'"
+    else
+        echo "  export MONGO_TESTDB_URL='mongodb://admin:admin@localhost:27017/nsdtest?authSource=admin'"
+    fi
+}
+
 if [ "$ACTION" = "stop" ]; then
     echo Shutting down the NSD server...
     stop_server || true
     $STOP_MONGO
 else
+    [ -z "$PRINTURL" -o -n "$DETACH" ] || print_unittest_url
+
     echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp --rm --name=$CONTAINER_NAME $DETACH $PACKAGE_NAME/peopleserver $DBTYPE
     docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp --rm --name=$CONTAINER_NAME $DETACH $PACKAGE_NAME/peopleserver $DBTYPE
+
+    [ -z "$PRINTURL" -o -z "$DETACH" ] || print_unittest_url
 fi
 
+    
