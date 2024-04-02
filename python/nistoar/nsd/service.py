@@ -106,7 +106,13 @@ class MongoPeopleService(PeopleService):
                 else:
                     cnsts.append({prop: {"$in": filter[prop]}})
         try:
-            return list(self._db['People'].find({"$or": cnsts}, {"_id": False}))
+            if len(cnsts) < 1:
+                cnsts = {}
+            elif len(cnsts) == 1:
+                cnsts = cnsts[0]
+            else:
+                cnsts = {"$or": cnsts}
+            return list(self._db['People'].find(cnsts, {"_id": False}))
         except OperationFailure as ex:
             raise NSDClientError('People', 400, "Bad input", "Bad input query syntax: "+str(filter))
         except PyMongoError as ex:

@@ -1,4 +1,4 @@
-import os, json, pdb, logging, tempfile
+import os, json, pdb, logging, tempfile, re
 from pathlib import Path
 import unittest as test
 
@@ -36,6 +36,8 @@ datadir = testdir / 'data'
 dburl = None
 if os.environ.get('MONGO_TESTDB_URL'):
     dburl = os.environ.get('MONGO_TESTDB_URL')
+dbname = re.sub(r'\?.*$', '', dburl).split('/')[-1]
+assert dbname
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
 class TestMongoPeopleService(test.TestCase):
@@ -47,19 +49,19 @@ class TestMongoPeopleService(test.TestCase):
         self.svc = serv.MongoPeopleService(dburl)
 
     def tearDown(self):
-        self.svc._cli.drop_database('nsd')
+        self.svc._cli.drop_database(dbname)
 
     def test_load(self):
-        self.assertEqual(self.svc._cli.nsd['OUs'].count_documents({}), 0)
-        self.assertEqual(self.svc._cli.nsd['Divisions'].count_documents({}), 0)
-        self.assertEqual(self.svc._cli.nsd['Groups'].count_documents({}), 0)
-        self.assertEqual(self.svc._cli.nsd['People'].count_documents({}), 0)
+        self.assertEqual(self.svc._cli[dbname]['OUs'].count_documents({}), 0)
+        self.assertEqual(self.svc._cli[dbname]['Divisions'].count_documents({}), 0)
+        self.assertEqual(self.svc._cli[dbname]['Groups'].count_documents({}), 0)
+        self.assertEqual(self.svc._cli[dbname]['People'].count_documents({}), 0)
 
         self.svc.load(self.cfg, rootlog)
-        self.assertEqual(self.svc._cli.nsd['OUs'].count_documents({}), 4)
-        self.assertEqual(self.svc._cli.nsd['Divisions'].count_documents({}), 2)
-        self.assertEqual(self.svc._cli.nsd['Groups'].count_documents({}), 2)
-        self.assertEqual(self.svc._cli.nsd['People'].count_documents({}), 4)
+        self.assertEqual(self.svc._cli[dbname]['OUs'].count_documents({}), 4)
+        self.assertEqual(self.svc._cli[dbname]['Divisions'].count_documents({}), 2)
+        self.assertEqual(self.svc._cli[dbname]['Groups'].count_documents({}), 2)
+        self.assertEqual(self.svc._cli[dbname]['People'].count_documents({}), 4)
         
     def test_OUs(self):
         self.svc.load(self.cfg, rootlog, False)

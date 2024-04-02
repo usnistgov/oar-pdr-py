@@ -79,6 +79,7 @@ CONFIGFILE=
 USEMONGO=1
 STOREDIR=
 DETACH=
+DATADIR=
 while [ "$1" != "" ]; do
     case "$1" in
         -b|--build)
@@ -99,6 +100,13 @@ while [ "$1" != "" ]; do
             ;;
         -N|--no-mongo)
             USEMONGO=
+            ;;
+        -d|--data-dir)
+            shift
+            DATA_DIR=$1
+            ;;
+        --data-dir=*)
+            DATADIR=`echo $1 | sed -e 's/[^=]*=//'`
             ;;
         -p)
             shift
@@ -145,12 +153,14 @@ done
 VOLOPTS="-v $repodir/dist:/app/dist"
 VOLOPTS="$VOLOPTS -v $repodir/scripts/people-uwsgi.py:/dev/oar-pdr-py/scripts/people-uwsgi.py"
 
-datadir=$repodir/docker/data
-ls $datadir/*.json > /dev/null 2>&1 || {
+[ -n "$DATADIR" ] || DATADIR=$repodir/docker/peopleserver/data
+ls $DATADIR/*.json > /dev/null 2>&1 || {
     # no JSON data found in datadir; reset the datadir to test data
-    datadir=$repodir/python/tests/nistoar/nsd/data
+    echo "${prog}: no people data found; will load db with test data"
+    DATADIR=$repodir/python/tests/nistoar/nsd/data
 }
-VOLOPTS="$VOLOPTS -v ${datadir}:/app/data"
+[ "$ACTION" = "stop" ] || echo "${prog}: loading DB from $DATADIR"
+VOLOPTS="$VOLOPTS -v ${DATADIR}:/app/data"
 
 # build the docker images if necessary
 (docker_images_built peopleserver && [ -z "$DODOCKBUILD" ]) || build_server_image

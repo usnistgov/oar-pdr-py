@@ -64,6 +64,7 @@ config.configure_log(config=cfg)
 log = logging.getLogger("NSD")
 psvc = service.MongoPeopleService(cfg.get('db_url'))
 try:
+    log.info("Loading data from %s", cfg.get('data', {}).get("dir", "."))
     psvc.load(cfg.get('data'), log)
 except Exception as ex:
     log.exception("Failed to load people data: %s", str(ex))
