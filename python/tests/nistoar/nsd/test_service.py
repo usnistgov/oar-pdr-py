@@ -82,7 +82,7 @@ class TestMongoPeopleService(test.TestCase):
         self.assertEqual(set([u['orG_ACRNM'] for u in grps]), set("BWM VTA".split()))
 
     def test_select_people(self):
-        self.svc.load(self.cfg, rootlog, False)
+        self.svc.load(self.cfg, rootlog)
 
         peops = self.svc.select_people({"firstName": ["Phillip"]})
         self.assertEqual(len(peops), 2)
