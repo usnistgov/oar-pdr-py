@@ -592,7 +592,13 @@ class MIDASApp:
             subj = subj[:-1*len("@nist.gov")]
         elif email.endswith("@nist.gov"):
             group = "nist"
-        return PubAgent(group, PubAgent.USER, subj, agents)
+
+        umd = dict((k,v) for k,v in userinfo.items()
+                         if k not in ["userEmail", "sub"])
+
+        if not email:
+            email=None
+        return PubAgent(group, PubAgent.USER, subj, agents, email=email, **umd)
 
     def handle_request(self, env, start_resp):
         path = env.get('PATH_INFO', '/').strip('/').split('/')

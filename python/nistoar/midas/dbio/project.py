@@ -333,10 +333,10 @@ class ProjectService(MIDASSystem):
 
         for prop in update:
             if prop in base and isinstance(base[prop], Mapping):
-                if depth > 1 and isinstance(update[prop], Mapping):
+                if (depth < 0 or depth > 1) and isinstance(update[prop], Mapping):
                     # the properties from the base and update must both be dictionaries; otherwise,
                     # update is ignored.
-                    self._merge_into(base[prop], update[prop], depth-1)
+                    self._merge_into(update[prop], base[prop], depth-1)
             else:
                 base[prop] = update[prop]
 
