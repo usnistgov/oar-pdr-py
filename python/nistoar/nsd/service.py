@@ -10,6 +10,7 @@ from typing import List
 from . import NSDException, NSDServerError, NSDClientError, NSDResourceNotFound
 
 from pymongo import MongoClient
+from pymongo.errors import PyMongoError, OperationFailure
 
 class PeopleService(ABC):
     """
@@ -66,16 +67,20 @@ class MongoPeopleService(PeopleService):
         self._db = self._cli.get_default_database()
 
     def OUs(self) -> List[Mapping]:
-        return list(self._db['OUs'].find({}))
+        return list(self._db['OUs'].find({}, {"_id": False}))
 
     def divs(self) -> List[Mapping]:
-        return list(self._db['Divisions'].find({}))
+        return list(self._db['Divisions'].find({}, {"_id": False}))
 
     def groups(self) -> List[Mapping]:
-        return list(self._db['Groups'].find({}))
+        return list(self._db['Groups'].find({}, {"_id": False}))
 
     def _get_rec(self, id: int, coll: str, idprop: str='orG_ID') -> Mapping:
-        hits = list(self._db[coll].find({idprop: id}))
+        try:
+            hits = list(self._db[coll].find({idprop: id}, {"_id": False}))
+        except PyMongoError as ex:
+            raise NSDServerError("Org listing failed due to MongoDB failure: "+str(ex)) from ex
+
         if not hits:
             return None
         return hits[0]
@@ -100,7 +105,12 @@ class MongoPeopleService(PeopleService):
                     cnsts.append({prop: filter[prop][0]})
                 else:
                     cnsts.append({prop: {"$in": filter[prop]}})
-        return list(self._db['People'].find({"$or": cnsts}))
+        try:
+            return list(self._db['People'].find({"$or": cnsts}, {"_id": False}))
+        except OperationFailure as ex:
+            raise NSDClientError('People', 400, "Bad input", "Bad input query syntax: "+str(filter))
+        except PyMongoError as ex:
+            raise NSDServerError(message="people select failed due to MongoDB failure: "+str(ex)) from ex
 
     def _load_org(self, coll: str, data: List[Mapping]):
         self._db[coll].insert_many(data)
@@ -134,7 +144,7 @@ class MongoPeopleService(PeopleService):
         load all data described in the given configuration object
         """
         if clear:
-            self._db['OU'].delete_many({})
+            self._db['OUs'].delete_many({})
             self._db['Divisions'].delete_many({})
             self._db['Groups'].delete_many({})
             self._db['People'].delete_many({})
