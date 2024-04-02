@@ -495,7 +495,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             sortd.add_record(rec)
 
         out = [rec.to_dict() for rec in sortd.sorted()]
-        return self.send_json(out, ashead=ashead)
+        return self.send_json(out)
 
     def _adv_select_records(self, filter, perms) -> Iterator[ProjectRecord]:
         """
