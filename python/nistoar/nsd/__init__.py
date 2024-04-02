@@ -28,7 +28,7 @@ class NSDException(OARException):
 
 class NSDServiceException(NSDException):
     """
-    an exception indicating a problem using the distribution service.
+    an exception indicating a problem using the NSD service.
     """
 
     def __init__(self, resource=None, http_code=None, http_reason=None, message=None, cause=None):
@@ -52,10 +52,10 @@ class NSDServiceException(NSDException):
         self.status = http_reason
 
 
-class NSDServerError(NSDException):
+class NSDServerError(NSDServiceException):
     """
     an exception indicating an error occurred on the server-side while 
-    trying to access the distribution service.  
+    trying to access the NSD service.  
 
     This exception includes three extra public properties, `status`, `reason`, 
     and `resource` which capture the HTTP response status code, the associated 
@@ -63,14 +63,13 @@ class NSDServerError(NSDException):
     submitted to it.  
     """
 
-    def __init__(self, resource=None, http_code=None, http_reason=None, 
-                 message=None, cause=None):
+    def __init__(self, resource=None, http_code=None, http_reason=None, message=None, cause=None):
         super(NSDServerError, self).__init__(resource, http_code, http_reason, message, cause)
                                                  
 class NSDClientError(NSDServiceException):
     """
     an exception indicating an error occurred on the client-side while 
-    trying to access the distribution service.  
+    trying to access the NSD service.  
 
     This exception includes three extra public properties, `status`, `reason`, 
     and `resource` which capture the HTTP response status code, the associated 
@@ -78,10 +77,9 @@ class NSDClientError(NSDServiceException):
     submitted to it.  
     """
 
-    def __init__(self, resource, http_code, http_reason, message=None,
-                 cause=None):
+    def __init__(self, resource, http_code, http_reason, message=None, cause=None):
         if not message:
-            message = "client-side distribution error occurred"
+            message = "client-side NSD error occurred"
             if resource:
                 message += " while processing " + resource
             message += ": {0} {1}".format(http_code, http_reason)
@@ -92,17 +90,16 @@ class NSDClientError(NSDServiceException):
 class NSDResourceNotFound(NSDClientError):
     """
     An error indicating that a requested resource is not available via the
-    distribution service.
+    NSD service.
     """
     def __init__(self, resource, http_reason=None, message=None,
                  cause=None):
         if not message:
-            message = "Requested distribution resource not found"
+            message = "Requested NSD resource not found"
             if resource:
                 message += ": "+resource
         
-        super(NSDClientError, self).__init__("distribution", resource, 404, 
-                                             http_reason, message, cause)
+        super(NSDClientError, self).__init__(resource, 404, http_reason, message, cause)
 
 
 

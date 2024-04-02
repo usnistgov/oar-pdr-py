@@ -106,7 +106,7 @@ while [ "$1" != "" ]; do
             ;;
         -d|--data-dir)
             shift
-            DATA_DIR=$1
+            DATADIR=$1
             ;;
         --data-dir=*)
             DATADIR=`echo $1 | sed -e 's/[^=]*=//'`
@@ -120,6 +120,7 @@ while [ "$1" != "" ]; do
             ;;
         -u|--for-unit-tests)
             PRINTURL=1
+            [ -n "$DATADIR" ] || DATADIR=$repodir/python/tests/nistoar/nsd/data
             ;;
         -h|--help)
             usage
