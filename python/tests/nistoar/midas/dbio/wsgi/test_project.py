@@ -1,5 +1,6 @@
 import os, json, pdb, logging, tempfile
 from collections import OrderedDict
+from pathlib import Path
 from io import StringIO
 import unittest as test
 
@@ -10,6 +11,14 @@ from nistoar.pdr.publish import prov
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_project.")
 loghdlr = None
 rootlog = None
+testdir = Path(__file__).parents[1]
+print(testdir)
+datadir = testdir / "data"
+
+request_body = datadir / 'request_body.json'
+with open(request_body, 'r') as file:
+    request_body = json.load(file)
+
 def setUpModule():
     global loghdlr
     global rootlog
@@ -190,8 +199,16 @@ class TestMIDASProjectApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("201 ", self.resp[0])
         resp=self.body2dict(body)
+        self.assertEqual(len(resp),2)
         self.assertEqual(resp[0]['data']['title'],"Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy")
         self.assertEqual(resp[1]['data']['title'],"Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy")
+        req['wsgi.input'] = StringIO(json.dumps(request_body))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp=self.body2dict(body)
+        self.assertEqual(len(resp),1)
+        self.assertEqual(resp[0]['data']['title'],"Standard Reference Materials")
 
 
 
