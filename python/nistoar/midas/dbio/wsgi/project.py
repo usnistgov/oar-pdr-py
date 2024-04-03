@@ -49,6 +49,7 @@ from nistoar.pdr.utils.webrecord import WebRecorder
 from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
+from .search_sorter import SortByPerm
 
 __all__ = ["MIDASProjectHandler", "ProjectDataHandler"]
 
@@ -455,7 +456,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
 
         # sort the results by the best permission type permitted
         sortd = SortByPerm()
-        for rec in self._selected_records(perms):
+        for rec in self._select_records(perms):
             sortd.add_record(rec)
         out = [rec.to_dict() for rec in sortd.sorted()]
 
@@ -489,16 +490,12 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             perms = [ dbio.ACLs.OWN ]
 
         # sort the results by the best permission type permitted
-        #sortd = SortByPerm()
-        result=[]
+        sortd = SortByPerm()
         for rec in self._adv_select_records(filter, perms):
-            #sortd.add_record(rec)
-            result.append(rec.to_dict())
+            sortd.add_record(rec)
 
-        #out = [rec.to_dict() for rec in sortd.sorted()]
-        #return rec
-        return result
-        #return self.send_json(result, ashead=ashead)
+        out = [rec.to_dict() for rec in sortd.sorted()]
+        return self.send_json(out)
 
     def _adv_select_records(self, filter, perms) -> Iterator[ProjectRecord]:
         """

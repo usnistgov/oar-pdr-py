@@ -189,8 +189,9 @@ class TestMIDASProjectApp(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
         self.assertIn("201 ", self.resp[0])
-        self.assertEqual(body[0]['data']['title'],"Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy")
-        self.assertEqual(body[1]['data']['title'],"Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy")
+        resp=self.body2dict(body)
+        self.assertEqual(resp[0]['data']['title'],"Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy")
+        self.assertEqual(resp[1]['data']['title'],"Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy")
 
 
 
