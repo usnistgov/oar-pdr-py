@@ -110,7 +110,7 @@ class TestMIDASProjectApp(test.TestCase):
         hdlr._env['HTTP_ACCEPT'] = "text/html,*/*"
         self.assertTrue(hdlr.acceptable())
 
-    def test_select_constraints(self):
+    def test_adv_select(self):
         path = ""
         req = {
             'REQUEST_METHOD': 'POST',
