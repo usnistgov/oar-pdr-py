@@ -469,13 +469,21 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         try:
             input = self.get_json_body()
         except self.FatalError as ex:
+            print("fatal Error")
             return self.send_fatal_error(ex)
-
+        
         path = path.rstrip('/')
         if not path:
             return self.create_record(input)
         elif path == ':selected':
-            return self.adv_select_records(input)
+            try: 
+                return self.adv_select_records(input)
+            except SyntaxError as syntax:
+                print("400 Bad Request from filter")
+                return send_error_resp(400, "Wrong query structure for filter")
+            except ValueError as value:
+                print("204 Empty Set")
+                return send_error_resp(204, "No Content")
         else:
             return send_error_resp(400, "Selection resource not found")
 
@@ -495,7 +503,10 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             sortd.add_record(rec)
 
         out = [rec.to_dict() for rec in sortd.sorted()]
-        return self.send_json(out)
+        if not out:
+            raise ValueError("Empty Set")
+        else:
+            return self.send_json(out)
 
     def _adv_select_records(self, filter, perms) -> Iterator[ProjectRecord]:
         """

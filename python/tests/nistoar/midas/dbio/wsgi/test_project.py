@@ -145,7 +145,7 @@ class TestMIDASProjectApp(test.TestCase):
                                                     }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("201 ", self.resp[0])
+        self.assertIn("201 ", self.resp[4])
         resp=self.body2dict(body)
         self.assertEqual(resp['data']['title'],'Standard Reference Materials')
 
@@ -159,7 +159,7 @@ class TestMIDASProjectApp(test.TestCase):
                                                     }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("201 ", self.resp[0])
+        self.assertIn("201 ", self.resp[8])
         resp=self.body2dict(body)
         self.assertEqual(resp['data']['title'],'Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy')
 
@@ -173,7 +173,7 @@ class TestMIDASProjectApp(test.TestCase):
                                                     }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("201 ", self.resp[0])
+        self.assertIn("201 ", self.resp[12])
         resp=self.body2dict(body)
         self.assertEqual(resp['data']['title'],'Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy')
 
@@ -185,6 +185,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
+        self.assertIn("200 ", self.resp[16])
         resp = self.body2dict(body)
         self.assertEqual(resp['data']['title'],'Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy')
 
@@ -193,26 +194,62 @@ class TestMIDASProjectApp(test.TestCase):
             'REQUEST_METHOD': 'POST',
             'PATH_INFO': self.rootpath + path
         }
+
         req['wsgi.input'] = StringIO(json.dumps( {"filter": {"$and": [ {"data.title": "Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy"} ]},
     "permissions": ["read", "write"]} ))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("201 ", self.resp[0])
+        self.assertIn("200 ", self.resp[20])
         resp=self.body2dict(body)
         self.assertEqual(len(resp),2)
         self.assertEqual(resp[0]['data']['title'],"Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy")
         self.assertEqual(resp[1]['data']['title'],"Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy")
+
+
         req['wsgi.input'] = StringIO(json.dumps(request_body))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("201 ", self.resp[0])
+        self.assertIn("200 ", self.resp[24])
         resp=self.body2dict(body)
         self.assertEqual(len(resp),1)
         self.assertEqual(resp[0]['data']['title'],"Standard Reference Materials")
 
 
+        req['wsgi.input'] = StringIO(json.dumps( {"filter": {"$and": [ {"data.name": "Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy"} ]},
+    "permissions": ["read", "write"]} ))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("500 ", self.resp[28])
 
-        
+
+        req['wsgi.input'] = StringIO(json.dumps( {"filter": {"$a-nd": [ {"dat-a.name": "test"} ]},
+    "permissions": ["read", "write"]} ))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("500 ", self.resp[30])
+
+
+
+        req['wsgi.input'] = StringIO(json.dumps( "YEsssay" ))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("500 ", self.resp[32])
+
+
+        req['wsgi.input'] = StringIO(json.dumps({
+                "name": "John Doe",
+                "age": 30,
+                "email": "johndoe@example.com",
+                "address": {
+                    "street": "123 Main Street",
+                    "city": "Anytown",
+                    "zipcode": "12345"
+                },
+                }
+                ))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("500 ", self.resp[34])
 
     def test_get_name(self):
         path = "mdm1:0003/name"
