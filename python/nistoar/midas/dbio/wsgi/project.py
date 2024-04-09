@@ -480,12 +480,16 @@ class ProjectSelectionHandler(ProjectRecordHandler):
                 return self.adv_select_records(input)
             except SyntaxError as syntax:
                 print("400 Bad Request from filter")
-                return send_error_resp(400, "Wrong query structure for filter")
+                return self.send_error(400, "Wrong query structure for filter")
             except ValueError as value:
                 print("204 Empty Set")
-                return send_error_resp(204, "No Content")
+                return self.send_error(204, "No Content")
+            except AttributeError as attribute:
+                print("400 Attribute Error, not a json")
+                return self.send_error(400, "Attribute Error, not a json")
+        
         else:
-            return send_error_resp(400, "Selection resource not found")
+            return self.send_error(400, "Selection resource not found")
 
     def adv_select_records(self, input: Mapping):
         """

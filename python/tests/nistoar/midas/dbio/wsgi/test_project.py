@@ -219,21 +219,21 @@ class TestMIDASProjectApp(test.TestCase):
     "permissions": ["read", "write"]} ))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("500 ", self.resp[28])
+        self.assertIn("204", self.resp[28])
 
 
         req['wsgi.input'] = StringIO(json.dumps( {"filter": {"$a-nd": [ {"dat-a.name": "test"} ]},
     "permissions": ["read", "write"]} ))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("500 ", self.resp[30])
+        self.assertIn("400", self.resp[30])
 
 
 
         req['wsgi.input'] = StringIO(json.dumps( "YEsssay" ))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("500 ", self.resp[32])
+        self.assertIn("400", self.resp[32])
 
 
         req['wsgi.input'] = StringIO(json.dumps({
@@ -249,7 +249,7 @@ class TestMIDASProjectApp(test.TestCase):
                 ))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("500 ", self.resp[34])
+        self.assertIn("400", self.resp[34])
 
     def test_get_name(self):
         path = "mdm1:0003/name"

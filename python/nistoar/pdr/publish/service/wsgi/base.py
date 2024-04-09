@@ -265,6 +265,7 @@ class Handler(object):
             else:
                 return self.send_error(405, self._meth + " not supported on this resource")
         except Exception as ex:
+            print(ex)
             if self.log:
                 self.log.exception("Unexpected failure: "+str(ex))
             return self.send_error(500, "Server failure")
