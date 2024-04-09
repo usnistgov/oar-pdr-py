@@ -479,13 +479,10 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             try: 
                 return self.adv_select_records(input)
             except SyntaxError as syntax:
-                print("400 Bad Request from filter")
                 return self.send_error(400, "Wrong query structure for filter")
             except ValueError as value:
-                print("204 Empty Set")
                 return self.send_error(204, "No Content")
             except AttributeError as attribute:
-                print("400 Attribute Error, not a json")
                 return self.send_error(400, "Attribute Error, not a json")
         
         else:
