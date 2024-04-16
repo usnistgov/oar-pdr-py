@@ -58,13 +58,15 @@ class MongoPeopleService(PeopleService):
     An implementation of a PeopleService that uses a Mongo database to store its data
     """
 
-    def __init__(self, mongourl):
+    def __init__(self, mongourl, exactmatch=False):
         """
         initialize the service
         """
         self._dburl = mongourl
         self._cli = MongoClient(self._dburl)
         self._db = self._cli.get_default_database()
+        self._make_prop_constraint = self._make_prop_constraint_exact if exactmatch else \
+                                     self._make_prop_constraint_like
 
     def OUs(self) -> List[Mapping]:
         return list(self._db['OUs'].find({}, {"_id": False}))
@@ -97,21 +99,33 @@ class MongoPeopleService(PeopleService):
     def get_person(self, id: int) -> Mapping:
         return self._get_rec(id, "People", "peopleID")
 
-    def select_people(self, filter: Mapping) -> List[Mapping]:
+    def _make_mongo_constraints(self, filter: Mapping) -> Mapping:
         cnsts = []
         for prop in filter:
             if filter[prop]:
-                if len(filter[prop]) == 1:
-                    cnsts.append({prop: filter[prop][0]})
-                else:
-                    cnsts.append({prop: {"$in": filter[prop]}})
+                cnsts.append(self._make_prop_constraint(prop, filter[prop]))
+
+        if len(cnsts) < 1:
+            cnsts = {}
+        elif len(cnsts) == 1:
+            cnsts = cnsts[0]
+        else:
+            cnsts = {"$or": cnsts}
+        return cnsts
+
+    def _make_prop_constraint_exact(self, prop, values):
+        if len(values) == 1:
+            return {prop: values[0]}
+        else:
+            return {prop: {"$in": values}}
+
+    def _make_prop_constraint_like(self, prop, values):
+        return {prop: {"$regex": "|".join(values), "$options": "i"}}
+
+    def select_people(self, filter: Mapping) -> List[Mapping]:
+        cnsts = self._make_mongo_constraints(filter)
+        
         try:
-            if len(cnsts) < 1:
-                cnsts = {}
-            elif len(cnsts) == 1:
-                cnsts = cnsts[0]
-            else:
-                cnsts = {"$or": cnsts}
             return list(self._db['People'].find(cnsts, {"_id": False}))
         except OperationFailure as ex:
             raise NSDClientError('People', 400, "Bad input", "Bad input query syntax: "+str(filter))
