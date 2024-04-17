@@ -34,7 +34,7 @@ serviceurl = None
 if os.environ.get('PEOPLE_TEST_URL'):
     serviceurl = os.environ.get('PEOPLE_TEST_URL')
 
-@test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
+@test.skipIf(not os.environ.get('PEOPLE_TEST_URL'), "test people service not available")
 class TestNSDClient(test.TestCase):
 
     def setUp(self):
