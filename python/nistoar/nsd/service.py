@@ -103,7 +103,11 @@ class MongoPeopleService(PeopleService):
         cnsts = []
         for prop in filter:
             if filter[prop]:
-                cnsts.append(self._make_prop_constraint(prop, filter[prop]))
+                if not any([isinstance(e, str) for e in filter[prop]]):
+                    # if (all) non-string values, ask for exact match
+                    cnsts.append(self._make_prop_constraint_exact(prop, filter[prop]))
+                else:
+                    cnsts.append(self._make_prop_constraint(prop, filter[prop]))
 
         if len(cnsts) < 1:
             cnsts = {}
@@ -123,8 +127,12 @@ class MongoPeopleService(PeopleService):
         return {prop: {"$regex": "|".join(values), "$options": "i"}}
 
     def select_people(self, filter: Mapping) -> List[Mapping]:
-        cnsts = self._make_mongo_constraints(filter)
-        
+        try:
+            cnsts = self._make_mongo_constraints(filter)
+        except (TypeError, ValueError) as ex:
+            raise NSDClientError('People', 400, "Bad input",
+                                 f"Bad input query syntax: {str(filter)} ({str(ex)})")
+            
         try:
             return list(self._db['People'].find(cnsts, {"_id": False}))
         except OperationFailure as ex:
