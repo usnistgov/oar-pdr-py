@@ -807,10 +807,12 @@ class DAPService(ProjectService):
                 [org.title for org in resmd['responsibleOrganization']] + \
                 reduce(lambda x, y: x+y, [org.subunit for org in resmd['responsibleOrganization']], [])
             ))
-        out["author_count"] = nerd.authors.count
+        out["authors"] = nerd.references.get_data()
+        out["references"] = nerd.authors.get_data()
+#        out["author_count"] = nerd.authors.count
+#        out["reference_count"] = nerd.references.count
         out["file_count"] = nerd.files.count
         out["nonfile_count"] = nerd.nonfiles.count
-        out["reference_count"] = nerd.references.count
         return out
 
     _handsoff = ("@id @context publisher issued firstIssued revised annotated version " + \

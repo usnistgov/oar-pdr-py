@@ -121,12 +121,14 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.id, "mdsy:0003")
         self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data",
                                      "agent_vehicle": "midas" })
-        for key in "_schema @type author_count file_count reference_count".split():
+        for key in "_schema @type authors references file_count nonfile_count".split():
             self.assertIn(key, prec.data)
         self.assertNotIn('color', prec.data)
         self.assertNotIn('contactPoint', prec.data)
         self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0003")
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0003")
+        self.assertEqual(prec.data['authors'], [])
+        self.assertEqual(prec.data['references'], [])
         self.assertEqual(prec.data['nonfile_count'], 0)
 
         # some legit metadata but no legit identity info
