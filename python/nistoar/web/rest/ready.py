@@ -4,7 +4,7 @@ Reuseable classes for providing a proof-of-life endpoint in a NIST-OAR web app
 from typing import Callable, Mapping
 from logging import Logger
 
-from .base import SubApp, Handler
+from .base import ServiceApp, Handler
 from ..formats import Unacceptable, UnsupportedFormat, FormatSupport, XHTMLSupport, TextSupport
 
 class Ready(Handler):
@@ -80,7 +80,7 @@ u  </body>
 """      
         return self.send_ok(out, contenttype, "Ready", ashead=ashead)
         
-class ReadyApp(SubApp):
+class ReadyApp(ServiceApp):
     """
     a WSGI sub-app that handles unsupported path or proof-of-life requests
     """
@@ -94,7 +94,7 @@ class ReadyApp(SubApp):
         :param Mapping env:  the WSGI environment containing the request
         :param Callable start_resp:  the start_resp function to use initiate the response
         :param str path:     the path to the resource being requested.  This is usually 
-                             relative to a parent path that this SubApp is configured to 
+                             relative to a parent path that this ServiceApp is configured to 
                              handle.  
         """
         return Ready(path, env, start_resp, who, log=self.log, app=self)
