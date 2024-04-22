@@ -6,7 +6,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, Callable
 
 from .service import MongoPeopleService, PeopleService, NSDClientError
-from nistoar.pdr.publish.service.wsgi import SubApp, Handler   # same infrastructure as the publishing service
+from nistoar.web.rest import ServiceApp, Handler, WSGIServiceApp
 from nistoar.base.config import ConfigurationException
 from . import system
 
@@ -91,12 +91,12 @@ class PeopleHandler(NSDHandler):
         return self.send_options(["POST"])
 
 
-class PeopleApp:
+class PeopleApp(WSGIServiceApp):
     """
     A partial implementation of the NIST Staff Directory web service
     """
 
-    def __init__(self, config: Mapping, base_ep: str=None):
+    def __init__(self, config: Mapping, base_ep: str=None, log: logging.Logger = deflog):
         """
         initialize the app
         :param Mapping config:  the collected configuration for the App
@@ -104,37 +104,30 @@ class PeopleApp:
                                 this App.  If not provided, a value set in the configuration is 
                                 used (which itself defaults to "").
         """
-        self.cfg = config
         if base_ep is None:
-            base_ep = self.cfg.get('base_endpoint', DEF_BASE_PATH).strip('/')
-        self.base_ep = base_ep
+            base_ep = config.get('base_endpoint', DEF_BASE_PATH).strip('/')
+
+        svcapp = self.SvcApp(config, log)
+        super(PeopleApp, self).__init__(svcapp, log, base_ep, config)
                                     
-        dburl = self.cfg.get('db_url')
-        if not dburl:
-            raise ConfigurationException("Missing required config param: db_url")
-        if not dburl.startswith("mongodb:"):
-            raise ConfigurationException("Unsupported (non-MongoDB) database URL: "+dburl)
-        self.svc = MongoPeopleService(dburl)
+    class SvcApp(ServiceApp):
+        def __init__(self, config, log):
+            ServiceApp.__init__(self, "nsd", log, config)
 
-    def handle_request(self, env, start_resp):
-        path = env.get('PATH_INFO', '/')
-        if self.base_ep:
-            be = f"/{self.base_ep}/"
-            if path.startswith(be):
-                path = path[len(be):]
-            else:
-                return Handler(path, env, start_resp).send_error(404, "Not Found")
-        else:
-            path = path.strip('/')
+            dburl = self.cfg.get('db_url')
+            if not dburl:
+                raise ConfigurationException("Missing required config param: db_url")
+            if not dburl.startswith("mongodb:"):
+                raise ConfigurationException("Unsupported (non-MongoDB) database URL: "+dburl)
 
-        if path.startswith("People/"):
-            hdlr = PeopleHandler(self.svc, path, env, start_resp)
-        else:
-            hdlr = OrgHandler(self.svc, path, env, start_resp)
-        return hdlr.handle()
+            self.svc = MongoPeopleService(dburl)
 
-    def __call__(self, env, start_resp):
-        return self.handle_request(env, start_resp)
+        def create_handler(self, env, start_resp, path, who) -> Handler:
+            if path.startswith("People/"):
+                return PeopleHandler(self.svc, path, env, start_resp)
+
+            return OrgHandler(self.svc, path, env, start_resp)
+
 
 app = PeopleApp
 
