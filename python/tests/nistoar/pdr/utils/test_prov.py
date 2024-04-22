@@ -2,7 +2,7 @@ import os, json, pdb, logging, time, yaml
 import unittest as test
 from io import StringIO
 
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 from nistoar.testing import *
 
 class TestPubAgent(test.TestCase):
