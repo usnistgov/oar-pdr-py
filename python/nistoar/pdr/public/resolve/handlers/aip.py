@@ -4,7 +4,9 @@ Handlers for resolving PDR resource identifiers
 import sys, os, re, json, tempfile
 from collections import OrderedDict
 
-from .base import Handler, Format, FormatSupport, TextSupport, Unacceptable, UnsupportedFormat, Ready
+from nistoar.web.rest import Handler, Ready
+from nistoar.web.formats import (Format, FormatSupport, XHTMLSupport, TextSupport,
+                                 Unacceptable, UnsupportedFormat)
 from nistoar.pdr import constants as const
 from nistoar.pdr.exceptions import ConfigurationException, IDNotFound, StateException
 from nistoar.pdr import distrib
@@ -23,14 +25,14 @@ class AIPHandler(Handler):
     to handle endpoints under "/aip/"; however, the path passed is expected to be relative to this base.
     """
 
-    def __init__(self, path, wsgienv, start_resp, config={}, log=None):
-        super(AIPHandler, self).__init__(path, wsgienv, start_resp, config)
+    def __init__(self, path, wsgienv, start_resp, config={}, log=None, app=None):
+        super(AIPHandler, self).__init__(path, wsgienv, start_resp, config=config, log=log, app=app)
         self._dsep = self.cfg.get('locations', {}).get('distributionService')
         if not self._dsep:
             raise ConfigurationException("Missing config param: locations.distributionService")
         self._dsep = self._dsep.rstrip('/')
         self._svccli = distrib.RESTServiceClient(self._dsep)
-        self.log = log
+        self._set_format_qp("format")
 
     def do_GET(self, path, ashead=False, format=None):
         """
@@ -46,7 +48,7 @@ class AIPHandler(Handler):
         """
         path = path.lstrip('/')
         if not path:
-            return Ready('', self._env, self._start).handle()
+            return Ready('', self._env, self._start, app=self.app).handle()
 
         parts = path.split('/')
         if len(parts) == 1:
@@ -89,19 +91,18 @@ class AIPHandler(Handler):
         """
         supp_fmts = TextSupport()
         supp_fmts.support(Format("json", "application/json"), ["text/json", "application/json"], True)
+        self._set_default_format_support(supp_fmts)
 
-        if not isinstance(format, Format):
-            reqformats = self._determine_request_formats(format)
-            try:
-                format = supp_fmts.select_format(reqformats, self.ordered_accepts())
-            except Unacceptable as ex:
-                return self.send_error(406, "Not Acceptable", str(ex))
-            except UnsupportedFormat as ex:
-                return self.send_error(400, "Unsupported Format", str(ex))
-
-        if format is None:
-            # set the default return format
-            format = supp_fmts.default_format()
+        try:
+            format = self.select_format(format)
+            if not format:
+                if self.log:
+                    self.log.failure("Failed to determine output format")
+                return send_error(500, "Server Error")
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
 
         distcli = distrib.BagDistribClient(aipid, self._svccli)
         try:
@@ -179,19 +180,18 @@ class AIPHandler(Handler):
 
         nct = self._nativects.get(os.path.splitext(aipbag)[1].lstrip('.'))
         supp_fmts.support(Format("native", nct), [nct], default2native)
+        self._set_default_format_support(supp_fmts)
 
-        if not isinstance(format, Format):
-            reqformats = self._determine_request_formats(format)
-            try:
-                format = supp_fmts.select_format(reqformats, self.ordered_accepts())
-            except Unacceptable as ex:
-                return self.send_error(406, "Not Acceptable", str(ex))
-            except UnsupportedFormat as ex:
-                return self.send_error(400, "Unsupported Format", str(ex))
-                
-        if format is None:
-            # set the default return format
-            format = supp_fmts.default_format()
+        try:
+            format = self.select_format(format)
+            if not format:
+                if self.log:
+                    self.log.failure("Failed to determine output format")
+                return send_error(500, "Server Error")
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
 
         bagep = self._dsep + "/_aip/" + aipbag
 
@@ -262,17 +262,18 @@ class AIPHandler(Handler):
         if dist:
             nct = self._nativects.get(os.path.splitext(dist.get('name',''))[1].lstrip('.'))
             supp_fmts.support(Format("native", nct), [nct])
+        self._set_default_format_support(supp_fmts)
 
-        if not isinstance(format, Format):
-            reqformats = self._determine_request_formats(format)
-            try:
-                format = supp_fmts.select_format(reqformats, self.ordered_accepts())
-            except Unacceptable as ex:
-                return self.send_error(406, "Not Acceptable", str(ex))
-            except UnsupportedFormat as ex:
-                return self.send_error(400, "Unsupported Format", str(ex))
-        if not format:
-            format = supp_fmts.default_format()
+        try:
+            format = self.select_format(format)
+            if not format:
+                if self.log:
+                    self.log.failure("Failed to determine output format")
+                return send_error(500, "Server Error")
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
                 
         if format.name == "json" or format.name == "text":
             if dist:
@@ -330,17 +331,18 @@ class AIPHandler(Handler):
         supp_fmts.support(Format("json", "application/json"), ["text/json", "application/json"], True)
         nct = self._nativects.get(os.path.splitext(head.get('name',''))[1].lstrip('.'))
         supp_fmts.support(Format("native", nct), [nct])
-        
-        if not isinstance(format, Format):
-            reqformats = self._determine_request_formats(format)
-            try:
-                format = supp_fmts.select_format(reqformats, self.ordered_accepts())
-            except Unacceptable as ex:
-                return self.send_error(406, "Not Acceptable", str(ex))
-            except UnsupportedFormat as ex:
-                return self.send_error(400, "Unsupported Format", str(ex))
-        if not format:
-            format = supp_fmts.default_format()
+        self._set_default_format_support(supp_fmts)
+
+        try:
+            format = self.select_format(format)
+            if not format:
+                if self.log:
+                    self.log.failure("Failed to determine output format")
+                return send_error(500, "Server Error")
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
                 
         if format.name == "json" or format.name == "text":
             return self.send_ok(content=json.dumps(head, indent=2),
@@ -409,19 +411,18 @@ class AIPHandler(Handler):
         
         supp_fmts = TextSupport()
         supp_fmts.support(Format("json", "application/json"), ["text/json", "application/json"], True)
+        self._set_default_format_support(supp_fmts)
 
-        if not isinstance(format, Format):
-            reqformats = self._determine_request_formats(format)
-            try:
-                format = supp_fmts.select_format(reqformats, self.ordered_accepts())
-            except Unacceptable as ex:
-                return self.send_error(406, "Not Acceptable", str(ex))
-            except UnsupportedFormat as ex:
-                return self.send_error(400, "Unsupported Format", str(ex))
-
-        if format is None:
-            # set the default return format
-            format = supp_fmts.default_format()
+        try:
+            format = self.select_format(format)
+            if not format:
+                if self.log:
+                    self.log.failure("Failed to determine output format")
+                return send_error(500, "Server Error")
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
 
         tmpdir = self.cfg.get('tmp_dir', tempfile.gettempdir())
         if not os.path.isdir(tmpdir):
