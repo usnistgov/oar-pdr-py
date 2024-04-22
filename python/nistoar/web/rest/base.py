@@ -235,7 +235,7 @@ class Handler(object):
     @property
     def app(self):
         """
-        the SubApp instance that created this handler
+        the ServiceApp instance that created this handler
         """
         return self._app
 
@@ -544,10 +544,10 @@ class Handler(object):
         self._fmtsup = fmtsup
         
     
-class SubApp(metaclass=ABCMeta):
+class ServiceApp(metaclass=ABCMeta):
     """
     a base class WSGI implementation intended to run as a delegate handling a particular path 
-    within another WSGI application.  A SubApp is usually plugged into a larger WSGI app to 
+    within another WSGI application.  A ServiceApp is usually plugged into a larger WSGI app to 
     handle requests for a particular path and its descendent paths (as in <path> and <path>/*).  
     """
 
@@ -580,7 +580,7 @@ class SubApp(metaclass=ABCMeta):
     @property
     def name(self):
         """
-        a name for the service provided by this SubApp instance (set at construction time).
+        a name for the service provided by this ServiceApp instance (set at construction time).
         This can be used in messages targeted to clients.
         """
         return self._name
@@ -592,7 +592,7 @@ class SubApp(metaclass=ABCMeta):
         :param Mapping env:  the WSGI environment containing the request
         :param Callable start_resp:  the start_resp function to use initiate the response
         :param str path:     the path to the resource being requested.  This is usually 
-                             relative to a parent path that this SubApp is configured to 
+                             relative to a parent path that this ServiceApp is configured to 
                              handle.  
         """
         raise NotImplementedError()
@@ -603,7 +603,7 @@ class SubApp(metaclass=ABCMeta):
         :param Mapping env:  the WSGI environment containing the request
         :param Callable start_resp:  the start_resp function to use initiate the response
         :param str path:     the path to the resource being requested.  This is usually 
-                             relative to a parent path that this SubApp is configured to 
+                             relative to a parent path that this ServiceApp is configured to 
                              handle.  If None, the value of env['PATH_INFO'] should be 
                              assumed.
         """
@@ -876,18 +876,18 @@ def make_agent_from_nistoar_claimset(self, userinfo: Mapping, log: Logger, agent
 
 class WSGIAppSuite(WSGIApp):
     """
-    A WSGI application class that aggregates one or more :py:class:SubApp: instances.  This supports 
-    a model where each SubApp represents a different logical service and each with its own base URL; 
+    A WSGI application class that aggregates one or more :py:class:ServiceApp: instances.  This supports 
+    a model where each ServiceApp represents a different logical service and each with its own base URL; 
     they are all brought together into a single WSGI application.
     """
 
-    def __init__(self, config: Mapping, subapps: Mapping[str, SubApp], log: Logger,
+    def __init__(self, config: Mapping, svcapps: Mapping[str, ServiceApp], log: Logger,
                  base_ep: str = None):
         """
         initialize the suite of web services
         """
         super(WSGIAppSuite, self).__init__(config, log, base_ep)
-        self.subapps = dict(subapps.items())
+        self.svcapps = dict(svcapps.items())
 
     def handle_path_request(self, path: str, env: Mapping, start_resp: Callable, who = None):
         """
@@ -900,14 +900,14 @@ class WSGIAppSuite(WSGIApp):
         :param func start_resp:  the start-response function provided by the WSGI engine.
         :param      who:  a string or object that represents the client user.  
         """
-        # Determine which subapp should handle this request
+        # Determine which ServiceApp should handle this request
         base = re.sub(r'/+', '/', path)
         apppath = ''
-        subapp = None
+        svcapp = None
         isaparent = False
-        while not subapp:
-            subapp = self.subapps.get(base)
-            if subapp:
+        while not svcapp:
+            svcapp = self.svcapps.get(base)
+            if svcapp:
                 # Found!
                 continue
 
@@ -918,13 +918,26 @@ class WSGIAppSuite(WSGIApp):
                     return Handler(path, env, start_resp).send_error(404, "Not Found")
 
             elif not isaparent:
-                isaparent = any([p.startswith(base+'/') for p in self.subapps.keys()])            
+                isaparent = any([p.startswith(base+'/') for p in self.svcapps.keys()])            
 
             parts = base.rsplit('/', 1)
             if len(parts) < 2:
                 parts = ['', base]
-            apppath = "/".join([parts[1], apppath])
+            apppath = "/".join([parts[1], apppath]).strip('/')
             base = parts[0]
 
-        return subapp.handle_path_request(env, start_resp, apppath, who)
+        return svcapp.handle_path_request(env, start_resp, apppath, who)
+    
+class WSGIServiceApp(WSGIAppSuite):
+    """
+    a wrapper around a single ServiceApp instance.
+    """
+
+    def __init__(self, svcapp: ServiceApp, log: Logger, base_ep: str = None, config: Mapping={}):
+        """
+        wrap a single ServiceApp
+        """
+        super(WSGIServiceApp, self).__init__(config, {'': svcapp}, log, base_ep)
+
+            
     
