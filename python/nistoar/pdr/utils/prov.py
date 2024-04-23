@@ -3,7 +3,7 @@ module defining classes that help track publishing provenance.
 
 The publishing provenance for an SIP going through the publishing process is modeled as a series of 
 actions taken on the SIP data; each is captured as an :py:class:`Action`.  Actions are initiated by 
-an agent, represented by a :py:class:`PubAgent` instance.  Actions are applied to a _subject_, which 
+an agent, represented by a :py:class:`Agent` instance.  Actions are applied to a _subject_, which 
 is either the SIP data as a whole or some portion of it; the subject is identified via an identifier.  
 
 Typically, an SIPBagger will record these records to a file within the bag.  The default format is in 
@@ -14,47 +14,67 @@ import time, datetime, json, re
 from io import StringIO
 from typing import List, Iterable
 from collections import OrderedDict
-from collections.abc import Mapping, Sequence
+from typing import Mapping, Sequence, Iterable, Tuple, Callable, NewType
+from copy import deepcopy
 
 import yaml
 from jsonpatch import JsonPatch
 
-class PubAgent(object):
+Agent = NewType("Agent", object)
+
+class Agent(object):
     """
-    a class describing an actor motivating a change to an SIP or other publishing artifact
+    a class describing an agent that can make some change on a data entity.  An agent's identifier is 
+    made of two parts: a _vehicle_--the software that requests or effects the change, and an 
+    _actor_--an authenticated identity, either human or functional--that authorizes the change.  
+    An Agent can also provide other information about the agent such as its origins and properties
+    that can be used to assess authorization rights or record provenance.
+
+    This class is intended to represent an Agent from the W3C PROV model 
+    (https://www.w3.org/TR/2013/NOTE-prov-primer-20130430/).  
     """
     USER: str = "user"
-    AUTO: str = "auto"
+    AUTO: str = "auto"  # for functional identities
     UNKN: str = ""
 
-    def __init__(self, group: str, actortype: str, actor: str = None, agents: Iterable[str] = None,
-                 **kwargs):
-        self._group = group
-        if actortype not in [self.USER, self.AUTO, self.UNKN]:
-            raise ValueError("PubAgent: actortype not one of "+str((self.USER, self.AUTO)))
+    def __init__(self, vehicle: str, actortype: str, actorid: str = None, 
+                 agents: Iterable[str] = None, groups: Iterable[str] = None, **kwargs):
+        """
+        create an agent
+        :param str   vehicle:  a name for the software component that this agent originates from.
+        :param str actortype:  one of USER, AUTO, or UNKN, indicating the type of actor the identifier
+                               represents
+        :param str   actorid:  the unique identifier for the actor driving the software vehicle.  (This 
+                               is often refered to as a "username" or "login name".)
+        :param list[str] agents:  the list of upstream agents that this agent is acting on behalf of
+                               (optional).
+        :param list[str] groups:  a list of names of permission groups that the actor should be 
+                               considered part of (optional).
+        :param kwargs:  arbitrary key-value pairs that will be saved as custom properties of the agent
+        """
+        self._vehicle = vehicle
+
+        if actortype not in (self.USER, self.AUTO, self.UNKN):
+            raise ValueError("Actor: actortype not one of "+str((self.USER, self.AUTO)))
         self._actor_type = actortype
+
+        self._groups = []
+        if groups:
+            self._groups = set(groups)
+
         self._agents = []
         if agents:
             self._agents = list(agents)
-        self._actor= actor
+        self._actor= actorid
         self._md = OrderedDict((k,v) for k,v in kwargs.items() if v is not None)
 
-    @property
-    def group(self) -> str:
-        """
-        the name of the permission group whose permissions are invoked in the context of this agent.
-        A permission group is a group of users that have a common set of permisisons to make changes.  
-        This value can used to determine if the agent is authorized to make a particular change, or 
-        record the group whose permissions allowed a certain action.  
-        """
-        return self._group
 
     @property
     def actor(self) -> str:
         """
-        an identifier for the specific actor--either a person or some automated agent--that is 
-        initiating a change.  If the change is ultimately initiated by an action by a real person,
-        the identifier should be for that person if possible.  If None, the actor is not known.
+        an identifier for the specific client actor making a request.  This should be unique 
+        within the context of the application and blindly comparable to other identifiers within
+        this scope; that is if self.id == other.id is True, self and other refer to the same actor.
         """
         return self._actor
 
@@ -62,28 +82,79 @@ class PubAgent(object):
     def actor_type(self) -> str:
         """
         return the category of the actor behind this change.  The type can be known even if the 
-        specific identity of the actor is not.  Possible values include USER and AUTO.  
+        specific identity of the actor is not.  Possible values include USER, representing real
+        people, and AUTO, representing functional identities.  
         """
         return self._actor_type
 
     @property
-    def agents(self) -> List[str]:
+    def vehicle(self) -> str:
         """
-        a chain of agents--tools or services--used to request a change.  The first element is the 
-        original agent used to initiate the change; this might either be a web clients HTTP user 
-        agent description or the name of a software daemon that first detected a triggering event.
-        Subsequent entries should list the chain of services delegated to to effect the change.
+        return the name of the software compenent that established this Agent
         """
-        return list(self._agents)
+        return self._vehicle
 
-    def add_agent(self, agent: str) -> None:
+    @property
+    def id(self) -> str:
         """
-        append an agent name or description to the list of agents that delegated to this agent 
-        to effect a change.  This allows a chain of delegation to be recorded with a change to 
-        show where ultimately the request came from.  
+        return an identifier for this agent, of the form _vehicle_:_actor_.  
         """
-        if agent:
-            self._agents.append(agent)
+        return f"{self.vehicle}:{self.actor}"
+
+    @property
+    def groups(self) -> Tuple[str]:
+        """
+        return the names of permission groups currently attached to this agent.  These can be used
+        to make authorization decisions.
+        """
+        return tuple(self._groups)
+
+    def attach_group(self, group: str):
+        """
+        Attach the given group to this user to indicate that the user should be considered part of 
+        this group.
+        """
+        groups.add(group)
+
+    def detach_group(self, group: str):
+        """
+        Remove this user from the given group.  Nothing is done if the group is not already attached
+        to this user.
+        """
+        groups.discard(group)
+
+    def is_in_group(self, group: str):
+        """
+        return True if the given group is one of the groups currently attached to this user.
+        """
+        return group in groups
+
+    @property
+    def agents(self) -> Tuple[str]:
+        """
+        a list representing a chain of agents--tools or services--that led to this request.  The 
+        first element is the original agent used ot initiate the change; this might be a front-end 
+        web application or end-user client tool.  Subsequent entries should list the chain of 
+        services delegated to to make the request.  
+
+        By convention, an agent is identified by a name representing a tool or service, optionally 
+        followed by a colon and the identifier of the user using the tool or service.  
+
+        This information is intended only for tracking the provenance of data objects.  It should 
+        _not_ be used to make autorization decisions as the information is typically provided 
+        through unauthenticated means.  
+        """
+        return tuple(self._agents)
+
+    def new_vehicle(self, vehicle: str) -> Agent:
+        """
+        create a clone this Agent but with a new software component vehicle name.  The agent id
+        for this agent will be added to the agent list of the new Agent.
+        :param str vehicle:  the vehicle name to attach to the cloned Agent
+        """
+        out = Agent(vehicle, self.actor_type, self.actor, self._agents + [self.id], self.groups)
+        out._md = deepcopy(self._md)
+        return out
 
     def get_prop(self, propname: str, defval=None):
         """
@@ -120,12 +191,14 @@ class PubAgent(object):
         of keys for serializing.
         """
         out = OrderedDict([
-            ("group", self.group),
+            ("vehicle", self.vehicle),
             ("actor", self.actor),
             ("type", self.actor_type)
         ])
+        if self._groups:
+            out['groups'] = list(self._groups)
         if self._agents:
-            out['agents'] = self.agents
+            out['agents'] = list(self._agents)
         if withmd and self._md:
             out['actor_md'] = deepcopy(self._md)
         return out
@@ -144,25 +217,33 @@ class PubAgent(object):
         return json.dumps(self.to_dict(withmd), **kw)
 
     def __str__(self):
-        return "PubAgent(%s:%s)" % (self.group, self.actor)
+        return self.id
+
+    def __repr__(self):
+        return "Agent(%s)" % self.id
 
     @classmethod
     def from_dict(self, data: Mapping) -> "PubAgent":
         """
-        convert a dictionary like that created by to_dict() back into a PubAgent instance
+        convert a dictionary like that created by to_dict() back into an Agent instance
         """
-        missing = [p for p in "group type".split() if p not in data]
+        missing = [p for p in "vehicle type".split() if p not in data]
         if missing:
             raise ValueError("PubAgent.from_dict(): data is missing required properties: "+str(missing))
-        return PubAgent(data.get('group'), data.get('type'), data.get('actor'), data.get('agents'))
-        
+        out = Agent(data.get('vehicle'), data.get('type'), data.get('actor'), data.get('agents'),
+                    data.get('groups'))
+        mdprops = [k for k in data.keys() if k not in "vehicle type actor agents groups".split()]
+        for key in mdprops:
+            out.set_prop(key, data[key])
+        return out
+
 
 class Action(object):
     """
     a description of an action that was taken on a dataset or some identifiable part of it.  Actions
     are intended to be recorded as part of the provenence history of the dataset.  
 
-    An ``Action`` has a :py:attr:`subject`, an identifier for the dataset or dataset part that the 
+    An ``Action`` has a :py:attr:`subject`, an identifier for the entity (or entity part) that the 
     action was applied to, and it is classified as of a particular :py:attr:`type`.  Some Actions
     may also have an :py:attr:`object`, depending on the type and the subject, which provides the
     data that was applied to the subject as part of the action.  While an ``Action`` type may 
@@ -196,6 +277,10 @@ class Action(object):
         This action serves to provide via its message extra information about an action (e.g. as a 
         subaction) or otherwise describe an action that is not strictly one of the above types.  
         This action should not include an object.
+
+    This class is intended to correspond to the concept of Activity from the W3C PROV model 
+    (https://www.w3.org/TR/2013/NOTE-prov-primer-20130430/):  an Action or a group of Actions could be 
+    mapped into an Activity.
     """
     CREATE:  str = "CREATE"
     PUT:     str = "PUT"
@@ -207,14 +292,14 @@ class Action(object):
     types = "CREATE PUT PATCH MOVE DELETE PROCESS COMMENT".split()
     TZ = datetime.timezone.utc
 
-    def __init__(self, acttype: str, subj: str, agent: PubAgent, msg: str = None, obj = None,
+    def __init__(self, acttype: str, subj: str, agent: Agent, msg: str = None, obj = None,
                  timestamp: float = 0.0, subacts: List["Action"] = None):
         """
         intialize the action
         :param str    acttype:  the type of action taken; one of CREATE, PUT, PATCH, MOVE, DELETE, 
                                 PROCESS, COMMENT.
-        :param str       subj:  the identifier for the part of the dataset that was updated
-        :param PubAgent agent:  the agent (person or system) that intiated the action
+        :param str       subj:  the identifier for the part of the dataset/entity that was updated
+        :param Agent    agent:  the agent (person or system) that intiated the action
         :param msg        str:  a description of the change (and possibly why).
         :param obj:             an indicator or description of what was changed; the value, if applicable,
                                 is specific to the action and subject.
@@ -230,7 +315,7 @@ class Action(object):
             raise ValueError("Action: Not a recognized action type: "+acttype)
         self._type: str = acttype
         self._subj: str = subj
-        self._agent: PubAgent = agent
+        self._agent: Agent = agent
         self._msg: str = msg
         self._obj = obj
         self._time: float = timestamp
@@ -255,7 +340,7 @@ class Action(object):
     @property
     def subject(self) -> str:
         """
-        the identifier for the dataset or portion of the dataset that the action was applied to
+        the identifier for the dataset (entity) or portion of the dataset that the action was applied to
         """
         return self._subj
 
@@ -264,16 +349,16 @@ class Action(object):
         self._subj = subj
 
     @property
-    def agent(self) -> PubAgent:
+    def agent(self) -> Agent:
         """
-        return the PubAgent describing who directed the action
+        return the Agent describing who directed the action
         """
         return self._agent
 
     @agent.setter
-    def agent(self, agnt: PubAgent) -> None:
-        if not isinstance(agnt, PubAgent):
-            raise TypeError("Agent.agent setter: input is not a PubAgent: "+str(agnt))
+    def agent(self, agnt: Agent) -> None:
+        if not isinstance(agnt, Agent):
+            raise TypeError("Agent.agent setter: input is not a Agent: "+str(agnt))
         self._agent = agnt
 
     @property
@@ -444,7 +529,7 @@ class Action(object):
 
         agent = None
         if 'agent' in data:
-            agent = PubAgent.from_dict(data['agent'])
+            agent = Agent.from_dict(data['agent'])
         subacts = []
         if 'subactions' in data:
             for act in data['subactions']:
@@ -519,7 +604,7 @@ class _ActionYAMLDumper(yaml.Dumper):
     def _action_mapping_representer(cls, dumper, data):
         return dumper.represent_dict(data.items())
     @classmethod
-    def _pubagent_representer(cls, dumper, agent):
+    def _agent_representer(cls, dumper, agent):
         return dumper.represent_mapping("tag:yaml.org,2002:map",
                                         agent.to_dict().items(), flow_style=True)
     @classmethod
@@ -533,7 +618,7 @@ class _ActionYAMLDumper(yaml.Dumper):
 _ActionYAMLDumper.add_multi_representer(Mapping, _ActionYAMLDumper._action_mapping_representer)
 _ActionYAMLDumper.add_representer(OrderedDict, _ActionYAMLDumper._action_mapping_representer)
 _ActionYAMLDumper.add_representer(Action, _ActionYAMLDumper._action_representer)
-_ActionYAMLDumper.add_representer(PubAgent, _ActionYAMLDumper._pubagent_representer)
+_ActionYAMLDumper.add_representer(Agent, _ActionYAMLDumper._agent_representer)
 
 class _ActionYAMLLoader(yaml.Loader):
     @classmethod
