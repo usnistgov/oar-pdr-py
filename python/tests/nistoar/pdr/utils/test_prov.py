@@ -24,27 +24,27 @@ class TestAgent(test.TestCase):
         self.assertEqual(agent.agents, ())
         self.assertEqual(agent.groups, ())
 
-        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1:Ray", "thing2:auto"))
+        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1/Ray", "thing2/auto"))
         self.assertEqual(agent.vehicle, "pdp0")
         self.assertEqual(agent.actor_type, prov.Agent.AUTO)
         self.assertEqual(agent.actor_type, "auto")
         self.assertEqual(agent.actor, "pdp")
-        self.assertEqual(agent.agents, ("thing1:Ray", "thing2:auto"))
+        self.assertEqual(agent.agents, ("thing1/Ray", "thing2/auto"))
         self.assertEqual(dict(agent.iter_props()), {})
 
-        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1:Ray", "thing2:auto"), ("ncnr",))
+        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1/Ray", "thing2/auto"), ("ncnr",))
         self.assertEqual(agent.vehicle, "pdp0")
         self.assertEqual(agent.actor_type, prov.Agent.AUTO)
         self.assertEqual(agent.actor_type, "auto")
         self.assertEqual(agent.actor, "pdp")
-        self.assertEqual(agent.agents, ("thing1:Ray", "thing2:auto"))
+        self.assertEqual(agent.agents, ("thing1/Ray", "thing2/auto"))
         self.assertEqual(agent.groups, ("ncnr",))
         self.assertEqual(dict(agent.iter_props()), {})
 
     def test_props(self):
-        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1:Ray", "thing2:pdp"),
+        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1/Ray", "thing2/pdp"),
                            email="a@b.com", lunch="tacos", likes=["mom"])
-        self.assertEqual(agent.agents, ("thing1:Ray", "thing2:pdp"))
+        self.assertEqual(agent.agents, ("thing1/Ray", "thing2/pdp"))
         self.assertEqual(dict(agent.iter_props()),
                          {"email": "a@b.com", "lunch": "tacos", "likes": ["mom"]})
         self.assertEqual(agent.get_prop("email"), "a@b.com")
@@ -58,7 +58,7 @@ class TestAgent(test.TestCase):
         self.assertEqual(agent.get_prop("likes"), "beer")
 
     def test_new_vehicle(self):
-        oldagent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1:Ray", "thing2:pdp"),
+        oldagent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1/Ray", "thing2/pdp"),
                               email="a@b.com", lunch="tacos", likes=["mom"])
         agent = oldagent.new_vehicle("midas")
 
@@ -66,8 +66,8 @@ class TestAgent(test.TestCase):
         self.assertEqual(agent.actor_type, prov.Agent.AUTO)
         self.assertEqual(agent.actor_type, "auto")
         self.assertEqual(agent.actor, "pdp")
-        self.assertEqual(agent.id, "midas:pdp")
-        self.assertEqual(agent.agents, ("thing1:Ray", "thing2:pdp", "pdp0:pdp"))
+        self.assertEqual(agent.id, "midas/pdp")
+        self.assertEqual(agent.agents, ("thing1/Ray", "thing2/pdp", "pdp0/pdp"))
         self.assertEqual(dict(agent.iter_props()),
                          {"email": "a@b.com", "lunch": "tacos", "likes": ["mom"]})
         self.assertEqual(agent.get_prop("email"), "a@b.com")
@@ -75,6 +75,13 @@ class TestAgent(test.TestCase):
         self.assertEqual(agent.get_prop("likes", "beer"), ["mom"])
         self.assertIsNone(agent.get_prop("hairdo"))
         self.assertEqual(agent.get_prop("hairdo", "cueball"), "cueball")
+
+    def test_agent_vehicles(self):
+        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1", "thing2/pdp"),
+                           email="a@b.com", lunch="tacos", likes=["mom"])
+        self.assertEqual(list(agent.agent_vehicles()), "pdp0 thing2 thing1".split())
+        self.assertEqual(list(agent.agent_vehicles(False)), "thing1 thing2 pdp0".split())
+        
         
     def test_to_dict(self):
         agent = prov.Agent("pdp0", prov.Agent.AUTO)

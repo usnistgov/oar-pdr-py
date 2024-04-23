@@ -14,7 +14,7 @@ import time, datetime, json, re
 from io import StringIO
 from typing import List, Iterable
 from collections import OrderedDict
-from typing import Mapping, Sequence, Iterable, Tuple, Callable, NewType
+from typing import Mapping, Sequence, Iterable, Iterator, Tuple, Callable, NewType
 from copy import deepcopy
 
 import yaml
@@ -97,9 +97,9 @@ class Agent(object):
     @property
     def id(self) -> str:
         """
-        return an identifier for this agent, of the form _vehicle_:_actor_.  
+        return an identifier for this agent, of the form _vehicle_/_actor_.  
         """
-        return f"{self.vehicle}:{self.actor}"
+        return f"{self.vehicle}/{self.actor}"
 
     @property
     def groups(self) -> Tuple[str]:
@@ -132,19 +132,31 @@ class Agent(object):
     @property
     def agents(self) -> Tuple[str]:
         """
-        a list representing a chain of agents--tools or services--that led to this request.  The 
-        first element is the original agent used ot initiate the change; this might be a front-end 
-        web application or end-user client tool.  Subsequent entries should list the chain of 
-        services delegated to to make the request.  
+        a list representing a chain of delegated agents--tools or services--that led to this 
+        request.  The first element is identifier for the original agent used to initiate the 
+        change; this might be a front-end web application or end-user client tool.  Subsequent 
+        entries should list the chain of services delegated to to make the request.  
 
         By convention, an agent is identified by a name representing a tool or service, optionally 
-        followed by a colon and the identifier of the user using the tool or service.  
+        followed by a forward slash and the identifier of the user using the tool or service.  
 
         This information is intended only for tracking the provenance of data objects.  It should 
         _not_ be used to make autorization decisions as the information is typically provided 
         through unauthenticated means.  
         """
         return tuple(self._agents)
+
+    def agent_vehicles(self, current_first=True) -> Iterator[str]:
+        """
+        return an iterator to the vehicles in the delegated agent chain.
+        :param bool current_first:  if True (default), order the list starting with the most current 
+                                    agent vehicle (i.e. the value of ``self.vehicle``).  
+        """
+        vehicles = [a.rsplit('/', 1)[0] for a in self._agents]
+        vehicles.append(self.vehicle)
+        if current_first:
+            vehicles.reverse()
+        return iter(vehicles)
 
     def new_vehicle(self, vehicle: str) -> Agent:
         """
@@ -223,13 +235,13 @@ class Agent(object):
         return "Agent(%s)" % self.id
 
     @classmethod
-    def from_dict(self, data: Mapping) -> "PubAgent":
+    def from_dict(self, data: Mapping) -> Agent:
         """
         convert a dictionary like that created by to_dict() back into an Agent instance
         """
         missing = [p for p in "vehicle type".split() if p not in data]
         if missing:
-            raise ValueError("PubAgent.from_dict(): data is missing required properties: "+str(missing))
+            raise ValueError("Agent.from_dict(): data is missing required properties: "+str(missing))
         out = Agent(data.get('vehicle'), data.get('type'), data.get('actor'), data.get('agents'),
                     data.get('groups'))
         mdprops = [k for k in data.keys() if k not in "vehicle type actor agents groups".split()]
