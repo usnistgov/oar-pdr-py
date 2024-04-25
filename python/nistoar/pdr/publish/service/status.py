@@ -250,10 +250,10 @@ class SIPStatus(object):
         return self._data['user']['state']
 
     @property
-    def agent_groups(self) -> [str]:
+    def authorized_agents(self) -> [str]:
         """
         the agent permission groups that currently have control over the SIP.  An empty list indicates
-        that it is currently unaffiliated.  See :py:class:`~nistoar.pdr.publish.service.prov.PubAgent` 
+        that it is currently unaffiliated.  See :py:class:`~nistoar.pdr.utils.Agent` 
         for details on agent groups.
         """
         return list(self._data['user']['authorized'])
@@ -324,34 +324,35 @@ class SIPStatus(object):
         if cache:
             self.cache()
 
-    def add_agent_group(self, group: str, cache: bool=True) -> None:
+    def add_authorized_agent(self, agentid: str, cache: bool=True) -> None:
         """
         Add an agent group as one of the groups authorized to access and update this SIP
-        (see :py:class:`~nistoar.pdr.publish.service.prov.PubAgent` for details about agents).  
+        (see :py:class:`~nistoar.pdr.utils.prov.PubAgent` for details about agents).  
         In addition to updating the data in-memory, the full, current set of status metadata 
         will be flushed to disk.  
         :param str  group:  the name of the agent group to add 
         :param bool cache:  if True (default), persist the status information after 
                             update.
         """
-        if group not in self._data['user']['authorized']:
-            self._data['user']['authorized'].append(group)
+        if '/' in agentid:
+            agentid = agentid.lsplit('/', 1)[0]
+        if agentid not in self._data['user']['authorized']:
+            self._data['user']['authorized'].append(agentid)
         if cache:
             self.cache()
 
-    def any_authorized(self, groups: Union[str,Iterable[str]]):
+    def any_authorized(self, agents: Union[str,Iterable[str]]):
         """
-        return True if any of the named agent groups is listed as an authorized agent group
-        for the SIP.
+        return True if any of the named agents is listed as an authorized agent for the SIP.
         :param str|list[str] groups: a name of a list of names of agent permis
         """
-        if not groups:
+        if not agents:
             return False
-        if isinstance(groups, str):
-            groups = [groups]
-        if not isinstance(groups, set):
-            groups = set(groups)
-        return bool(groups & set(self._data['user']['authorized']))
+        if isinstance(agents, str):
+            agents = [agents]
+        if not isinstance(agents, set):
+            agents = set(agents)
+        return bool(agents & set(self._data['user']['authorized']))
 
     def remember(self, message: str=None, reset: bool=False):
         """
@@ -423,7 +424,7 @@ class SIPStatus(object):
         if self.state == FAILED and self._data['sys']:
             self._data['sys'] = {}
         if agroup:
-            self.add_agent_group(agroup, False)
+            self.add_authorized_agent(agroup, False)
         self.update(PROCESSING, message)
 
     def record_progress(self, message: str) -> None:

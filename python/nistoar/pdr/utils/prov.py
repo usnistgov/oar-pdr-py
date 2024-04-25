@@ -21,6 +21,8 @@ import yaml
 from jsonpatch import JsonPatch
 
 Agent = NewType("Agent", object)
+PUBLIC_AGENT_CLASS = "public"
+INVALID_AGENT_CLASS = "invalid"
 
 class Agent(object):
     """
@@ -36,8 +38,11 @@ class Agent(object):
     USER: str = "user"
     AUTO: str = "auto"  # for functional identities
     UNKN: str = ""
+    PUBLIC: str = PUBLIC_AGENT_CLASS
+    INVALID: str = INVALID_AGENT_CLASS
+    default_class = PUBLIC_AGENT_CLASS
 
-    def __init__(self, vehicle: str, actortype: str, actorid: str = None, 
+    def __init__(self, vehicle: str, actortype: str, actorid: str = None, agclass: str = None,
                  agents: Iterable[str] = None, groups: Iterable[str] = None, **kwargs):
         """
         create an agent
@@ -46,6 +51,9 @@ class Agent(object):
                                represents
         :param str   actorid:  the unique identifier for the actor driving the software vehicle.  (This 
                                is often refered to as a "username" or "login name".)
+        :param str   agclass:  an agent classification name (see :py:attr:`class`).  This is usually 
+                               assigned based on the actor identity and/or the identity of the service
+                               client.  
         :param list[str] agents:  the list of upstream agents that this agent is acting on behalf of
                                (optional).
         :param list[str] groups:  a list of names of permission groups that the actor should be 
@@ -57,6 +65,9 @@ class Agent(object):
         if actortype not in (self.USER, self.AUTO, self.UNKN):
             raise ValueError("Actor: actortype not one of "+str((self.USER, self.AUTO)))
         self._actor_type = actortype
+        if not agclass:
+            agclass = self.default_class
+        self._agclass = agclass
 
         self._groups = []
         if groups:
@@ -67,7 +78,6 @@ class Agent(object):
             self._agents = list(agents)
         self._actor= actorid
         self._md = OrderedDict((k,v) for k,v in kwargs.items() if v is not None)
-
 
     @property
     def actor(self) -> str:
@@ -95,6 +105,14 @@ class Agent(object):
         return self._vehicle
 
     @property
+    def agent_class(self) -> str:
+        """
+        a named category for the agent intended to confirm a set of permissions automatically.
+        This class will be listed as the first group in the groups property
+        """
+        return self._agclass
+
+    @property
     def id(self) -> str:
         """
         return an identifier for this agent, of the form _vehicle_/_actor_.  
@@ -107,7 +125,7 @@ class Agent(object):
         return the names of permission groups currently attached to this agent.  These can be used
         to make authorization decisions.
         """
-        return tuple(self._groups)
+        return tuple([self._agclass] + list(self._groups))
 
     def attach_group(self, group: str):
         """
@@ -130,7 +148,7 @@ class Agent(object):
         return group in groups
 
     @property
-    def agents(self) -> Tuple[str]:
+    def delegated(self) -> Tuple[str]:
         """
         a list representing a chain of delegated agents--tools or services--that led to this 
         request.  The first element is identifier for the original agent used to initiate the 
@@ -141,7 +159,7 @@ class Agent(object):
         followed by a forward slash and the identifier of the user using the tool or service.  
 
         This information is intended only for tracking the provenance of data objects.  It should 
-        _not_ be used to make autorization decisions as the information is typically provided 
+        _not_ be used to make authorization decisions as the information is typically provided 
         through unauthenticated means.  
         """
         return tuple(self._agents)
@@ -164,7 +182,8 @@ class Agent(object):
         for this agent will be added to the agent list of the new Agent.
         :param str vehicle:  the vehicle name to attach to the cloned Agent
         """
-        out = Agent(vehicle, self.actor_type, self.actor, self._agents + [self.id], self.groups)
+        out = Agent(vehicle, self.actor_type, self.actor, self.agent_class,
+                    self._agents + [self.id], self.groups)
         out._md = deepcopy(self._md)
         return out
 
@@ -205,12 +224,13 @@ class Agent(object):
         out = OrderedDict([
             ("vehicle", self.vehicle),
             ("actor", self.actor),
-            ("type", self.actor_type)
+            ("type", self.actor_type),
+            ("class", self.agent_class)
         ])
         if self._groups:
             out['groups'] = list(self._groups)
         if self._agents:
-            out['agents'] = list(self._agents)
+            out['delegated'] = list(self._agents)
         if withmd and self._md:
             out['actor_md'] = deepcopy(self._md)
         return out
@@ -242,8 +262,8 @@ class Agent(object):
         missing = [p for p in "vehicle type".split() if p not in data]
         if missing:
             raise ValueError("Agent.from_dict(): data is missing required properties: "+str(missing))
-        out = Agent(data.get('vehicle'), data.get('type'), data.get('actor'), data.get('agents'),
-                    data.get('groups'))
+        out = Agent(data.get('vehicle'), data.get('type'), data.get('actor'), data.get('class'),
+                    data.get('delegated'), data.get('groups'))
         mdprops = [k for k in data.keys() if k not in "vehicle type actor agents groups".split()]
         for key in mdprops:
             out.set_prop(key, data[key])

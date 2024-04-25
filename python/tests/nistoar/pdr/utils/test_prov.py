@@ -13,38 +13,43 @@ class TestAgent(test.TestCase):
         self.assertEqual(agent.actor_type, prov.Agent.AUTO)
         self.assertEqual(agent.actor_type, "auto")
         self.assertIsNone(agent.actor)
-        self.assertEqual(agent.agents, ())
-        self.assertEqual(agent.groups, ())
+        self.assertEqual(agent.agent_class, "public")
+        self.assertEqual(agent.delegated, ())
+        self.assertEqual(agent.groups, ("public",))
 
         agent = prov.Agent("pdp0", prov.Agent.USER, "Ray")
         self.assertEqual(agent.vehicle, "pdp0")
         self.assertEqual(agent.actor_type, prov.Agent.USER)
         self.assertEqual(agent.actor_type, "user")
         self.assertEqual(agent.actor, "Ray")
-        self.assertEqual(agent.agents, ())
-        self.assertEqual(agent.groups, ())
+        self.assertEqual(agent.agent_class, "public")
+        self.assertEqual(agent.delegated, ())
+        self.assertEqual(agent.groups, ("public",))
 
-        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1/Ray", "thing2/auto"))
+        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", "nist", ("thing1/Ray", "thing2/auto"))
         self.assertEqual(agent.vehicle, "pdp0")
         self.assertEqual(agent.actor_type, prov.Agent.AUTO)
         self.assertEqual(agent.actor_type, "auto")
         self.assertEqual(agent.actor, "pdp")
-        self.assertEqual(agent.agents, ("thing1/Ray", "thing2/auto"))
+        self.assertEqual(agent.agent_class, "nist")
+        self.assertEqual(agent.delegated, ("thing1/Ray", "thing2/auto"))
         self.assertEqual(dict(agent.iter_props()), {})
+        self.assertEqual(agent.groups, ("nist",))
 
-        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1/Ray", "thing2/auto"), ("ncnr",))
+        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", "ncnr", ("thing1/Ray", "thing2/auto"), ("repo",))
         self.assertEqual(agent.vehicle, "pdp0")
         self.assertEqual(agent.actor_type, prov.Agent.AUTO)
         self.assertEqual(agent.actor_type, "auto")
         self.assertEqual(agent.actor, "pdp")
-        self.assertEqual(agent.agents, ("thing1/Ray", "thing2/auto"))
-        self.assertEqual(agent.groups, ("ncnr",))
+        self.assertEqual(agent.agent_class, "ncnr")
+        self.assertEqual(agent.delegated, ("thing1/Ray", "thing2/auto"))
+        self.assertEqual(agent.groups, ("ncnr", "repo"))
         self.assertEqual(dict(agent.iter_props()), {})
 
     def test_props(self):
-        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1/Ray", "thing2/pdp"),
+        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", agents=("thing1/Ray", "thing2/pdp"),
                            email="a@b.com", lunch="tacos", likes=["mom"])
-        self.assertEqual(agent.agents, ("thing1/Ray", "thing2/pdp"))
+        self.assertEqual(agent.delegated, ("thing1/Ray", "thing2/pdp"))
         self.assertEqual(dict(agent.iter_props()),
                          {"email": "a@b.com", "lunch": "tacos", "likes": ["mom"]})
         self.assertEqual(agent.get_prop("email"), "a@b.com")
@@ -58,7 +63,7 @@ class TestAgent(test.TestCase):
         self.assertEqual(agent.get_prop("likes"), "beer")
 
     def test_new_vehicle(self):
-        oldagent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1/Ray", "thing2/pdp"),
+        oldagent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", "ncnr", ("thing1/Ray", "thing2/pdp"),
                               email="a@b.com", lunch="tacos", likes=["mom"])
         agent = oldagent.new_vehicle("midas")
 
@@ -66,8 +71,9 @@ class TestAgent(test.TestCase):
         self.assertEqual(agent.actor_type, prov.Agent.AUTO)
         self.assertEqual(agent.actor_type, "auto")
         self.assertEqual(agent.actor, "pdp")
+        self.assertEqual(agent.agent_class, "ncnr")
         self.assertEqual(agent.id, "midas/pdp")
-        self.assertEqual(agent.agents, ("thing1/Ray", "thing2/pdp", "pdp0/pdp"))
+        self.assertEqual(agent.delegated, ("thing1/Ray", "thing2/pdp", "pdp0/pdp"))
         self.assertEqual(dict(agent.iter_props()),
                          {"email": "a@b.com", "lunch": "tacos", "likes": ["mom"]})
         self.assertEqual(agent.get_prop("email"), "a@b.com")
@@ -77,7 +83,7 @@ class TestAgent(test.TestCase):
         self.assertEqual(agent.get_prop("hairdo", "cueball"), "cueball")
 
     def test_agent_vehicles(self):
-        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1", "thing2/pdp"),
+        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", "nist", ("thing1", "thing2/pdp"),
                            email="a@b.com", lunch="tacos", likes=["mom"])
         self.assertEqual(list(agent.agent_vehicles()), "pdp0 thing2 thing1".split())
         self.assertEqual(list(agent.agent_vehicles(False)), "thing1 thing2 pdp0".split())
@@ -88,26 +94,29 @@ class TestAgent(test.TestCase):
         data = agent.to_dict()
         self.assertEqual(data.get('vehicle'), "pdp0")
         self.assertEqual(data.get('type'), "auto")
+        self.assertEqual(data.get('class'), "public")
         self.assertIn('actor', data)
         self.assertIsNone(data.get('user'))
-        self.assertNotIn('agents', data)
-        self.assertEqual(set(data.keys()), set("vehicle actor type".split()))
+        self.assertNotIn('delegated', data)
+        self.assertEqual(set(data.keys()), set("vehicle actor type class".split()))
 
         agent = prov.Agent("pdp0", prov.Agent.USER, "Ray")
         data = agent.to_dict()
         self.assertEqual(data.get('vehicle'), "pdp0")
         self.assertEqual(data.get('type'), "user")
         self.assertEqual(data.get('actor'), "Ray")
-        self.assertNotIn('agents', data)
-        self.assertEqual(set(data.keys()), set("vehicle actor type".split()))
+        self.assertEqual(data.get('class'), "public")
+        self.assertNotIn('delegated', data)
+        self.assertEqual(set(data.keys()), set("vehicle actor type class".split()))
 
-        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1", "thing2"))
+        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", "ncnr", ("thing1", "thing2"))
         data = agent.to_dict()
         self.assertEqual(data.get('vehicle'), "pdp0")
         self.assertEqual(data.get('type'), "auto")
         self.assertEqual(data.get('actor'), "pdp")
-        self.assertEqual(data.get('agents'), ["thing1", "thing2"])
-        self.assertEqual(set(data.keys()), set("vehicle actor type agents".split()))
+        self.assertEqual(data.get('class'), "ncnr")
+        self.assertEqual(data.get('delegated'), ["thing1", "thing2"])
+        self.assertEqual(set(data.keys()), set("vehicle actor type class delegated".split()))
 
     def test_serialize(self):
         agent = prov.Agent("pdp0", prov.Agent.AUTO)
@@ -115,22 +124,25 @@ class TestAgent(test.TestCase):
         self.assertEqual(data.get('vehicle'), "pdp0")
         self.assertEqual(data.get('type'), "auto")
         self.assertIn('actor', data)
+        self.assertEqual(data.get('class'), "public")
         self.assertIsNone(data.get('actor'))
-        self.assertNotIn('agents', data)
+        self.assertNotIn('delegated', data)
 
         agent = prov.Agent("pdp0", prov.Agent.USER, "Ray")
         data = json.loads(agent.serialize())
         self.assertEqual(data.get('vehicle'), "pdp0")
         self.assertEqual(data.get('type'), "user")
         self.assertEqual(data.get('actor'), "Ray")
-        self.assertNotIn('agents', data)
+        self.assertEqual(data.get('class'), "public")
+        self.assertNotIn('delegated', data)
 
-        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1", "thing2"))
+        agent = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", "ncnr", ("thing1", "thing2"))
         data = json.loads(agent.serialize())
         self.assertEqual(data.get('vehicle'), "pdp0")
         self.assertEqual(data.get('type'), "auto")
         self.assertEqual(data.get('actor'), "pdp")
-        self.assertEqual(data.get('agents'), ["thing1", "thing2"])
+        self.assertEqual(data.get('class'), "ncnr")
+        self.assertEqual(data.get('delegated'), ["thing1", "thing2"])
 
     def test_from_dict(self):
         src = prov.Agent("pdp0", prov.Agent.AUTO)
@@ -139,7 +151,8 @@ class TestAgent(test.TestCase):
         self.assertEqual(agent.actor_type, prov.Agent.AUTO)
         self.assertEqual(agent.actor_type, "auto")
         self.assertIsNone(agent.actor)
-        self.assertEqual(agent.agents, ())
+        self.assertEqual(agent.agent_class, "public")
+        self.assertEqual(agent.delegated, ())
 
         src = prov.Agent("pdp0", prov.Agent.USER, "Ray")
         agent = prov.Agent.from_dict(json.loads(src.serialize()))
@@ -147,19 +160,21 @@ class TestAgent(test.TestCase):
         self.assertEqual(agent.actor_type, prov.Agent.USER)
         self.assertEqual(agent.actor_type, "user")
         self.assertEqual(agent.actor, "Ray")
-        self.assertEqual(agent.agents, ())
+        self.assertEqual(agent.agent_class, "public")
+        self.assertEqual(agent.delegated, ())
 
-        src = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", ("thing1", "thing2"))
+        src = prov.Agent("pdp0", prov.Agent.AUTO, "pdp", "ncnr", ("thing1", "thing2"))
         agent = prov.Agent.from_dict(json.loads(src.serialize()))
         self.assertEqual(agent.vehicle, "pdp0")
         self.assertEqual(agent.actor_type, prov.Agent.AUTO)
         self.assertEqual(agent.actor_type, "auto")
         self.assertEqual(agent.actor, "pdp")
-        self.assertEqual(agent.agents, ("thing1", "thing2"))
+        self.assertEqual(agent.agent_class, "ncnr")
+        self.assertEqual(agent.delegated, ("thing1", "thing2"))
 
 
 class TestAction(test.TestCase):
-    who = prov.Agent("pdp0", prov.Agent.AUTO, "ray", ["brian"])
+    who = prov.Agent("pdp0", prov.Agent.AUTO, "ray", groups=["brian"])
 
     def test_ctor(self):
         with self.assertRaises(ValueError):
