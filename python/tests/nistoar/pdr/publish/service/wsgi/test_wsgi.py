@@ -6,7 +6,7 @@ import unittest as test
 from nistoar.testing import *
 from nistoar.pdr.publish.service import wsgi
 import nistoar.pdr.preserve.bagit.builder as bldr
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 from nistoar.pdr import utils
 
 datadir = Path(__file__).parents[3] / 'preserve' / 'data'
@@ -33,8 +33,8 @@ def tearDownModule():
         loghdlr = None
     rmtmpdir()
 
-tstag = prov.PubAgent("test", prov.PubAgent.AUTO, "tester")
-ncnrag = prov.PubAgent("ncnr", prov.PubAgent.AUTO, "tester")
+tstag = prov.Agent("pdp", prov.Agent.AUTO, "tester", "test")
+ncnrag = prov.Agent("pdp", prov.Agent.AUTO, "tester", "ncnr")
 
 class TestPDPWSGI(test.TestCase):
 
@@ -109,12 +109,12 @@ class TestPDPWSGI(test.TestCase):
                 {
                     "auth_key": "NCNRTOKEN",
                     "user":     "gurn",
-                    "group":    "ncnr"
+                    "client":    "ncnr"
                 },
                 {
                     "auth_key": "DRAFTTOKEN",
                     "user":     "draft",
-                    "group":    "test"
+                    "client":    "test"
                 }
             ],
             'conventions': {
@@ -136,16 +136,18 @@ class TestPDPWSGI(test.TestCase):
         who = self.app.authenticate(req)
         self.assertIsNotNone(who)
         self.assertEqual(who.actor, "gurn")
-        self.assertEqual(who.group, "ncnr")
+        self.assertEqual(who.agent_class, "ncnr")
         self.assertEqual(who.actor_type, "auto")
+        self.assertEqual(who.delegated, ("ncnr/gurn",))
 
         req['HTTP_X_OAR_USER'] = "tester"
         req['HTTP_AUTHORIZATION'] = "Bearer DRAFTTOKEN"
         who = self.app.authenticate(req)
         self.assertIsNotNone(who)
         self.assertEqual(who.actor, "tester")
-        self.assertEqual(who.group, "test")
+        self.assertEqual(who.agent_class, "test")
         self.assertEqual(who.actor_type, "user")
+        self.assertEqual(who.delegated, ("test/tester",))
 
         req['HTTP_AUTHORIZATION'] = "DRAFTTOKEN"
         who = self.app.authenticate(req)

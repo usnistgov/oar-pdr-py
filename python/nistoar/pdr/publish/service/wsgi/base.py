@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from wsgiref.headers import Headers
 # from urllib.parse import parse_qs
 
-from nistoar.pdr.publish.prov import PubAgent
+from nistoar.pdr.utils.prov import Agent
 from nistoar.pdr import config as cfgmod
 from nistoar.pdr.utils.web import order_accepts
 
@@ -37,7 +37,7 @@ class Handler(object):
         the resource being requested (perhaps in addition to that implied by the HTTP 
         request method); see :py:meth:`get_action`.
     """
-    default_agent = PubAgent("public", PubAgent.UNKN, "anonymous")
+    default_agent = Agent("pdp", Agent.UNKN, "anonymous", Agent.PUBLIC)
     ACTION_UPDATE   = ''
     ACTION_FINALIZE = "finalize"
     ACTION_PUBLISH  = "publish"
@@ -338,7 +338,7 @@ class SubApp(metaclass=ABCMeta):
                                              "name-value pairs")
 
     @abstractmethod
-    def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:
+    def create_handler(self, env: dict, start_resp: Callable, path: str, who: Agent) -> Handler:
         """
         return a handler instance to handle a particular request to a path
         :param Mapping env:  the WSGI environment containing the request
@@ -349,7 +349,7 @@ class SubApp(metaclass=ABCMeta):
         """
         raise NotImplementedError()
         
-    def handle_path_request(self, env: dict, start_resp: Callable, path: str=None, who: PubAgent=None):
+    def handle_path_request(self, env: dict, start_resp: Callable, path: str=None, who: Agent=None):
         """
         respond to a request on a particular (relative) URL path.
         :param Mapping env:  the WSGI environment containing the request
@@ -388,7 +388,7 @@ class Ready(SubApp):
 
             return self.send_ok("Publishing service is up.\n", ashead=ashead)
 
-    def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:
+    def create_handler(self, env: dict, start_resp: Callable, path: str, who: Agent) -> Handler:
         """
         return a handler instance to handle a particular request to a path
         :param Mapping env:  the WSGI environment containing the request

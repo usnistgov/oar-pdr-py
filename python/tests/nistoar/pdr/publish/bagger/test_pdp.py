@@ -23,7 +23,7 @@ from nistoar.pdr.preserve import AIPValidationError
 from nistoar.pdr.publish import idmint as minter
 from nistoar.pdr.publish import BadSIPInputError
 from nistoar.nerdm import constants as consts
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 
 # datadir = nistoar/preserve/data
 datadir = Path(__file__).parents[2] / 'preserve' / 'data'
@@ -66,7 +66,7 @@ def to_dict(odict):
                     out[prop][i] = to_dict(out[prop][i])
     return out
 
-tstag = prov.PubAgent("test", prov.PubAgent.AUTO, "tester")
+tstag = prov.Agent("test", prov.Agent.AUTO, "tester")
 
 class TestPDPBagger(test.TestCase):
 

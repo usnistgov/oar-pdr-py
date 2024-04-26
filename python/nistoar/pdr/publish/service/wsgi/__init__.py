@@ -7,7 +7,7 @@ from collections import OrderedDict, Mapping
 from copy import deepcopy
 
 from ... import ConfigurationException, PublishSystem, system
-from ...prov import PubAgent
+from ....utils.prov import Agent
 from .base import Ready, SubApp, Handler
 from .pdp0 import PDP0App
 
@@ -47,7 +47,7 @@ class PDPApp(PublishSystem):
     and contains the following sub-parameters:
     :param str auth_key:  (required) the authorization bearer token that should be presented by the 
                           client.  
-    :param str group:     (required) the name of the permission group to use for clients that connect 
+    :param str client:    (required) the name of the client group to use for clients that connect 
                           with the associated 'auth_key'.  If not provided, the app will ignore this 
                           client authorization, effectively disabling use of the authorization token.
                           Note that is value is used to determine which identifier shoulders the client
@@ -68,10 +68,10 @@ class PDPApp(PublishSystem):
         for iden in self.cfg.get('authorized',[]):
             if not iden.get('auth_key'):
                 if iden.get('user'):
-                    log.warning("Missing authorization key for group=%s; skipping...", iden['group'])
+                    log.warning("Missing authorization key for client=%s; skipping...", iden['client'])
                 continue;
             if not isinstance(iden['auth_key'], str):
-                raise ConfigurationException("auth_key has wrong type for group="+str(iden.get('group'))+
+                raise ConfigurationException("auth_key has wrong type for client="+str(iden.get('client'))+
                                              ": "+type(iden['auth_key']))
             self._id_map[iden['auth_key']] = iden
 
@@ -113,12 +113,12 @@ class PDPApp(PublishSystem):
         cfg['convention'] = conv
         return cfg
 
-    def authenticate(self, env) -> PubAgent:
+    def authenticate(self, env) -> Agent:
         """
         determine and return the identity of the client.  This is done by mapping a Bearer key to 
         an identity in the `authorized` configuration parameter.
         :param Mapping env:  the WSGI request environment 
-        :rtype: PubAgent
+        :rtype: Agent
         """
         auth = env.get('HTTP_AUTHORIZATION', "")
         authkey = None
@@ -133,12 +133,13 @@ class PDPApp(PublishSystem):
             return None
 
         user = env.get('HTTP_X_OAR_USER')
-        patype = PubAgent.USER
+        patype = Agent.USER
         if not user:
-            patype = PubAgent.AUTO
+            patype = Agent.AUTO
             user = client.get('user', 'anonymous')
 
-        return PubAgent(client.get('group'), client.get('type', patype), user)
+        return Agent("pdp", client.get('type', patype), user, client.get('client'),
+                     [f"{client.get('client')}/{user}"])
         
 
     def handle_request(self, env, start_resp):

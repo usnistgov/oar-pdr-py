@@ -12,7 +12,7 @@ from nistoar.pdr.preserve.bagit import NISTBag
 from nistoar.pdr.publish.bagger import utils as bagutils
 import nistoar.pdr.preserve.bagit.builder as bldr
 import nistoar.pdr.exceptions as exceptions
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 
 from nistoar.pdr.publish.service import pdp
 from nistoar.pdr.publish.service import status
@@ -58,8 +58,8 @@ def to_dict(odict):
                     out[prop][i] = to_dict(out[prop][i])
     return out
 
-tstag = prov.PubAgent("test", prov.PubAgent.AUTO, "tester")
-ncnrag = prov.PubAgent("ncnr", prov.PubAgent.AUTO, "tester")
+tstag = prov.Agent("test", prov.Agent.AUTO, "tester", "test")
+ncnrag = prov.Agent("ncnr_client", prov.Agent.AUTO, "tester", "ncnr")
 
 class TestPDPublishingService(test.TestCase):
 
@@ -161,7 +161,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(self.pubsvc._get_id_shoulder(tstag, "", True), "pdp0")
         self.assertEqual(self.pubsvc._get_id_shoulder(tstag, None, True), "pdp0")
 
-        ncnr = prov.PubAgent("ncnr", prov.PubAgent.AUTO, "tester")
+        ncnr = prov.Agent("ncnr", prov.Agent.AUTO, "tester", "ncnr")
         self.assertEqual(self.pubsvc._get_id_shoulder(ncnr, "ncnr0:4200", True), "ncnr0")
         self.assertEqual(self.pubsvc._get_id_shoulder(ncnr, "", True), "ncnr0")
 

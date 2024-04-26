@@ -454,7 +454,7 @@ class SIPStatus(object):
         return out
 
     @classmethod
-    def requests(cls, config: Mapping, agents: Union[str,Iterable[str],None]=None) -> list:
+    def requests(cls, config: Mapping, agents: Union[str,Iterable[str],None]=None) -> List:
         """
         return a list of SIP IDs for which there exist status information.  
         :param Mapping config:  the status configurtion (which should include the `cachedir` parameter)
