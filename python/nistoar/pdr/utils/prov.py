@@ -1,14 +1,27 @@
 """
-module defining classes that help track publishing provenance.
+module defining classes that help track data provenance.
 
-The publishing provenance for an SIP going through the publishing process is modeled as a series of 
-actions taken on the SIP data; each is captured as an :py:class:`Action`.  Actions are initiated by 
-an agent, represented by a :py:class:`Agent` instance.  Actions are applied to a _subject_, which 
-is either the SIP data as a whole or some portion of it; the subject is identified via an identifier.  
+Provenance--the history of changes that occur to a dataset--is recorded throughout the publishing 
+process with the help of classes in this module.  This is handled (separately) in two parts of the 
+system:  in MIDAS, while tracking draft DAPs (digital asset publications) and DMPs (data management 
+plans), and in the PDR publishing service, tracking SIPs (submission information packages) going 
+through preservation and publication.  Both processes are modeled as a a series of actions taken on 
+the SIP data; each is captured as an :py:class:`Action`.  Actions are initiated by an agent, 
+represented by a :py:class:`Agent` instance.  Actions are applied to a _subject_, which is either 
+the SIP data as a whole or some portion of it; the subject is identified via an identifier.  
 
-Typically, an SIPBagger will record these records to a file within the bag.  The default format is in 
-the form of a YAML file in which each YAML document encoded in it represents a single request by the 
-client, which can be a compound Action.  
+(This model is intended to correspond to that in the 
+`W3C PROV model <https://www.w3.org/TR/2013/NOTE-prov-primer-20130430/>`_.  In particular, an 
+:py:class:`Action` or a set of Actions can correspond to an Activity.  The subject of the action
+corresponds to an Entity.)
+
+Provenance then is a recording of a series of actions on an entity.  The default file format (used 
+in the PDR publishing service) is in the form of a YAML file in which each YAML document encoded in 
+it represents a single request by the client, which can be a compound Action.  MIDAS stores its 
+provenance as JSON in its backend database.
+
+While the :py:class:`Agent` class was built to support provenance recording to capture who-and-what 
+made an action, it also provides features for assessing authorization.
 """
 import time, datetime, json, re
 from io import StringIO
@@ -26,14 +39,29 @@ INVALID_AGENT_CLASS = "invalid"
 
 class Agent(object):
     """
-    a class describing an agent that can make some change on a data entity.  An agent's identifier is 
-    made of two parts: a _vehicle_--the software that requests or effects the change, and an 
+    a class describing an agent that can make some change on a data entity.  An agent's identifier has
+    two main parts: a _vehicle_--the software that requests or effects the change, and an 
     _actor_--an authenticated identity, either human or functional--that authorizes the change.  
     An Agent can also provide other information about the agent such as its origins and properties
     that can be used to assess authorization rights or record provenance.
 
-    This class is intended to represent an Agent from the W3C PROV model 
-    (https://www.w3.org/TR/2013/NOTE-prov-primer-20130430/).  
+    Two properties in particular are provided for assessing authorization.  First is the 
+    :py:attr:`groups` property, a list of named collections of users that can be assigned permissions 
+    on particular data entities.  A group can be a static or persisted set of users stored in a 
+    database (like a UNIX user group) or something dynamic whose membership is computed on the fly 
+    based on current circumstances.  A group can be attached to an ``Agent``, signifying the agent's 
+    membership, via :py:meth:`attach_group` (or "detached" via :py:meth:`detach_group`).  
+
+    The second property intended for supporting authorization is the :py:attr:`agent_class`.  The 
+    class represents a dynamic group that is typically assigned the agent based on the origins of 
+    the agent.  This is used the actor represents a functional identity used as part of an automated 
+    agent:  multiple functional actors can belong to the same agent_class, sharing a common set of 
+    permissions.  The :py:attr:`agent_class` name will always appear as the first group in the 
+    :py:attr:`groups` property.  The PDR publishing service, whose clients are typically other 
+    software agents, uses :py:attr:`agent_class` to control which clients can publish which SIPs.
+
+    This class is intended to represent an Agent from the 
+    `W3C PROV model <https://www.w3.org/TR/2013/NOTE-prov-primer-20130430/>`_.
     """
     USER: str = "user"
     AUTO: str = "auto"  # for functional identities
