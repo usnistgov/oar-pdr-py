@@ -8,7 +8,7 @@ from functools import reduce
 from logging import Logger
 from urllib.parse import parse_qs
 from collections import OrderedDict
-from typing import Mapping, Iterable, Tuple, Callable
+from typing import Mapping, Iterable, Tuple, Callable, Union
 
 from wsgiref.headers import Headers
 # from urllib.parse import parse_qs
@@ -17,180 +17,7 @@ from ..utils import order_accepts
 from ..webrecord import WebRecorder
 from ..formats import Unacceptable, UnsupportedFormat, FormatSupport
 from nistoar.base.config import ConfigurationException
-
-PUBLIC_GROUP  = "public"
-INVALID_GROUP = "invalid"
-
-class Agent(object):
-    """
-    a class describing the actor making a request to a web service.  In addition to its unique 
-    identifier, it can hold other information about the actor's origins and properties that can 
-    be used to assess authorization rights or record provenance.
-    """
-    USER: str = "user"
-    AUTO: str = "auto"  # for functional identities
-    UNKN: str = ""
-
-    def __init__(self, actortype: str, actorid: str = None, agents: Iterable[str] = None,
-                 groups: Iterable[str] = None, **kwargs):
-        """
-        create an agent
-        :param str actortype:  one of USER, AUTO, or UNKN, indicating the type of actor the identifier
-                               represents
-        :param str   actorid:  the unique identifier for the actor being described.  (This is often 
-                               refered to as the "username" or "login name".)
-        :param list[str] agents:  the list of upstream agents that this agent is acting on behalf of
-                               (optional).
-        :param list[str] groups:  a list of names of permission groups that the actor should be 
-                               considered part of (optional).
-        :param kwargs:  arbitrary key-value pairs that will be saved as custom properties of the agent
-        """
-        if actortype not in (self.USER, self.AUTO, self.UNKN):
-            raise ValueError("Agent: actortype not one of "+str((self.USER, self.AUTO)))
-        self._actor_type = actortype
-
-        self._groups = []
-        if groups:
-            self._groups = set(groups)
-
-        self._agents = []
-        if agents:
-            self._agents = list(agents)
-        self._id= actorid
-        self._md = OrderedDict((k,v) for k,v in kwargs.items() if v is not None)
-
-
-    @property
-    def id(self) -> str:
-        """
-        an identifier for the specific client actor making a requuest.  This should be unique 
-        within the context of the application and blindly comparable to other identifiers within
-        this scope; that is if self.id == other.id is True, self and other refer to the same actor.
-        """
-        return self._id
-
-    @property
-    def actor_type(self) -> str:
-        """
-        return the category of the actor behind this change.  The type can be known even if the 
-        specific identity of the actor is not.  Possible values include USER, representing real
-        people, and AUTO, representing functional identities.  
-        """
-        return self._actor_type
-
-    @property
-    def groups(self) -> Tuple[str]:
-        """
-        return the names of permission groups currently attached to this agent.  These can be used
-        to make authorization decisions.
-        """
-        return tuple(self._groups)
-
-    def attach_group(self, group: str):
-        """
-        Attach the given group to this user to indicate that the user should be considered part of 
-        this group.
-        """
-        groups.add(group)
-
-    def detach_group(self, group: str):
-        """
-        Remove this user from the given group.  Nothing is done if the group is not already attached
-        to this user.
-        """
-        groups.discard(group)
-
-    def is_in_group(self, group: str):
-        """
-        return True if the given group is one of the groups currently attached to this user.
-        """
-        return group in groups
-
-    @property
-    def agents(self) -> Tuple[str]:
-        """
-        a list representing a chain of agents--tools or services--that led to this request.  The 
-        first element is the original agent used ot initiate the change; this might be a front-end 
-        web application or end-user client tool.  Subsequent entries should list the chain of 
-        services delegated to to make the request.  
-
-        By convention, an agent is identified by a name representing a tool or service, optionally 
-        followed by a colon and the identifier of the user using the tool or service.  
-
-        This information is intended only for tracking the provenance of data objects.  It should 
-        _not_ be used to make autorization decisions as the information is typically provided 
-        through unauthenticated means.  
-        """
-        return tuple(self.agents)
-
-    def get_prop(self, propname: str, defval=None):
-        """
-        return an actor property with the given name.  These arbitrary properties are typically 
-        set at construction time from authentication credentials, but others can be set via 
-        :py:meth:`set_prop`.  
-        :param str propname: the name of the actor property to return
-        :param Any    deval: the value to return if the property is not set (defaults to None)
-        :return:  the property value
-                  :rtype: Any
-        """
-        return self._md.get(propname, defval)
-
-    def set_prop(self, propname: str, val):
-        """
-        set an actor property with the given name to a given value.  To unset a property, provide 
-        None as the value.  
-        """
-        if val is None and propname in self._md:
-            del self._md[propname]
-        else:
-            self._md[propname] = val
-
-    def iter_props(self) -> Iterable[tuple]:
-        """
-        iterate through the attached actor properties, returning them a (property, value) tuples
-        """
-        return self._md.items()
-
-    def to_dict(self, withmd=False) -> Mapping:
-        """
-        return a dictionary describing this agent that can be converted to JSON directly via the 
-        json module.  This implementation returns an OrderedDict which provides a preferred ordering 
-        of keys for serializing.
-        """
-        out = OrderedDict([
-            ("group", self.group),
-            ("id", self.id),
-            ("type", self.actor_type)
-        ])
-        if self._agents:
-            out['agents'] = self.agents
-        if withmd and self._md:
-            out['actor_md'] = deepcopy(self._md)
-        return out
-    
-    def serialize(self, indent=None, withmd=False):
-        """
-        serialize this agent to a JSON string
-        :param int indent:  use the given value as the desired indentation.  If None, the output will 
-                            include no newline characters (and thus no indentation)
-        :param bool withmd: if True, include all extra user properties stored in this instance; 
-                            default: True
-        """
-        kw = {}
-        if indent:
-            kw['indent'] = indent
-        return json.dumps(self.to_dict(withmd), **kw)
-
-    def __str__(self):
-        return self.id
-
-    def __repr__(self):
-        grps = self.groups
-        if len(grps) > 0:
-            return "PubAgent(%s:%s)" % (grps[0], self.actor)
-        else:
-            return "PubAgent(%s)" % self.actor
-
+from nistoar.pdr.utils.prov import Agent
 
 class Handler(object):
     """
@@ -200,9 +27,6 @@ class Handler(object):
       * the ``who`` property that holds the identity of the remote user making the request
       * [content negotiation support]
     """
-    @classmethod
-    def default_agent(cls):
-        return Agent(Agent.UNKN, "anonymous", groups=["public"])
 
     def __init__(self, path: str, wsgienv: dict, start_resp: Callable, who=None, 
                  config: dict={}, log: Logger=None, app=None):
@@ -213,14 +37,14 @@ class Handler(object):
         self._code = 0
         self._msg = "unknown status"
         self.cfg = config
-        if not who:
-            who = self.default_agent()
-        self.who = who
         self.log = log
 
         self._app = app
         if self._app and hasattr(app, 'include_headers'):
             self._hdr = Headers(list(app.include_headers.items()))
+        if not who:
+            who = self._default_agent()
+        self.who = who
 
         # the output formats supported by this Handler; if None, the client has no choice
         # over the output format.  This should be set at construction time via
@@ -257,6 +81,10 @@ class Handler(object):
         supported.
         """
         self._format_qp = qpname
+
+    def _default_agent(self):
+        name = "nistoar" if not self.app else self.app.name
+        return Agent(name, Agent.UNKN, "anonymous", groups=["public"])
 
     def send_error(self, code, message, content=None, contenttype=None, ashead=None, encoding='utf-8'):
         """
@@ -614,10 +442,22 @@ class ServiceApp(metaclass=ABCMeta):
     def __call__(self, env, start_resp):
         return self.handle_path_request(env, start_resp)
 
+class Unauthenticated(Exception):
+    """
+    An exception indicating that a service client did not successfully authenticate itself.
+    This may be because the credentials are required but none were provided by the client, or 
+    because the credentials presented were not valid.
+
+    Note that an implementation is not required to raise this exception, particularly if 
+    credentials are optional.  Instead an identity can be returned that specifically represent
+    an unauthenticated client.  
+    """
+    pass
 
 class WSGIApp(metaclass=ABCMeta):
     """
-    A WSGI application base class that provides for authentication 
+    A WSGI application base class for wrapping one or more ServiceApp classes.  It provides a 
+    common authentication authentication check.  
     """
 
     def __init__(self, config: Mapping, log: Logger, base_ep: str = None):
@@ -629,15 +469,28 @@ class WSGIApp(metaclass=ABCMeta):
         if base_ep:
             self.base_ep = '/%s/' % base_ep.strip('/')
 
-    def authenticate(self, env) -> Agent:
+    def authenticate(self, env) -> Union[object,str,None]:
         """
-        determine and return the identity of the client.  This implementation returns None, reflecting
-        that by default authentication is not supported.
+        determine and return the identity of the client.  This base method has loose constraints on 
+        the form of the output identity: it can be a simple string or a more complex object.  This 
+        implementation returns None, reflecting that by default authentication is not supported.  
+        This method is called automatically by :py:meth:`handle_request`.
+
+        This method may raise an :py:class:`Unauthenticated` exception.  If it does, 
+        :py:meth:`handle_request` will immediately respond to the client with a 401 (Unauthorized) 
+        error.  If this is not desired (because, say, this state is to be handled at the method 
+        level), the implementation should return an identity that represents an unauthenticated 
+        user.
+
+        See also :py:class:`AuthenticatedWSGIApp`.
         
         :param Mapping env:  the WSGI request environment 
         :return:  a representation of the requesting user.  None can be returned if authentication is 
                   not supported or needed.  
-                  :rtype: Agent
+        :raises Unauthenticated:  if the authentication process fails.   Note that an implementation 
+                  is not required to raise this exception for an unauthenticated user; instead, the 
+                  implementation may choose to return an identity that specifically represents an 
+                  unauthenticated user.
         """
         return None
 
@@ -645,7 +498,14 @@ class WSGIApp(metaclass=ABCMeta):
         path = re.sub(r'/+', '/', env.get('PATH_INFO', '/'))
 
         # determine who is making the request
-        who = self.authenticate(env)
+        try:
+            who = self.authenticate(env)
+        except Unauthenticated as ex:
+            self.log.debug("Authentication failure: %s", str(ex))
+            self.send_error(401, "Authentication Failure")
+        except Exception as ex:
+            self.log.error("Unexpected failure while authenticating: %s", str(ex))
+            self.send_error(500, "Internal Server Error")
 
         if self.base_ep:
             if path.startswith(self.base_ep):
@@ -681,27 +541,81 @@ class WSGIApp(metaclass=ABCMeta):
     def __call__(self, env, start_resp):
         return self.handle_request(env, start_resp)
 
+class AuthenticatedWSGIApp(WSGIApp):
+    """
+    a WSGIApp with a NIST-OAR-specific model for authentication built around the 
+    :py:class:`~nistoar.pdr.utils.prov.Agent` class as the representation for the client identity.  
+    """
+
     def authenticate(self, env) -> Agent:
         """
-        determine and return the identity of the client.  This checks both user credentials and, if 
-        configured, the client application key.  If client keys are configured and the client has not 
-        provided a recognized key, an exception is thrown.  Otherwise, if the request has not presented 
-        authenticable credentials, the returned Agent will represent an anoymous user.
-        
+        determine and return the identity of the client as an :py:class:`~nistoar.pdr.utils.prov.Agent`
+        instance.  This checks both user credentials and, if configured, the client application 
+        identifier.  
+        If client keys are configured and the client has not provided a recognized key or if the 
+        user credentials are invalid in someway, then either an exception is thrown or an "invalid" 
+        Agent (where the ``agent_class`` is set to "invalid") is returned, depending on the 
+        configuration.  Also depending on the configuration, if no usr credentials are presented,
+        either the exception is raised or an "anonymous" identity is returned.  
+
+        This implementation will check for client application identifier which is expected to be 
+        provided via the ``OAR-client-id`` HTTP header.  Clients may also provide a list of delegated 
+        agents via the ``OAR-client-agents`` header; the agent identifiers should be space-separated.  
+        If provided, these will be included in provenance recording.  Checking for user credentials 
+        and creating the appropriate Agent instance to return is delegated to the 
+        :py:meth:`authenticate_user` method.  
+
+        This implementation is configured by the ``authentication`` parameter in the configuration 
+        dictionary that was provided at construction time.  This parameter's value is an object that 
+        can include the following sub-properties:
+
+        ``client_agents``
+            a map whose keys are secret client keys and, and each value is a list of agent 
+            identifiers corresponding to the agents that were assigned this identifier.  The list 
+            represents the agent delegation that was expected to have occured on the client side 
+            leading to the current request.  This list will be set as the returned 
+            :py:class:`~nistoar.pdr.utils.prov.Agent`'s ``delegated`` property.  If not 
+            provided, this will default to the value of the presented client ID.  
+
+        ``allowed_clients``
+            a list of client identifiers that should be considered allowed to use this service.  If 
+            this parameter is not set, the ``OAR-client-id`` HTTP header is not required to be set, 
+            and all clients will be allowed.  Otherwise, the ``OAR-client-id`` value must be in the 
+            this list or the authentication will be considered invalid. 
+
+        ``raise_on_invalid``
+            set to True if an exception should be raised if the credentials presented are found to 
+            be invalid (this includes if client ID is not in the ``allowed_clients`` parameter).
+            The default False will cause an Agent to be returned whose ``agent_class`` is set to 
+            "invalid".
+
+        ``raise_on_anonymous``
+            set to True if an exception should be raised if user credentials are not provided by 
+            the client.  The default False will cause an Agent to be returned whose ``actor`` 
+            ID is set to "anonymous" and its ``agent_class`` set to "public".
+
         :param Mapping env:  the WSGI request environment 
         :return:  a representation of the requesting user.  None can be returned if authentication is 
                   not supported or needed.  
                   :rtype: Agent
+        :raises Unauthenticated:  if the authentication process fails.   Note that an implementation 
+                  is not required to raise this exception for an unauthenticated user; instead, the 
+                  implementation may choose to return an identity that specifically represents an 
+                  unauthenticated user.
         """
+        authcfg = self.cfg.get('authentication', {})
+
         # get client id, if present
         client_id = env.get('HTTP_OAR_CLIENT_ID','(unknown)')
         agents = env.get('HTTP_OAR_CLIENT_AGENTS', '').split()
         if not agents:
-            agents = self.cfg.get('client_agents', {}).get(client_id, [client_id])
-        allowed = self.cfg.get('allowed_clients')
+            agents = authcfg.get('client_agents', {}).get(client_id, [client_id])
+        allowed = authcfg.get('allowed_clients')
         if allowed is not None and client_id not in allowed:
             log.warning("Client %s is not recongized among %s", client_id, str(allowed))
-            return Agent(Agent.UNKN, "anonymous", agents, [INVALID_GROUP],
+            if authcfg.get('raise_on_invalid'):
+                raise Unauthenticated("Unrecognized Client ID")
+            return Agent(client_id, Agent.UNKN, "anonymous", Agent.INVALID, agents,
                          invalid_reason=f"Unrecognized client ID: {client_id}")
 
         # this encapsulates the configured user authentication mechanisms
@@ -723,8 +637,16 @@ class WSGIApp(metaclass=ABCMeta):
                               This can be used to influence what groups are attached to 
                               the output agent.  If None, either an ID was not provided by
                               the client or it is otherwise not supported by the app.  
+        :raises Unauthenticated:  if the authentication process fails.   Note that an implementation 
+                  is not required to raise this exception for an unauthenticated user; instead, the 
+                  implementation may choose to return an identity that specifically represents an 
+                  unauthenticated user.
         """
-        return Agent(Agent.UNKN, "anonymous", agents, [PUBLIC_GROUP])
+        if self.cfg.get('authentication', {}).get('raise_on_anonymous'):
+            raise Unauthenticated("Unauthenticated by default")
+        if not client_id:
+            client_id = "(unknown)"
+        return Agent(client_id, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
 
 
 def authenticate_via_authkey(self, env: Mapping, authcfg: Mapping,
@@ -734,7 +656,20 @@ def authenticate_via_authkey(self, env: Mapping, authcfg: Mapping,
 
     This authorization method simply requires the client to present an opaque key set as a
     Bearer token to the Authorization HTTP header.  The key must be provided in the given 
-    configuration as an ``auth_key`` property.  
+    configuration with in the ``authorized`` object which contains a list of client authentication 
+    objects; each object contains the following parameters:
+
+    ``auth_key``
+       _str_ (required).  A recognized opaque key looked for as a Bearer Authorization token
+
+    ``user``
+       _str_ (required).  an identifier to set the returned Agent ``actor`` id to when the client 
+       presents the associated ``auth_key``.
+
+    ``client``
+       _str_ (required).  a name for the client; this will be set as both the Agent ``vehicle`` and 
+       ``agent_class``.  
+
 
     :param dict      env: the WSGI environment containing the request data
     :param dict   jwtcfg: the JWT decoding configuration (see above)
@@ -745,6 +680,9 @@ def authenticate_via_authkey(self, env: Mapping, authcfg: Mapping,
                           app.  
     :returns:  an :py:class:`Agent` instance representing the user
     """
+    if not client_id:
+        client_id = "(unknown)"
+
     auth = env.get('HTTP_AUTHORIZATION', "x").split()
     if len(auth) < 2 or auth[0] != "Bearer":
         log.warning("Client %s did not provide an authentication token", str(client_id))
@@ -782,24 +720,38 @@ def authenticate_via_proxy_x509(self, env: Mapping, authcfg: Mapping,
                           app.  
     :returns:  an :py:class:`Agent` instance representing the user
     """
+    if not client_id:
+        client_id = "(unknown)"
+
     subj = env.get('HTTP_OAR_SSL_S_DN')
     if not subj:
-        return Agent(PubAgent.UNKN, "anonymous", agents, [PUBLIC_GROUP])
+        if authcfg.get('raise_on_anonymous'):
+            raise Unauthenticated("OAR_SSL_S_DN not provided")
+        return Agent(client_id, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
 
     if authcfg.get('proxy_key'):
         # we're expecting a validation token from the proxy server
         auth = env.get('HTTP_AUTHORIZATION' 'x').split()
         if len(auth) < 2 or auth[0] != "Bearer":
             log.warning("Reverse proxy server did not provide an authentication token")
-            return Agent(Agent.UNKN, "anonymous", agents, [INVALID_GROUP],
+            if authcfg.get('raise_on_invalid'):
+                raise Unauthenticated("required proxy key not provided")
+            return Agent(client_id, Agent.UNKN, "anonymous", Agent.INVALID, agents, 
                          invalid_reason="Missing proxy auth token")
+        if authcfg['proxy_key'] != auth[1]:
+            log.error("Reverse proxy server presented unrecognized authentication token")
+            if authcfg.get('raise_on_invalid'):
+                raise Unauthenticated("bad proxy key")
+            return Agent(client_id, Agent.UNKN, "anonymous", Agent.INVALID, agents, 
+                         invalid_reason="bad proxy auth token")
 
     # parse the subject elements to construct an identity
     # TODO!
     return None
 
 def authenticate_via_jwt(self, env: Mapping, jwtcfg: Mapping, log: Logger,
-                         agents: List[str], client_id: str=None):
+                         agents: List[str], client_id: str=None,
+                         claim_to_agent_func: Callable=None):
     """
     authenticate the remote user assuming a JWT was provided as an Authorization Bearer token.
 
@@ -824,32 +776,46 @@ def authenticate_via_jwt(self, env: Mapping, jwtcfg: Mapping, log: Logger,
     :param str client_id: an ID representing the OAR client being used to connect.  If None,
                           either an ID was not provided or is otherwise not supported by the 
                           app.  
+    :param function claim_to_agent_func:  a function that takes a JWT claimset dictionary and 
+                          returns an Agent instance.  If not provided, 
+                          :py:func:`make_agent_from_nistoar_claimset` will be executed.
     :returns:  an :py:class:`Agent` instance representing the user
     """
+    if not client_id:
+        client_id = "(unknown)"
 
     auth = env.get('HTTP_AUTHORIZATION', "x").split()
     if len(auth) < 2 or auth[0] != "Bearer":
         log.warning("Client %s did not provide an authentication token", str(client_id))
-        return Agent(PubAgent.UNKN, "anonymous", agents, [PUBLIC_GROUP])
+        if jwtcfg.get('raise_on_anonymous'):
+            raise Unauthenticated("JWT token not provided")
+        return Agent(client_id, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
 
     try:
         userinfo = jwt.decode(auth[1], jwtcfg.get("key", ""),
                               algorithms=[jwtcfg.get("algorithm", "HS256")])
     except jwt.InvalidTokenError as ex:
         log.warning("Invalid token can not be decoded: %s", str(ex))
-        return Agent(Agent.UNKN, "anonymous", agents, [INVALID_GROUP],
+        if jwtcfg.get('raise_on_invalid'):
+            raise Unauthenticated("Undecodable JWT token")
+        return Agent(client_id, Agent.UNKN, "anonymous", Agent.INVALID, agents,
                      invalid_reason="Invalid token can not be decoded")
 
     # make sure the token has an expiration date
     if jwtcfg.get('require_expiration', True) and not userinfo.get('exp'):
         # Note expiration was checked implicitly by the above jwt.decode() call
         log.warning("Rejecting non-expiring token for user %s", userinfo.get('sub', "(unknown)"))
-        return Agent(Agent.UNKN, "anonymous", agents, [INVALID_GROUP],
+        if jwtcfg.get('raise_on_invalid'):
+            raise Unauthenticated("Non-expiring JWT token")
+        return Agent(client_id, Agent.UNKN, "anonymous", Agent.INVALID, agents,
                      invalid_reason=f"non-expiring token rejected")
 
-    return self.make_agent_from_claimset(userinfo, log, agents)
+    if not claim_to_agent_func:
+        claim_to_agent_func = make_agent_from_claimset
+    return claim_to_agent_func(userinfo, log, agents)
 
-def make_agent_from_nistoar_claimset(self, userinfo: Mapping, log: Logger, agents=None) -> Agent:
+def make_agent_from_nistoar_claimset(self, userinfo: Mapping, log: Logger, agents=None,
+                                     client_id: str=None) -> Agent:
     """
     Create an Agent instance representing the end user given a JWT claim set assuming 
     it originated from a NIST-OAR JWT service.
@@ -871,10 +837,13 @@ def make_agent_from_nistoar_claimset(self, userinfo: Mapping, log: Logger, agent
         subj = subj[:-1*len("@nist.gov")]
     elif email.endswith("@nist.gov"):
         group = "nist"
-    return Agent(Agent.USER, subj, agents, [group])
+
+    if not client_id:
+        client_id = group
+    return Agent(client_id, Agent.USER, subj, group, agents)
 
 
-class WSGIAppSuite(WSGIApp):
+class WSGIAppSuite(AuthenticatedWSGIApp):
     """
     A WSGI application class that aggregates one or more :py:class:ServiceApp: instances.  This supports 
     a model where each ServiceApp represents a different logical service and each with its own base URL; 
