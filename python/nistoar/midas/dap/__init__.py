@@ -18,7 +18,8 @@ This package draws on some of the infrastructure from the  :py:mod:`~nistoar.pdr
 including :py:mod:`provenence tracking<nistoar.pdr.publish.prov>` and 
 :py:mod:`README generation<nistoar.pdr.publish.readme>`.
 """
-from nistoar.pdr.publish import prov, readme
+from nistoar.pdr.utils import prov
+from nistoar.pdr.publish import readme
 
 # subpackages: 
 #   nerdstore

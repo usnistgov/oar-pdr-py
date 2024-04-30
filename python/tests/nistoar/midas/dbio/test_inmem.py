@@ -3,9 +3,9 @@ from pathlib import Path
 import unittest as test
 
 from nistoar.midas.dbio import inmem, base
-from nistoar.pdr.publish.prov import Action, PubAgent
+from nistoar.pdr.utils.prov import Action, Agent
 
-testuser = PubAgent("test", PubAgent.AUTO, "tester")
+testuser = Agent("dbio", Agent.AUTO, "tester", "test")
 
 class TestInMemoryDBClientFactory(test.TestCase):
 

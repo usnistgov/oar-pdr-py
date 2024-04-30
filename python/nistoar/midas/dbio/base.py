@@ -20,7 +20,7 @@ from enum import Enum
 from datetime import datetime
 
 from nistoar.base.config import ConfigurationException
-from nistoar.pdr.publish.prov import Action
+from nistoar.pdr.utils.prov import Action
 from .. import MIDASException
 from .status import RecordStatus
 

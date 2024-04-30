@@ -157,19 +157,19 @@ class ProjectService(MIDASSystem):
         :raises NotAuthorized: if an uathorized shoulder appropriate for the user cannot be determined.
         """
         out = None
-        client_ctl = self.cfg.get('clients', {}).get(user.group)
+        client_ctl = self.cfg.get('clients', {}).get(user.agent_class)
         if client_ctl is None:
             client_ctl = self.cfg.get('clients', {}).get("default")
         if client_ctl is None:
-            self.log.debug("Unrecognized client group, %s", user.group)
+            self.log.debug("Unrecognized client group, %s", user.agent_class)
             raise NotAuthorized(user.actor, "create record",
-                                "Client group, %s, not recognized" % user.group)
+                                "Client group, %s, not recognized" % user.agent_class)
 
         out = client_ctl.get('default_shoulder')
         if not out:
-            self.log.info("No default ID shoulder configured for client group, %s", user.group)
+            self.log.info("No default ID shoulder configured for client group, %s", user.agent_class)
             raise NotAuthorized(user.actor, "create record",
-                                "No default shoulder defined for client group, "+user.group)
+                                "No default shoulder defined for client group, "+user.agent_class)
         return out
 
     def get_record(self, id) -> ProjectRecord:

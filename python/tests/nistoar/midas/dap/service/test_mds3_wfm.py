@@ -7,7 +7,7 @@ from nistoar.midas.dbio import inmem, base, AlreadyExists, InvalidUpdate, Object
 from nistoar.midas.dbio import project as prj
 from nistoar.midas.dap.service import mds3
 from nistoar.midas.dap.fm import FileSpaceNotFound
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 from nistoar.pdr.utils import read_nerd
 from nistoar.nerdm.constants import CORE_SCHEMA_URI
 from nistoar.pdr.utils import read_json, write_json
@@ -33,7 +33,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 # test records
 testdir = pathlib.Path(__file__).parents[0]
@@ -41,7 +41,7 @@ pdr2210 = testdir.parents[2] / 'pdr' / 'describe' / 'data' / 'pdr2210.json'
 ncnrexp0 = testdir.parents[2] / 'pdr' / 'publish' / 'data' / 'ncnrexp0.json'
 daptestdir = Path(__file__).parents[1] / 'data' 
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 def read_scan(id=None):
     return read_json(daptestdir/"scan-report.json")
@@ -207,7 +207,7 @@ class TestMDS3DAPServiceWithFM(test.TestCase):
         self.assertTrue(self.svc._fmcli)
         self.assertEqual(self.svc.cfg, self.cfg)
         self.assertEqual(self.svc.who.actor, "nstr1")
-        self.assertEqual(self.svc.who.group, "midas")
+        self.assertEqual(self.svc.who.agent_class, "midas")
         self.assertTrue(self.svc.log)
         self.assertTrue(self.svc._store)
         self.assertTrue(self.svc._valid8r)
