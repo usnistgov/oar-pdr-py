@@ -890,6 +890,12 @@ class WSGIAppSuite(AuthenticatedWSGIApp):
         super(WSGIAppSuite, self).__init__(config, log, base_ep)
         self.svcapps = dict(svcapps.items())
 
+    def _set_service_route(self, path: str, svcapp: ServiceApp):
+        """
+        configure a resource path to be handled by a particular ServiceApp instance
+        """
+        self.svcapps[path] = svcapp
+
     def handle_path_request(self, path: str, env: Mapping, start_resp: Callable, who = None):
         """
         Dispatch a request on a resource path to a handler.

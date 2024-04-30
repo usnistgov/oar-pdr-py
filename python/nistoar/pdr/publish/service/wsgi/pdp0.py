@@ -6,16 +6,18 @@ from collections import OrderedDict
 from typing import Callable
 from urllib.parse import parse_qs
 
-from .base import SubApp, Handler
 from .. import PDP0Service, status
 from ... import (PublishingStateException, SIPNotFoundError, BadSIPInputError, NERDError,
                  SIPStateException, SIPConflictError, UnauthorizedPublishingRequest)
+from .base import PDPHandler
+from nistoar.web.rest import ServiceApp
 from nistoar.pdr.utils.prov import Agent, Action
 from nistoar.pdr.utils.webrecord import WebRecorder
-from nistoar.pdr.utils.web import order_accepts
+from nistoar.web.utils import order_accepts
+from nistoar.web.rest import Handler
 from nistoar.nerdm.validate import ValidationError
 
-class PDP0App(SubApp):
+class PDP0App(ServiceApp):
     """
     The WSGI SubApp that handles the pdp0 convention of the PDP service
     """
@@ -47,7 +49,7 @@ class PDP0App(SubApp):
         """
         return self._Handler(self, path, env, start_resp, who)
 
-    class _Handler(Handler):
+    class _Handler(PDPHandler):
         default_agent = None
 
         def __init__(self, app, path: str, wsgienv: dict, start_resp: Callable, who=None, config: dict={}):
@@ -80,10 +82,10 @@ class PDP0App(SubApp):
             return self.send_json(resp, reason, code, ashead)
 
         def do_GET(self, path, ashead=False):
-            path = path.lstrip('/')
-            if not self.authorize():
-                return self.send_unauthorized()
+            if not self.acceptable():
+                return self.send_unacceptable()
 
+            path = path.lstrip('/')
             if not path:
                 return self.send_json(self._app.sips_for(self.who), ashead=ashead)
 
@@ -109,9 +111,10 @@ class PDP0App(SubApp):
                 return self.send_error(500, "Server error")
 
         def do_POST(self, path):
+            if not self.acceptable():
+                return self.send_unacceptable()
+
             path = path.lstrip('/')
-            if not self.authorize():
-                return self.send_unauthorized()
 
             sipid = ''
             stat = None
@@ -228,9 +231,10 @@ class PDP0App(SubApp):
                 return self.send_error(500, "Server error")
                 
         def do_PUT(self, path):
+            if not self.acceptable():
+                return self.send_unacceptable()
+
             path = path.lstrip('/')
-            if not self.authorize():
-                return self.send_unauthorized()
 
             if not path:
                 return self.send_error_resp(405, "Method not allowed", "PUT not allowed on this resource")
@@ -337,9 +341,10 @@ class PDP0App(SubApp):
                 return self.send_error(500, "Server error")
 
         def do_DELETE(self, path):
+            if not self.acceptable():
+                return self.send_unacceptable()
+
             path = path.lstrip('/')
-            if not self.authorize():
-                return self.send_unauthorized()
 
             if not path:
                 return self.send_error_resp(405, "Method not allowed on this resource",
@@ -398,10 +403,11 @@ class PDP0App(SubApp):
             return self.send_ok()
             
         def do_PATCH(self, path):
+            if not self.acceptable():
+                return self.send_unacceptable()
+
             # This method is only used to finalize or publish
             path = path.lstrip('/')
-            if not self.authorize():
-                return self.send_unauthorized()
 
             parts = path.split('/')
             if not path or len(parts) > 1:
@@ -447,19 +453,6 @@ class PDP0App(SubApp):
             except Exception as ex:
                 self.log.exception("Failed to take %s action on %s: %s", action, path, str(ex))
                 return self.send_error(500, "Server error")
-
-        def acceptable(self):
-            """
-            return True if the client's Accept request is compatible with this handler.
-
-            This default implementation will return True if "*/*" is included in the Accept request
-            or if the Accept header is not specified.
-            """
-            accepts = self._env.get('HTTP_ACCEPT')
-            if not accepts:
-                return True;
-            accepts = order_accepts(accepts)
-            return "*/*" in accepts or "application/json" in accepts
 
 
             

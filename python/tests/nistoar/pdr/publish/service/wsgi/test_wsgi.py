@@ -140,22 +140,21 @@ class TestPDPWSGI(test.TestCase):
         self.assertEqual(who.actor_type, "auto")
         self.assertEqual(who.delegated, ("ncnr/gurn",))
 
-        req['HTTP_X_OAR_USER'] = "tester"
-        req['HTTP_AUTHORIZATION'] = "Bearer DRAFTTOKEN"
-        who = self.app.authenticate(req)
-        self.assertIsNotNone(who)
-        self.assertEqual(who.actor, "tester")
-        self.assertEqual(who.agent_class, "test")
-        self.assertEqual(who.actor_type, "user")
-        self.assertEqual(who.delegated, ("test/tester",))
-
         req['HTTP_AUTHORIZATION'] = "DRAFTTOKEN"
         who = self.app.authenticate(req)
-        self.assertIsNone(who)
+        self.assertEqual(who.actor, "anonymous")
+        self.assertEqual(who.id, "pdp/anonymous")
+        self.assertEqual(who.agent_class, "public")
+        self.assertEqual(who.actor_type, "")
+        self.assertEqual(who.delegated, ("(unknown)",))
 
         del req['HTTP_AUTHORIZATION']
         who = self.app.authenticate(req)
-        self.assertIsNone(who)
+        self.assertEqual(who.actor, "anonymous")
+        self.assertEqual(who.id, "pdp/anonymous")
+        self.assertEqual(who.agent_class, "public")
+        self.assertEqual(who.actor_type, "")
+        self.assertEqual(who.delegated, ("(unknown)",))
 
     def test_ready(self):
         req = {

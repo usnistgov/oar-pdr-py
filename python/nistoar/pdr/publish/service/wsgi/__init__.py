@@ -5,11 +5,13 @@ import os, sys, logging, json, re
 from wsgiref.headers import Headers
 from collections import OrderedDict, Mapping
 from copy import deepcopy
+from typing import List
 
 from ... import ConfigurationException, PublishSystem, system
 from ....utils.prov import Agent
-from .base import Ready, SubApp, Handler
+from .base import Ready
 from .pdp0 import PDP0App
+from nistoar.web.rest import WSGIAppSuite, Unauthenticated
 
 log = logging.getLogger(system.system_abbrev)   \
              .getChild(system.subsystem_abbrev) \
@@ -17,7 +19,7 @@ log = logging.getLogger(system.system_abbrev)   \
 
 DEF_BASE_PATH = "/"
 
-class PDPApp(PublishSystem):
+class PDPApp(WSGIAppSuite, PublishSystem):
     """
     a WSGI-compliant service app providing programmatic data publishing (PDP) services under various 
     conventions.  Each endpoint under the base URL handles a different convention.  
@@ -61,7 +63,7 @@ class PDPApp(PublishSystem):
     """
 
     def __init__(self, config):
-        self.cfg = config
+        WSGIAppSuite.__init__(self, config, {}, log)
 
         # load the authorized identities
         self._id_map = {}
@@ -75,11 +77,12 @@ class PDPApp(PublishSystem):
                                              ": "+type(iden['auth_key']))
             self._id_map[iden['auth_key']] = iden
 
+        if not self._id_map:
+            log.warning("Missing auth key configuration")
+
         # each convention is mapped to a "sub-app" that will handle its requests
-        self.subapps = {
-            "pdp0": PDP0App(log, self._config_for_convention("pdp0")),
-            "":     Ready(log, self.cfg.get('ready',{}))
-        }
+        self._set_service_route("pdp0", PDP0App(log, self._config_for_convention("pdp0")))
+        self._set_service_route("",     Ready(log, self.cfg.get('ready',{})))
 
     def _config_for_convention(self, conv):
         # return a complete configuration for the handler covering a particular convention.
@@ -113,11 +116,10 @@ class PDPApp(PublishSystem):
         cfg['convention'] = conv
         return cfg
 
-    def authenticate(self, env) -> Agent:
+    def authenticate_user(self, env: Mapping, agents: List[str]=None, client_id: str=None) -> Agent:
         """
         determine and return the identity of the client.  This is done by mapping a Bearer key to 
         an identity in the `authorized` configuration parameter.
-        :param Mapping env:  the WSGI request environment 
         :rtype: Agent
         """
         auth = env.get('HTTP_AUTHORIZATION', "")
@@ -127,40 +129,20 @@ class PDPApp(PublishSystem):
         if len(auth) > 1:
             if auth[0] == "Bearer":
                 authkey = auth[1]
+        if not authkey:
+            log.warning("Client %s did not provide a Bearer authentication token", str(client_id))
+            return Agent("pdp", Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
         
-        client = self._id_map.get(authkey)
-        if not client:
-            return None
+        client = deepcopy(self._id_map.get(authkey))
+        client.setdefault('user', 'authorized')
+        client.setdefault('client', client_id)
+        if not agents or agents == ["(unknown)"]:
+            agents = [f"{client['client']}/{client['user']}"]
+        if client:
+            return Agent("pdp", Agent.AUTO, client['user'], client['client'], agents)
 
-        user = env.get('HTTP_X_OAR_USER')
-        patype = Agent.USER
-        if not user:
-            patype = Agent.AUTO
-            user = client.get('user', 'anonymous')
-
-        return Agent("pdp", client.get('type', patype), user, client.get('client'),
-                     [f"{client.get('client')}/{user}"])
-        
-
-    def handle_request(self, env, start_resp):
-        path = env.get('PATH_INFO', '/').strip('/')
-        parts = path.split('/', 1)
-
-        # determine who is making the request
-        who = self.authenticate(env)
-
-        subapp = None
-        if parts[0] in self.subapps:
-            # parts[0] is a convention (e.g. "pdp0")
-            path = '/'
-            if len(parts) > 1:
-                path += parts[1]
-            subapp = self.subapps.get(parts[0])
-
-        if not subapp:
-            subapp = self.subapps.get('')
-
-        return subapp.handle_path_request(env, start_resp, path, who)
+        log.warning("Unrecognized token from client %s", str(client_id))
+        raise Unauthenticated("Unrecognized auth token")
 
     def __call__(self, env, start_resp):
         return self.handle_request(env, start_resp)
