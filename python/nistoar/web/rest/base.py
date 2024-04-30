@@ -10,6 +10,8 @@ from urllib.parse import parse_qs
 from collections import OrderedDict
 from typing import Mapping, Iterable, Tuple, Callable, Union
 
+import jwt
+
 from wsgiref.headers import Headers
 # from urllib.parse import parse_qs
 
@@ -18,6 +20,10 @@ from ..webrecord import WebRecorder
 from ..formats import Unacceptable, UnsupportedFormat, FormatSupport
 from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils.prov import Agent
+
+__all__ = ["Handler", "ServiceApp", "Unauthenticated", "WSGIApp", "AuthenticatedWSGIApp",
+           "WSGIAppSuite", "Agent",
+           "authenticate_via_authkey", "authenticate_via_proxy_x509", "authenticate_via_jwt" ]
 
 class Handler(object):
     """
@@ -460,12 +466,17 @@ class WSGIApp(metaclass=ABCMeta):
     common authentication authentication check.  
     """
 
-    def __init__(self, config: Mapping, log: Logger, base_ep: str = None):
+    def __init__(self, config: Mapping, log: Logger, base_ep: str = None, name: str = None):
         """
         """
-        self.cfg = config
         self.log = log
+        self.cfg = config
+        self.name = name
+        if not self.name:
+            self.name = self.cfg.get("name", "")
         self.base_ep = None
+        if not base_ep:
+            base_ep = self.cfg.get("base_ep")
         if base_ep:
             self.base_ep = '/%s/' % base_ep.strip('/')
 
@@ -646,10 +657,11 @@ class AuthenticatedWSGIApp(WSGIApp):
             raise Unauthenticated("Unauthenticated by default")
         if not client_id:
             client_id = "(unknown)"
-        return Agent(client_id, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
+        vehicle = self.name or client_id
+        return Agent(vehicle, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
 
 
-def authenticate_via_authkey(self, env: Mapping, authcfg: Mapping,
+def authenticate_via_authkey(svcname: str, env: Mapping, authcfg: Mapping, log: Logger,
                              agents: List[str]=None, client_id: str=None):
     """
     authenticate the user via a simple shared Bearer Authorization key.
@@ -671,8 +683,9 @@ def authenticate_via_authkey(self, env: Mapping, authcfg: Mapping,
        ``agent_class``.  
 
 
+    :param str   svcname: a name to provide as the agent software vehicle
     :param dict      env: the WSGI environment containing the request data
-    :param dict   jwtcfg: the JWT decoding configuration (see above)
+    :param dict  authcfg: the JWT decoding configuration (see above)
     :param Logger    log: the logger that can be used to record messages
     :param [str]  agents: an optional list of agent strings to attach to output agent
     :param str client_id: an ID representing the OAR client being used to connect.  If None,
@@ -682,18 +695,27 @@ def authenticate_via_authkey(self, env: Mapping, authcfg: Mapping,
     """
     if not client_id:
         client_id = "(unknown)"
+    if not svcname:
+        svnname = client_id
 
     auth = env.get('HTTP_AUTHORIZATION', "x").split()
-    if len(auth) < 2 or auth[0] != "Bearer":
-        log.warning("Client %s did not provide an authentication token", str(client_id))
-        return Agent(Agent.UNKN, "anonymous", agents, [PUBLIC_GROUP])
-        
-    if not authcfg.get("auth_key") or authcfg['auth_key'] != auth[1]:
-        return Agent(Agent.UNKN, "anonymous", agents, [INVALID_GROUP])
+    if len(auth) < 2 or auth[0] != "Bearer" or not auth[1]:
+        log.warning("Client %s did not provide a Bearer authentication token", str(client_id))
+        if authcfg.get('raise_on_anonymous'):
+            raise Unauthenticated("No auth token provided")
+        return Agent(svcname, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
 
-    return Agent(Agent.AUTO, "authorized", agents)
+    for client in authcfg.get('authorized'):
+        if client.get("auth_key") == auth[1]:
+            return Agent(svcname, Agent.AUTO, client.get('user','authorized'),
+                         client.get('client', client_id), agents)
 
-def authenticate_via_proxy_x509(self, env: Mapping, authcfg: Mapping, 
+    log.warning("Unrecognized token from client %s", str(client_id))
+    if authcfg.get('raise_on_invalid'):
+        raise Unauthenticated("Unrecognized auth token")
+    return Agent(svcname, Agent.UNKN, "anonymous", Agent.INVALID, agents)
+
+def authenticate_via_proxy_x509(svcname: str, env: Mapping, authcfg: Mapping, log: Logger,
                                 agents: List[str]=None, client_id: str=None):
     """
     authenticate the user assuming that the client provided an X.509 client certificate
@@ -711,6 +733,7 @@ def authenticate_via_proxy_x509(self, env: Mapping, authcfg: Mapping,
         in order for subject data to be considered valid.  If the keys do not match or is not 
         provided in the input request to this function, an invalid anonymous identity is returned.
 
+    :param str   svcname: a name to provide as the agent software vehicle
     :param dict      env: the WSGI environment containing the request data
     :param dict   jwtcfg: the JWT decoding configuration (see above)
     :param Logger    log: the logger that can be used to record messages
@@ -722,12 +745,14 @@ def authenticate_via_proxy_x509(self, env: Mapping, authcfg: Mapping,
     """
     if not client_id:
         client_id = "(unknown)"
+    if not svcname:
+        svnname = client_id
 
     subj = env.get('HTTP_OAR_SSL_S_DN')
     if not subj:
         if authcfg.get('raise_on_anonymous'):
             raise Unauthenticated("OAR_SSL_S_DN not provided")
-        return Agent(client_id, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
+        return Agent(svcname, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
 
     if authcfg.get('proxy_key'):
         # we're expecting a validation token from the proxy server
@@ -736,20 +761,20 @@ def authenticate_via_proxy_x509(self, env: Mapping, authcfg: Mapping,
             log.warning("Reverse proxy server did not provide an authentication token")
             if authcfg.get('raise_on_invalid'):
                 raise Unauthenticated("required proxy key not provided")
-            return Agent(client_id, Agent.UNKN, "anonymous", Agent.INVALID, agents, 
+            return Agent(svcname, Agent.UNKN, "anonymous", Agent.INVALID, agents, 
                          invalid_reason="Missing proxy auth token")
         if authcfg['proxy_key'] != auth[1]:
             log.error("Reverse proxy server presented unrecognized authentication token")
             if authcfg.get('raise_on_invalid'):
                 raise Unauthenticated("bad proxy key")
-            return Agent(client_id, Agent.UNKN, "anonymous", Agent.INVALID, agents, 
+            return Agent(svcname, Agent.UNKN, "anonymous", Agent.INVALID, agents, 
                          invalid_reason="bad proxy auth token")
 
     # parse the subject elements to construct an identity
     # TODO!
     return None
 
-def authenticate_via_jwt(self, env: Mapping, jwtcfg: Mapping, log: Logger,
+def authenticate_via_jwt(svcname: str, env: Mapping, jwtcfg: Mapping, log: Logger,
                          agents: List[str], client_id: str=None,
                          claim_to_agent_func: Callable=None):
     """
@@ -769,6 +794,7 @@ def authenticate_via_jwt(self, env: Mapping, jwtcfg: Mapping, log: Logger,
         (bool) _optional_.  If True (default), any JWT token that does not include an expiration 
         time will be rejected, and the client user will be set to anonymous.
 
+    :param str   svcname: a name to provide as the agent software vehicle
     :param dict      env: the WSGI environment containing the request data
     :param dict   jwtcfg: the JWT decoding configuration (see above)
     :param Logger    log: the logger that can be used to record messages
@@ -783,13 +809,15 @@ def authenticate_via_jwt(self, env: Mapping, jwtcfg: Mapping, log: Logger,
     """
     if not client_id:
         client_id = "(unknown)"
+    if not svcname:
+        svnname = client_id
 
     auth = env.get('HTTP_AUTHORIZATION', "x").split()
     if len(auth) < 2 or auth[0] != "Bearer":
         log.warning("Client %s did not provide an authentication token", str(client_id))
         if jwtcfg.get('raise_on_anonymous'):
             raise Unauthenticated("JWT token not provided")
-        return Agent(client_id, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
+        return Agent(svcname, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
 
     try:
         userinfo = jwt.decode(auth[1], jwtcfg.get("key", ""),
@@ -798,7 +826,7 @@ def authenticate_via_jwt(self, env: Mapping, jwtcfg: Mapping, log: Logger,
         log.warning("Invalid token can not be decoded: %s", str(ex))
         if jwtcfg.get('raise_on_invalid'):
             raise Unauthenticated("Undecodable JWT token")
-        return Agent(client_id, Agent.UNKN, "anonymous", Agent.INVALID, agents,
+        return Agent(svcname, Agent.UNKN, "anonymous", Agent.INVALID, agents,
                      invalid_reason="Invalid token can not be decoded")
 
     # make sure the token has an expiration date
@@ -807,18 +835,19 @@ def authenticate_via_jwt(self, env: Mapping, jwtcfg: Mapping, log: Logger,
         log.warning("Rejecting non-expiring token for user %s", userinfo.get('sub', "(unknown)"))
         if jwtcfg.get('raise_on_invalid'):
             raise Unauthenticated("Non-expiring JWT token")
-        return Agent(client_id, Agent.UNKN, "anonymous", Agent.INVALID, agents,
+        return Agent(svcname, Agent.UNKN, "anonymous", Agent.INVALID, agents,
                      invalid_reason=f"non-expiring token rejected")
 
     if not claim_to_agent_func:
-        claim_to_agent_func = make_agent_from_claimset
-    return claim_to_agent_func(userinfo, log, agents)
+        claim_to_agent_func = make_agent_from_nistoar_claimset
+    return claim_to_agent_func(svcname, userinfo, log, agents)
 
-def make_agent_from_nistoar_claimset(self, userinfo: Mapping, log: Logger, agents=None,
+def make_agent_from_nistoar_claimset(svcname: str, userinfo: Mapping, log: Logger, agents=None,
                                      client_id: str=None) -> Agent:
     """
     Create an Agent instance representing the end user given a JWT claim set assuming 
     it originated from a NIST-OAR JWT service.
+    :param str   svcname:  a name to provide as the agent software vehicle
     :param dict userinfo:  a dictionary containing the JST claimset data
     :param Logger    log:  a Logger object that should be used to record warning messages
                            (e.g. if the claimset is misisng key data)
@@ -827,20 +856,23 @@ def make_agent_from_nistoar_claimset(self, userinfo: Mapping, log: Logger, agent
                            to the returned Agent.
     """
     subj = userinfo.get('sub')
-    email = userinfo.get('userEmail','')
-    group = "public"
+    email = userinfo.get('userEmail')
+    group = Agent.PUBLIC
     if not subj:
         log.warning("User token is missing subject identifier; defaulting to anonymous")
         subj = "anonymous"
     elif subj.endswith("@nist.gov"):
         group = "nist"
         subj = subj[:-1*len("@nist.gov")]
-    elif email.endswith("@nist.gov"):
+    elif email and email.endswith("@nist.gov"):
         group = "nist"
+
+    umd = dict((k,v) for k,v in userinfo.items()
+                         if k not in ["userEmail", "sub"])
 
     if not client_id:
         client_id = group
-    return Agent(client_id, Agent.USER, subj, group, agents)
+    return Agent(svcname, Agent.USER, subj, client_id, agents, email=email, **umd)
 
 
 class WSGIAppSuite(AuthenticatedWSGIApp):
