@@ -713,7 +713,8 @@ def authenticate_via_authkey(svcname: str, env: Mapping, authcfg: Mapping, log: 
     log.warning("Unrecognized token from client %s", str(client_id))
     if authcfg.get('raise_on_invalid'):
         raise Unauthenticated("Unrecognized auth token")
-    return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents)
+    return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents,
+                 invalid_reason="Unrecognized auth token")
 
 def authenticate_via_proxy_x509(svcname: str, env: Mapping, authcfg: Mapping, log: Logger,
                                 agents: List[str]=None, client_id: str=None):
