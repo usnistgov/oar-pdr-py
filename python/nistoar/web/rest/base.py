@@ -90,7 +90,7 @@ class Handler(object):
 
     def _default_agent(self):
         name = "nistoar" if not self.app else self.app.name
-        return Agent(name, Agent.UNKN, "anonymous", groups=["public"])
+        return Agent(name, Agent.UNKN, Agent.ANONYMOUS, groups=["public"])
 
     def send_error(self, code, message, content=None, contenttype=None, ashead=None, encoding='utf-8'):
         """
@@ -567,7 +567,7 @@ class AuthenticatedWSGIApp(WSGIApp):
         user credentials are invalid in someway, then either an exception is thrown or an "invalid" 
         Agent (where the ``agent_class`` is set to "invalid") is returned, depending on the 
         configuration.  Also depending on the configuration, if no usr credentials are presented,
-        either the exception is raised or an "anonymous" identity is returned.  
+        either the exception is raised or an Agent.ANONYMOUS identity is returned.  
 
         This implementation will check for client application identifier which is expected to be 
         provided via the ``OAR-client-id`` HTTP header.  Clients may also provide a list of delegated 
@@ -603,7 +603,7 @@ class AuthenticatedWSGIApp(WSGIApp):
         ``raise_on_anonymous``
             set to True if an exception should be raised if user credentials are not provided by 
             the client.  The default False will cause an Agent to be returned whose ``actor`` 
-            ID is set to "anonymous" and its ``agent_class`` set to "public".
+            ID is set to Agent.ANONYMOUS and its ``agent_class`` set to "public".
 
         :param Mapping env:  the WSGI request environment 
         :return:  a representation of the requesting user.  None can be returned if authentication is 
@@ -626,7 +626,7 @@ class AuthenticatedWSGIApp(WSGIApp):
             log.warning("Client %s is not recongized among %s", client_id, str(allowed))
             if authcfg.get('raise_on_invalid'):
                 raise Unauthenticated("Unrecognized Client ID")
-            return Agent(client_id, Agent.UNKN, "anonymous", Agent.INVALID, agents,
+            return Agent(client_id, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents,
                          invalid_reason=f"Unrecognized client ID: {client_id}")
 
         # this encapsulates the configured user authentication mechanisms
@@ -658,7 +658,7 @@ class AuthenticatedWSGIApp(WSGIApp):
         if not client_id:
             client_id = "(unknown)"
         vehicle = self.name or client_id
-        return Agent(vehicle, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
+        return Agent(vehicle, Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, agents)
 
 
 def authenticate_via_authkey(svcname: str, env: Mapping, authcfg: Mapping, log: Logger,
@@ -703,7 +703,7 @@ def authenticate_via_authkey(svcname: str, env: Mapping, authcfg: Mapping, log: 
         log.warning("Client %s did not provide a Bearer authentication token", str(client_id))
         if authcfg.get('raise_on_anonymous'):
             raise Unauthenticated("No auth token provided")
-        return Agent(svcname, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
+        return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, agents)
 
     for client in authcfg.get('authorized'):
         if client.get("auth_key") == auth[1]:
@@ -713,7 +713,7 @@ def authenticate_via_authkey(svcname: str, env: Mapping, authcfg: Mapping, log: 
     log.warning("Unrecognized token from client %s", str(client_id))
     if authcfg.get('raise_on_invalid'):
         raise Unauthenticated("Unrecognized auth token")
-    return Agent(svcname, Agent.UNKN, "anonymous", Agent.INVALID, agents)
+    return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents)
 
 def authenticate_via_proxy_x509(svcname: str, env: Mapping, authcfg: Mapping, log: Logger,
                                 agents: List[str]=None, client_id: str=None):
@@ -752,7 +752,7 @@ def authenticate_via_proxy_x509(svcname: str, env: Mapping, authcfg: Mapping, lo
     if not subj:
         if authcfg.get('raise_on_anonymous'):
             raise Unauthenticated("OAR_SSL_S_DN not provided")
-        return Agent(svcname, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
+        return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, agents)
 
     if authcfg.get('proxy_key'):
         # we're expecting a validation token from the proxy server
@@ -761,13 +761,13 @@ def authenticate_via_proxy_x509(svcname: str, env: Mapping, authcfg: Mapping, lo
             log.warning("Reverse proxy server did not provide an authentication token")
             if authcfg.get('raise_on_invalid'):
                 raise Unauthenticated("required proxy key not provided")
-            return Agent(svcname, Agent.UNKN, "anonymous", Agent.INVALID, agents, 
+            return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents, 
                          invalid_reason="Missing proxy auth token")
         if authcfg['proxy_key'] != auth[1]:
             log.error("Reverse proxy server presented unrecognized authentication token")
             if authcfg.get('raise_on_invalid'):
                 raise Unauthenticated("bad proxy key")
-            return Agent(svcname, Agent.UNKN, "anonymous", Agent.INVALID, agents, 
+            return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents, 
                          invalid_reason="bad proxy auth token")
 
     # parse the subject elements to construct an identity
@@ -817,7 +817,7 @@ def authenticate_via_jwt(svcname: str, env: Mapping, jwtcfg: Mapping, log: Logge
         log.warning("Client %s did not provide an authentication token", str(client_id))
         if jwtcfg.get('raise_on_anonymous'):
             raise Unauthenticated("JWT token not provided")
-        return Agent(svcname, Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
+        return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, agents)
 
     try:
         userinfo = jwt.decode(auth[1], jwtcfg.get("key", ""),
@@ -826,7 +826,7 @@ def authenticate_via_jwt(svcname: str, env: Mapping, jwtcfg: Mapping, log: Logge
         log.warning("Invalid token can not be decoded: %s", str(ex))
         if jwtcfg.get('raise_on_invalid'):
             raise Unauthenticated("Undecodable JWT token")
-        return Agent(svcname, Agent.UNKN, "anonymous", Agent.INVALID, agents,
+        return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents,
                      invalid_reason="Invalid token can not be decoded")
 
     # make sure the token has an expiration date
@@ -835,7 +835,7 @@ def authenticate_via_jwt(svcname: str, env: Mapping, jwtcfg: Mapping, log: Logge
         log.warning("Rejecting non-expiring token for user %s", userinfo.get('sub', "(unknown)"))
         if jwtcfg.get('raise_on_invalid'):
             raise Unauthenticated("Non-expiring JWT token")
-        return Agent(svcname, Agent.UNKN, "anonymous", Agent.INVALID, agents,
+        return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents,
                      invalid_reason=f"non-expiring token rejected")
 
     if not claim_to_agent_func:
@@ -860,7 +860,7 @@ def make_agent_from_nistoar_claimset(svcname: str, userinfo: Mapping, log: Logge
     group = Agent.PUBLIC
     if not subj:
         log.warning("User token is missing subject identifier; defaulting to anonymous")
-        subj = "anonymous"
+        subj = Agent.ANONYMOUS
     elif subj.endswith("@nist.gov"):
         group = "nist"
         subj = subj[:-1*len("@nist.gov")]

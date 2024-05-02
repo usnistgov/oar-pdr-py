@@ -23,6 +23,7 @@ from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils.prov import Action
 from .. import MIDASException
 from .status import RecordStatus
+from nistoar.pdr.utils.prov import ANONYMOUS_USER
 
 DAP_PROJECTS = "dap"
 DMP_PROJECTS = "dmp"
@@ -35,7 +36,7 @@ DEF_PEOPLE_SHOULDER = "ppl0"
 DEF_GROUPS_SHOULDER = "grp0"
 
 PUBLIC_GROUP = DEF_GROUPS_SHOULDER + ":public"    # all users are implicitly part of this group
-ANONYMOUS = PUBLIC_GROUP
+ANONYMOUS = ANONYMOUS_USER
 
 __all__ = ["DBClient", "DBClientFactory", "ProjectRecord", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP", 
            "ANONYMOUS", "DAP_PROJECTS", "DMP_PROJECTS", "ObjectNotFound", "NotAuthorized", "AlreadyExists"]
@@ -514,8 +515,6 @@ class DBGroups(object):
         :raises NotAuthorized:  if the user is not authorized to create this group
         """
         if not foruser:
-            if self._cli.user_id == ANONYMOUS:
-                raise ValueException("create_group(): foruser must be specified when client is anonymous")
             foruser = self._cli.user_id
         if not self._cli._authorized_group_create(self._shldr, foruser):
             raise NotAuthorized(self._cli.user_id, "create group")
@@ -805,12 +804,8 @@ class DBClient(ABC):
                               specified, the value of :py:property:`user_id` will be assumed.  In 
                               this implementation, only a superuser can create a record for someone 
                               else.
-        :raise ValueException:  if :py:property:`user_id` corresponds to an anonymous user and `owner`
-                              is not specified.
         """
         if not foruser:
-            if self.user_id == ANONYMOUS:
-                raise ValueException("create_record(): foruser must be specified when client is anonymous")
             foruser = self.user_id
         if not shoulder:
             shoulder = self._default_shoulder()

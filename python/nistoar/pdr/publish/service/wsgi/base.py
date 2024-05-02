@@ -25,7 +25,7 @@ class PDPHandler(Handler):
     to be applied to the resource being requested (perhaps in addition to that implied by the HTTP 
     request method); see :py:meth:`get_action`.
     """
-    default_agent = Agent("pdp", Agent.UNKN, "anonymous", Agent.PUBLIC)
+    default_agent = Agent("pdp", Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC)
     ACTION_UPDATE   = ''
     ACTION_FINALIZE = "finalize"
     ACTION_PUBLISH  = "publish"

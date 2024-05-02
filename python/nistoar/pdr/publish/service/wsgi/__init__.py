@@ -131,7 +131,7 @@ class PDPApp(WSGIAppSuite, PublishSystem):
                 authkey = auth[1]
         if not authkey:
             log.warning("Client %s did not provide a Bearer authentication token", str(client_id))
-            return Agent("pdp", Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
+            return Agent("pdp", Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, agents)
         
         client = deepcopy(self._id_map.get(authkey))
         client.setdefault('user', 'authorized')
