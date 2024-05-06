@@ -1010,13 +1010,15 @@ class DBClient(ABC):
         if not out.authorized(perm):
             raise NotAuthorized(self.user_id, perm)
         return out
-    
-    def check_query_structure(query):
+
+    @classmethod
+    def check_query_structure(cls, query):
         if not isinstance(query, dict):
             return False
 
-        valid_operators = ['$and', '$or', '$not', '$nor', '$eq', '$ne', '$gt', '$gte', '$lt', '$lte', '$in', '$nin', '$exists', '$type', '$expr', '$jsonSchema', '$mod', '$regex', '$text',
-                            '$where', '$geoIntersects', '$geoWithin', '$near', '$nearSphere', '$all', '$elemMatch', '$size', '$bitsAllClear', '$bitsAllSet', '$bitsAnyClear', '$bitsAnySet', '$comment', '$meta']
+        valid_operators = ['$and', '$or', '$not', '$nor', '$eq', '$ne', '$gt', '$gte', '$lt',
+                           '$lte', '$in', '$nin', '$exists', '$type', '$mod', '$regex', '$text',
+                           '$all', '$elemMatch', '$size']
 
         for key in query.keys():
             if key not in valid_operators:
