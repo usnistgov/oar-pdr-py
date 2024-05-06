@@ -8,6 +8,7 @@ __pycache__
 # Ignore .c files by default to avoid including generated code. If you want to
 # add a non-generated .c extension, use `git add -f filename.c`.
 *.c
+docker/dockbuild.log
 
 # Other generated files
 */version.py
@@ -46,6 +47,12 @@ m2repo
 .pydevproject
 .settings
 
+python/ejsonschema-master/
+python/ejsonschema.zip
+python/nistoar/midas/version.py
+python/nistoar/pdr/version.py
+python/pynoid-master/
+python/pynoid.zip
 # Mac OSX
 .DS_Store
 

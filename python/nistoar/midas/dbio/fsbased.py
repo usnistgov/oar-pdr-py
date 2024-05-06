@@ -128,7 +128,7 @@ class FSBasedDBClient(base.DBClient):
         except KeyError:
             raise base.DBIOException("_upsert(): record is missing 'id' property")
 
-    def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+    def select_records(self, perm: base.Permissions=base.ACLs.OWN, **cnsts) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
             perm = [perm]
         if isinstance(perm, (list, tuple)):
@@ -151,6 +151,10 @@ class FSBasedDBClient(base.DBClient):
                     if rec.authorized(p):
                         yield rec
                         break
+
+    def adv_select_records(self, perm: base.Permissions = base.ACLs.OWN,
+                           **cst) -> Iterator[base.ProjectRecord]:
+        raise NotImplementedError()
 
     def _save_action_data(self, actdata: Mapping):
         self._ensure_collection(base.PROV_ACT_LOG)

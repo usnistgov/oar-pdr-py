@@ -41,11 +41,13 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence, Callable
 from typing import Iterator
 from urllib.parse import parse_qs
+import json
 
 from nistoar.web.rest import ServiceApp, Handler, Agent
 from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
+from .search_sorter import SortByPerm
 
 __all__ = ["MIDASProjectHandler", "ProjectDataHandler"]
 
@@ -404,7 +406,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
     """
 
     def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
-                 who: Agent, config: dict=None, log: Logger=None):
+                 who: Agent, iftype: str=None, config: dict=None, log: Logger=None):
         """
         Initialize this record request handler with the request particulars.  This constructor is called 
         by the webs service ServiceApp in charge of the project record interface.  
@@ -414,25 +416,31 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
         :param Agent     who:  the authenticated user making the request.  
+        :param str    iftype:  a name for the search interface type that is requested.  Recognized values
+                               include ":selected" which supports Mongo-like filter syntax.  If not provided,
+                               a simple query-parameter-based filter syntax is used.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
                                will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
                                logger attached to the ServiceApp will be used.  
         """
-        super(ProjectSelectionHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, "",
+        if iftype is None:
+            iftype = ""
+        super(ProjectSelectionHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, iftype,
                                                       config, log)
 
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "POST"])
 
-    def _select_records(self, perms) -> Iterator[ProjectRecord]:
+    def _select_records(self, perms, **constraints) -> Iterator[ProjectRecord]:
         """
-        submit a search query in a project specific way.  This implementation passes the query
-        directly to the generic DBClient instance.
+        submit a search query in a project specific way.  This method is provided as a 
+        hook to subclasses that may need to specialize the search strategy or manipulate the results.  
+        This implementation passes the query directly to the generic DBClient instance.
         :return:  a generator that iterates through the matched records
         """
-        return self._dbcli.select_records(perms)
+        return self._dbcli.select_records(perms, **constraints)
 
     def do_GET(self, path, ashead=False):
         """
@@ -450,27 +458,10 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             perms = dbio.ACLs.OWN
 
         # sort the results by the best permission type permitted
-        selected = OrderedDict()
+        sortd = SortByPerm()
         for rec in self._select_records(perms):
-            maxperm = ''
-            if rec.owner == self._dbcli.user_id:
-                maxperm = "owner"
-            elif rec.authorized(dbio.ACLs.ADMIN):
-                maxperm = dbio.ACLs.ADMIN
-            elif rec.authorized(dbio.ACLs.WRITE):
-                maxperm = dbio.ACLs.WRITE
-            else:
-                maxperm = dbio.ACLs.READ
-
-            if maxperm not in selected:
-                selected[maxperm] = []
-            selected[maxperm].append(rec)
-
-        # order the matched records based on best permissions
-        out = []
-        for perm in ["owner", dbio.ACLs.ADMIN, dbio.ACLs.WRITE, dbio.ACLs.READ]:
-            for rec in selected.get(perm, []):
-                out.append(rec.to_dict())
+            sortd.add_record(rec)
+        out = [rec.to_dict() for rec in sortd.sorted()]
 
         return self.send_json(out, ashead=ashead)
 
@@ -479,10 +470,64 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         create a new project record given some initial data
         """
         try:
-            newdata = self.get_json_body()
+            input = self.get_json_body()
         except self.FatalError as ex:
+            print("fatal Error")
             return self.send_fatal_error(ex)
+        
+        path = path.rstrip('/')
+        if not path:
+            return self.create_record(input)
+        elif path == ':selected':
+            try: 
+                return self.adv_select_records(input)
+            except SyntaxError as syntax:
+                return self.send_error(400, "Wrong query structure for filter")
+            except ValueError as value:
+                return self.send_error(204, "No Content")
+            except AttributeError as attribute:
+                return self.send_error(400, "Attribute Error, not a json")
+        
+        else:
+            return self.send_error(400, "Selection resource not found")
 
+    def adv_select_records(self, input: Mapping):
+        """
+        submit a record search 
+        :param dict filter:   the search constraints for the search.
+        """
+        filter = input.get("filter", {})
+        perms = input.get("permissions", [])
+        if not perms:
+            perms = [ dbio.ACLs.OWN ]
+
+        # sort the results by the best permission type permitted
+        sortd = SortByPerm()
+        for rec in self._adv_select_records(filter, perms):
+            sortd.add_record(rec)
+
+        out = [rec.to_dict() for rec in sortd.sorted()]
+        if not out:
+            raise ValueError("Empty Set")
+        else:
+            return self.send_json(out)
+
+    def _adv_select_records(self, filter, perms) -> Iterator[ProjectRecord]:
+        """
+        submit the advanced search query in a project-specific way. This method is provided as a 
+        hook to subclasses that may need to specialize the search strategy or manipulate the results.  
+        This base implementation passes the query directly to the generic DBClient instance.
+        :return:  a generator that iterates through the matched records
+        """
+        return self._dbcli.adv_select_records(filter, perms)
+
+    def create_record(self, newdata: Mapping):
+        """
+        create a new record
+        :param dict newdata:  the initial data for the record.  This data is expected to conform to
+                              the DBIO record schema (with ``data`` and ``meta`` content appropriate 
+                              for the project type). 
+        """
         if not newdata.get('name'):
             return self.send_error_resp(400, "Bad POST input", "No mneumonic name provided")
 
@@ -907,6 +952,9 @@ class MIDASProjectApp(ServiceApp):
             if not idattrpart[0]:
                 # path is empty: this is used to list all available projects or create a new one
                 return self._selection_handler(service, self, env, start_resp, who)
+            elif idattrpart[0][0] == ":":
+                # path starts with ":" (e.g. ":selected"); this indicates a search resource
+                return self._selection_handler(service, self, env, start_resp, who, idattrpart[0])
             else:
                 # path is just an ID: 
                 return self._update_handler(service, self, env, start_resp, who, idattrpart[0])

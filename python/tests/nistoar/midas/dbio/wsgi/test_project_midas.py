@@ -50,26 +50,35 @@ class TestMIDASProjectAppMongo(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "broker": {
-                "clients": {
-                    "midas": {
-                        "default_shoulder": "mdm1"
-                    },
-                    "default": {
-                        "default_shoulder": "mdm0"
-                    }
+            "clients": {
+                "midas": {
+                    "default_shoulder": "mdm1"
+                },
+                "default": {
+                    "default_shoulder": "mdm0"
                 }
             },
             "dbio": {
                 "superusers": [ "rlp" ],
                 "allowed_project_shoulders": ["mdm1", "spc1"],
                 "default_shoulder": "mdm0"
+            },
+            "include_headers": {
+                "Access-Control-Allow-Origin": "*"
             }
         }
         self.dbfact = mongo.MongoDBClientFactory({}, os.environ['MONGO_TESTDB_URL'])
-        self.app = prj.MIDASProjectApp(base.DMP_PROJECTS, rootlog.getChild("dmpapi"), self.dbfact, self.cfg)
+        self.svcfact = prj.ProjectServiceFactory(base.DMP_PROJECTS, self.dbfact, self.cfg, 
+                                                 rootlog.getChild("midas.prj"))
+        self.app = prj.MIDASProjectApp(self.svcfact, rootlog.getChild("dmpapi"), self.cfg)
         self.resp = []
         self.rootpath = "/midas/dmp/"
+
+    def tearDown(self):
+        cli = self.dbfact.create_client(base.DMP_PROJECTS)
+        cli.native.drop_collection("dmp")
+        cli.native.drop_collection("nextnum")
+        cli.native.drop_collection("prov_action_log")
 
     def create_record(self, name="goob", meta=None):
         cli = self.dbfact.create_client(base.DMP_PROJECTS, self.cfg["dbio"], nistr.actor)

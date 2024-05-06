@@ -180,8 +180,9 @@ class MongoDBClient(base.DBClient):
 
         except Exception as ex:
             raise base.DBIOException("Failed while deleting record with id=%s: %s" % (id, str(ex)))
+         
 
-    def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+    def select_records(self, perm: base.Permissions=base.ACLs.OWN, **cnsts) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
             perm = [perm]
         if isinstance(perm, (list, tuple)):
@@ -194,7 +195,6 @@ class MongoDBClient(base.DBClient):
                 constraints["$or"].append({"acls."+p: {"$in": idents}})
         else:
             constraints = {"acls."+perm.pop(): {"$in": idents}}
-            
         try:
             coll = self.native[self._projcoll]
 
@@ -203,6 +203,37 @@ class MongoDBClient(base.DBClient):
 
         except Exception as ex:
             raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
+        
+    
+    def adv_select_records(self, filter: dict,
+                           perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+        if(base.DBClient.check_query_structure(filter) == True):
+            if isinstance(perm, str):
+                perm = [perm]
+            if isinstance(perm, (list, tuple)):
+                perm = set(perm)
+            idents = [self.user_id] + list(self.user_groups)
+
+            if len(perm) > 1:
+                constraints = {"$or": []}
+                for p in perm:
+                    constraints["$or"].append({"acls."+p: {"$in": idents}})
+            else:
+                constraints = {"acls."+perm.pop(): {"$in": idents}}
+                
+            filter["$and"].append(constraints)
+                
+            try:
+                
+                coll = self.native[self._projcoll]
+                for rec in coll.find(filter):
+                    yield base.ProjectRecord(self._projcoll, rec)
+
+            except Exception as ex:
+                raise base.DBIOException(
+                    "Failed while selecting records: " + str(ex), cause=ex)
+        else:
+            raise SyntaxError('Wrong query format')
 
     def _save_action_data(self, actdata: Mapping):
         try:
@@ -283,4 +314,3 @@ class MongoDBClientFactory(base.DBClientFactory):
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
         cfg = merge_config(config, deepcopy(self._cfg))
         return MongoDBClient(self._dburl, cfg, servicetype, foruser)
-

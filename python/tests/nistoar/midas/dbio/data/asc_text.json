@@ -1,0 +1,28 @@
+{
+    "$and": [
+        {
+            "name": "test"
+        },
+        {
+            "$or": [
+                {
+                    "data/title": "Superconductor Metrology"
+                },
+                {
+                    "data/title": "Standard Reference Materials"
+                }
+            ]
+        },
+        {
+            "$text": {
+                "$search": "keyword"
+            }
+        },
+        {
+            "modifiedDate": {
+                "$gte": 18,
+                "$lte": 30
+            }
+        }
+    ]
+}
