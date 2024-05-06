@@ -69,7 +69,7 @@ class InMemoryDBClient(base.DBClient):
         self._db[coll][recdata['id']] = deepcopy(recdata)
         return not exists
 
-    def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+    def select_records(self, perm: base.Permissions=base.ACLs.OWN, **cnsts) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
             perm = [perm]
         if isinstance(perm, (list, tuple)):
@@ -81,7 +81,8 @@ class InMemoryDBClient(base.DBClient):
                     yield deepcopy(rec)
                     break
     
-    def select_constraint_records(self,filter:dict,perm: base.Permissions=base.ACLs.OWN,) -> Iterator[base.ProjectRecord]:
+    def adv_select_records(self, filter:dict,
+                           perm: base.Permissions=base.ACLs.OWN,) -> Iterator[base.ProjectRecord]:
         if(base.DBClient.check_query_structure(filter) == True):
             try:
                 if isinstance(perm, str):

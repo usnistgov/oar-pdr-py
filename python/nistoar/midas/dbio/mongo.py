@@ -182,7 +182,7 @@ class MongoDBClient(base.DBClient):
             raise base.DBIOException("Failed while deleting record with id=%s: %s" % (id, str(ex)))
          
 
-    def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+    def select_records(self, perm: base.Permissions=base.ACLs.OWN, **cnsts) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
             perm = [perm]
         if isinstance(perm, (list, tuple)):
@@ -205,7 +205,8 @@ class MongoDBClient(base.DBClient):
             raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
         
     
-    def select_constraint_records(self,filter:dict, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+    def adv_select_records(self, filter: dict,
+                           perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
         if(base.DBClient.check_query_structure(filter) == True):
             if isinstance(perm, str):
                 perm = [perm]

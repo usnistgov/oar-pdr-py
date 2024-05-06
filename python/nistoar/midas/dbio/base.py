@@ -636,8 +636,7 @@ class DBGroups(object):
         """
         if not owner:
             owner = self._cli.user_id
-        it = self._cli._select_from_coll(
-            GROUPS_COLL, incl_deact=True, name=name, owner=owner)
+        it = self._cli._select_from_coll(GROUPS_COLL, incl_deact=True, name=name, owner=owner)
         try:
             return bool(next(it))
         except StopIteration:
@@ -668,8 +667,7 @@ class DBGroups(object):
         """
         if not owner:
             owner = self._cli.user_id
-        matches = self._cli._select_from_coll(
-            GROUPS_COLL, incl_deact=True, name=name, owner=owner)
+        matches = self._cli._select_from_coll(GROUPS_COLL, incl_deact=True, name=name, owner=owner)
         for m in matches:
             m = Group(m, self._cli)
             if m.authorized(ACLs.READ):
@@ -683,17 +681,15 @@ class DBGroups(object):
         member of another group.  Deactivated groups are not included.
         """
         checked = set()
-        out = set(g['id'] for g in self._cli._select_prop_contains(
-            GROUPS_COLL, 'members', id))
+        out = set(g['id'] for g in self._cli._select_prop_contains(GROUPS_COLL, 'members', id))
 
         follow = list(out)
         while len(follow) > 0:
-            g = follow.pop(0)
-            if g not in checked:
-                add = set(g['id'] for g in self._cli._select_prop_contains(
-                    GROUPS_COLL, 'members', g))
+            gg = follow.pop(0)
+            if gg not in checked:
+                add = set(g['id'] for g in self._cli._select_prop_contains(GROUPS_COLL, 'members', gg))
                 out |= add
-                checked.add(g)
+                checked.add(gg)
                 follow.extend(add.difference(checked))
 
         out.add(PUBLIC_GROUP)
@@ -981,8 +977,7 @@ class DBClient(ABC):
         """
         if not owner:
             owner = self.user_id
-        it = self._select_from_coll(
-            self._projcoll, incl_deact=True, name=name, owner=owner)
+        it = self._select_from_coll(self._projcoll, incl_deact=True, name=name, owner=owner)
         try:
             return bool(next(it))
         except StopIteration:
@@ -995,8 +990,7 @@ class DBClient(ABC):
         """
         if not owner:
             owner = self.user_id
-        matches = self._select_from_coll(
-            self._projcoll, incl_deact=True, name=name, owner=owner)
+        matches = self._select_from_coll(self._projcoll, incl_deact=True, name=name, owner=owner)
         for m in matches:
             m = ProjectRecord(self._projcoll, m, self)
             if m.authorized(ACLs.READ):
@@ -1056,7 +1050,7 @@ class DBClient(ABC):
         raise NotImplementedError()
     
     @abstractmethod
-    def select_constraint_records(self,filter:dict, perm: Permissions = ACLs.OWN) -> Iterator[ProjectRecord]:
+    def adv_select_records(self, filter: Mapping, perm: Permissions = ACLs.OWN) -> Iterator[ProjectRecord]:
         """
         return an iterator of project records for which the given user has at least one of the
         permissions and the records meet all the constraints given
@@ -1069,7 +1063,6 @@ class DBClient(ABC):
         :param str       **cst: a json that describes all the constraints the records should meet. 
                                 the schema of this json is the query structure used by mongodb.
         """
-        print("BASE PYY")
         raise NotImplementedError()
 
     def is_connected(self) -> bool:

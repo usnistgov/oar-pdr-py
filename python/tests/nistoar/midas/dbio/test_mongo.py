@@ -313,7 +313,7 @@ class TestMongoDBClient(test.TestCase):
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
         self.assertEqual(recs[1].id, id)
 
-    def test_select_constraint_records(self):
+    def test_adv_select_records(self):
 
         # inject some data into the database
 
@@ -369,17 +369,17 @@ class TestMongoDBClient(test.TestCase):
         constraint_wrong = {'$a,nkd': [
             {'$okn,r': [{'name': 'test 2'}, {'name': 'test3'}]}]}
         with self.assertRaises(SyntaxError) as context:
-            recs = list(self.cli.select_constraint_records(**constraint_wrong))
+            recs = list(self.cli.adv_select_records(constraint_wrong))
         self.assertEqual(str(context.exception), "Wrong query format")
-        recs = list(self.cli.select_constraint_records(base.ACLs.READ,**constraint_or))
+        recs = list(self.cli.adv_select_records(constraint_or, base.ACLs.READ))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")
 
-        recs = list(self.cli.select_constraint_records(**constraint_and))
+        recs = list(self.cli.adv_select_records(constraint_and))
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0].id, "pdr0:0003")
-        recs = list(self.cli.select_constraint_records(base.ACLs.READ,**constraint_andor))
+        recs = list(self.cli.adv_select_records(constraint_andor, base.ACLs.READ))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")

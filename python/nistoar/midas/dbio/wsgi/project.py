@@ -430,14 +430,14 @@ class ProjectSelectionHandler(ProjectRecordHandler):
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "POST"])
 
-    def _select_records(self, perms) -> Iterator[ProjectRecord]:
+    def _select_records(self, perms, **constraints) -> Iterator[ProjectRecord]:
         """
         submit a search query in a project specific way.  This method is provided as a 
         hook to subclasses that may need to specialize the search strategy or manipulate the results.  
         This implementation passes the query directly to the generic DBClient instance.
         :return:  a generator that iterates through the matched records
         """
-        return self._dbcli.select_records(perms)
+        return self._dbcli.select_records(perms, **constraints)
 
     def do_GET(self, path, ashead=False):
         """
@@ -516,7 +516,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         This base implementation passes the query directly to the generic DBClient instance.
         :return:  a generator that iterates through the matched records
         """
-        return self._dbcli.select_constraint_records(filter, perms)
+        return self._dbcli.adv_select_records(filter, perms)
 
     def create_record(self, newdata: Mapping):
         """
