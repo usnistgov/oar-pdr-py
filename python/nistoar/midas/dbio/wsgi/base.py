@@ -43,6 +43,13 @@ class DBIOHandler(Handler):
         if hasattr(self._app, "_recorder") and self._app._recorder:
             self._reqrec = self._app._recorder.from_wsgi(self._env)
 
+    def preauthorize(self):
+        """
+        determine if the client agent is authorized to access this endpoint.  This implementation 
+        ensures that a valid client agent has been established and is valid.
+        """
+        return bool(self.who) and self.who.agent_class != Agent.INVALID
+
     def acceptable(self):
         """
         return True if the client's Accept request is compatible with this handler.

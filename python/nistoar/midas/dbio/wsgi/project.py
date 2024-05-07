@@ -924,13 +924,6 @@ class MIDASProjectApp(ServiceApp):
         super(MIDASProjectApp, self).__init__(service_factory.project_type, log, config)
         self.svcfact = service_factory
 
-    def preauthorize(self):
-        """
-        determine if the client agent is authorized to access this endpoint.  This implementation 
-        ensures that a valid client agent has been established.
-        """
-        return bool(self.who) and self.who.agent_class != Agent.INVALID
-
     def create_handler(self, env: dict, start_resp: Callable, path: str, who: Agent) -> Handler:
         """
         return a handler instance to handle a particular request to a path

@@ -112,14 +112,21 @@ if dbtype == "fsbased":
         os.mkdir(dbdir)
     factory = FSBasedDBClientFactory(cfg.get("dbio", {}), dbdir)
 elif dbtype == "mongo":
+    dbcfg = cfg.get("dbio", {})
     dburl = os.environ.get("OAR_MONGODB_URL")
     if not dburl:
-        port = ":%s" % os.environ.get("OAR_MONGODB_PORT", "27017")
+        dburl = dbcfg.get("db_url")
+    if not dburl:
+        # Build the DB URL from its pieces with env vars taking precedence over the config
+        port = ":%s" % os.environ.get("OAR_MONGODB_PORT", dbcfg.get("port", "27017"))
+        user = os.environ.get("OAR_MONGODB_USER", dbcfg.get("user"))
         cred = ""
-        if os.environ.get("OAR_MONGODB_USER"):
-            pasw = os.environ.get("OAR_MONGODB_PASS", os.environ.get("OAR_MONGODB_USER"))
-            cred = "%s:%s@" % (os.environ.get("OAR_MONGODB_USER"), pasw)
-        dburl = "mongodb://%s%s%s/midas" % (cred, os.environ.get("OAR_MONGODB_HOST", "localhost"), port)
+        if user:
+            pasw = os.environ.get("OAR_MONGODB_PASS", dbcfg.get("pw", os.environ.get("OAR_MONGODB_USER")))
+            cred = "%s:%s@" % (user, pasw)
+        host = os.environ.get("OAR_MONGODB_HOST", dbcfg.get("host", "localhost"))
+        dburl = "mongodb://%s%s%s/midas" % (cred, host, port)
+    print(f"dburl: {dburl}")
     factory = MongoDBClientFactory(cfg.get("dbio", {}), dburl)
 elif dbtype == "inmem":
     factory = InMemoryDBClientFactory(cfg.get("dbio", {}))

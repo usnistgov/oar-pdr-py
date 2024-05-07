@@ -1,4 +1,4 @@
-echo "Creating curator user..."
+echo "Creating MIDAS user..."
 echo '
     use '${OAR_MONGODB_DBNAME}'
     db.createUser(
@@ -8,4 +8,4 @@ echo '
             roles: [ "readWrite" ]
         }
     )
-    exit' | mongo
+    exit' | mongo -u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD
