@@ -9,9 +9,15 @@ import nistoar.nsd.client as nsd
 testdir = Path(__file__).parents[0]
 datadir = testdir.parents[1] / 'nsd' / 'data'
 peopledata = datadir / "person.json"
+oudata = datadir / "ou.json"
+divdata = datadir / "div.json"
 
 with open(peopledata) as fd:
     peops = json.load(fd)
+with open(oudata) as fd:
+    ous = json.load(fd)
+with open(divdata) as fd:
+    divs = json.load(fd)
 
 class TestIndex(test.TestCase):
 
@@ -254,6 +260,23 @@ class TestDAPAuthorIndexer(test.TestCase):
         self.assertEqual(idx.key_labels_for("ossman"), idx.key_labels_for("david"))
 
 
+class TestNSDOrgResponseIndexer(test.TestCase):
+
+    def test_make_def_index(self):
+        idxr = index.NSDOrgResponseIndexer()
+
+        idx = idxr.make_index(ous)
+
+        self.assertEqual(set([v for v in idx._data.keys()]),
+                         set(["department of leftovers", "department of covers", "department of failure",
+                              "department of spies", "dos", "dof", "doc", "dol", "01", "02", "03", "04"]))
+        self.assertEqual(set([k for k,d in idx.iter_key_labels()]),
+                         set(range(1,5)))
+        self.assertEqual(set([d for k,d in idx.iter_key_labels()]),
+                         set(["Department of Leftovers (01)", "Department of Covers (02)",
+                              "Department of Failure (03)", "Department of Spies (04)"]))
+        
+    
 class TestNSDPeopleResponseIndexer(test.TestCase):
 
     def test_make_def_index(self):
@@ -308,6 +331,40 @@ class TestNSDPeopleResponseIndexer(test.TestCase):
 serviceurl = None
 if os.environ.get('PEOPLE_TEST_URL'):
     serviceurl = os.environ.get('PEOPLE_TEST_URL')
+
+@test.skipIf(not os.environ.get('PEOPLE_TEST_URL'), "test people service not available")
+class TestNSDOrgIndexClient(test.TestCase):
+
+    def setUp(self):
+        self.nsdcli = nsd.NSDClient(serviceurl)
+
+    def test_make_ou_index(self):
+        idxcli = index.NSDOrgIndexClient(self.nsdcli)
+
+        idx = idxcli.get_index_for("ou", "dep")
+    
+        self.assertEqual(set([v for v in idx._data.keys()]),
+                         set(["department of leftovers", "department of covers", "department of failure",
+                              "department of spies"]))
+        self.assertEqual(set([k for k,d in idx.iter_key_labels()]),
+                         set(range(1,5)))
+        self.assertEqual(set([d for k,d in idx.iter_key_labels()]),
+                         set(["Department of Leftovers (01)", "Department of Covers (02)",
+                              "Department of Failure (03)", "Department of Spies (04)"]))
+
+    def test_make_any_index(self):
+        idxcli = index.NSDOrgIndexClient(self.nsdcli)
+
+        idx = idxcli.get_index_for("division group ou group".split(), "ve")
+    
+        self.assertEqual(set([v for v in idx._data.keys()]),
+                         set(["verterans' tapdance administration"]))
+        self.assertEqual(set([k for k,d in idx.iter_key_labels()]), set([8]))
+        self.assertEqual(set([d for k,d in idx.iter_key_labels()]),
+                         set(["Verterans' Tapdance Administration (10001)"]))
+
+    
+
 
 @test.skipIf(not os.environ.get('PEOPLE_TEST_URL'), "test people service not available")
 class TestNSDPeopleIndexClient(test.TestCase):

@@ -288,7 +288,7 @@ class DAPAuthorIndexer(Indexer):
     
 class NSDPeopleResponseIndexer(Indexer):
     """
-    an Indexer implementation that operates on a response to a person query to an NSD query 
+    an Indexer implementation that operates on a response to a NSD person query
     via the :py:class:`~nistoar.nsd.client.NSDClient`.  
     """
     _dispfmt = "{0}, {1}"
@@ -306,6 +306,123 @@ class NSDPeopleResponseIndexer(Indexer):
         for delg in self.delegates:
             out |= delg.make_index(data, caseins)
         return out
+
+class NSDOrgResponseIndexer(Indexer):
+    """
+    an Indexer implementation that operates on a response to an NSD organization query
+    via the :py:class:`~nistoar.nsd.client.NSDClient`.  
+    """
+    _dispfmt = "{0} ({1})"
+
+    def __init__(self, targets: List[str]=None):
+        if not targets:
+            targets = "orG_Name orG_ACRNM orG_CD".split()
+        self.delegates = []
+        for target in targets:
+            self.delegates.append(IndexerOnProperty(target, "orG_ID", ["orG_Name", "orG_CD"],
+                                                    self._dispfmt))
+
+    def make_index(self, data: Indexable[Mapping], caseins: bool=True) -> Index:
+        out = Index()
+        for delg in self.delegates:
+            out |= delg.make_index(data, caseins)
+        return out
+
+class NSDOrgIndexClient:
+    """
+    a class that can create an index based on a query to an NSD service.  It wraps around an 
+    :py:class:`~nistoar.nsd.client.NSDClient` instance which it uses to submit a query to one of 
+    the search endpoints and returns an Index of the results.
+    """
+    _nsdeps = {
+        "ou":       nsd.NSDClient.OU_EP,
+        "division": nsd.NSDClient.DIV_EP,
+        "group":    nsd.NSDClient.GROUP_EP
+    }
+
+    def __init__(self, client: nsd.NSDClient, indexprops=None, indexer: Indexer=None, 
+                 enforce_start=False):
+        """
+        create the index-making client.  
+        :param NSDClient client:   the NSDClient instance to use to send queries
+        :param [str] indexprops:   a list of the people properties to index.  These 
+                                   properties will be used provide constraints on queries
+                                   to the NSD service.  If not provided, these default to 
+                                   ``["orG_Name", "orG_ACRNM", "oarG_CD"]`` (the organization
+                                   name, abbreviation, and number).  
+        :param Indexer indexer:    the Indexer instance to use to create indicies.  This 
+                                   Indexer must be configured to operate on responses 
+                                   from an :py:class:`~nistoar.nsd.client.NSDClient`.
+                                   If not provided, a default instance will be created 
+                                   based on the ``indexprops`` values.  
+        :param bool enforce_start: if True, require for the records returned from the NSD 
+                                   query that the values of the indexed properties start with 
+                                   index-making prompt value (see :py:meth:`get_index_for`).  
+                                   Some implementations of the NSD service will match any value 
+                                   substring by default.  Setting this to True will filter out 
+                                   matched records that do not start with the prompt string.  
+                                   The default is False, because the index generation will 
+                                   effectively do the same.  
+        """
+        self.cli = client
+
+        if not indexprops:
+            indexprops = "orG_Name orG_ACRNM orG_CD".split()
+        if not isinstance(indexprops, (list, tuple)) or any(not isinstance(e, str) for e in indexprops):
+            raise ValueError("NSDOrgIndexClient(): indexprops is not a list of strings: "+str(indexprops))
+        self.props = indexprops
+
+        if not indexer:
+            indexer = NSDOrgResponseIndexer(self.props)
+        self.idxr = indexer
+
+    def get_index_for(self, orgtypes: Union[str,Iterable[str]], prompt: str) -> Index:
+        """
+        send a query for organizational groups whose names, abbreviation, or number start with the given 
+        prompt string and return an index of the results.  The records that will be indexed will be those 
+        whose index properties ("orG_Name", "orG_ACRNM", and "orG_CD", by default) start with the prompt 
+        string.
+        :param list[str] orgtypes:  the types of organization to query, given as a unique list that can 
+                             can include "ou", "division", or "group".
+        :param str  prompt:  the string to look for when matching organizations
+        :raises NSDServerError:  if there is a problem communicating with the NSD server.  In particular,
+                                 this will usually be raised if the NSD endpoint URL is incorrect.
+        :raises ConfigurationException:  if there appears to be a problem with how this class instance is 
+                                 configured such as incompatible index properties or indexer.
+        """
+        if isinstance(orgtypes, str):
+            orgtypes = set([orgtypes.lower()])
+        elif isinstance(orgtypes, Iterable):
+            orgtypes = set([e.lower() for e in orgtypes])
+        for ot in orgtypes:
+            if ot not in "ou division group".split():
+                raise ValueError("NSDOrgIndexClient: Not a recognized org type: "+ot)
+
+        out = Index(True)
+        for ot in orgtypes:
+            try:
+                res = self._select_from(ot, prompt)
+            except nsd.NSDClientError as ex:
+                raise ConfigurationException("client configuration results in bad service query: "+str(ex))
+
+            out |= self.idxr.make_index(res).select_startswith(prompt)
+
+        return out
+
+    def _select_from(self, orgtype: str, prompt: str):
+        if orgtype not in self._nsdeps:
+            raise RuntimeError("Programming error: %s: unexpected org type: %s" % \
+                               (str(self.__class__), orgtype))
+        res = self.cli._get(self._nsdeps[orgtype])
+
+        def startswithprompt(rec):
+            for p in self.props:
+                if rec[p].lower().startswith(prompt):
+                    return True
+            return False
+
+        return [r for r in res if startswithprompt(r)]
+
 
 class NSDPeopleIndexClient:
     """
@@ -366,7 +483,7 @@ class NSDPeopleIndexClient:
 
         try:
             res = self.cli.select_people(filter=filter)
-        except NSDClientError as ex:
+        except nsd.NSDClientError as ex:
             raise ConfigurationException("client configuration results in bad service query: "+str(ex))
 
         if self.muststart:
