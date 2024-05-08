@@ -22,7 +22,7 @@ from nistoar.base.config import ConfigurationException
 import nistoar.base.config as cfgmod
 from nistoar.pdr.utils.prov import Agent
 
-__all__ = ["Handler", "ServiceApp", "Unauthenticated", "WSGIApp", "AuthenticatedWSGIApp",
+__all__ = ["Handler", "ServiceApp", "Unauthenticated", "WSGIServiceApp", "AuthenticatedWSGIApp",
            "WSGIAppSuite", "Agent",
            "authenticate_via_authkey", "authenticate_via_proxy_x509", "authenticate_via_jwt" ]
 

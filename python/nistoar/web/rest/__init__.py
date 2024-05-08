@@ -37,3 +37,4 @@ enable some additional features:
 
 from .base import *
 from .ready import Ready
+from .jsonerr import ErrorHandling, FatalError, HandlerWithJSON
