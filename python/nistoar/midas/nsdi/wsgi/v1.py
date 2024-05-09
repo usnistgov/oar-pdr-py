@@ -1,6 +1,7 @@
 """
 The WSGI implementation of the web API to the NSD Indexer Service.  See :py:mod:`nistoar.midas.nsdi`
-for a description of what this service does.
+for a description of what this service does and :py:mod:`nistoar.midas.dbio.index` for what the index 
+looks like. 
 
 In this implementation, all endpoints feature the same interface: a GET request will return an index
 document based on a prompt string given by a ``prompt`` query parameter.  The endpoint relects the 
@@ -14,6 +15,11 @@ NSD query endpoint that will be indexed.  The endpoints are:
        indexes division records base on the division's full name, abbreviation, or number
   ``/Group``
        indexes division records base on the group's full name, abbreviation, or number
+
+For example, a GET to ``/People?prompt=pla`` will return an index to all NSD people entries whose 
+first or last name begins with "pla" (case-insensitive).  A GET to ``/Division?prompt=mat`` returns
+an index to all division entries whose full name, abbreviation starts with "mat".  
+``/Division?prompt=64`` returns index where the division number starts with "64".  
 
 The default format for the returned index is JSON.  A format can be explicitly returned either via 
 the ``format`` query parameter or by requesting a media type with the ``Accept`` HTTP request header. 
@@ -34,7 +40,7 @@ from collections.abc import Mapping, Callable
 from urllib.parse import parse_qs
 
 from nistoar.web.rest import ServiceApp, Handler, ErrorHandling, FatalError
-from nistoar.nsd.client import NSDClient
+from nistoar.nsd.client import NSDClient, NSDServerError
 from nistoar.pdr.publish.prov import PubAgent
 from nistoar.midas.dbio.index import NSDPeopleIndexClient, NSDOrgIndexClient
 
@@ -71,7 +77,7 @@ class PeopleIndexHandler(Handler, ErrorHandling):
             return self.send_error_obj(503, "Upstream service error",
                                   "Failure accessing the NSD service: "+str(ex))
         except Exception as ex:
-            self.log.error("Unexpected error accessing indexer client: %s", str(ex))
+            self.log.exception("Unexpected error accessing indexer client: %s", str(ex))
             return self.send_error_obj(500, "Internal Server Error")
 
         return self.send_ok(idx.export_as_json(), "application/json")
@@ -94,10 +100,10 @@ class OrgIndexHandler(Handler, ErrorHandling):
         return an index based on the given prompt
         """
         path = path.lower()
-        if path not in "ou div group any".split():
+        if path not in "ou division group organization".split():
             return self.send_error_obj(404, "Not Found", "Not a recognized organization type: "+path)
         if path == "organization":
-            path = "ou div group".split()
+            path = "ou division group".split()
 
         prompt = ''
         qstr = self._env.get('QUERY_STRING')
@@ -112,7 +118,7 @@ class OrgIndexHandler(Handler, ErrorHandling):
             return self.send_error_obj(503, "Upstream service error",
                                   "Failure accessing the NSD service: "+str(ex))
         except Exception as ex:
-            self.log.error("Unexpected error accessing indexer client: %s", str(ex))
+            self.log.exception("Unexpected error accessing indexer client: %s", str(ex))
             return self.send_error_obj(500, "Internal Server Error")
 
         return self.send_ok(idx.export_as_json(), "application/json")
@@ -124,10 +130,11 @@ class NSDIndexerApp(ServiceApp):
     a web app interface for handling NSD indexing requests
     """
     _supported_eps = {
-        "people":   PeopleIndexHandler,
-        "ou":       OrgIndexHandler,
-        "division": OrgIndexHandler,
-        "group":    OrgIndexHandler
+        "people":        PeopleIndexHandler,
+        "ou":            OrgIndexHandler,
+        "division":      OrgIndexHandler,
+        "group":         OrgIndexHandler,
+        "organization":  OrgIndexHandler
     }
 
     def __init__(self, log: Logger, config: Mapping={}, nsdclient: NSDClient=None):
@@ -175,7 +182,16 @@ class Unsupported(Handler, ErrorHandling):
 
     def __init__(self, env: Mapping, start_resp: Callable, path: str, config: Mapping=None,
                  log: Logger=None, app=None):
-        Handler.__init__(self, env, start_resp, path, None, config, log, app)
+        Handler.__init__(self, path, env, start_resp, None, config, log, app)
 
     def do_GET(self, path, ashead=False):
         return self.send_error_obj(404, "Not Found", ashead=ashead)
+
+
+def NSDIndexerAppFactory(dbio_client_factory, log: Logger, config: Mapping, projname):
+    """
+    a factory function that fits an NSDIndexerApp into the MIDAS web app framework.  The 
+    ``dbio_client_factory`` and ``projname`` argument are ignored as they are not needed.
+    """
+    return NSDIndexerApp(log, config)
+
