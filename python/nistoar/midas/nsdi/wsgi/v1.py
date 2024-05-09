@@ -40,6 +40,7 @@ from collections.abc import Mapping, Callable
 from urllib.parse import parse_qs
 
 from nistoar.web.rest import ServiceApp, Handler, ErrorHandling, FatalError
+from nistoar.web.formats import FormatSupport, Format, Unacceptable, UnsupportedFormat
 from nistoar.nsd.client import NSDClient, NSDServerError
 from nistoar.pdr.publish.prov import PubAgent
 from nistoar.midas.dbio.index import NSDPeopleIndexClient, NSDOrgIndexClient
@@ -55,14 +56,29 @@ class PeopleIndexHandler(Handler, ErrorHandling):
 
         idxprops = self.cfg.get("index_properties")  # None will default to last/first names
         self.idxcli = NSDPeopleIndexClient(nsdclient, idxprops)
+        supp_fmts = FormatSupport()
+        supp_fmts.support(Format("json", "application/json"), ["text/json", "application/json"], True)
+        supp_fmts.support(Format("csv", "text/csv"), ["text/csv", "application/csv"], True)
+        self._set_default_format_support(supp_fmts)
 
-    def do_GET(self, path, ashead=False):
+    def do_GET(self, path, ashead=False, format=None):
         """
         return an index based on the given prompt
         """
         path = path.lower()
         if path != "people":
             return self.send_error_obj(404, "Not Found")
+
+        try:
+            format = self.select_format(format)
+            if not format:
+                if self.log:
+                    self.log.error("Failed to determine output format")
+                return self.send_error(500, "Server Error")
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
 
         prompt = ''
         qstr = self._env.get('QUERY_STRING')
@@ -80,7 +96,10 @@ class PeopleIndexHandler(Handler, ErrorHandling):
             self.log.exception("Unexpected error accessing indexer client: %s", str(ex))
             return self.send_error_obj(500, "Internal Server Error")
 
-        return self.send_ok(idx.export_as_json(), "application/json")
+        if format.name == "csv":
+            return self.send_ok(idx.export_as_csv(), "text/csv")
+        else:
+            return self.send_ok(idx.export_as_json(), "application/json")
 
 
 class OrgIndexHandler(Handler, ErrorHandling):
@@ -94,8 +113,12 @@ class OrgIndexHandler(Handler, ErrorHandling):
 
         idxprops = self.cfg.get("index_properties")  # None will default to orG_Name, orG_ACRNM, orG_CD
         self.idxcli = NSDOrgIndexClient(nsdclient, idxprops)
+        supp_fmts = FormatSupport()
+        supp_fmts.support(Format("json", "application/json"), ["text/json", "application/json"], True)
+        supp_fmts.support(Format("csv", "text/csv"), ["text/csv", "application/csv"], True)
+        self._set_default_format_support(supp_fmts)
 
-    def do_GET(self, path, ashead=False):
+    def do_GET(self, path, ashead=False, format=None):
         """
         return an index based on the given prompt
         """
@@ -104,6 +127,17 @@ class OrgIndexHandler(Handler, ErrorHandling):
             return self.send_error_obj(404, "Not Found", "Not a recognized organization type: "+path)
         if path == "organization":
             path = "ou division group".split()
+
+        try:
+            format = self.select_format(format)
+            if not format:
+                if self.log:
+                    self.log.error("Failed to determine output format")
+                return self.send_error(500, "Server Error")
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
 
         prompt = ''
         qstr = self._env.get('QUERY_STRING')
@@ -121,7 +155,10 @@ class OrgIndexHandler(Handler, ErrorHandling):
             self.log.exception("Unexpected error accessing indexer client: %s", str(ex))
             return self.send_error_obj(500, "Internal Server Error")
 
-        return self.send_ok(idx.export_as_json(), "application/json")
+        if format.name == "csv":
+            return self.send_ok(idx.export_as_csv(), "text/csv")
+        else:
+            return self.send_ok(idx.export_as_json(), "application/json")
 
     
 
