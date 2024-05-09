@@ -1,5 +1,15 @@
 """
 a module supporting special-purpose indexes for the DBIO.
+
+The core of this module is the :py:class:`Index` which can be serialized to JSON or CSV and 
+delivered a remote (web) client.  The client then uses that index on the client-side to quickly
+determine which remote records match a prompt string.  See :py:class:`Index` for more details,
+including the structure of the JSON and CSV serializations.
+
+An :py:class:`Index` is created on the server-side by an :py:class:`Indexer` implementation. 
+This module includes different common and specific Index generators, including a ones for 
+indexing entries from the NIST Staff Directory (NSD) service.  These indexers are made available 
+as web services via the :py:mod:`nistoar.midas.nsdi` module.
 """
 import json, csv, re
 from abc import ABC, abstractmethod
@@ -38,6 +48,10 @@ class Index:
     where the target value starts with a particular substring, and the second provides a format 
     for the index that can be delivered to a web client.  The client can then do its own fast 
     lookups, and use the keys to retrieve specific records of interest based on the target value. 
+
+    An Index is serialized to deliver it to a client.  See :py:mod:`export_as_json` and 
+    :py:mod:`export_as_csv` for a description of the structure of the JSON and CSV serialization
+    formats.
     """
     def __init__(self, caseins=True):
         """
@@ -124,14 +138,63 @@ class Index:
 
     def export_as_json(self, pretty=False) -> str:
         """
-        export this index into JSON
+        serialize this index into JSON.
+
+        The output is a JSON dictionary in which the keys are the index's target values--that is,
+        the values that matched the prompt string used to generate the index.  Each key maps to 
+        an object with entries representing all the entries in the indexed database that feature 
+        the target value.  Each key of this second object is the unique identifier for the 
+        matching record, and its value is displayable string meant to represent or summarize that 
+        record.  (A client may show this displayable string as, say, a suggestion to an input field.)
+
+        For example, a small index might look like this::
+
+            {
+                "Bryan": {
+                    "13913": "Cranston, Bryan"
+                },
+                "Cranston": {
+                    "23497": "Cranston, Gurn",
+                    "13913": "Cranston, Bryan"
+                },
+                "Gurn": {
+                    "23497": "Cranston, Gurn"
+                }
+            }
+
+        :param bool pretty:  if True, format the JSON in a pretty format with indentation and 
+                             newline characters (as shown above).  The default, False, formats
+                             JSON in compact form without indentation or newlines.
+        :rtype: str
         """
         if pretty:
             return json.dumps(self._data, indent=2)
         else:
             return json.dumps(self._data)
 
-    def export_as_csv(self, keydelim=':') -> str:
+    def export_as_csv(self, keydelim: str=':') -> str:
+        """
+        serialize this index into JSON.
+
+        The output is a CSV table in which each row represents matching records for a particular
+        target value.  The first column is a target value--that is, a value the matched the 
+        prompt string used to generate the index.  The remaining columns represent records that 
+        match the target value.  (Note that since a target value can match 1 or more records, the 
+        table wil not, in general, have a constant number of columns.)  Each remaining column 
+        contains a colon-delimited key-value pair: the key is the unique identifier for the 
+        matching record, and its value is displayable string meant to represent or summarize that 
+        record.  (A client may show this displayable string as, say, a suggestion to an input field.) 
+
+        For example, three rows of an index into a staff directory may look like this::
+
+            Bryan,"13913:Cranston, Bryan"
+            Cranston,"23497:Cranston, Gurn","13913:Cranston, Bryan"
+            Gurn,"23497:Cranston, Gurn",
+
+        :param str keydelim:  A delimiter to use instead of a colon (:) to seperate the identifier
+                              and displayable value.
+        :rtype: str
+        """
         out = StringIO(newline='')
         wrtr = csv.writer(out, csv.unix_dialect, quoting=csv.QUOTE_MINIMAL)
         for target in self._data:
@@ -417,7 +480,7 @@ class NSDOrgIndexClient:
 
         def startswithprompt(rec):
             for p in self.props:
-                if rec[p].lower().startswith(prompt):
+                if isinstance(rec[p], str) and rec[p].lower().startswith(prompt):
                     return True
             return False
 
@@ -489,7 +552,7 @@ class NSDPeopleIndexClient:
         if self.muststart:
             def startswithprompt(rec):
                 for p in self.props:
-                    if rec[p].lower().startswith(prompt):
+                    if isinstance(rec[p], str) and rec[p].lower().startswith(prompt):
                         return True
                 return False
 

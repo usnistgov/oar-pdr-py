@@ -21,4 +21,7 @@ to the selected suggestion.
 
 This module provides the indexing service and its REST web service interfaces.  It leverages the 
 index-generating capabilities provided by :py:mod:`nistoar.midas.dbio.index`.  
+
+For the details on the service endpoints, see the convention/version-specific documentation:
+  *  :py:mod:`nistoar.midas.nsdi.wsgi.v1
 """

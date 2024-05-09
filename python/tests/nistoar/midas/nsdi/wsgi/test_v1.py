@@ -155,6 +155,20 @@ class TestNSDIndexerApp(test.TestCase):
         self.app = v1.NSDIndexerApp(rootlog, self.cfg)
         self.resp = []
 
+    def test_unsupported(self):
+        req = {
+            "REQUEST_METHOD": "GET",
+            "PATH_INFO": "/Gurn",
+            "QUERY_STRING": "prompt=ve"
+        }
+        body = self.app(req, self.start)
+        self.assertIn("404 ", self.resp[0])
+        resp = self.body2data(body)
+
+        self.assertEqual(resp["http:status"], 404)
+        self.assertEqual(resp["http:reason"], "Not Found")
+        self.assertEqual(resp["oar:message"], "Not Found")
+
     def test_group(self):
         req = {
             "REQUEST_METHOD": "GET",

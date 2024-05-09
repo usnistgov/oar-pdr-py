@@ -14,6 +14,8 @@ the following endpoints:
     Repository (PDR)
   * ``/groups/`` -- the API for creating and managing access permission groups for collaborative 
     authoring.
+  * ``/nsdi/v1/`` -- an API for retrieving fast indexes matching entries in the NIST Staff Directory
+    (see :py:mod:`nistoar.midas.nsdi` for details).
 
 These endpoint send and receive data stored in the backend database through the common 
 :py:mod:` DBIO layer <nistoar.midas.dbio>`.  
@@ -151,6 +153,7 @@ from .dap.service import mdsx, mds3
 from .dbio.inmem import InMemoryDBClientFactory
 from .dbio.fsbased import FSBasedDBClientFactory
 from .dbio.mongo import MongoDBClientFactory
+from .nsdi.wsgi import v1 as nsdiv1
 from nistoar.base.config import ConfigurationException, merge_config
 
 log = logging.getLogger(system.system_abbrev)   \
@@ -464,7 +467,8 @@ _MIDASServiceApps = {
 #    "dmp/mdm1":  mdm1.DMPApp,
     "dmp/mdm1":  prj.MIDASProjectApp.factory_for("dmp"),
     "dap/mdsx":  mdsx.DAPApp,
-    "dap/mds3":  mds3.DAPApp
+    "dap/mds3":  mds3.DAPApp,
+    "nsdi/v1":   nsdiv1.NSDIndexerAppFactory
 }
 
 class MIDASApp(AuthenticatedWSGIApp):
