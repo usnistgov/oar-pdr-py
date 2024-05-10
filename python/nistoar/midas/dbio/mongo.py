@@ -199,7 +199,7 @@ class MongoDBClient(base.DBClient):
             coll = self.native[self._projcoll]
 
             for rec in coll.find(constraints, {'_id': False}):
-                yield base.ProjectRecord(self._projcoll, rec)
+                yield base.ProjectRecord(self._projcoll, rec, self)
 
         except Exception as ex:
             raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
@@ -227,7 +227,7 @@ class MongoDBClient(base.DBClient):
                 
                 coll = self.native[self._projcoll]
                 for rec in coll.find(filter):
-                    yield base.ProjectRecord(self._projcoll, rec)
+                    yield base.ProjectRecord(self._projcoll, rec, self)
 
             except Exception as ex:
                 raise base.DBIOException(
