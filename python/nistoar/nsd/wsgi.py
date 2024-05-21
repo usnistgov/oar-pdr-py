@@ -6,7 +6,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, Callable
 
 from .service import MongoPeopleService, PeopleService, NSDClientError
-from nistoar.web.rest import ServiceApp, Handler, WSGIServiceApp
+from nistoar.web.rest import ServiceApp, Handler, WSGIServiceApp, authenticate_via_jwt
 from nistoar.base.config import ConfigurationException
 from . import system
 
@@ -110,6 +110,22 @@ class PeopleApp(WSGIServiceApp):
         svcapp = self.SvcApp(config, log)
         super(PeopleApp, self).__init__(svcapp, log, base_ep, config)
                                     
+        if not self.cfg.get('authentication'):  # formerly jwt_auth
+            log.warning("JWT Authentication is not configured")
+        else:
+            if not isinstance(self.cfg['authentication'], Mapping):
+                raise ConfigurationException("Config param, authentication, not a dictionary: "+
+                                             str(self.cfg['authentication']))
+            if not self.cfg['authentication'].get('require_expiration', True):
+                log.warning("JWT Authentication: token expiration is not required")
+
+    def authenticate_user(self, env: Mapping, agents: List[str]=None, client_id: str=None) -> Agent:
+        """
+        determine the authenticated user
+        """
+        authcfg = self.cfg.get('authentication', {})
+        return authenticate_via_jwt("midas", env, authcfg, self.log, agents, client_id)
+
     class SvcApp(ServiceApp):
         def __init__(self, config, log):
             ServiceApp.__init__(self, "nsd", log, config)
