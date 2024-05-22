@@ -257,7 +257,7 @@ class TestInMemoryDBClient(test.TestCase):
         rec2 = self.cli._get_from_coll(base.GROUPS_COLL, "p:bob")
         self.assertEqual(rec2, {"id": "p:bob", "members": ["p:bob", "alice"]})
 
-    def test_select_constraint_records(self):
+    def test_adv_select_records(self):
         # inject some data into the database
         id = "pdr0:0002"
         rec = base.ProjectRecord(
@@ -313,17 +313,17 @@ class TestInMemoryDBClient(test.TestCase):
         constraint_wrong = {'$a,nkd': [
             {'$okn,r': [{'name': 'test 2'}, {'name': 'test3'}]}]}
         with self.assertRaises(SyntaxError) as context:
-            recs = list(self.cli.select_constraint_records(constraint_wrong,base.ACLs.READ))
+            recs = list(self.cli.adv_select_records(constraint_wrong,base.ACLs.READ))
         self.assertEqual(str(context.exception), "Wrong query format")
-        recs = list(self.cli.select_constraint_records(constraint_or))
+        recs = list(self.cli.adv_select_records(constraint_or))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")
 
-        recs = list(self.cli.select_constraint_records(constraint_and))
+        recs = list(self.cli.adv_select_records(constraint_and))
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0].id, "pdr0:0003")
-        recs = list(self.cli.select_constraint_records(constraint_andor,base.ACLs.READ))
+        recs = list(self.cli.adv_select_records(constraint_andor,base.ACLs.READ))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")

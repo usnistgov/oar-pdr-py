@@ -182,7 +182,7 @@ class MongoDBClient(base.DBClient):
             raise base.DBIOException("Failed while deleting record with id=%s: %s" % (id, str(ex)))
          
 
-    def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+    def select_records(self, perm: base.Permissions=base.ACLs.OWN, **cnsts) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
             perm = [perm]
         if isinstance(perm, (list, tuple)):
@@ -199,14 +199,15 @@ class MongoDBClient(base.DBClient):
             coll = self.native[self._projcoll]
 
             for rec in coll.find(constraints, {'_id': False}):
-                yield base.ProjectRecord(self._projcoll, rec)
+                yield base.ProjectRecord(self._projcoll, rec, self)
 
         except Exception as ex:
             raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
         
     
-    def select_constraint_records(self,filter:dict, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
-        if(base.DBClient.check_query_structure(filter) == True):
+    def adv_select_records(self, filter: dict,
+                           perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+        if base.DBClient.check_query_structure(filter):
             if isinstance(perm, str):
                 perm = [perm]
             if isinstance(perm, (list, tuple)):
@@ -226,7 +227,7 @@ class MongoDBClient(base.DBClient):
                 
                 coll = self.native[self._projcoll]
                 for rec in coll.find(filter):
-                    yield base.ProjectRecord(self._projcoll, rec)
+                    yield base.ProjectRecord(self._projcoll, rec, self)
 
             except Exception as ex:
                 raise base.DBIOException(
