@@ -316,7 +316,6 @@ class TestMongoDBClient(test.TestCase):
     def test_adv_select_records(self):
 
         # inject some data into the database
-
         id = "pdr0:0002"
         rec = base.ProjectRecord(
             base.DMP_PROJECTS, {"id": id, "name": "test 1", "deactivated": "null", "status": {
@@ -377,6 +376,7 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(recs[1].id, "pdr0:0003")
 
         recs = list(self.cli.adv_select_records(constraint_and))
+        print(constraint_and)
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0].id, "pdr0:0003")
         recs = list(self.cli.adv_select_records(constraint_andor, base.ACLs.READ))
