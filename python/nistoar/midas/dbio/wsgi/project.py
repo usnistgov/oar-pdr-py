@@ -42,9 +42,7 @@ from collections.abc import Mapping, Sequence, Callable
 from typing import Iterator
 from urllib.parse import parse_qs
 
-from nistoar.pdr.publish.service.wsgi import SubApp, Handler  # same infrastructure as publishing service
-from nistoar.pdr.publish.prov import PubAgent
-from nistoar.pdr.utils.webrecord import WebRecorder
+from nistoar.web.rest import ServiceApp, Handler, Agent
 from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
@@ -55,28 +53,29 @@ class ProjectRecordHandler(DBIOHandler):
     """
     base handler class for all requests on project records.  
     """
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, path: str="", config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, path: str="", config: dict=None, log: Logger=None):
         """
         Initialize this handler with the request particulars.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str      path:  the relative path to be handled by this handler; typically, some starting 
                                portion of the original request path has been stripped away to handle 
                                produce this value.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
 
-        super(ProjectRecordHandler, self).__init__(subapp, service.dbcli, wsgienv, start_resp, who,
+        super(ProjectRecordHandler, self).__init__(svcapp, service.dbcli, wsgienv, start_resp, who,
                                                    path, config, log)
         self.svc = service
 
@@ -85,27 +84,28 @@ class ProjectHandler(ProjectRecordHandler):
     handle access to the whole project record
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, id: str, config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, id: str, config: dict=None, log: Logger=None):
         """
         Initialize this handler with the request particulars.  This constructor is called 
-        by the webs service SubApp.  
+        by the webs service ServiceApp.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
 
-        super(ProjectHandler, self).__init__(service, subapp, wsgienv, start_resp, who, "", config, log)
+        super(ProjectHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, "", config, log)
 
         self._id = id
         if not id:
@@ -147,28 +147,29 @@ class ProjectInfoHandler(ProjectRecordHandler):
     handle retrieval of simple parts of a project record.  Only GET requests are allowed via this handler.
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, id: str, attribute: str, config: dict={}, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, id: str, attribute: str, config: dict={}, log: Logger=None):
         """
         Initialize this handler with the request particulars.  This constructor is called 
-        by the webs service SubApp.  
+        by the webs service ServiceApp.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
         :param str attribute:  a recognized project model attribute
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
 
-        super(ProjectInfoHandler, self).__init__(service, subapp, wsgienv, start_resp, who, attribute,
+        super(ProjectInfoHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, attribute,
                                                  config, log)
         self._id = id
         if not id:
@@ -207,27 +208,27 @@ class ProjectNameHandler(ProjectRecordHandler):
     handle retrieval/update of a project records mnumonic name
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable,
-                 who: PubAgent, id: str, config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
+                 who: Agent, id: str, config: dict=None, log: Logger=None):
         """
         Initialize this handler with the request particulars.  This constructor is called 
-        by the webs service SubApp.  
+        by the webs service ServiceApp.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
-        
-        super(ProjectNameHandler, self).__init__(service, subapp, wsgienv, start_resp, who, "", config, log)
+        super(ProjectNameHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, "", config, log)
                                                    
         self._id = id
         if not id:
@@ -272,30 +273,31 @@ class ProjectDataHandler(ProjectRecordHandler):
     handle retrieval/update of a project record's data content
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, id: str, datapath: str, config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, id: str, datapath: str, config: dict=None, log: Logger=None):
         """
         Initialize this data request handler with the request particulars.  This constructor is called 
-        by the webs service SubApp in charge of the project record interface.  
+        by the webs service ServiceApp in charge of the project record interface.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
         :param str  datapath:  the subpath pointing to a particular piece of the project record's data;
                                this will be a '/'-delimited identifier pointing to an object property 
                                within the data object.  This will be an empty string if the full data 
                                object is requested.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
-        super(ProjectDataHandler, self).__init__(service, subapp, wsgienv, start_resp, who, datapath,
+        super(ProjectDataHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, datapath,
                                                  config, log)
         self._id = id
         if not id:
@@ -401,23 +403,24 @@ class ProjectSelectionHandler(ProjectRecordHandler):
     handle collection-level access searching for project records and creating new ones
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable,
-                 who: PubAgent, config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
+                 who: Agent, config: dict=None, log: Logger=None):
         """
         Initialize this record request handler with the request particulars.  This constructor is called 
-        by the webs service SubApp in charge of the project record interface.  
+        by the webs service ServiceApp in charge of the project record interface.  
 
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
-        super(ProjectSelectionHandler, self).__init__(service, subapp, wsgienv, start_resp, who, "",
+        super(ProjectSelectionHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, "",
                                                       config, log)
 
     def do_OPTIONS(self, path):
@@ -502,18 +505,19 @@ class ProjectACLsHandler(ProjectRecordHandler):
     handle retrieval/update of a project record's data content
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, id: str, datapath: str="", config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, id: str, datapath: str="", config: dict=None, log: Logger=None):
         """
         Initialize this data request handler with the request particulars.  This constructor is called 
-        by the webs service SubApp in charge of the project record interface.  
+        by the webs service ServiceApp in charge of the project record interface.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
         :param str  permpath:  the subpath pointing to a particular permission ACL; it can either be
                                simply a permission name, PERM (e.g. "read"), or a p
@@ -521,12 +525,12 @@ class ProjectACLsHandler(ProjectRecordHandler):
                                within the data object.  This will be an empty string if the full data 
                                object is requested.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
-        super(ProjectACLsHandler, self).__init__(service, subapp, wsgienv, start_resp, who, datapath,
+        super(ProjectACLsHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, datapath,
                                                  config, log)
         self._id = id
         if not id:
@@ -735,18 +739,19 @@ class ProjectStatusHandler(ProjectRecordHandler):
     """
     _requestable_actions = [ ProjectService.STATUS_ACTION_FINALIZE, ProjectService.STATUS_ACTION_SUBMIT ] 
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, id: str, datapath: str="", config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, id: str, datapath: str="", config: dict=None, log: Logger=None):
         """
         Initialize this data request handler with the request particulars.  This constructor is called 
-        by the webs service SubApp in charge of the project record interface.  
+        by the webs service ServiceApp in charge of the project record interface.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
         :param str  permpath:  the subpath pointing to a particular permission ACL; it can either be
                                simply a permission name, PERM (e.g. "read"), or a p
@@ -754,12 +759,12 @@ class ProjectStatusHandler(ProjectRecordHandler):
                                within the data object.  This will be an empty string if the full data 
                                object is requested.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
-        super(ProjectStatusHandler, self).__init__(service, subapp, wsgienv, start_resp, who, datapath,
+        super(ProjectStatusHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, datapath,
                                                    config, log)
         self._id = id
         if not id:
@@ -857,7 +862,7 @@ class ProjectStatusHandler(ProjectRecordHandler):
 
         
         
-class MIDASProjectApp(SubApp):
+class MIDASProjectApp(ServiceApp):
     """
     a base web app for an interface handling project record.
     """
@@ -871,18 +876,18 @@ class MIDASProjectApp(SubApp):
     # _history_handler = ProjectHistoryHandler
 
     def __init__(self, service_factory: ProjectServiceFactory, log: Logger, config: dict={}):
-        super(MIDASProjectApp, self).__init__(service_factory._prjtype, log, config)
+        super(MIDASProjectApp, self).__init__(service_factory.project_type, log, config)
         self.svcfact = service_factory
 
-    def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:
+    def create_handler(self, env: dict, start_resp: Callable, path: str, who: Agent) -> Handler:
         """
         return a handler instance to handle a particular request to a path
         :param Mapping env:  the WSGI environment containing the request
         :param Callable start_resp:  the start_resp function to use initiate the response
-        :param str path:     the path to the resource being requested.  This is usually 
-                             relative to a parent path that this SubApp is configured to 
+        :param str    path:  the path to the resource being requested.  This is usually 
+                             relative to a parent path that this ServiceApp is configured to 
                              handle.  
-        :param PubAgent who  the authenticated user agent making the request
+        :param Agent   who:  the authenticated user agent making the request
         """
 
         # create a service on attached to the user
@@ -940,7 +945,7 @@ class MIDASProjectApp(SubApp):
     def factory_for(cls, project_coll):
         """
         return a factory function that instantiates this class connected to the given DBIO collection.  
-        This is intended for plugging this SubApp into the main WSGI app as is.  
+        This is intended for plugging this ServiceApp into the main WSGI app as is.  
         :param str project_coll:  the name of the DBIO project collection to use for creating and 
                                   updating project records.
         """

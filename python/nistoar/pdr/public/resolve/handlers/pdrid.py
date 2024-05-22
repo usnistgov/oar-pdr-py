@@ -3,8 +3,9 @@ Handlers for resolving PDR resource identifiers
 """
 import sys, re, json
 
-from .base import (Handler, Format, FormatSupport, XHTMLSupport, TextSupport,
-                   Unacceptable, UnsupportedFormat, Ready)
+from nistoar.web.rest import Handler, Ready
+from nistoar.web.formats import (Format, FormatSupport, XHTMLSupport, TextSupport,
+                                 Unacceptable, UnsupportedFormat)
 from nistoar.pdr import constants as const
 from nistoar.pdr.exceptions import ConfigurationException, IDNotFound, StateException
 from nistoar.pdr.describe import MetadataClient
@@ -26,11 +27,11 @@ class PDRIDHandler(Handler):
     ver_path_delim_re = re.compile(VER_DELIM + r'(/+|$)')
     filepath_delim_re = re.compile(FILE_DELIM+ r'(/+|$)')
 
-    def __init__(self, path, wsgienv, start_resp, config={}, log=None):
-        super(PDRIDHandler, self).__init__(path, wsgienv, start_resp, config)
+    def __init__(self, path, wsgienv, start_resp, config={}, log=None, app=None):
+        super(PDRIDHandler, self).__init__(path, wsgienv, start_resp, config=config, log=log, app=app)
         self._naan = str(self.cfg.get('naan', ark_naan))
-        self.log = log
         self._mdcachedir = self.cfg.get("metadata_cache_dir")
+        self._set_format_qp("format")
 
     def do_GET(self, path, ashead=False, format=None):
         """
@@ -45,7 +46,7 @@ class PDRIDHandler(Handler):
         """
         path = path.lstrip('/')
         if not path:
-            return Ready('', self._env, self._start).handle()
+            return Ready('', self._env, self._start, app=self.app).handle()
 
         idm = self.ark_id_re.match(path)     # match allowed ARK identifiers (ark:/NNNNN/dsid/...)
         if idm:
@@ -111,29 +112,19 @@ class PDRIDHandler(Handler):
         TextSupport.add_support(supp_fmts)
         supp_fmts.support(Format("nerdm", "application/json"), ["text/json", "application/json"], True)
         # supp_fmts.support(Format("datacite", "application/json"))
+        self._set_default_format_support(supp_fmts)
 
-        reqformats = []
-        if isinstance(format, str):
-            reqformats = [ format ]
-        elif isinstance(format, list):
-            # allow format param to be a list of desired formats
-            reqformats = [(isinstance(f, Format) and f.name) or f for f in format
-                          if isinstance(f, str) or isinstance(f, Format)]
-        else:
-            reqformats = self.ordered_formats()
-
-        if not isinstance(format, Format):
-            try:
-                format = supp_fmts.select_format(reqformats, self.ordered_accepts())
-            except Unacceptable as ex:
-                return self.send_error(406, "Not Acceptable", str(ex))
-            except UnsupportedFormat as ex:
-                return self.send_error(400, "Unsupported Format", str(ex))
-
-        if format is None:
-            # set the default return format
-            format = supp_fmts.default_format()
-
+        try:
+            format = self.select_format(format)
+            if not format:
+                if self.log:
+                    self.log.failure("Failed to determine output format")
+                return send_error(500, "Server Error")
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+            
         if format.name == supp_fmts.FMT_HTML:
             baseurl = self.cfg.get("locations", {}).get("landingPageService")
             if not baseurl:
@@ -204,31 +195,21 @@ class PDRIDHandler(Handler):
         send a view summarizing the release history for a dataset
         """
         supp_fmts = FormatSupport()
-        supp_fmts.support(Format("nerdm", "application/json"), ["text/json", "application/json"])
+        supp_fmts.support(Format("nerdm", "application/json"), ["text/json", "application/json"], True)
         # TextSupport.add_support(supp_fmts)
         # XHTMLSupport.add_support(supp_fmts)
+        self._set_default_format_support(supp_fmts)
 
-        reqformats = []
-        if isinstance(format, str):
-            reqformats = [ format ]
-        elif isinstance(format, list):
-            # allow format param to be a list of desired formats
-            reqformats = [(isinstance(f, Format) and f.name) or f for f in format
-                          if isinstance(f, str) or isinstance(f, Format)]
-        else:
-            reqformats = self.ordered_formats()
-
-        if not isinstance(format, Format):
-            try:
-                format = supp_fmts.select_format(reqformats, self.ordered_accepts())
-            except Unacceptable as ex:
-                return self.send_error(406, "Not Acceptable", str(ex))
-            except UnsupportedFormat as ex:
-                return self.send_error(400, "Unsupported Format", str(ex))
-                
-        if format is None:
-            # set the default return format
-            format = supp_fmts.default_format()
+        try:
+            format = self.select_format(format)
+            if not format:
+                if self.log:
+                    self.log.failure("Failed to determine output format")
+                return send_error(500, "Server Error")
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
 
         if format.name == "nerdm":   # FUTURE: or format.name == "text":
             baseurl = self.cfg.get("APIs", {}).get("mdSearch")
@@ -277,15 +258,7 @@ class PDRIDHandler(Handler):
                 print(msg, file=sys.stderr)
             return self.send_error(503, "Metadata Service Temporarily Unavailable")
 
-        reqformats = []
-        if isinstance(format, str):
-            reqformats = [ format ]
-        elif isinstance(format, list):
-            # allow format param to be a list of desired formats
-            reqformats = [(isinstance(f, Format) and f.name) or f for f in format
-                          if isinstance(f, str) or isinstance(f, Format)]
-        else:
-            reqformats = self.ordered_formats()
+        reqformats = self.get_requested_formats()
 
         if path.startswith(AGG_DELIM):
             # this is an included resource; does the client want nerdm format?
@@ -312,7 +285,7 @@ class PDRIDHandler(Handler):
                 self.add_header("Location", cmpmd.get('location'))
                 self.set_response(302, "Found Included Resource")
                 self.end_headers()
-                return[]
+                return []
 
         nrdfmt = Format("nerdm", "application/json")
         supp_fmts = TextSupport()
@@ -323,24 +296,18 @@ class PDRIDHandler(Handler):
         if redirurl or isinstance(cmpmd.get('mediaType'), str):
             native = Format("native", cmpmd['mediaType'])
             supp_fmts.support(native, [cmpmd['mediaType']], True)
+        self._set_default_format_support(supp_fmts)
 
-        reqformats = []
-        if isinstance(format, str):
-            reqformats = [ format ]
-        elif isinstance(format, list):
-            # allow format param to be a list of desired formats
-            reqformats = [(isinstance(f, Format) and f.name) or f for f in format
-                          if isinstance(f, str) or isinstance(f, Format)]
-        else:
-            reqformats = self.ordered_formats()
-
-        if not isinstance(format, Format):
-            try:
-                format = supp_fmts.select_format(reqformats, self.ordered_accepts())
-            except Unacceptable as ex:
-                return self.send_error(406, "Not Acceptable", str(ex))
-            except UnsupportedFormat as ex:
-                return self.send_error(400, "Unsupported Format", str(ex))
+        try:
+            format = self.select_format(format)
+            if not format:
+                if self.log:
+                    self.log.failure("Failed to determine output format")
+                return send_error(500, "Server Error")
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
 
         if not format:
             format = (redirurl and native) or nrdfmt

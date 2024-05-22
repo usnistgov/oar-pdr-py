@@ -4,8 +4,7 @@ import unittest as test
 from nistoar.midas.dbio import inmem, base, AlreadyExists, InvalidUpdate, ObjectNotFound, PartNotAccessible
 from nistoar.midas.dbio import project as prj
 from nistoar.midas.dap.service import mds3
-from nistoar.pdr.publish import prov
-from nistoar.pdr.utils import read_nerd
+from nistoar.pdr.utils import read_nerd, prov
 from nistoar.nerdm.constants import CORE_SCHEMA_URI
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_mds3.")
@@ -29,7 +28,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 # test records
 testdir = pathlib.Path(__file__).parents[0]
@@ -72,7 +71,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertTrue(self.svc.dbcli)
         self.assertEqual(self.svc.cfg, self.cfg)
         self.assertEqual(self.svc.who.actor, "nstr1")
-        self.assertEqual(self.svc.who.group, "midas")
+        self.assertEqual(self.svc.who.agent_class, "midas")
         self.assertTrue(self.svc.log)
         self.assertTrue(self.svc._store)
         self.assertTrue(self.svc._valid8r)
@@ -120,7 +119,8 @@ class TestMDS3DAPService(test.TestCase):
                                        "softwarelink": "http://..." })  # misspelled key
         self.assertEqual(prec.name, "gurn")
         self.assertEqual(prec.id, "mdsy:0003")
-        self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data"})
+        self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data",
+                                     "agent_vehicle": "midas" })
         for key in "_schema @type author_count file_count reference_count".split():
             self.assertIn(key, prec.data)
         self.assertNotIn('color', prec.data)
@@ -136,7 +136,8 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.name, "goob")
         self.assertEqual(prec.id, "mdsy:0004")
         self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
-                                     "softwareLink": "https://github.com/usnistgov/goob"})
+                                     "softwareLink": "https://github.com/usnistgov/goob",
+                                     "agent_vehicle": "midas" })
         self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0004")
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0004")
         self.assertEqual(prec.data['nonfile_count'], 1)
@@ -155,7 +156,8 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.name, "cranston")
         self.assertEqual(prec.id, "mdsy:0005")
         self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
-                                     "softwareLink": "https://github.com/usnistgov/goob"})
+                                     "softwareLink": "https://github.com/usnistgov/goob",
+                                     "agent_vehicle": "midas" })
         self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0005")
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0005")
         self.assertEqual(prec.data['nonfile_count'], 1)

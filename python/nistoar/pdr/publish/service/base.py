@@ -4,7 +4,7 @@ Base classes for implementing the publishing process according to a particular c
 import re, logging
 from abc import ABCMeta, abstractmethod, abstractproperty
 from collections import Mapping
-from ..prov import PubAgent
+from ...utils.prov import Agent
 from .. import PublishSystem, PublishingStateException, ConfigurationException
 from ....nerdm.constants import core_schema_base as NERDM_SCHEMA_BASE, CORE_SCHEMA_URI
 from ....nerdm import validate
@@ -182,7 +182,7 @@ class SimpleNerdmPublishingService(PublishingService):
     
 
     @abstractmethod
-    def accept_resource_metadata(self, nerdm: Mapping, who: PubAgent=None, sipid: str=None, create: bool=None):
+    def accept_resource_metadata(self, nerdm: Mapping, who: Agent=None, sipid: str=None, create: bool=None):
         """
         create or update an SIP for submission.  By default, a new SIP will be created if the input 
         record is does not have an "@id" property, and an identifier is assigned to it; otherwise,
@@ -220,7 +220,7 @@ class SimpleNerdmPublishingService(PublishingService):
         raise NotImplementedError()
 
     @abstractmethod
-    def upsert_component_metadata(self, sipid: str, cmpmd: Mapping, who: PubAgent=None):
+    def upsert_component_metadata(self, sipid: str, cmpmd: Mapping, who: Agent=None):
         """
         add or update a component of the NERDm resource with the provided metadata.  If the record does not 
         have an "@id" property, a new component will be create and a component identifier will be assigend
