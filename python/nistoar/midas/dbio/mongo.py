@@ -207,6 +207,7 @@ class MongoDBClient(base.DBClient):
     
     def adv_select_records(self, filter: dict,
                            perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+        print(filter)
         if base.DBClient.check_query_structure(filter):
             if isinstance(perm, str):
                 perm = [perm]
