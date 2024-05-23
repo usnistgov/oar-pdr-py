@@ -227,7 +227,7 @@ class MongoDBClient(base.DBClient):
             try:
                 
                 coll = self.native[self._projcoll]
-                for rec in coll.find(filter):
+                for rec in coll.find(filter, {'_id': False}):
                     yield base.ProjectRecord(self._projcoll, rec, self)
 
             except Exception as ex:
