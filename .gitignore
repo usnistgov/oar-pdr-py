@@ -53,6 +53,7 @@ python/nistoar/midas/version.py
 python/nistoar/pdr/version.py
 python/pynoid-master/
 python/pynoid.zip
+python/multibag-py-0.3
 # Mac OSX
 .DS_Store
 
