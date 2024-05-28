@@ -207,6 +207,7 @@ class MongoDBClient(base.DBClient):
     
     def adv_select_records(self, filter: dict,
                            perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+        
         if base.DBClient.check_query_structure(filter):
             if isinstance(perm, str):
                 perm = [perm]
@@ -222,11 +223,11 @@ class MongoDBClient(base.DBClient):
                 constraints = {"acls."+perm.pop(): {"$in": idents}}
                 
             filter["$and"].append(constraints)
-                
+
             try:
                 
                 coll = self.native[self._projcoll]
-                for rec in coll.find(filter):
+                for rec in coll.find(filter, {'_id': False}):
                     yield base.ProjectRecord(self._projcoll, rec, self)
 
             except Exception as ex:
