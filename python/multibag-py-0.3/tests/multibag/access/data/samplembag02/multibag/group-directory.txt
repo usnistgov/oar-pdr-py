@@ -1,0 +1,5 @@
+data/trial1.json  samplembag02
+data/trial2.json  samplembag02
+data/trial3/trial3a.json samplembag02
+metadata/pod.json   samplembag02
+metadata/nerdm.json samplembag2

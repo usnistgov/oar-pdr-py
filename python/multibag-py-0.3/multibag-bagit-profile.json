@@ -1,0 +1,55 @@
+{
+    "BagIt-Profile-Info": { 
+        "BagIt-Profile-Identifier": "https://raw.githubusercontent.com/usnistgov/multibag-py/master/multibag-bagit-profile.json",
+        "Source-Organization": "National Institute of Standards and Technology",
+        "Contact-Name": "Raymond Plante",
+        "Contact-Email": "raymond.plante@nist.gov", 
+        "External-Description": "A BagIt profile describing a bag that is part of a bag aggregation that can be logically combined into a larger single bag.  This profile should be considered a draft version.",
+        "Version":"0.2"
+    },
+    "Bag-Info": {
+        "Multibag-Version": {
+            "description": "The version of the Multibag profile specification that the bag conforms to. The version described by this document is 0.2",
+            "required": true,
+            "repeatable": false,
+            "values": [ "0.2", "0.3", "0.4" ]
+        },
+        "Multibag-Reference": {
+            "description": "A URL pointing to Multibag specification referred to in the Mulibag-Version element",
+            "required": false,
+            "repeatable": false
+        },
+        "Multibag-Tag-Directory": {
+            "description": "the path relative to the bag's base directory to the multibag-specific tag directory",
+            "required": false,
+            "repeatable": false,
+            "default": "multibag"
+        },
+        "Multibag-Head-Version": {
+            "description": "the version of the bag aggregation that the current bag is the head bag for; the presence of this tag identifies this bag as a head bag",
+            "required": false,
+            "repeatable": false
+        },
+        "Multibag-Head-Deprecates": {
+            "description": "one or two tokens, separated by a comma, where the first field is the version of another Multibag aggregation that the current aggregation deprecates, and the second field is the name of the head bag for the deprecated aggregation.",
+            "required": false,
+            "repeatable": true
+        },
+        "Bag-Group-Identifier": {
+            "required": false,
+            "repeatable": false
+        },
+        "Internal-Sender-Identifier": {
+            "required": false,
+            "repeatable": false
+        },
+        "Internal-Sender-Description": {
+            "required": false,
+            "repeatable": false
+        }
+    },
+    "Allow-Fetch.txt": true,
+    "Accept-Serialization": [ "application/zip" ],
+    "Accept-BagIt-Version": [ "0.97" ],
+    "Tag-Files-Required": [  ]
+}

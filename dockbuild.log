@@ -1,0 +1,327 @@
+Exec: dockbuild.sh -d midasserver
+   started at Thu May 16 13:59:57 EDT 2024
++ docker build --build-arg=devuid=501 -t oar-pdr-py/pyenv pyenv
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.81kB done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/oar-metadata/ejsonschema:latest
+#3 DONE 0.0s
+
+#4 [1/8] FROM docker.io/oar-metadata/ejsonschema
+#4 CACHED
+
+#5 [2/8] RUN apt-get update && apt-get install -y python-yaml curl wget less sudo zip                                          p7zip-full ca-certificates git
+#5 1.083 Hit:1 http://ports.ubuntu.com/ubuntu-ports focal InRelease
+#5 1.126 Ign:2 http://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 InRelease
+#5 1.158 Get:3 http://ports.ubuntu.com/ubuntu-ports focal-updates InRelease [114 kB]
+#5 1.194 Hit:4 http://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 Release
+#5 1.675 Hit:6 http://ports.ubuntu.com/ubuntu-ports focal-backports InRelease
+#5 1.795 Get:7 http://ports.ubuntu.com/ubuntu-ports focal-security InRelease [114 kB]
+#5 2.281 Get:8 http://ports.ubuntu.com/ubuntu-ports focal-updates/universe arm64 Packages [1,400 kB]
+#5 6.285 Fetched 1,627 kB in 6s (268 kB/s)
+#5 6.285 Reading package lists...
+#5 6.945 Reading package lists...
+#5 7.490 Building dependency tree...
+#5 7.592 Reading state information...
+#5 7.703 zip is already the newest version (3.0-11build1).
+#5 7.703 ca-certificates is already the newest version (20230311ubuntu0.20.04.1).
+#5 7.703 curl is already the newest version (7.68.0-1ubuntu2.22).
+#5 7.703 git is already the newest version (1:2.25.1-1ubuntu3.11).
+#5 7.703 less is already the newest version (551-1ubuntu0.3).
+#5 7.703 less set to manually installed.
+#5 7.703 The following additional packages will be installed:
+#5 7.703   libpython2-stdlib libpython2.7-minimal libpython2.7-stdlib p7zip python2
+#5 7.703   python2-minimal python2.7 python2.7-minimal
+#5 7.704 Suggested packages:
+#5 7.704   p7zip-rar python2-doc python-tk python2.7-doc binfmt-support
+#5 7.774 The following NEW packages will be installed:
+#5 7.774   libpython2-stdlib libpython2.7-minimal libpython2.7-stdlib p7zip p7zip-full
+#5 7.774   python-yaml python2 python2-minimal python2.7 python2.7-minimal sudo wget
+#5 8.984 0 upgraded, 12 newly installed, 0 to remove and 0 not upgraded.
+#5 8.984 Need to get 6,065 kB of archives.
+#5 8.984 After this operation, 25.5 MB of additional disk space will be used.
+#5 8.984 Get:1 http://ports.ubuntu.com/ubuntu-ports focal-updates/universe arm64 libpython2.7-minimal arm64 2.7.18-1~20.04.4 [335 kB]
+#5 9.935 Get:2 http://ports.ubuntu.com/ubuntu-ports focal-updates/universe arm64 python2.7-minimal arm64 2.7.18-1~20.04.4 [1,261 kB]
+#5 13.01 Get:3 http://ports.ubuntu.com/ubuntu-ports focal/universe arm64 python2-minimal arm64 2.7.17-2ubuntu4 [27.5 kB]
+#5 13.04 Get:4 http://ports.ubuntu.com/ubuntu-ports focal-updates/universe arm64 libpython2.7-stdlib arm64 2.7.18-1~20.04.4 [1,868 kB]
+#5 16.73 Get:5 http://ports.ubuntu.com/ubuntu-ports focal-updates/universe arm64 python2.7 arm64 2.7.18-1~20.04.4 [248 kB]
+#5 17.62 Get:6 http://ports.ubuntu.com/ubuntu-ports focal/universe arm64 libpython2-stdlib arm64 2.7.17-2ubuntu4 [7,072 B]
+#5 17.67 Get:7 http://ports.ubuntu.com/ubuntu-ports focal/universe arm64 python2 arm64 2.7.17-2ubuntu4 [26.5 kB]
+#5 18.33 Get:8 http://ports.ubuntu.com/ubuntu-ports focal-updates/main arm64 sudo arm64 1.8.31-1ubuntu1.5 [474 kB]
+#5 19.01 Get:9 http://ports.ubuntu.com/ubuntu-ports focal-updates/main arm64 wget arm64 1.20.3-1ubuntu2 [331 kB]
+#5 20.53 Get:10 http://ports.ubuntu.com/ubuntu-ports focal/universe arm64 p7zip arm64 16.02+dfsg-7build1 [317 kB]
+#5 21.29 Get:11 http://ports.ubuntu.com/ubuntu-ports focal/universe arm64 p7zip-full arm64 16.02+dfsg-7build1 [1,058 kB]
+#5 24.22 Get:12 http://ports.ubuntu.com/ubuntu-ports focal-updates/universe arm64 python-yaml arm64 5.3.1-1ubuntu0.1 [112 kB]
+#5 24.81 debconf: delaying package configuration, since apt-utils is not installed
+#5 24.84 Fetched 6,065 kB in 17s (360 kB/s)
+#5 24.86 Selecting previously unselected package libpython2.7-minimal:arm64.
+#5 24.86 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 20289 files and directories currently installed.)
+#5 24.92 Preparing to unpack .../0-libpython2.7-minimal_2.7.18-1~20.04.4_arm64.deb ...
+#5 24.92 Unpacking libpython2.7-minimal:arm64 (2.7.18-1~20.04.4) ...
+#5 24.98 Selecting previously unselected package python2.7-minimal.
+#5 24.98 Preparing to unpack .../1-python2.7-minimal_2.7.18-1~20.04.4_arm64.deb ...
+#5 24.98 Unpacking python2.7-minimal (2.7.18-1~20.04.4) ...
+#5 25.09 Selecting previously unselected package python2-minimal.
+#5 25.10 Preparing to unpack .../2-python2-minimal_2.7.17-2ubuntu4_arm64.deb ...
+#5 25.10 Unpacking python2-minimal (2.7.17-2ubuntu4) ...
+#5 25.11 Selecting previously unselected package libpython2.7-stdlib:arm64.
+#5 25.12 Preparing to unpack .../3-libpython2.7-stdlib_2.7.18-1~20.04.4_arm64.deb ...
+#5 25.12 Unpacking libpython2.7-stdlib:arm64 (2.7.18-1~20.04.4) ...
+#5 25.28 Selecting previously unselected package python2.7.
+#5 25.28 Preparing to unpack .../4-python2.7_2.7.18-1~20.04.4_arm64.deb ...
+#5 25.28 Unpacking python2.7 (2.7.18-1~20.04.4) ...
+#5 25.31 Selecting previously unselected package libpython2-stdlib:arm64.
+#5 25.31 Preparing to unpack .../5-libpython2-stdlib_2.7.17-2ubuntu4_arm64.deb ...
+#5 25.31 Unpacking libpython2-stdlib:arm64 (2.7.17-2ubuntu4) ...
+#5 25.33 Setting up libpython2.7-minimal:arm64 (2.7.18-1~20.04.4) ...
+#5 25.34 Setting up python2.7-minimal (2.7.18-1~20.04.4) ...
+#5 25.52 Linking and byte-compiling packages for runtime python2.7...
+#5 25.53 Setting up python2-minimal (2.7.17-2ubuntu4) ...
+#5 25.57 Selecting previously unselected package python2.
+#5 25.57 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 21038 files and directories currently installed.)
+#5 25.58 Preparing to unpack .../0-python2_2.7.17-2ubuntu4_arm64.deb ...
+#5 25.58 Unpacking python2 (2.7.17-2ubuntu4) ...
+#5 25.61 Selecting previously unselected package sudo.
+#5 25.61 Preparing to unpack .../1-sudo_1.8.31-1ubuntu1.5_arm64.deb ...
+#5 25.62 Unpacking sudo (1.8.31-1ubuntu1.5) ...
+#5 25.67 Selecting previously unselected package wget.
+#5 25.67 Preparing to unpack .../2-wget_1.20.3-1ubuntu2_arm64.deb ...
+#5 25.67 Unpacking wget (1.20.3-1ubuntu2) ...
+#5 25.71 Selecting previously unselected package p7zip.
+#5 25.71 Preparing to unpack .../3-p7zip_16.02+dfsg-7build1_arm64.deb ...
+#5 25.71 Unpacking p7zip (16.02+dfsg-7build1) ...
+#5 25.76 Selecting previously unselected package p7zip-full.
+#5 25.76 Preparing to unpack .../4-p7zip-full_16.02+dfsg-7build1_arm64.deb ...
+#5 25.77 Unpacking p7zip-full (16.02+dfsg-7build1) ...
+#5 25.87 Selecting previously unselected package python-yaml.
+#5 25.87 Preparing to unpack .../5-python-yaml_5.3.1-1ubuntu0.1_arm64.deb ...
+#5 25.87 Unpacking python-yaml (5.3.1-1ubuntu0.1) ...
+#5 25.90 Setting up wget (1.20.3-1ubuntu2) ...
+#5 25.91 Setting up libpython2.7-stdlib:arm64 (2.7.18-1~20.04.4) ...
+#5 25.91 Setting up sudo (1.8.31-1ubuntu1.5) ...
+#5 25.93 Setting up p7zip (16.02+dfsg-7build1) ...
+#5 25.93 Setting up python2.7 (2.7.18-1~20.04.4) ...
+#5 26.39 Setting up libpython2-stdlib:arm64 (2.7.17-2ubuntu4) ...
+#5 26.40 Setting up p7zip-full (16.02+dfsg-7build1) ...
+#5 26.41 Setting up python2 (2.7.17-2ubuntu4) ...
+#5 26.41 Setting up python-yaml (5.3.1-1ubuntu0.1) ...
+#5 26.81 Processing triggers for mime-support (3.64ubuntu1) ...
+#5 DONE 26.9s
+
+#6 [3/8] RUN pip install funcsigs 'bagit>=1.6.3,<2.0' 'fs>=2.0.21' jsonpatch mako pyjwt                 jsonpath_ng lxml webdavclient3
+#6 0.966 WARNING: The directory '/data/db/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you may want sudo's -H flag.
+#6 1.234 Collecting funcsigs
+#6 1.433   Downloading funcsigs-1.0.2-py2.py3-none-any.whl (17 kB)
+#6 1.531 Collecting bagit<2.0,>=1.6.3
+#6 1.584   Downloading bagit-1.8.1-py2.py3-none-any.whl (35 kB)
+#6 1.819 Collecting fs>=2.0.21
+#6 1.906   Downloading fs-2.4.16-py2.py3-none-any.whl (135 kB)
+#6 2.584 Collecting jsonpatch
+#6 2.622   Downloading jsonpatch-1.33-py2.py3-none-any.whl (12 kB)
+#6 3.042 Collecting mako
+#6 3.085   Downloading Mako-1.3.5-py3-none-any.whl (78 kB)
+#6 3.519 Collecting pyjwt
+#6 3.624   Downloading PyJWT-2.8.0-py3-none-any.whl (22 kB)
+#6 3.672 Requirement already satisfied: jsonpath_ng in /usr/local/lib/python3.8/dist-packages (1.6.1)
+#6 4.818 Collecting lxml
+#6 4.855   Downloading lxml-5.2.2-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (4.8 MB)
+#6 29.68 Collecting webdavclient3
+#6 29.72   Downloading webdavclient3-3.14.6.tar.gz (23 kB)
+#6 30.12 Collecting appdirs~=1.4.3
+#6 30.22   Downloading appdirs-1.4.4-py2.py3-none-any.whl (9.6 kB)
+#6 30.26 Requirement already satisfied: setuptools in /usr/local/lib/python3.8/dist-packages (from fs>=2.0.21) (65.7.0)
+#6 30.31 Requirement already satisfied: six~=1.10 in /usr/local/lib/python3.8/dist-packages (from fs>=2.0.21) (1.16.0)
+#6 30.51 Collecting jsonpointer>=1.9
+#6 30.58   Downloading jsonpointer-2.4-py2.py3-none-any.whl (7.8 kB)
+#6 31.01 Collecting MarkupSafe>=0.9.2
+#6 31.05   Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (26 kB)
+#6 31.15 Requirement already satisfied: ply in /usr/local/lib/python3.8/dist-packages (from jsonpath_ng) (3.11)
+#6 31.16 Requirement already satisfied: requests in /usr/local/lib/python3.8/dist-packages (from webdavclient3) (2.31.0)
+#6 31.34 Collecting python-dateutil
+#6 31.40   Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+#6 32.41 Requirement already satisfied: charset-normalizer<4,>=2 in /usr/local/lib/python3.8/dist-packages (from requests->webdavclient3) (3.3.2)
+#6 32.41 Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.8/dist-packages (from requests->webdavclient3) (3.7)
+#6 32.42 Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.8/dist-packages (from requests->webdavclient3) (2.2.1)
+#6 32.42 Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.8/dist-packages (from requests->webdavclient3) (2024.2.2)
+#6 32.43 Building wheels for collected packages: webdavclient3
+#6 32.43   Building wheel for webdavclient3 (setup.py): started
+#6 32.66   Building wheel for webdavclient3 (setup.py): finished with status 'done'
+#6 32.66   Created wheel for webdavclient3: filename=webdavclient3-3.14.6-py3-none-any.whl size=20828 sha256=33e1f01cbdab1f89f55f8a8339d24d307827aab29feb0dfa2df6bbc6fa04185b
+#6 32.66   Stored in directory: /tmp/pip-ephem-wheel-cache-t90ewkk5/wheels/f5/f4/8a/526a74b0760ef00a2fefb678b173383ced24dff40bd32d0764
+#6 32.67 Successfully built webdavclient3
+#6 32.79 Installing collected packages: funcsigs, bagit, appdirs, fs, jsonpointer, jsonpatch, MarkupSafe, mako, pyjwt, lxml, python-dateutil, webdavclient3
+#6 33.13 Successfully installed MarkupSafe-2.1.5 appdirs-1.4.4 bagit-1.8.1 fs-2.4.16 funcsigs-1.0.2 jsonpatch-1.33 jsonpointer-2.4 lxml-5.2.2 mako-1.3.5 pyjwt-2.8.0 python-dateutil-2.9.0.post0 webdavclient3-3.14.6
+#6 DONE 33.2s
+
+#7 [4/8] RUN multibag_ver=0.3 &&     curl -L -o multibag-py.zip     https://github.com/usnistgov/multibag-py/archive/$multibag_ver.zip &&     unzip -oq multibag-py.zip &&     cd multibag-py-$multibag_ver &&     echo __version__ = $multibag_ver >> multibag/__init__.py &&     python setup.py install --install-purelib=/usr/local/lib/python3.8/dist-packages
+#7 0.298   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+#7 0.298                                  Dload  Upload   Total   Spent    Left  Speed
+#7 0.299   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+#7 0.779   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100  302k    0  302k    0     0   211k      0 --:--:--  0:00:01 --:--:--  319k100  578k    0  578k    0     0   237k      0 --:--:--  0:00:02 --:--:--  296k100  835k    0  835k    0     0   243k      0 --:--:--  0:00:03 --:--:--  282k100 1082k    0 1082k    0     0   270k      0 --:--:--  0:00:03 --:--:--  307k
+#7 4.473 running install
+#7 4.544 running bdist_egg
+#7 4.550 running egg_info
+#7 4.550 creating multibag.egg-info
+#7 4.552 writing multibag.egg-info/PKG-INFO
+#7 4.552 writing dependency_links to multibag.egg-info/dependency_links.txt
+#7 4.553 writing top-level names to multibag.egg-info/top_level.txt
+#7 4.553 writing manifest file 'multibag.egg-info/SOURCES.txt'
+#7 4.558 reading manifest file 'multibag.egg-info/SOURCES.txt'
+#7 4.559 writing manifest file 'multibag.egg-info/SOURCES.txt'
+#7 4.559 installing library code to build/bdist.linux-aarch64/egg
+#7 4.559 running install_lib
+#7 4.559 running build_py
+#7 4.559 creating build
+#7 4.559 creating build/lib
+#7 4.559 creating build/lib/multibag
+#7 4.559 copying multibag/__init__.py -> build/lib/multibag
+#7 4.560 copying multibag/amend.py -> build/lib/multibag
+#7 4.560 copying multibag/split.py -> build/lib/multibag
+#7 4.560 copying multibag/restore.py -> build/lib/multibag
+#7 4.560 copying multibag/constants.py -> build/lib/multibag
+#7 4.561 creating build/lib/multibag/access
+#7 4.561 copying multibag/access/extended.py -> build/lib/multibag/access
+#7 4.561 copying multibag/access/__init__.py -> build/lib/multibag/access
+#7 4.561 copying multibag/access/bagit.py -> build/lib/multibag/access
+#7 4.561 copying multibag/access/multibag.py -> build/lib/multibag/access
+#7 4.561 copying multibag/access/exceptions.py -> build/lib/multibag/access
+#7 4.562 creating build/lib/multibag/validate
+#7 4.562 copying multibag/validate/__init__.py -> build/lib/multibag/validate
+#7 4.562 copying multibag/validate/headbag.py -> build/lib/multibag/validate
+#7 4.562 copying multibag/validate/member.py -> build/lib/multibag/validate
+#7 4.562 copying multibag/validate/bag.py -> build/lib/multibag/validate
+#7 4.563 copying multibag/validate/base.py -> build/lib/multibag/validate
+#7 4.563 creating build/lib/multibag/testing
+#7 4.563 copying multibag/testing/__init__.py -> build/lib/multibag/testing
+#7 4.563 copying multibag/testing/mkdata.py -> build/lib/multibag/testing
+#7 4.564 creating build/bdist.linux-aarch64
+#7 4.564 creating build/bdist.linux-aarch64/egg
+#7 4.564 creating build/bdist.linux-aarch64/egg/multibag
+#7 4.564 copying build/lib/multibag/__init__.py -> build/bdist.linux-aarch64/egg/multibag
+#7 4.564 creating build/bdist.linux-aarch64/egg/multibag/validate
+#7 4.564 copying build/lib/multibag/validate/__init__.py -> build/bdist.linux-aarch64/egg/multibag/validate
+#7 4.565 copying build/lib/multibag/validate/headbag.py -> build/bdist.linux-aarch64/egg/multibag/validate
+#7 4.565 copying build/lib/multibag/validate/member.py -> build/bdist.linux-aarch64/egg/multibag/validate
+#7 4.565 copying build/lib/multibag/validate/bag.py -> build/bdist.linux-aarch64/egg/multibag/validate
+#7 4.565 copying build/lib/multibag/validate/base.py -> build/bdist.linux-aarch64/egg/multibag/validate
+#7 4.565 copying build/lib/multibag/amend.py -> build/bdist.linux-aarch64/egg/multibag
+#7 4.565 creating build/bdist.linux-aarch64/egg/multibag/access
+#7 4.565 copying build/lib/multibag/access/extended.py -> build/bdist.linux-aarch64/egg/multibag/access
+#7 4.565 copying build/lib/multibag/access/__init__.py -> build/bdist.linux-aarch64/egg/multibag/access
+#7 4.565 copying build/lib/multibag/access/bagit.py -> build/bdist.linux-aarch64/egg/multibag/access
+#7 4.566 copying build/lib/multibag/access/multibag.py -> build/bdist.linux-aarch64/egg/multibag/access
+#7 4.566 copying build/lib/multibag/access/exceptions.py -> build/bdist.linux-aarch64/egg/multibag/access
+#7 4.566 copying build/lib/multibag/split.py -> build/bdist.linux-aarch64/egg/multibag
+#7 4.566 creating build/bdist.linux-aarch64/egg/multibag/testing
+#7 4.566 copying build/lib/multibag/testing/__init__.py -> build/bdist.linux-aarch64/egg/multibag/testing
+#7 4.566 copying build/lib/multibag/testing/mkdata.py -> build/bdist.linux-aarch64/egg/multibag/testing
+#7 4.567 copying build/lib/multibag/restore.py -> build/bdist.linux-aarch64/egg/multibag
+#7 4.567 copying build/lib/multibag/constants.py -> build/bdist.linux-aarch64/egg/multibag
+#7 4.567 byte-compiling build/bdist.linux-aarch64/egg/multibag/__init__.py to __init__.cpython-38.pyc
+#7 4.568 byte-compiling build/bdist.linux-aarch64/egg/multibag/validate/__init__.py to __init__.cpython-38.pyc
+#7 4.568 byte-compiling build/bdist.linux-aarch64/egg/multibag/validate/headbag.py to headbag.cpython-38.pyc
+#7 4.571 byte-compiling build/bdist.linux-aarch64/egg/multibag/validate/member.py to member.cpython-38.pyc
+#7 4.572 byte-compiling build/bdist.linux-aarch64/egg/multibag/validate/bag.py to bag.cpython-38.pyc
+#7 4.572 byte-compiling build/bdist.linux-aarch64/egg/multibag/validate/base.py to base.cpython-38.pyc
+#7 4.574 byte-compiling build/bdist.linux-aarch64/egg/multibag/amend.py to amend.cpython-38.pyc
+#7 4.575 byte-compiling build/bdist.linux-aarch64/egg/multibag/access/extended.py to extended.cpython-38.pyc
+#7 4.578 byte-compiling build/bdist.linux-aarch64/egg/multibag/access/__init__.py to __init__.cpython-38.pyc
+#7 4.578 byte-compiling build/bdist.linux-aarch64/egg/multibag/access/bagit.py to bagit.cpython-38.pyc
+#7 4.581 byte-compiling build/bdist.linux-aarch64/egg/multibag/access/multibag.py to multibag.cpython-38.pyc
+#7 4.584 byte-compiling build/bdist.linux-aarch64/egg/multibag/access/exceptions.py to exceptions.cpython-38.pyc
+#7 4.584 byte-compiling build/bdist.linux-aarch64/egg/multibag/split.py to split.cpython-38.pyc
+#7 4.587 byte-compiling build/bdist.linux-aarch64/egg/multibag/testing/__init__.py to __init__.cpython-38.pyc
+#7 4.587 byte-compiling build/bdist.linux-aarch64/egg/multibag/testing/mkdata.py to mkdata.cpython-38.pyc
+#7 4.589 byte-compiling build/bdist.linux-aarch64/egg/multibag/restore.py to restore.cpython-38.pyc
+#7 4.591 byte-compiling build/bdist.linux-aarch64/egg/multibag/constants.py to constants.cpython-38.pyc
+#7 4.592 creating build/bdist.linux-aarch64/egg/EGG-INFO
+#7 4.592 copying multibag.egg-info/PKG-INFO -> build/bdist.linux-aarch64/egg/EGG-INFO
+#7 4.592 copying multibag.egg-info/SOURCES.txt -> build/bdist.linux-aarch64/egg/EGG-INFO
+#7 4.592 copying multibag.egg-info/dependency_links.txt -> build/bdist.linux-aarch64/egg/EGG-INFO
+#7 4.592 copying multibag.egg-info/top_level.txt -> build/bdist.linux-aarch64/egg/EGG-INFO
+#7 4.592 /usr/local/lib/python3.8/dist-packages/setuptools/command/install.py:34: SetuptoolsDeprecationWarning: setup.py install is deprecated. Use build and pip and other standards-based tools.
+#7 4.592   warnings.warn(
+#7 4.592 /usr/local/lib/python3.8/dist-packages/setuptools/command/easy_install.py:144: EasyInstallDeprecationWarning: easy_install command is deprecated. Use build and pip and other standards-based tools.
+#7 4.592   warnings.warn(
+#7 4.592 zip_safe flag not set; analyzing archive contents...
+#7 4.597 creating dist
+#7 4.597 creating 'dist/multibag-0.2-py3.8.egg' and adding 'build/bdist.linux-aarch64/egg' to it
+#7 4.610 removing 'build/bdist.linux-aarch64/egg' (and everything under it)
+#7 4.612 Processing multibag-0.2-py3.8.egg
+#7 4.613 Copying multibag-0.2-py3.8.egg to /usr/local/lib/python3.8/dist-packages
+#7 4.615 Adding multibag 0.2 to easy-install.pth file
+#7 4.616 
+#7 4.616 Installed /usr/local/lib/python3.8/dist-packages/multibag-0.2-py3.8.egg
+#7 4.616 Processing dependencies for multibag==0.2
+#7 4.616 Finished processing dependencies for multibag==0.2
+#7 DONE 4.7s
+
+#8 [5/8] RUN sed --in-place -e '/CREATE_MAIL_SPOOL/ s/=yes/=no/' /etc/default/useradd
+#8 DONE 0.3s
+
+#9 [6/8] RUN grep -qs :501: /etc/group ||     groupadd --gid 501 developer
+#9 DONE 0.3s
+
+#10 [7/8] RUN grep -Pqs ":501:\d+:" /etc/passwd ||     useradd -m --comment "OAR Developer" --shell /bin/bash             --gid 501 --uid 501 developer
+#10 DONE 0.2s
+
+#11 [8/8] RUN echo developer "ALL=(ALL)" NOPASSWD:ALL > /etc/sudoers.d/90-developers
+#11 DONE 0.2s
+
+#12 exporting to image
+#12 exporting layers
+#12 exporting layers 0.2s done
+#12 writing image sha256:01f0ca2905914dd454467611d326c39a08339374fd52ae36ca1d3efa81d95efe done
+#12 naming to docker.io/oar-pdr-py/pyenv done
+#12 DONE 0.2s
+
+What's Next?
+  View summary of image vulnerabilities and recommendations → docker scout quickview
++ docker build --build-arg=devuid=501 -t oar-pdr-py/midasserver midasserver
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 717B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/oar-pdr-py/pyenv:latest
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 1.18kB done
+#4 DONE 0.0s
+
+#5 [1/5] FROM docker.io/oar-pdr-py/pyenv
+#5 DONE 0.0s
+
+#6 [2/5] COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+#6 DONE 0.0s
+
+#7 [3/5] RUN chmod a+rx /usr/local/bin/entrypoint.sh
+#7 DONE 0.1s
+
+#8 [4/5] RUN mkdir -p /dev/oar-pdr-py /app && chmod a+rwx /app
+#8 DONE 0.3s
+
+#9 [5/5] WORKDIR /dev/oar-pdr-py
+#9 DONE 0.0s
+
+#10 exporting to image
+#10 exporting layers 0.0s done
+#10 writing image sha256:439dabaf2df723ecbfcbe9e52be4212f842e1d54e2906ebbe4b5472f33063716 done
+#10 naming to docker.io/oar-pdr-py/midasserver done
+#10 DONE 0.0s
+
+What's Next?
+  View summary of image vulnerabilities and recommendations → docker scout quickview

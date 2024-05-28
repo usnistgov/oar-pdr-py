@@ -1,0 +1,4 @@
+bagit>=1.6.0
+setuptools
+fs>=2.0.0
+funcsigs>=1.0.2; python_version < '3.0'

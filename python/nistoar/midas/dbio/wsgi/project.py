@@ -141,7 +141,7 @@ class ProjectHandler(ProjectRecordHandler):
         except NotImplementedError as ex:
             return self.send_error(501, "Not Implemented")
 
-        return self.send_json(out, "Deleted")
+        return self.send_json(out)
 
 
 class ProjectInfoHandler(ProjectRecordHandler):

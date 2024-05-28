@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Python: Current File",
+        "type": "python",
+        "request": "launch",
+        "program": "/Users/alexloembe/NIST/usnistgov/oar-pdr-py/python/tests/nistoar/midas/dbio/wsgi/test_project_midas.py",
+        "console": "integratedTerminal",
+        "pythonPath": "/usr/bin/python3",
+        "env": {
+          "PYTHONPATH": "/Users/alexloembe/NIST/usnistgov/oar-pdr-py/python",
+          "MONGO_TESTDB_URL":"mongodb://admin:admin@127.0.0.1:27017/midas?authSource=admin"
+        },
+        "terminal": "zsh"
+      }
+    ]
+  }
+  
