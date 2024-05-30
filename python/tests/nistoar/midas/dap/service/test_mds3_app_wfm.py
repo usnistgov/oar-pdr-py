@@ -11,8 +11,7 @@ from nistoar.midas.dbio.wsgi import project as prj
 from nistoar.midas.dap.service import mds3
 from nistoar.midas.dap.fm import FileManager
 from nistoar.midas.dap.nerdstore.fmfs import FMFSResourceStorage
-from nistoar.pdr.publish import prov
-from nistoar.pdr.utils import read_nerd, read_json
+from nistoar.pdr.utils import read_nerd, read_json, prov
 from nistoar.nerdm.constants import CORE_SCHEMA_URI
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_mds3.")
@@ -36,7 +35,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 # test records
 testdir = pathlib.Path(__file__).parents[0]

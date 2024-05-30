@@ -14,7 +14,7 @@ from nistoar.pdr.publish import idmint as minter
 from nistoar.pdr.publish import BadSIPInputError
 from nistoar.nerdm import constants as consts
 from nistoar.pdr.preserve.bagit import builder as bldr
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 from nistoar.pdr.preserve.bagit.bag import NISTBag
 from nistoar.pdr.preserve.bagit.serialize import zip_deserialize
 
@@ -124,7 +124,7 @@ def load_nerdm_from_aip(zipfname, destarch):
     sipid = re.sub(r'^ark:/\d+/', '', nerdm['ediid'])
     utils.write_json(nerdm, destarch / "records" / (sipid+".json"))
 
-tstag = prov.PubAgent("test", prov.PubAgent.AUTO, "tester")
+tstag = prov.Agent("test", prov.Agent.AUTO, "tester")
 
 class TestPDPBagger(test.TestCase):
 

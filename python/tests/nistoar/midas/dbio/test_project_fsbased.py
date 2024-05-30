@@ -4,7 +4,7 @@ import unittest as test
 
 from nistoar.midas.dbio import fsbased, base
 from nistoar.midas.dbio import project
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_project.")
 loghdlr = None
@@ -27,7 +27,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 class TestInMemoryDBClientFactory(test.TestCase):
 
@@ -88,7 +88,7 @@ class TestProjectService(test.TestCase):
         self.assertTrue(self.project.dbcli)
         self.assertEqual(self.project.cfg, self.cfg)
         self.assertEqual(self.project.who.actor, "nstr1")
-        self.assertEqual(self.project.who.group, "midas")
+        self.assertEqual(self.project.who.agent_class, "midas")
         self.assertTrue(self.project.log)
 
     def test_update_replace_data(self):

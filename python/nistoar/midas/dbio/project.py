@@ -18,11 +18,11 @@ from copy import deepcopy
 
 import jsonpatch
 
-from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus,
+from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus, ANONYMOUS,
                    AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException)
 from . import status
 from .. import MIDASException, MIDASSystem
-from nistoar.pdr.publish.prov import PubAgent, Action
+from nistoar.pdr.utils.prov import Agent, Action
 from nistoar.id.versions import OARVersion
 from nistoar.pdr import ARK_NAAN
 
@@ -39,7 +39,7 @@ class ProjectService(MIDASSystem):
     A base class for a service to create, access, or update a project.  This generic 
     base can be used as is or extended and overridden to specialize the business logic for updating 
     a particular type of project under particular conventions or policies.  The service is attached 
-    to a particular user at construction time (as given by a :py:class:`~nistoar.pdr.publish.prov.PubAgent`
+    to a particular user at construction time (as given by a :py:class:`~nistoar.pdr.utils.Agent`
     instance); thus, requests to this service are subject to internal Authorization checks.
 
     This base service supports a two parameters, ``dbio`` and ``clients``.  The optional ``dbio`` 
@@ -76,7 +76,7 @@ class ProjectService(MIDASSystem):
     STATUS_ACTION_SUBMIT   = _STATUS_ACTION_SUBMIT  
 
     def __init__(self, project_type: str, dbclient_factory: DBClientFactory, config: Mapping={},
-                 who: PubAgent=None, log: Logger=None, _subsys=None, _subsysabbrev=None):
+                 who: Agent=None, log: Logger=None, _subsys=None, _subsysabbrev=None):
         """
         create the service
         :param str  project_type:  the project data type desired.  This name is usually used as the 
@@ -84,7 +84,7 @@ class ProjectService(MIDASSystem):
                                    include ``dbio.DAP_PROJECTS`` and ``dbio.DMP_PROJECTS``
         :param DBClient dbclient:  the DBIO client instance to use to access and save project records
         :param dict       config:  the handler configuration tuned for the current type of project
-        :param who      PubAgent:  the representation of the user that is requesting access
+        :param who         Agent:  the representation of the user that is requesting access
         :param Logger        log:  the logger to use for log messages
         """
         if not _subsys:
@@ -94,7 +94,7 @@ class ProjectService(MIDASSystem):
         super(ProjectService, self).__init__(_subsys, _subsysabbrev)
         self.cfg = config
         if not who:
-            who = PubAgent("unkwn", PubAgent.USER, "anonymous")
+            who = Agent("dbio.project", Agent.USER, Agent.ANONYMOUS, Agent.PUBLIC)
         self.who = who
         if not log:
             log = getLogger(self.system_abbrev).getChild(self.subsystem_abbrev).getChild(project_type)
@@ -104,9 +104,9 @@ class ProjectService(MIDASSystem):
         self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), user)
 
     @property
-    def user(self) -> PubAgent:
+    def user(self) -> Agent:
         """
-        the PubAgent instance representing the user that this service acts on behalf of.
+        the Agent instance representing the user that this service acts on behalf of.
         """
         return self.who
 
@@ -121,6 +121,8 @@ class ProjectService(MIDASSystem):
         :raises AlreadyExists:  if a record owned by the user already exists with the given name
         """
         shoulder = self._get_id_shoulder(self.who)
+        if self.dbcli.user_id == ANONYMOUS:
+            self.log.warning("A new record requested for an anonymous user")
         prec = self.dbcli.create_record(name, shoulder)
 
         if meta:
@@ -150,26 +152,26 @@ class ProjectService(MIDASSystem):
         # TODO:  handling previously published records
         raise NotImplementedError()
 
-    def _get_id_shoulder(self, user: PubAgent):
+    def _get_id_shoulder(self, user: Agent):
         """
         return an ID shoulder that is appropriate for the given user agent
-        :param PubAgent user:  the user agent that is creating a record, requiring a shoulder
+        :param Agent user:  the user agent that is creating a record, requiring a shoulder
         :raises NotAuthorized: if an uathorized shoulder appropriate for the user cannot be determined.
         """
         out = None
-        client_ctl = self.cfg.get('clients', {}).get(user.group)
+        client_ctl = self.cfg.get('clients', {}).get(user.agent_class)
         if client_ctl is None:
             client_ctl = self.cfg.get('clients', {}).get("default")
         if client_ctl is None:
-            self.log.debug("Unrecognized client group, %s", user.group)
+            self.log.debug("Unrecognized client group, %s", user.agent_class)
             raise NotAuthorized(user.actor, "create record",
-                                "Client group, %s, not recognized" % user.group)
+                                "Client group, %s, not recognized" % user.agent_class)
 
         out = client_ctl.get('default_shoulder')
         if not out:
-            self.log.info("No default ID shoulder configured for client group, %s", user.group)
+            self.log.info("No default ID shoulder configured for client group, %s", user.agent_class)
             raise NotAuthorized(user.actor, "create record",
-                                "No default shoulder defined for client group, "+user.group)
+                                "No default shoulder defined for client group, "+user.agent_class)
         return out
 
     def get_record(self, id) -> ProjectRecord:
@@ -333,10 +335,10 @@ class ProjectService(MIDASSystem):
 
         for prop in update:
             if prop in base and isinstance(base[prop], Mapping):
-                if depth > 1 and isinstance(update[prop], Mapping):
+                if (depth < 0 or depth > 1) and isinstance(update[prop], Mapping):
                     # the properties from the base and update must both be dictionaries; otherwise,
                     # update is ignored.
-                    self._merge_into(base[prop], update[prop], depth-1)
+                    self._merge_into(update[prop], base[prop], depth-1)
             else:
                 base[prop] = update[prop]
 
@@ -375,6 +377,7 @@ class ProjectService(MIDASSystem):
         """
         out = self._new_metadata_for(shoulder)
         out.update(mdata)
+        out['agent_vehicle'] = self.who.vehicle
         return out
 
     def replace_data(self, id, newdata, part=None, message="", _prec=None):
@@ -867,10 +870,18 @@ class ProjectServiceFactory:
         self._cfg = config
         self._log = log
 
-    def create_service_for(self, who: PubAgent=None):
+    @property
+    def project_type(self):
+        """
+        the name for the type of DBIO project this is a service factory for.  Values can include
+        "DAP" and "DMP".
+        """
+        return self._prjtype
+
+    def create_service_for(self, who: Agent=None):
         """
         create a service that acts on behalf of a specific user.  
-        :param PubAgent who:    the user that wants access to a project
+        :param Agent who:    the user that wants access to a project
         """
         return ProjectService(self._prjtype, self._dbclifact, self._cfg, who, self._log)
 

@@ -24,7 +24,7 @@ PACKAGE_NAME=oar-pdr-py
 ## depends the former ones).  
 #
 DEP_DOCKER_IMAGE_DIRS="pymongo jqfromsrc ejsonschema pyenv"
-EXEC_DOCKER_IMAGE_DIRS="pdrpytest pdpserver midasserver"
+EXEC_DOCKER_IMAGE_DIRS="pdrpytest pdpserver midasserver peopleserver"
 
 [ -d "$codedir/metadata/docker" ] || {
     echo ${prog}: Missing metadata submodule
@@ -64,4 +64,8 @@ fi
 if { echo " $BUILD_IMAGES " | grep -qs " midasserver "; }; then
     echo '+' docker build $BUILD_OPTS -t $PACKAGE_NAME/midasserver midasserver | logit
     docker build $BUILD_OPTS -t $PACKAGE_NAME/midasserver midasserver 2>&1 | logit
+fi
+if { echo " $BUILD_IMAGES " | grep -qs " peopleserver "; }; then
+    echo '+' docker build $BUILD_OPTS -t $PACKAGE_NAME/peopleserver peopleserver | logit
+    docker build $BUILD_OPTS -t $PACKAGE_NAME/peopleserver peopleserver 2>&1 | logit
 fi

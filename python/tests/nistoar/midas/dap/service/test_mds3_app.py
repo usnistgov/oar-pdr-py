@@ -8,8 +8,7 @@ from nistoar.midas.dbio import inmem, base, AlreadyExists, InvalidUpdate, Object
 from nistoar.midas.dbio.wsgi import project as prj
 from nistoar.midas.dap.service import mds3
 from nistoar.midas.dap.nerdstore.inmem import InMemoryResourceStorage
-from nistoar.pdr.publish import prov
-from nistoar.pdr.utils import read_nerd
+from nistoar.pdr.utils import read_nerd, prov
 from nistoar.nerdm.constants import CORE_SCHEMA_URI
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_mds3.")
@@ -33,7 +32,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 # test records
 testdir = pathlib.Path(__file__).parents[0]

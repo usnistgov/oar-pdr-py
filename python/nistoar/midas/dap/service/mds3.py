@@ -15,7 +15,7 @@ The key features of the mds3 conventions are:
     ``_moderate_*`` functions in the :py:class:`DAPService` class.)
 
 Support for the web service frontend is provided via :py:class:`DAPApp` class, an implementation
-of the WSGI-based :ref:class:`~nistoar.pdr.publish.service.wsgi.SubApp`.
+of the WSGI-based :ref:class:`~nistoar.pdr.publish.service.wsgi.ServiceApp`.
 """
 import os, re, pkg_resources, random, string, time, math
 from datetime import datetime
@@ -30,13 +30,13 @@ from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, No
                      InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
-                                  ProjectSelectionHandler, SubApp)
+                                  ProjectSelectionHandler, ServiceApp)
 from ...dbio import status
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
 from nistoar.pdr.utils import build_mime_type_map, read_json
-from nistoar.pdr.publish.prov import PubAgent, Action
+from nistoar.pdr.utils.prov import Agent, Action
 
 from . import validate
 from .. import nerdstore
@@ -231,14 +231,14 @@ class DAPService(ProjectService):
     in the record NERDm data.  
     """
 
-    def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: PubAgent=None,
+    def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: Agent=None,
                  log: Logger=None, nerdstore: NERDResourceStorage=None, project_type=DAP_PROJECTS,
                  minnerdmver=(0, 6), fmcli=None):
         """
         create the service
         :param DBClientFactory dbclient_factory:  the factory to create the DBIO service client from
         :param dict       config:  the service configuration tuned for the current type of project
-        :param PubAgent      who:  the agent that describe who/what is using this service
+        :param Agent         who:  the agent that describe who/what is using this service
         :param Logger        log:  the logger to use for log messages
         :param NERDResourceStorage nerdstore:  the NERD metadata storage backend to use; if None,
                                    a backend will be constructed based on the configuration
@@ -443,10 +443,15 @@ class DAPService(ProjectService):
                 out['components'] = [swcomp] + out['components']
 
             # contact info
-            # if meta.get("creatorIsContact"):
-            #     # base contact on the currently logged in user
-            # elif meta.get("contactName"):
-            if meta.get("contactName"):
+            if meta.get("creatorisContact"):
+                cp = OrderedDict()
+                if self.who.get_prop("userName") and self.who.get_prop("userLastName"):
+                    cp['fn'] = f"{self.who.get_prop('userName')} {self.who.get_prop('userLastName')}"
+                if self.who.get_prop("email"):
+                    cp['hasEmail'] = self.who.get_prop("email")
+                if cp:
+                    out['contactPoint'] = cp
+            elif meta.get("contactName"):
                 out['contactPoint'] = self._moderate_contactPoint({"fn": meta["contactName"]}, doval=False)
 
         return out
@@ -2173,17 +2178,17 @@ class DAPServiceFactory(ProjectServiceFactory):
         self._nerdstore = nerdstore
         super(DAPServiceFactory, self).__init__(project_coll, dbclient_factory, config, log)
 
-    def create_service_for(self, who: PubAgent=None):
+    def create_service_for(self, who: Agent=None):
         """
         create a service that acts on behalf of a specific user.  
-        :param PubAgent who:    the user that wants access to a project
+        :param Agent who:    the user that wants access to a project
         """
         return DAPService(self._dbclifact, self._cfg, who, self._log, self._nerdstore, self._prjtype)
 
     
 class DAPApp(MIDASProjectApp):
     """
-    A MIDAS SubApp supporting a DAP service following the mds3 conventions
+    A MIDAS ServiceApp supporting a DAP service following the mds3 conventions
     """
     
     def __init__(self, dbcli_factory: DBClientFactory, log: Logger, config: dict={},
@@ -2206,8 +2211,8 @@ class DAPProjectDataHandler(ProjectDataHandler):
     """
     _allowed_post_paths = "authors references components".split() + [FILE_DELIM, LINK_DELIM]
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, id: str, datapath: str, config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, subapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, id: str, datapath: str, config: dict=None, log: Logger=None):
         super(DAPProjectDataHandler, self).__init__(service, subapp, wsgienv, start_resp, who,
                                                     id, datapath, config, log)
 
@@ -2364,8 +2369,8 @@ class DAPProjectSelectionHandler(ProjectSelectionHandler):
     the information computed on the fly).
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable,
-                 who: PubAgent, config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, subapp: ServiceApp, wsgienv: dict, start_resp: Callable,
+                 who: Agent, config: dict=None, log: Logger=None):
         super(DAPProjectSelectionHandler, self).__init__(service, subapp, wsgienv, start_resp, who,
                                                          config, log)
         self._fmcli = None

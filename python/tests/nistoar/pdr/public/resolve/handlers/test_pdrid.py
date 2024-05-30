@@ -380,7 +380,7 @@ class TestPDRIDHandler(test.TestCase):
     def test_bad_format(self):
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "ark:/88434/mds2-2107/pdr:v/",
+            'PATH_INFO': "ark:/88434/mds2-2107/pdr:v",
             'QUERY_STRING': "format=datacite"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
@@ -390,7 +390,7 @@ class TestPDRIDHandler(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "ark:/88434/mds2-2107/pdr:v/",
+            'PATH_INFO': "ark:/88434/mds2-2107/pdr:v",
             'HTTP_ACCEPT': "text/csv"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
@@ -400,7 +400,7 @@ class TestPDRIDHandler(test.TestCase):
     def test_get_releaseset(self):
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "ark:/88434/mds2-2106/pdr:v/"
+            'PATH_INFO': "ark:/88434/mds2-2106/pdr:v"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
         body = self.tostr( hdlr.handle() )

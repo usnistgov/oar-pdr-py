@@ -6,7 +6,7 @@ import unittest as test
 
 from nistoar.midas.dbio import inmem, base, mongo
 from nistoar.midas.dbio.wsgi import project as prj
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_project.")
 loghdlr = None
@@ -35,7 +35,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 dburl = None
 if os.environ.get('MONGO_TESTDB_URL'):

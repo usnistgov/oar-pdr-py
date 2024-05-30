@@ -18,6 +18,7 @@ services:
       - type: volume
         source: MONGO_CONFIG
         target: /data/configdb
+
   mongo-express:
     image: mongo-express:latest
     container_name: mongo-express
