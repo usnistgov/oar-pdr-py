@@ -19,7 +19,8 @@ from flask_jwt_extended import jwt_required
 from flask_restful import Resource
 
 import helpers
-from app.utils import files
+from app.clients.nextcloud.api import NextcloudApi
+from app.clients.webdav.api import WebDAVApi
 from config import Config
 
 logging.basicConfig(level=logging.INFO)
@@ -224,7 +225,9 @@ class FileManagerDirectoryScanner(UserSpaceScannerBase):
             temp_file.write(file_content.encode('utf-8'))
             # Go back to the beginning of the file
             temp_file.seek(0)
-            files.post_file(temp_file.name, str(fm_system_path), filename)
+            webdav_client = WebDAVApi(Config)
+            response = webdav_client.upload_file(str(fm_system_path), temp_file.name, filename)
+            logging.info('Upload file:' + filename)
 
         except KeyError as e:
             logging.exception(f"Key error: {e}")
@@ -264,40 +267,50 @@ class FileManagerDirectoryScanner(UserSpaceScannerBase):
 
             last_scan = self.find_most_recent_scan(scan_id)
 
-            for resource in content_md['contents']:
-                checksum = None
+            async def process_resource(resource):
                 if resource['resource_type'] == 'file':
-                    last_modified = datetime.datetime.fromisoformat(resource['last_modified']).replace(tzinfo=None)
-                    file_id = resource['fileid']
+                    await update_checksum(resource)
+                elif 'contents' in resource:
+                    for sub_resource in resource['contents']:
+                        await process_resource(sub_resource)
 
-                    last_checksum_date = datetime.datetime.fromisoformat('1970-01-01T00:00:00').replace(
-                        tzinfo=None).isoformat()
-                    if last_scan is not None:
-                        last_scan_content_md = next(
-                            (content_md for content_md in last_scan['contents'] if content_md['fileid'] == file_id),
-                            None)
-                        if last_scan_content_md is not None and 'last_checksum_date' in last_scan_content_md:
-                            last_checksum_date = datetime.datetime.fromisoformat(
-                                last_scan_content_md['last_checksum_date']).replace(tzinfo=None)
-                            if last_modified < last_checksum_date:
-                                checksum = last_scan_content_md['checksum']
-                                last_checksum_date = last_checksum_date.isoformat()
+            async def update_checksum(resource):
+                last_modified = datetime.datetime.strptime(resource['last_modified'], '%a, %d %b %Y %H:%M:%S GMT')
+                file_id = resource['fileid']
+                checksum = None
+                last_checksum_date = datetime.datetime.fromisoformat('1970-01-01T00:00:00').replace(
+                    tzinfo=None).isoformat()
 
-                    if checksum is None:
-                        file_path = resource['path']
-                        checksum = helpers.calculate_checksum(file_path)
-                        last_checksum_date = current_time.isoformat()
+                if last_scan:
+                    last_scan_content_md = next(
+                        (item for item in last_scan['contents'] if item['fileid'] == file_id),
+                        None)
+                    if last_scan_content_md and 'last_checksum_date' in last_scan_content_md:
+                        last_checksum_date = datetime.datetime.fromisoformat(
+                            last_scan_content_md['last_checksum_date']).replace(tzinfo=None)
+                        if last_modified < last_checksum_date:
+                            checksum = last_scan_content_md['checksum']
+                            last_checksum_date = last_checksum_date.isoformat()
 
-                    # Update resource
-                    resource['checksum'] = checksum
-                    resource['last_checksum_date'] = last_checksum_date
+                if checksum is None:
+                    file_path = resource['path']
+                    checksum = helpers.calculate_checksum(file_path)
+                    last_checksum_date = current_time.isoformat()
 
-                    # Update the report.json file after each resource has been updated
-                    update_json_data = json.dumps(content_md, indent=4)
-                    filename = f"report-{scan_id}.json"
-                    filepath = os.path.join(fm_system_path, filename)
-                    disk_filepath = os.path.join(self.system_dir, filename)
-                    files.put_file(update_json_data, filepath, disk_filepath)
+                # Update resource
+                resource['checksum'] = checksum
+                resource['last_checksum_date'] = last_checksum_date
+
+            for resource in content_md['contents']:
+                await process_resource(resource)
+
+            # Update the report.json file after each resource has been updated
+            update_json_data = json.dumps(content_md, indent=4)
+            filename = f"report-{scan_id}.json"
+            filepath = os.path.join(fm_system_path, filename)
+            disk_filepath = os.path.join(self.system_dir, filename)
+            webdav_client = WebDAVApi(Config)
+            response = webdav_client.modify_file_content(filepath, update_json_data)
 
             logging.info("Slow scan completed successfully")
             return content_md
@@ -345,32 +358,39 @@ class ScanFiles(Resource):
         Returns:
             list: List of metadata dictionaries for all files and directories.
         """
+        nextcloud_client = NextcloudApi(Config)
+        webdav_client = WebDAVApi(Config)
         contents = []
-        nextcloud_xml = files.put_scandir(fm_file_path)
+        nextcloud_xml = nextcloud_client.scan_directory_files(fm_file_path)
         nextcloud_md = helpers.parse_nextcloud_scan_xml(fm_file_path, nextcloud_xml)
 
         for resource in nextcloud_md:
             resource_path = re.split(Config.API_USER, resource['path'], flags=re.IGNORECASE)[-1].lstrip('/')
-            nextcloud_resource_info = files.get_file(resource_path)
+            nextcloud_resource_info = webdav_client.get_file_info(resource_path)
+            resource_type = 'file' if 'getcontenttype' in resource else 'folder'
+            file_type = resource.get('getcontenttype', '')
+            size = resource.get('getcontentlength', resource.get('quota-used-bytes', '0'))
+            path = os.path.join(root_dir_from_disk, resource_path)
 
             resource_md = {
-                'fileid': resource['fileid'],
-                'path': os.path.join(root_dir_from_disk, resource_path),
-                'size': resource['size'],
-                'last_modified': helpers.find_last_modified(nextcloud_resource_info),
-                'resource_type': helpers.determine_resource_type(resource),
-                'scan_errors': []
+                'name': path.rstrip('/').split("/")[-1],
+                'fileid': resource['getetag'].strip('"'),
+                'path': path,
+                'size': size,
+                'last_modified': resource['getlastmodified'],
+                'resource_type': resource_type,
+                'file_type': file_type,
+                'scan_errors': [],
+                'contents': [],
             }
 
             if resource_md['resource_type'] == 'folder':
-                if resource_md not in contents:
-                    contents += [resource_md]
                 subdirectory_path = resource_path
-                resource_md = self.scan_directory_contents(subdirectory_path, root_dir_from_disk)
+                sub_contents = self.scan_directory_contents(subdirectory_path, root_dir_from_disk)
+                resource_md['contents'].extend(sub_contents)
+                contents.append(resource_md)
             else:
-                resource_md = [resource_md]
-
-            contents += resource_md
+                contents.append(resource_md)
 
         return contents
 
@@ -387,6 +407,7 @@ class ScanFiles(Resource):
             tuple: Success response with status code 200, or error response with status code 500.
         """
         try:
+            webdav_client = WebDAVApi(Config)
             logging.info(f"Starting file scanning process for record: {record_name}")
 
             # Instantiate dirs
@@ -403,9 +424,15 @@ class ScanFiles(Resource):
             # Find current time
             current_epoch_time = time.time()
 
+            if not webdav_client.is_directory(fm_space_path):
+                logging.error(f"Record name '{record_name}' does not exist or missing information")
+                return {"error": "Not Found",
+                        "message": f"Record name '{record_name}' does not exist or is missing information"}, 404
+
             # Find user space last modified file date
-            nextcloud_dir_info = files.get_directory(fm_space_path)
-            last_modified_date = helpers.find_last_modified(nextcloud_dir_info)
+            dir_info = webdav_client.get_directory_info(fm_space_path)
+
+            last_modified_date = dir_info['last_modified']
 
             # Convert epoch time to an ISO-formatted string
             current_datetime = datetime.datetime.fromtimestamp(current_epoch_time)
@@ -421,10 +448,10 @@ class ScanFiles(Resource):
                 'scan_datetime': display_time,
                 'user_dir': str(user_dir),
                 'fm_system_path': str(fm_system_path),
-                'contents': contents,
                 'last_modified': last_modified_date,
                 'size': helpers.calculate_size(contents),
-                'is_complete': True
+                'is_complete': True,
+                'contents': contents
             }
 
             # Instantiate Scanning Class
@@ -477,6 +504,7 @@ class ScanFiles(Resource):
             tuple: Content metadata object and status code 200, or error message with status code 404.
         """
         try:
+            nextcloud_client = NextcloudApi(Config)
             content = None
 
             # Instantiate dirs
@@ -488,7 +516,8 @@ class ScanFiles(Resource):
             full_sys_dir = os.path.join(root_dir_from_disk, fm_system_path)
 
             # Retrieve nextcloud metadata
-            nextcloud_md = helpers.parse_nextcloud_scan_xml(user_dir, files.put_scandir(fm_system_path))
+            nextcloud_scanned_dir_files = nextcloud_client.scan_directory_files(fm_system_path)
+            nextcloud_md = helpers.parse_nextcloud_scan_xml(user_dir, nextcloud_scanned_dir_files)
             for file_md in nextcloud_md:
                 if scan_id in file_md['path']:
                     file_path = helpers.get_correct_path(
@@ -522,6 +551,7 @@ class ScanFiles(Resource):
             tuple: Success response with status code 200, or error response with status code 500.
         """
         try:
+            webdav_client = WebDAVApi(Config)
             # Instantiate dirs
             space_id = record_name
             fm_system_path = os.path.join(space_id, f"{space_id}-sys")
@@ -529,7 +559,7 @@ class ScanFiles(Resource):
 
             # Delete file
             logging.info(f"Attempting to delete file: {file_path}")
-            response = files.delete_file(file_path)
+            response = webdav_client.delete_file(file_path)
 
             if len(response) > 0:
                 exception_message = helpers.extract_exception_message(response)
