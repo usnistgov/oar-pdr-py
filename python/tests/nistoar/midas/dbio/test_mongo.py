@@ -19,6 +19,8 @@ asc_andor = datadir / 'asc_andor.json'
 asc_and   = datadir / 'asc_and.json'
 asc_or    = datadir / 'asc_or.json'
 dmp_path  = datadir / 'dmp.json'
+asc_dates = datadir / 'asc_dates.json'
+asc_text  = datadir / 'asc_text.json'
 
 with open(asc_or, 'r') as file:
     constraint_or = json.load(file)
@@ -32,6 +34,11 @@ with open(asc_andor, 'r') as file:
 with open(dmp_path, 'r') as file:
     dmp = json.load(file)
 
+with open(asc_dates, 'r') as file:
+    constraint_dates = json.load(file)
+
+with open(asc_text, 'r') as file:
+    constraint_text = json.load(file)
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
 class TestInMemoryDBClientFactory(test.TestCase):
@@ -335,7 +342,7 @@ class TestMongoDBClient(test.TestCase):
                 "state": "edit",
                 "action": "create",
                 "since": 1689021185.5038593,
-                "modified": 1689021185.5050585,
+                "modified": 1689021180.5050585,
                 "message": "draft created"
             }}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
@@ -352,6 +359,18 @@ class TestMongoDBClient(test.TestCase):
             }}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
 
+        id = "pdr0:0008"
+        rec = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": id, "name": "qwerty", "status": {
+                "created": 1689021185.5037804,
+                "state": "edit",
+                "action": "create",
+                "since": 1689021185.5038593,
+                "modified": 1689021183.5050585,
+                "message": "test"
+            }}, self.cli)
+        self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
+
         id = "pdr0:0007"
         rec = base.ProjectRecord(
             base.DMP_PROJECTS, {"id": id, "name": "test3", "owner": "alice", "status": {
@@ -359,7 +378,7 @@ class TestMongoDBClient(test.TestCase):
                 "state": "edit",
                 "action": "create",
                 "since": 1689021185.5038593,
-                "modified": 1689021185.5050585,
+                "modified": 1689021189.5050585,
                 "message": "draft created"
             }}, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
@@ -376,13 +395,24 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(recs[1].id, "pdr0:0003")
 
         recs = list(self.cli.adv_select_records(constraint_and))
-        print(constraint_and)
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0].id, "pdr0:0003")
         recs = list(self.cli.adv_select_records(constraint_andor, base.ACLs.READ))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")
+
+        recs = list(self.cli.adv_select_records(constraint_dates, base.ACLs.READ))
+        self.assertEqual(len(recs), 2)
+        self.assertEqual(recs[0].id, "pdr0:0002")
+        self.assertEqual(recs[1].id, "pdr0:0003")
+
+        recs = list(self.cli.adv_select_records(constraint_text, base.ACLs.READ))
+        self.assertEqual(len(recs), 3)
+        self.assertEqual(recs[0].id, "pdr0:0006")
+        self.assertEqual(recs[1].id, "pdr0:0002")
+        self.assertEqual(recs[2].id, "pdr0:0008")
+        
 
     def test_action_log_io(self):
         self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 0)
