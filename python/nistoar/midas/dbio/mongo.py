@@ -47,10 +47,7 @@ class MongoDBClient(base.DBClient):
             self._mngocli.get_database = self._mngocli.get_default_database
 
         self._native = self._mngocli.get_database()
-        # Create the index
-        #coll.create_index([("$**", "text")], 
-        #              {"default_language": "dummy", "weights": {"title": 1, "keyword": 2}})
-        
+
 
     def disconnect(self):
         """
@@ -229,7 +226,10 @@ class MongoDBClient(base.DBClient):
             filter["$and"].append(constraints)
             try:
                 coll = self.native[self._projcoll]
-                coll.create_index([("$**", "text")],weights= {"name": 2, "data.keywords": 3})
+                index_info = coll.list_indexes()
+                index_exists = any(idx['name'] == 'name_text_data.keywords_text' for idx in index_info)
+                if not index_exists:
+                    coll.create_index([("$**", "text")],weights= {"name": 2, "data.keywords": 3})
                 for rec in coll.find(filter, {'_id': False}):
                     yield base.ProjectRecord(self._projcoll, rec, self)
 
