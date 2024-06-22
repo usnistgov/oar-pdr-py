@@ -2,7 +2,8 @@
 This module provides the base validator class
 """
 from abc import ABCMeta, abstractmethod, abstractproperty
-from collections import Sequence, OrderedDict
+from collections import OrderedDict
+from collections.abc import Sequence
 
 ERROR = 1
 WARN  = 2

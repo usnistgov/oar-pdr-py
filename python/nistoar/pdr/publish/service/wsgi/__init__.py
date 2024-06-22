@@ -3,7 +3,8 @@ The web service providing the various flavored endpoints for programmatic data p
 """
 import os, sys, logging, json, re
 from wsgiref.headers import Headers
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from copy import deepcopy
 from typing import List
 

@@ -4,7 +4,8 @@ infrastructure.  At the center is the SIPBagger class that serves as an
 abstract base for subclasses that understand different input sources.
 """
 import os, json, filelock
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from abc import ABCMeta, abstractmethod, abstractproperty
 from copy import deepcopy
 

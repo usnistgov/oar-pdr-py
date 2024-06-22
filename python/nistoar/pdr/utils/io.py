@@ -1,7 +1,8 @@
 """
 Utility functions and classes for file reading and writing
 """
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 import json, os, threading
 try:
     import fcntl
