@@ -12,7 +12,7 @@ case "$1" in
         exec /usr/local/bin/gosu developer /usr/local/bin/runtests.sh $@
         ;;
     *)
-        exec /usr/local/bin/gosu developer /usr/local/bin/mdtests.sh $@
+        exec /usr/local/bin/gosu developer /usr/local/bin/runtests.sh $@
         ;;
 esac
 
