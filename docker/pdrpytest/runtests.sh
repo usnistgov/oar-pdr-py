@@ -20,10 +20,12 @@ case "$1" in
     makedist)
         shift
         scripts/makedist "$@"
+        EXCODE=$?
         ;;
     build)
         scripts/setversion.sh
         (cd python && python setup.py build)
+        EXCODE=$?
         ;;
     testall)
         install || {
@@ -42,10 +44,12 @@ case "$1" in
             exitopwith testall 3
         }
         # echo All OK
+        EXCODE=$stat
         ;;
     install)
         install
         python -c 'import nistoar.pdr, jq'
+        EXCODE=$?
         ;;
     testshell)
         # wrapper root shell should have already started mongodb
@@ -58,10 +62,9 @@ case "$1" in
     *)
         echo Unknown command: $1
         echo Available commands:  build makedist testall install shell
-        exit 100
+        EXCODE=100
         ;;
 esac
 
-EXCODE=$?
 echo $EXCODE > $cmd.exit
 exit $EXCODE
