@@ -1,7 +1,7 @@
 """
 The base REST framework classes
 """
-import sys, re, json
+import sys, os, re, json
 from abc import ABCMeta, abstractmethod, abstractproperty
 from typing import Callable, List
 from functools import reduce
@@ -19,6 +19,7 @@ from ..utils import order_accepts
 from ..webrecord import WebRecorder
 from ..formats import Unacceptable, UnsupportedFormat, FormatSupport
 from nistoar.base.config import ConfigurationException
+import nistoar.base.config as cfgmod
 from nistoar.pdr.utils.prov import Agent
 
 __all__ = ["Handler", "ServiceApp", "Unauthenticated", "WSGIApp", "AuthenticatedWSGIApp",

@@ -3,7 +3,8 @@ This module provides a base implementations of the SIPBagger interface to suppor
 Publishing (PDP) API.  In this framework, SIP inputs are primarily in the form of NERDm metadata.
 """
 import os, re, logging, json
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from abc import abstractmethod, abstractproperty
 from copy import deepcopy
 from urllib.parse import urlparse

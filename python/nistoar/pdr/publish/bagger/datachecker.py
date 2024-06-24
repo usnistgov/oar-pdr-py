@@ -2,7 +2,7 @@
 tools for checking the availability of distributions described in a NIST bag.
 """
 import os, re
-from collections import Mapping
+from collections.abc import Mapping
 
 import multibag as mb
 import requests
