@@ -46,9 +46,13 @@ ARGUMENTS
   -c FILE, --config-file FILE   Use a custom service configuration given in FILE.
                                 This file must be in YAML or JSON format.
                                 Defaut: docker/midasserver/midas-dmp_config.yml
+  -B, --bg                      Run the server in the background (returning the 
+                                command prompt after successful launch)
   -M, --use-mongodb             Use a MongoDB backend; DIR must also be provided.
                                 If not set, a file-based database (using JSON 
                                 files) will be used, stored under DIR/dbfiles.
+  -p, --port NUM                The port that the service should listen to 
+                                (default: 9091)
   -h, --help                    Print this text to the terminal and then exit
 
 EOF
@@ -68,12 +72,14 @@ function build_server_image {
     $dockerdir/dockbuild.sh -d midasserver # > log
 }
 
+PORT=9091
 DOPYBUILD=
 DODOCKBUILD=
 CONFIGFILE=
 USEMONGO=
 STOREDIR=
 DBTYPE=
+DETACH=
 while [ "$1" != "" ]; do
     case "$1" in
         -b|--build)
@@ -88,6 +94,16 @@ while [ "$1" != "" ]; do
             ;;
         --config-file=*)
             CONFIGFILE=`echo $1 | sed -e 's/[^=]*=//'`
+            ;;
+        -p)
+            shift
+            PORT=$1
+            ;;
+        --port=*)
+            PORT=`echo $1 | sed -e 's/[^=]*=//'`
+            ;;
+        -B|--bg|--detach)
+            DETACH="--detach"
             ;;
         -M|--use-mongo)
             DBTYPE="mongo"
@@ -217,7 +233,7 @@ if [ "$ACTION" = "stop" ]; then
     stop_server || true
     $STOP_MONGO
 else
-    echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
-    docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
+    echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp --rm --name=$CONTAINER_NAME $DETACH $PACKAGE_NAME/midasserver $DBTYPE
+    docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp --rm --name=$CONTAINER_NAME $DETACH $PACKAGE_NAME/midasserver $DBTYPE
 fi
 

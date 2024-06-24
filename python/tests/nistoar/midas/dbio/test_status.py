@@ -3,7 +3,7 @@ import unittest as test
 from copy import deepcopy
 
 from nistoar.midas.dbio import status
-from nistoar.pdr.publish.prov import Action
+from nistoar.pdr.utils.prov import Action
 
 class TestRecordStatus(test.TestCase):
 

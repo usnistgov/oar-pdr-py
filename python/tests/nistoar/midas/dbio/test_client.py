@@ -3,7 +3,7 @@ from pathlib import Path
 import unittest as test
 
 from nistoar.midas.dbio import inmem, base
-from nistoar.pdr.publish.prov import Action, PubAgent
+from nistoar.pdr.utils.prov import Action, Agent
 
 class TestDBClient(test.TestCase):
 
@@ -193,7 +193,7 @@ class TestDBClient(test.TestCase):
         self.assertEqual(len(names), 4)
 
     def test_record_action(self):
-        testuser = PubAgent("nist", PubAgent.USER, self.user)
+        testuser = Agent("dbio", Agent.USER, self.user, "nist")
         
         rec = self.cli.create_record("mine1")
         rec = self.cli.create_record("mine2")
@@ -217,7 +217,7 @@ class TestDBClient(test.TestCase):
             cli.record_action(Action(Action.COMMENT, "mds3:0001", testuser, "crikey"))
             
     def test_close_actionlog_with(self):
-        testuser = PubAgent("nist", PubAgent.USER, self.user)
+        testuser = Agent("dbio", Agent.USER, self.user, "nist")
         
         prec = base.ProjectRecord(base.DRAFT_PROJECTS,
                                   {"id": "pdr0:2222", "name": "brains", "owner": "doc0:sec"}, self.cli)

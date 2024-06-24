@@ -16,6 +16,8 @@ FROM oar-pdr-py/pyenv
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod a+rx /usr/local/bin/entrypoint.sh
+COPY runtests.sh /usr/local/bin/runtests.sh
+RUN chmod a+rx /usr/local/bin/runtests.sh
 
 VOLUME /dev/oar-pdr-py
 VOLUME /app/dist
@@ -24,7 +26,8 @@ RUN mkdir -p /dev/oar-pdr-py /app && chmod a+rwx /app
 WORKDIR /dev/oar-pdr-py
 
 ENV PYTHONPATH /dev/oar-pdr-py/python/build/lib
+ENV MONGO_TESTDB_URL mongodb://localhost/testdb
 
 ARG devuser=developer
-USER $devuser
+ENV DEV_USER $devuser
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

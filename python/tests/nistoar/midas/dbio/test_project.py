@@ -3,7 +3,7 @@ import unittest as test
 
 from nistoar.midas.dbio import inmem, base
 from nistoar.midas.dbio import project
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_project.")
 loghdlr = None
@@ -26,7 +26,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 class TestProjectService(test.TestCase):
 
@@ -66,14 +66,14 @@ class TestProjectService(test.TestCase):
         self.assertTrue(self.project.dbcli)
         self.assertEqual(self.project.cfg, self.cfg)
         self.assertEqual(self.project.who.actor, "nstr1")
-        self.assertEqual(self.project.who.group, "midas")
+        self.assertEqual(self.project.who.agent_class, "midas")
         self.assertTrue(self.project.log)
 
     def test_get_id_shoulder(self):
         self.create_service()
         self.assertEqual(self.project._get_id_shoulder(nistr), "mdm1")
         
-        usr = prov.PubAgent("malware", prov.PubAgent.USER, "nstr1")
+        usr = prov.Agent("midas", prov.Agent.USER, "nstr1", "malware")
         self.assertEqual(self.project._get_id_shoulder(usr), "mdm0")
 
         del self.cfg['clients']['default']['default_shoulder']
@@ -138,7 +138,7 @@ class TestProjectService(test.TestCase):
         self.assertEqual(prec.name, "gurn")
         self.assertEqual(prec.id, "mdm1:0003")
         self.assertEqual(prec.data, {"color": "red"})
-        self.assertEqual(prec.meta, {"temper": "dark"})
+        self.assertEqual(prec.meta, {"temper": "dark", "agent_vehicle": 'midas'})
 
     def test_get_data(self):
         self.create_service()
@@ -310,7 +310,7 @@ class TestProjectServiceFactory(test.TestCase):
         self.assertTrue(svc.dbcli)
         self.assertEqual(svc.dbcli._cfg, self.cfg["dbio"])
         self.assertEqual(svc.who.actor, "nstr1")
-        self.assertEqual(svc.who.group, "midas")
+        self.assertEqual(svc.who.agent_class, "midas")
         self.assertTrue(svc.log)
 
         prec = svc.create_record("goob")

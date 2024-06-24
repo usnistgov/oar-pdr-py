@@ -5,7 +5,8 @@ import os, errno, logging, re, pkg_resources, textwrap, datetime, shutil
 import pynoid as noid
 from shutil import copy as filecopy, rmtree
 from copy import deepcopy
-from collections import Mapping, Sequence, OrderedDict
+from collections import OrderedDict
+from collections.abc import Mapping, Sequence
 from urllib.parse import quote as urlencode
 
 from .. import PreservationSystem
@@ -243,7 +244,7 @@ class BagBuilder(PreservationSystem):
                 self._nerdm_schema_id += '#'
 
     def __del__(self):
-        self.disconnect_logfile()
+        self.disconnect_logfile(quiet=True)
 
     def __enter__(self):
         return self
@@ -321,7 +322,7 @@ class BagBuilder(PreservationSystem):
         
         self.plog.addHandler(hdlr)
 
-    def disconnect_logfile(self, logfile=None):
+    def disconnect_logfile(self, logfile=None, quiet=False):
         """
         disconnect the log file from this builder.  This ensures that the 
         logfile is closed so that the bag can be savely removed, moved, etc.
@@ -345,8 +346,9 @@ class BagBuilder(PreservationSystem):
                 logfile = os.path.join(self.bagdir, logfile)
             files = [ logfile ]
 
-        self.log.debug("Disconnecting BagBuilder from internal log (under %s)", self.bagdir)
-
+        if not quiet:
+            self.log.debug("Disconnecting BagBuilder from internal log (under %s)", self.bagdir)
+        
         for lf in files:
             hdlrs = [h for h in self.plog.handlers if self._handles_logfile(h,lf)]
             for h in hdlrs:

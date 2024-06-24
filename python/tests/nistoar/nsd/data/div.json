@@ -1,0 +1,18 @@
+[
+  {
+    "orG_Name": "Lost Electricity Reclamation Agency", 
+    "activE_YN": "Y", 
+    "orG_ID": 5, 
+    "oU_ORG_ID": 3, 
+    "orG_CD": "100", 
+    "orG_ACRNM": "LERA"
+  }, 
+  {
+    "orG_Name": "Small Animal Administration", 
+    "activE_YN": "Y", 
+    "orG_ID": 6, 
+    "oU_ORG_ID": 2, 
+    "orG_CD": "101", 
+    "orG_ACRNM": "SAA"
+  }
+]

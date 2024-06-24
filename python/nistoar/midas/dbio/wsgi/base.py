@@ -5,8 +5,7 @@ import logging, json, re
 from collections import OrderedDict
 from collections.abc import Callable
 
-from nistoar.pdr.publish.service.wsgi import SubApp, Handler   # same infrastructure as the publishing service
-from nistoar.pdr.publish.prov import PubAgent
+from nistoar.web.rest import ServiceApp, Handler, Agent
 from .. import DBClient
 
 class DBIOHandler(Handler):
@@ -14,34 +13,42 @@ class DBIOHandler(Handler):
     a base class for handling requests for DBIO data.  It provides some common utililty functions 
     for sending responses and dealing with errors.
     """
-    def __init__(self, subapp: SubApp, dbclient: DBClient, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, path: str="", config: dict=None, log: logging.Logger=None):
+    def __init__(self, svcapp: ServiceApp, dbclient: DBClient, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, path: str="", config: dict=None, log: logging.Logger=None):
         """
         Initialize this handler with the request particulars.  
 
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp: the web service ServiceApp receiving the request and calling this 
+                                  constructor
         :param DBClient dbclient: the DBIO client to use
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str      path:  the relative path to be handled by this handler; typically, some starting 
                                portion of the original request path has been stripped away to handle 
                                produce this value.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
-        if config is None and hasattr(subapp, 'cfg'):
-            config = subapp.cfg
-        if not log and hasattr(subapp, 'log'):
-            log = subapp.log
-        Handler.__init__(self, path, wsgienv, start_resp, who, config, log, subapp)
+        if config is None and hasattr(svcapp, 'cfg'):
+            config = svcapp.cfg
+        if not log and hasattr(svcapp, 'log'):
+            log = svcapp.log
+        Handler.__init__(self, path, wsgienv, start_resp, who, config, log, svcapp)
         self._dbcli = dbclient
         self._reqrec = None
         if hasattr(self._app, "_recorder") and self._app._recorder:
             self._reqrec = self._app._recorder.from_wsgi(self._env)
+
+    def preauthorize(self):
+        """
+        determine if the client agent is authorized to access this endpoint.  This implementation 
+        ensures that a valid client agent has been established and is valid.
+        """
+        return bool(self.who) and self.who.agent_class != Agent.INVALID
 
     def acceptable(self):
         """
@@ -106,7 +113,7 @@ class DBIOHandler(Handler):
             else:
                 out = json.load(bodyin, object_pairs_hook=OrderedDict)
             if self._reqrec:
-                self._reqrec.add_body_text(json.dumps(name, indent=2)).record()
+                self._reqrec.add_body_text(json.dumps(out, indent=2)).record()
             return out
 
         except (ValueError, TypeError) as ex:
@@ -114,12 +121,25 @@ class DBIOHandler(Handler):
                 self.log.error("Failed to parse input: %s", str(ex))
                 self.log.debug("\n%s", body)
             if self._reqrec:
-                self._reqrec.add_body_text(body).record()
+                try:
+                    if isinstance(body, bytes):
+                        body = body.decode('utf-8')
+                    self._reqrec.add_body_text(body).record()
+                except Exception:
+                    self._reqrec.record()
             raise self.FatalError(400, "Input not parseable as JSON",
                                   "Input document is not parse-able as JSON: "+str(ex))
 
         except Exception as ex:
             if self._reqrec:
-                self._reqrec.add_body_text(body).record()
+                try:
+                    if body:
+                        if isinstance(body, bytes):
+                            body = body.decode('utf-8')
+                        self._reqrec.add_body_text(body).record()
+                    else:
+                        self._reqrec.add_body_text("<<empty body>>")
+                except Exception:
+                    self._reqrec.add_body_text("<<not convertable to text>>")
             raise
 

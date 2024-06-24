@@ -1,0 +1,20 @@
+<?xml version="1.0" ?>
+<d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
+	<d:response>
+		<d:href>/remote.php/dav/files/oar_api/mds3-0012/mds3-0012/</d:href>
+		<d:propstat>
+			<d:prop>
+				<d:resourcetype>
+					<d:collection/>
+				</d:resourcetype>
+				<d:creationdate>1970-01-01T00:00:00+00:00</d:creationdate>
+				<d:getlastmodified>Thu, 18 Jan 2024 21:08:09 GMT</d:getlastmodified>
+				<oc:fileid>192</oc:fileid>
+				<oc:size>4997166</oc:size>
+				<oc:permissions>RGDNVCK</oc:permissions>
+			</d:prop>
+			<d:status>HTTP/1.1 200 OK</d:status>
+		</d:propstat>
+	</d:response>
+</d:multistatus>
+

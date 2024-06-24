@@ -10,7 +10,7 @@ from time import time
 from datetime import datetime
 from copy import deepcopy
 
-from nistoar.pdr.publish.prov import Action
+from nistoar.pdr.utils.prov import Action
 
 # Available record states:
 #

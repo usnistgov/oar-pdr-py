@@ -2,7 +2,7 @@
 Module providing minters for use with the PDR
 """
 import os, re
-from collections import Mapping
+from collections.abc import Mapping
 from copy import deepcopy
 from abc import abstractmethod
 

@@ -8,8 +8,7 @@ from nistoar.midas.dbio import inmem, base, AlreadyExists, InvalidUpdate, Object
 from nistoar.midas.dbio.wsgi import project as prj
 from nistoar.midas.dap.service import mds3
 from nistoar.midas.dap.nerdstore.inmem import InMemoryResourceStorage
-from nistoar.pdr.publish import prov
-from nistoar.pdr.utils import read_nerd
+from nistoar.pdr.utils import read_nerd, prov
 from nistoar.nerdm.constants import CORE_SCHEMA_URI
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_mds3.")
@@ -33,7 +32,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 # test records
 testdir = pathlib.Path(__file__).parents[0]
@@ -527,7 +526,25 @@ class TestMDS3DAPApp(test.TestCase):
         resp = self.body2dict(body)
         self.assertNotIn("landingPage", resp)
 
+    def test_get_fs_info(self):
+        path = "pdr1:0001/file_space"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, mds3.DAPProjectInfoHandler))
+        prec = self.create_record("goob")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIn('id', resp)
+        self.assertIn('action', resp)
+        self.assertEqual(resp['action'], '')
+        self.assertNotIn('file_count', resp)  # file manager not engaged
 
+        
+        
 
 
 

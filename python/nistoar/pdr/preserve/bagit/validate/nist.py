@@ -2,7 +2,8 @@
 This module implements a validator for the NIST-generated bags
 """
 import os, re, json
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from urllib.parse import urlparse
 
 import ejsonschema as ejs

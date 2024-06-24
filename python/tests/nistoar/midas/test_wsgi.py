@@ -7,7 +7,7 @@ import yaml, jwt
 
 from nistoar.midas.dbio import inmem, fsbased, base
 from nistoar.midas import wsgi as app
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_wsgiapp.")
 loghdlr = None
@@ -30,7 +30,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 class TestAbout(test.TestCase):
 
@@ -60,6 +60,7 @@ class TestAbout(test.TestCase):
         self.assertEqual(self.app.data['message'], "Service is available")
         for key in self.data.keys():
             self.assertEqual(self.app.data[key], self.data[key])
+        self.assertEqual(prov.Agent.ANONYMOUS, "anonymous")
 
     def test_add_stuff(self):
         self.assertNotIn("hairdos",  self.app.data)
@@ -128,7 +129,7 @@ class TestAbout(test.TestCase):
         self.assertIn("404 ", self.resp[0])
 
 
-class TestSubAppFactory(test.TestCase):
+class TestServiceAppFactory(test.TestCase):
 
     def setUp(self):
         self.config = {
@@ -188,7 +189,7 @@ class TestSubAppFactory(test.TestCase):
                 }
             }
         }
-        self.fact = app.SubAppFactory(self.config, app._MIDASSubApps)
+        self.fact = app.ServiceAppFactory(self.config, app._MIDASServiceApps)
 
     def test_ctor_register(self):
         self.assertTrue(bool(self.fact.cfg))
@@ -196,7 +197,7 @@ class TestSubAppFactory(test.TestCase):
         self.assertIn("dmp/mdm1", self.fact.subapps)
         self.assertNotIn("dap", self.fact.subapps)
 
-        self.fact.register_subapp("dap", app._MIDASSubApps["dmp/mdm1"])
+        self.fact.register_subapp("dap", app._MIDASServiceApps["dmp/mdm1"])
         self.assertIn("dmp/mdm1", self.fact.subapps)
         self.assertIn("dap", self.fact.subapps)
         self.assertIs(self.fact.subapps["dmp/mdm1"], self.fact.subapps["dap"])
@@ -394,7 +395,7 @@ class TestMIDASApp(test.TestCase):
         self.data = self.clifact._db
 
     def test_ctor(self):
-        self.assertEqual(self.app.base_ep, ['midas'])
+        self.assertEqual(self.app.base_ep, '/midas/')
         self.assertIn("dmp/mdm1", self.app.subapps)
         self.assertIn("dmp/mdm1", self.app.subapps)
         self.assertNotIn("dmp/mdm2", self.app.subapps)
@@ -486,13 +487,13 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mdm0:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "dmp")
 
         self.assertEqual(self.data["dmp"]["mdm0:0001"]["name"], "gary")
         self.assertEqual(self.data["dmp"]["mdm0:0001"]["data"], {"color": "red"})
         self.assertEqual(self.data["dmp"]["mdm0:0001"]["id"], "mdm0:0001")
-        self.assertEqual(self.data["dmp"]["mdm0:0001"]["owner"], "anonymous")
+        self.assertEqual(self.data["dmp"]["mdm0:0001"]["owner"], prov.Agent.ANONYMOUS)
 
         self.resp = []
         req = {
@@ -506,7 +507,7 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mdm0:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "dmp")
 
         self.resp = []
@@ -545,7 +546,7 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "bob")
         self.assertEqual(data["data"], {"color": "red", "size": "grande"})
         self.assertEqual(data["id"], "mdm0:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "dmp")
 
         self.resp = []
@@ -587,13 +588,13 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mds3:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "drafts")
 
         self.assertEqual(self.data["drafts"]["mds3:0001"]["name"], "gary")
         self.assertEqual(self.data["drafts"]["mds3:0001"]["data"], {"color": "red"})
         self.assertEqual(self.data["drafts"]["mds3:0001"]["id"], "mds3:0001")
-        self.assertEqual(self.data["drafts"]["mds3:0001"]["owner"], "anonymous")
+        self.assertEqual(self.data["drafts"]["mds3:0001"]["owner"], prov.Agent.ANONYMOUS)
 
         self.resp = []
         req = {
@@ -607,7 +608,7 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mds3:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "drafts")
 
 midasserverdir = Path(__file__).parents[4] / 'docker' / 'midasserver'
@@ -641,8 +642,9 @@ class TestMIDASServer(test.TestCase):
         self.config['working_dir'] = self.workdir
         self.config['services']['dap']['conventions']['mds3']['nerdstorage']['store_dir'] = \
             os.path.join(self.workdir, 'nerdm')
-        self.config['jwt_auth'] = { "key": "XXXXX", "algorithm": "HS256", "require_expiration": False }
-        self.config['client_agents'] = {'ark:/88434/tl0-0001': ["Unit testing agent"]}
+        cliagents = {'ark:/88434/tl0-0001': ["Unit testing agent"]}
+        self.config['authentication'] = { "key": "XXXXX", "algorithm": "HS256", "require_expiration": False,
+                                          'client_agents': cliagents }
 
         self.clifact = fsbased.FSBasedDBClientFactory({}, self.dbdir)
         self.app = app.MIDASApp(self.config, self.clifact)
@@ -671,23 +673,34 @@ class TestMIDASServer(test.TestCase):
             'PATH_INFO': '/midas/dmp'
         }
         who = self.app.authenticate(req)
-        self.assertEqual(who.group, "public")
-        self.assertEqual(who.actor, "anonymous")
-        self.assertEqual(who.agents, ['(unknown)'])
+        self.assertEqual(who.agent_class, "public")
+        self.assertEqual(who.actor, prov.Agent.ANONYMOUS)
+        self.assertEqual(who.delegated, ('(unknown)',))
 
         req['HTTP_AUTHORIZATION'] = "Bearer goober"  # bad token
         req['HTTP_OAR_CLIENT_ID'] = 'ark:/88434/tl0-0001'
         who = self.app.authenticate(req)
-        self.assertEqual(who.group, "invalid")
-        self.assertEqual(who.actor, "anonymous")
-        self.assertEqual(who.agents, ["Unit testing agent"])
+        self.assertEqual(who.agent_class, "invalid")
+        self.assertEqual(who.actor, prov.Agent.ANONYMOUS)
+        self.assertEqual(who.delegated, ("Unit testing agent",))
 
-        token = jwt.encode({"sub": "fed@nist.gov"}, self.config['jwt_auth']['key'], algorithm="HS256")
+        token = jwt.encode({"sub": "fed@nist.gov"}, self.config['authentication']['key'], algorithm="HS256")
         req['HTTP_AUTHORIZATION'] = "Bearer "+token
         who = self.app.authenticate(req)
-        self.assertEqual(who.group, "nist")
+        self.assertEqual(who.agent_class, "nist")
         self.assertEqual(who.actor, "fed")
-        self.assertEqual(who.agents, ["Unit testing agent"])
+        self.assertEqual(who.delegated, ("Unit testing agent",))
+        self.assertIsNone(who.get_prop("email"))
+
+        token = jwt.encode({"sub": "fed", "userEmail": "fed@nist.gov", "OU": "61"},
+                           self.config['authentication']['key'], algorithm="HS256")
+        req['HTTP_AUTHORIZATION'] = "Bearer "+token
+        who = self.app.authenticate(req)
+        self.assertEqual(who.agent_class, "nist")
+        self.assertEqual(who.actor, "fed")
+        self.assertEqual(who.delegated, ("Unit testing agent",))
+        self.assertEqual(who.get_prop("email"), "fed@nist.gov")
+        self.assertEqual(who.get_prop("OU"), "61")
 
 
     def test_create_dmp(self):

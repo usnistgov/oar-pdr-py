@@ -3,7 +3,8 @@ various tools for enhancing the metadata and ancillary content of a
 NIST-style bag.  
 """
 import re, logging
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 
 from nistoar.nerdm.convert import DOIResolver
 from nistoar.doi import is_DOI, DOIResolutionException

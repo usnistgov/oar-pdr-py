@@ -4,7 +4,8 @@ infrastructure.  At the center is the SIPBagger class that serves as an
 abstract base for subclasses that understand different input sources.
 """
 import os, json, filelock
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from abc import ABCMeta, abstractmethod, abstractproperty
 from copy import deepcopy
 
@@ -13,7 +14,7 @@ from .. import (PublishException, PublishingStateException, StateException)
 from ...utils import read_nerd, read_pod, read_json, write_json
 from ...preserve.bagit.builder import checksum_of
 from ....base.config import merge_config
-from ..prov import PubAgent, Action
+from ...utils.prov import Agent, Action
 
 def moddate_of(filepath):
     """
@@ -78,14 +79,14 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
                                        
 
     @abstractmethod
-    def ensure_preparation(self, nodata: bool=False, who: PubAgent=None, _action: Action=None) -> None:
+    def ensure_preparation(self, nodata: bool=False, who: Agent=None, _action: Action=None) -> None:
         """
         create and update the output working bag directory to ensure it is 
         a re-organized version of the SIP, ready for annotation.
 
         :param bool nodata:  if True, do not copy (or link) data files to the
                              output directory.
-        :param PubAgent who: an actor identifier object, indicating who is requesting this action.  This 
+        :param Agent    who: an actor identifier object, indicating who is requesting this action.  This 
                              will get recorded in the history data.  If None, an internal administrative 
                              identity will be assumed.  This identity may affect the identifier assigned.
         :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
@@ -127,12 +128,12 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
         else:
             self.ensure_preparation(nodata, who, _action)
 
-    def finalize(self, who: PubAgent=None, lock=True, _action: Action=None):
+    def finalize(self, who: Agent=None, lock=True, _action: Action=None):
         """
         Based on the current state of the bag, finalize its contents to a complete state according to 
         the conventions of this bagger implementation.  After a successful call, the bag should be in 
         a preservable state.
-        :param PubAgent who: an actor identifier object, indicating who is requesting this action.  This 
+        :param Agent    who: an actor identifier object, indicating who is requesting this action.  This 
                              will get recorded in the history data.  If None, an internal administrative 
                              identity will be assumed.  This identity may affect the identifier assigned.
         :param bool lock:    if True (default), acquire a lock before executing
@@ -150,12 +151,12 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
             self.ensure_finalize(who, _action)
 
     @abstractmethod
-    def ensure_finalize(self, who: PubAgent=None, _action: Action=None):
+    def ensure_finalize(self, who: Agent=None, _action: Action=None):
         """
         Based on the current state of the bag, finalize its contents to a complete state according to 
         the conventions of this bagger implementation.  After a successful call, the bag should be in 
         a preservable state.
-        :param PubAgent who:  an actor identifier object, indicating who is requesting this action.  This 
+        :param Agent    who:  an actor identifier object, indicating who is requesting this action.  This 
                               will get recorded in the history data.  If None, an internal administrative 
                               identity will be assumed.  This identity may affect the identifier assigned.
         :param Action _action:  Intended primarily for internal use; if provided, any provence actions 

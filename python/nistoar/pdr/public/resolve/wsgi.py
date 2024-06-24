@@ -3,12 +3,14 @@ The suite of web service endpoints that can resolve an identifier.
 """
 import os, sys, logging, json, re
 from wsgiref.headers import Headers
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from copy import deepcopy
 
 from ... import ARK_NAAN
 from . import system
-from .handlers import Ready, PDRIDHandler, AIPHandler
+from .handlers import ResolverReady, PDRIDHandler, AIPHandler
+from nistoar.web.rest import ServiceApp
 
 log = logging.getLogger(system.system_abbrev)   \
              .getChild(system.subsystem_abbrev) \
@@ -17,7 +19,7 @@ log = logging.getLogger(system.system_abbrev)   \
 DEF_BASE_PATH = "/"
 ark_naan = ARK_NAAN
 
-class ResolverApp(object):
+class ResolverApp(ServiceApp):
     """
     a WSGI-compliant service app designed to resolve PDR-recognized identifiers
 
@@ -28,9 +30,6 @@ class ResolverApp(object):
     """
 
     def __init__(self, config):
-        level = config.get('loglevel')
-        if level:
-            log.setLevel(level)
         cfg = deepcopy(config)
         cfg.setdefault('id', {})
         cfg.setdefault('aip', {})
@@ -44,13 +43,19 @@ class ResolverApp(object):
             cfg['aip'].setdefault('APIs', cfg['APIs'])
             cfg['ready'].setdefault('APIs', cfg['APIs'])
 
+        super(ResolverApp, self).__init__("Resolver", log, cfg)
+        
+        level = self.cfg.get('loglevel')
+        if level:
+            self.log.setLevel(level)
+
         self.handlers = {
-            "id":  (PDRIDHandler, cfg.get('id', {})),
-            "aip": (AIPHandler,   cfg.get('aip', {})),
-            "":    (Ready,        cfg.get('ready', {}))
+            "id":  (PDRIDHandler,  self.cfg.get('id', {})),
+            "aip": (AIPHandler,    self.cfg.get('aip', {})),
+            "":    (ResolverReady, self.cfg.get('ready', {}))
         }
 
-    def handle_request(self, env, start_resp):
+    def create_handler(self, env, start_resp, path, who):
         path = env.get('PATH_INFO', '/').strip('/')
         parts = path.split('/', 1)
 
@@ -65,11 +70,8 @@ class ResolverApp(object):
         if not handler:
             handler = self.handlers.get('')
 
-        handler = handler[0](path, env, start_resp, handler[1], log)
-        return handler.handle()
+        return handler[0](path, env, start_resp, config=handler[1], log=log, app=self)
 
-    def __call__(self, env, start_resp):
-        return self.handle_request(env, start_resp)
 
 app = ResolverApp
 

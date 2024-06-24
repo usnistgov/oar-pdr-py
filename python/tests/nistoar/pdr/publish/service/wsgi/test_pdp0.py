@@ -6,7 +6,7 @@ import unittest as test
 from nistoar.testing import *
 from nistoar.pdr.publish.service.wsgi import pdp0
 import nistoar.pdr.preserve.bagit.builder as bldr
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 from nistoar.pdr import utils
 
 datadir = Path(__file__).parents[3] / 'preserve' / 'data'
@@ -33,8 +33,8 @@ def tearDownModule():
         loghdlr = None
     rmtmpdir()
 
-tstag = prov.PubAgent("test", prov.PubAgent.AUTO, "tester")
-ncnrag = prov.PubAgent("ncnr", prov.PubAgent.AUTO, "tester")
+tstag = prov.Agent("test", prov.Agent.AUTO, "tester", "test")
+ncnrag = prov.Agent("ncnr", prov.Agent.AUTO, "tester", "ncnr")
 
 class TestPDP0App(test.TestCase):
 

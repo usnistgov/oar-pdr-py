@@ -3,7 +3,7 @@ The DAP Authoring Service implemented using the mdsx convention.  This conventio
 implementation provided for development purposes and not intended for production use. 
 
 Support for the web service frontend is provided as 
-WSGI :ref:class:`~nistoar.pdr.publish.service.wsgi.SubApp` implementation.
+WSGI :ref:class:`~nistoar.pdr.publish.service.wsgi.ServiceApp` implementation.
 """
 from logging import Logger
 from collections import OrderedDict
@@ -15,7 +15,7 @@ from ...dbio.wsgi.project import MIDASProjectApp
 from nistoar.base.config import ConfigurationException
 from nistoar.nerdm.constants import core_schema_base, schema_versions
 from nistoar.pdr import constants as const
-from nistoar.pdr.publish.prov import PubAgent
+from nistoar.pdr.utils.prov import Agent
 
 ASSIGN_DOI_NEVER   = 'never'
 ASSIGN_DOI_ALWAYS  = 'always'
@@ -50,7 +50,7 @@ class DAPService(ProjectService):
     in the record NERDm data.  
     """
 
-    def __init__(self, dbclient_factory: DBClient, config: Mapping={}, who: PubAgent=None,
+    def __init__(self, dbclient_factory: DBClient, config: Mapping={}, who: Agent=None,
                  log: Logger=None, project_type=DAP_PROJECTS):
         """
         create a request handler
@@ -161,17 +161,17 @@ class DAPServiceFactory(ProjectServiceFactory):
             project_coll = DAP_PROJECTS
         super(DAPServiceFactory, self).__init__(project_coll, dbclient_factory, config, log)
 
-    def create_service_for(self, who: PubAgent=None):
+    def create_service_for(self, who: Agent=None):
         """
         create a service that acts on behalf of a specific user.  
-        :param PubAgent who:    the user that wants access to a project
+        :param Agent who:    the user that wants access to a project
         """
         return DAPService(self._dbclifact, self._cfg, who, self._log, self._prjtype)
 
     
 class DAPApp(MIDASProjectApp):
     """
-    A MIDAS SubApp supporting a DAP service
+    A MIDAS ServiceApp supporting a DAP service
     """
     
     def __init__(self, dbcli_factory: DBClientFactory, log: Logger, config: dict={}, project_coll: str=None):
