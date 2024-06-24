@@ -43,6 +43,13 @@ class DBIOHandler(Handler):
         if hasattr(self._app, "_recorder") and self._app._recorder:
             self._reqrec = self._app._recorder.from_wsgi(self._env)
 
+    def preauthorize(self):
+        """
+        determine if the client agent is authorized to access this endpoint.  This implementation 
+        ensures that a valid client agent has been established and is valid.
+        """
+        return bool(self.who) and self.who.agent_class != Agent.INVALID
+
     def acceptable(self):
         """
         return True if the client's Accept request is compatible with this handler.
@@ -106,7 +113,7 @@ class DBIOHandler(Handler):
             else:
                 out = json.load(bodyin, object_pairs_hook=OrderedDict)
             if self._reqrec:
-                self._reqrec.add_body_text(json.dumps(name, indent=2)).record()
+                self._reqrec.add_body_text(json.dumps(out, indent=2)).record()
             return out
 
         except (ValueError, TypeError) as ex:
@@ -114,12 +121,25 @@ class DBIOHandler(Handler):
                 self.log.error("Failed to parse input: %s", str(ex))
                 self.log.debug("\n%s", body)
             if self._reqrec:
-                self._reqrec.add_body_text(body).record()
+                try:
+                    if isinstance(body, bytes):
+                        body = body.decode('utf-8')
+                    self._reqrec.add_body_text(body).record()
+                except Exception:
+                    self._reqrec.record()
             raise self.FatalError(400, "Input not parseable as JSON",
                                   "Input document is not parse-able as JSON: "+str(ex))
 
         except Exception as ex:
             if self._reqrec:
-                self._reqrec.add_body_text(body).record()
+                try:
+                    if body:
+                        if isinstance(body, bytes):
+                            body = body.decode('utf-8')
+                        self._reqrec.add_body_text(body).record()
+                    else:
+                        self._reqrec.add_body_text("<<empty body>>")
+                except Exception:
+                    self._reqrec.add_body_text("<<not convertable to text>>")
             raise
 

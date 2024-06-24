@@ -69,7 +69,7 @@ class InMemoryDBClient(base.DBClient):
         self._db[coll][recdata['id']] = deepcopy(recdata)
         return not exists
 
-    def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+    def select_records(self, perm: base.Permissions=base.ACLs.OWN, **cnsts) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
             perm = [perm]
         if isinstance(perm, (list, tuple)):
@@ -80,6 +80,27 @@ class InMemoryDBClient(base.DBClient):
                 if rec.authorized(p):
                     yield deepcopy(rec)
                     break
+    
+    def adv_select_records(self, filter:dict,
+                           perm: base.Permissions=base.ACLs.OWN,) -> Iterator[base.ProjectRecord]:
+        if(base.DBClient.check_query_structure(filter) == True):
+            try:
+                if isinstance(perm, str):
+                    perm = [perm]
+                if isinstance(perm, (list, tuple)):
+                    perm = set(perm)
+                for rec in self._db[self._projcoll].values():
+                    rec = base.ProjectRecord(self._projcoll, rec, self)
+                    for p in perm:
+                        if(rec.authorized(p)):
+                            if (rec.searched(filter) == True):
+                                yield deepcopy(rec)
+                                break
+            except Exception as ex:
+                raise base.DBIOException(
+                    "Failed while selecting records: " + str(ex), cause=ex)
+        else:
+            raise SyntaxError('Wrong query format')
 
     def _save_action_data(self, actdata: Mapping):
         if 'subject' not in actdata:

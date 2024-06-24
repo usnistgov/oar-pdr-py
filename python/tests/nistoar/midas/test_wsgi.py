@@ -60,6 +60,7 @@ class TestAbout(test.TestCase):
         self.assertEqual(self.app.data['message'], "Service is available")
         for key in self.data.keys():
             self.assertEqual(self.app.data[key], self.data[key])
+        self.assertEqual(prov.Agent.ANONYMOUS, "anonymous")
 
     def test_add_stuff(self):
         self.assertNotIn("hairdos",  self.app.data)
@@ -486,13 +487,13 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mdm0:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "dmp")
 
         self.assertEqual(self.data["dmp"]["mdm0:0001"]["name"], "gary")
         self.assertEqual(self.data["dmp"]["mdm0:0001"]["data"], {"color": "red"})
         self.assertEqual(self.data["dmp"]["mdm0:0001"]["id"], "mdm0:0001")
-        self.assertEqual(self.data["dmp"]["mdm0:0001"]["owner"], "anonymous")
+        self.assertEqual(self.data["dmp"]["mdm0:0001"]["owner"], prov.Agent.ANONYMOUS)
 
         self.resp = []
         req = {
@@ -506,7 +507,7 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mdm0:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "dmp")
 
         self.resp = []
@@ -545,7 +546,7 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "bob")
         self.assertEqual(data["data"], {"color": "red", "size": "grande"})
         self.assertEqual(data["id"], "mdm0:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "dmp")
 
         self.resp = []
@@ -587,13 +588,13 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mds3:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "drafts")
 
         self.assertEqual(self.data["drafts"]["mds3:0001"]["name"], "gary")
         self.assertEqual(self.data["drafts"]["mds3:0001"]["data"], {"color": "red"})
         self.assertEqual(self.data["drafts"]["mds3:0001"]["id"], "mds3:0001")
-        self.assertEqual(self.data["drafts"]["mds3:0001"]["owner"], "anonymous")
+        self.assertEqual(self.data["drafts"]["mds3:0001"]["owner"], prov.Agent.ANONYMOUS)
 
         self.resp = []
         req = {
@@ -607,7 +608,7 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mds3:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "drafts")
 
 midasserverdir = Path(__file__).parents[4] / 'docker' / 'midasserver'
@@ -673,14 +674,14 @@ class TestMIDASServer(test.TestCase):
         }
         who = self.app.authenticate(req)
         self.assertEqual(who.agent_class, "public")
-        self.assertEqual(who.actor, "anonymous")
+        self.assertEqual(who.actor, prov.Agent.ANONYMOUS)
         self.assertEqual(who.delegated, ('(unknown)',))
 
         req['HTTP_AUTHORIZATION'] = "Bearer goober"  # bad token
         req['HTTP_OAR_CLIENT_ID'] = 'ark:/88434/tl0-0001'
         who = self.app.authenticate(req)
         self.assertEqual(who.agent_class, "invalid")
-        self.assertEqual(who.actor, "anonymous")
+        self.assertEqual(who.actor, prov.Agent.ANONYMOUS)
         self.assertEqual(who.delegated, ("Unit testing agent",))
 
         token = jwt.encode({"sub": "fed@nist.gov"}, self.config['authentication']['key'], algorithm="HS256")

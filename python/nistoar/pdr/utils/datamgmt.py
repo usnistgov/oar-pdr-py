@@ -1,7 +1,7 @@
 """
 Utility functions managing data and files
 """
-from collections import Mapping
+from collections.abc import Mapping
 import hashlib, os, shutil, time, re, math
 
 __all__ = [

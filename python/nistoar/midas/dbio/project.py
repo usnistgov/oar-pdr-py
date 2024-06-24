@@ -18,7 +18,7 @@ from copy import deepcopy
 
 import jsonpatch
 
-from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus,
+from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus, ANONYMOUS,
                    AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException)
 from . import status
 from .. import MIDASException, MIDASSystem
@@ -94,7 +94,7 @@ class ProjectService(MIDASSystem):
         super(ProjectService, self).__init__(_subsys, _subsysabbrev)
         self.cfg = config
         if not who:
-            who = Agent("dbio.project", Agent.USER, "anonymous", Agent.PUBLIC)
+            who = Agent("dbio.project", Agent.USER, Agent.ANONYMOUS, Agent.PUBLIC)
         self.who = who
         if not log:
             log = getLogger(self.system_abbrev).getChild(self.subsystem_abbrev).getChild(project_type)
@@ -121,6 +121,8 @@ class ProjectService(MIDASSystem):
         :raises AlreadyExists:  if a record owned by the user already exists with the given name
         """
         shoulder = self._get_id_shoulder(self.who)
+        if self.dbcli.user_id == ANONYMOUS:
+            self.log.warning("A new record requested for an anonymous user")
         prec = self.dbcli.create_record(name, shoulder)
 
         if meta:

@@ -3,7 +3,8 @@ The suite of web service endpoints that can resolve an identifier.
 """
 import os, sys, logging, json, re
 from wsgiref.headers import Headers
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from copy import deepcopy
 
 from ... import ARK_NAAN

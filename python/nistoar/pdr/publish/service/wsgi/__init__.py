@@ -3,7 +3,8 @@ The web service providing the various flavored endpoints for programmatic data p
 """
 import os, sys, logging, json, re
 from wsgiref.headers import Headers
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from copy import deepcopy
 from typing import List
 
@@ -131,7 +132,7 @@ class PDPApp(WSGIAppSuite, PublishSystem):
                 authkey = auth[1]
         if not authkey:
             log.warning("Client %s did not provide a Bearer authentication token", str(client_id))
-            return Agent("pdp", Agent.UNKN, "anonymous", Agent.PUBLIC, agents)
+            return Agent("pdp", Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, agents)
         
         client = deepcopy(self._id_map.get(authkey))
         client.setdefault('user', 'authorized')

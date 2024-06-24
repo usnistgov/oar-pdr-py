@@ -36,6 +36,7 @@ from jsonpatch import JsonPatch
 Agent = NewType("Agent", object)
 PUBLIC_AGENT_CLASS = "public"
 INVALID_AGENT_CLASS = "invalid"
+ANONYMOUS_USER = "anonymous"
 
 class Agent(object):
     """
@@ -68,6 +69,7 @@ class Agent(object):
     UNKN: str = ""
     PUBLIC: str = PUBLIC_AGENT_CLASS
     INVALID: str = INVALID_AGENT_CLASS
+    ANONYMOUS: str = ANONYMOUS_USER
     default_class = PUBLIC_AGENT_CLASS
 
     def __init__(self, vehicle: str, actortype: str, actorid: str = None, agclass: str = None,
