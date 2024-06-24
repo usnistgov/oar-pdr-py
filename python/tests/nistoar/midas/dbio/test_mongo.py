@@ -322,6 +322,8 @@ class TestMongoDBClient(test.TestCase):
 
     def test_adv_select_records(self):
 
+        self.cli.native[base.DMP_PROJECTS].create_index([("$**", "text")], weights={"name": 2})
+
         # inject some data into the database
         id = "pdr0:0002"
         rec = base.ProjectRecord(
