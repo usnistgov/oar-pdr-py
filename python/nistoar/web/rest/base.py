@@ -1,7 +1,7 @@
 """
 The base REST framework classes
 """
-import sys, re, json
+import sys, os, re, json
 from abc import ABCMeta, abstractmethod, abstractproperty
 from typing import Callable, List
 from functools import reduce
