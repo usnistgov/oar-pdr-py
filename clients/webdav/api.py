@@ -70,10 +70,10 @@ class WebDAVApi:
                 raise ValueError(f"Unsupported method: {method}")
         except WebDavException as e:
             logging.error(f"WebDav error occurred while handling request: {e}")
-            return {'status': 500, 'message': str(e)}
+            return {'status': 500, 'message': "Uncaught error occurred while handling request."}
         except Exception as e:
             logging.error(f"Uncaught error occurred while handling request: {e}")
-            return {'status': 500, 'message': str(e)}
+            return {'status': 500, 'message': "Uncaught error occurred while handling request."}
 
     def create_directory(self, path):
         """ Create a directory given a path. """
@@ -89,11 +89,16 @@ class WebDAVApi:
         last_modified = None
         if len(contents_info) > 0:
             for content in contents_info:
+                if content['size'] is None:
+                    content['size'] = 0
                 total_size += content['size']
                 date_times.append(datetime.strptime(content['modified'], date_format))
 
             last_modified_date = max(date_times)
             last_modified = last_modified_date.strftime(date_format)
+        else:
+            dir_info = self.handle_request('PROPFIND', dir_path)
+            last_modified = dir_info['info'][0]['modified']
 
         dir_info = {
             'name': dir_name,
@@ -104,26 +109,37 @@ class WebDAVApi:
 
         return dir_info
 
+
     def get_contents_info(self, dir_path):
         contents = self.handle_request('PROPFIND', dir_path)
+        contents_info = []
+
         for content in contents['info']:
-            path_parts = [part for part in content['path'].split('/') if part]
-            if path_parts:
-                content['name'] = path_parts[-1]
-            if content.get('isdir', False):
-                content['size'] = 0
-                content['content_type'] = 'Directory'
+            content['name'] = content['path'].rstrip('/').split('/')[-1]
+            if content['isdir']:
                 subdir_path = content['path'].split(f"{Config.API_USER}/")[-1].rstrip('/')
-                content['info'] = self.get_contents_info(subdir_path)
-                for sub_content in content['info']:
-                    if sub_content['size'] is not None:
-                        content['size'] += int(sub_content['size'])
+                if subdir_path != dir_path.rstrip('/'):
+                    content['size'] = 0
+                    content['content_type'] = 'Directory'
+                    subdir_contents = self.get_contents_info(subdir_path)
+                    # Remove the subdirectory itself from its info list
+                    content['info'] = [sub_content for sub_content in subdir_contents if
+                                       sub_content['path'].rstrip('/') != subdir_path]
+                    for sub_content in content['info']:
+                        if sub_content['size'] is not None:
+                            content['size'] += int(sub_content['size'])
+                    if subdir_path != dir_path.rstrip('/'):
+                        content.pop('created', None)
+                        contents_info.append(content)
             else:
                 if content['size'] is not None:
                     content['size'] = int(content['size'])
-            content.pop('created', None)
+                else:
+                    content['size'] = 0
+                content.pop('created', None)
+                contents_info.append(content)
 
-        return contents['info']
+        return contents_info
 
     def delete_directory(self, path):
         """ Delete a directory given a path. """
