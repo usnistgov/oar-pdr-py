@@ -66,8 +66,8 @@ class RecordSpace(Resource):
             return success_response, 201
 
         except Exception as error:
-            logging.exception("An unexpected error occurred")
-            return {"error": "Internal Server Error", "message": str(error)}, 500
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
 
     @jwt_required()
     def get(self, record_name):
@@ -93,8 +93,8 @@ class RecordSpace(Resource):
             logging.error(f"Regex error while processing response: {regex_error}")
             return {"error": "Internal Server Error", "message": "Failed to process directory information"}, 500
         except Exception as error:
-            logging.exception("An unexpected error occurred")
-            return {"error": "Internal Server Error", "message": str(error)}, 500
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
 
     @jwt_required()
     def delete(self, record_name):
@@ -109,7 +109,7 @@ class RecordSpace(Resource):
             elif response['status'] != 200:
                 logging.error(f"Failed to delete '{dir_name}' with status code {response['status']}")
                 return {"error": "Internal Server Error",
-                        "message": f"Unknown error: status {str(response['status'])}"}, 500
+                        "message": "Unknown error"}, 500
 
             success_response = {
                 'success': 'DELETE',
@@ -119,5 +119,5 @@ class RecordSpace(Resource):
             return success_response, 200
 
         except Exception as error:
-            logging.exception("An unexpected error occurred")
-            return {"error": "Internal Server Error", "message": str(error)}, 500
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
