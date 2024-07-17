@@ -133,8 +133,8 @@ class Permissions(Resource):
             logging.exception(f"Value error: {ve}")
             return {"error": "Bad Request", "message": str(ve)}, 400
         except Exception as error:
-            logging.exception("An unexpected error occurred in GET")
-            return {"error": "Internal Server Error", "message": str(error)}, 500
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
 
     @jwt_required()
     def put(self, user_name, record_name, permission_type):
@@ -169,8 +169,8 @@ class Permissions(Resource):
             logging.exception(f"Value error in PUT: {ve}")
             return {"error": "Bad Request", "message": str(ve)}, 400
         except Exception as error:
-            logging.exception("An unexpected error occurred in PUT")
-            return {"error": "Internal Server Error", "message": str(error)}, 500
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
 
     @jwt_required()
     def delete(self, user_name, record_name):
@@ -193,5 +193,5 @@ class Permissions(Resource):
             return success_response, 200
 
         except Exception as error:
-            logging.exception("An unexpected error occurred in DELETE")
-            return {"error": "Internal Server Error", "message": str(error)}, 500
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
