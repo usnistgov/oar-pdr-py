@@ -50,8 +50,8 @@ class File(Resource):
 
             return success_response, 201
         except Exception as error:
-            logging.exception("An unexpected error occurred during file upload")
-            return {'error': 'Internal Server Error', 'message': str(error)}, 500
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
 
     @jwt_required()
     def put(self, destination_path=''):
@@ -79,8 +79,8 @@ class File(Resource):
             return {'success': 'PUT',
                     'message': f'Modified file {filename} in {destination_path} successfully'}, 200
         except Exception as error:
-            logging.exception("An unexpected error occurred during file modification")
-            return {'error': 'Internal Server Error', 'message': str(error)}, 500
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
 
     @jwt_required()
     def delete(self, path):
@@ -96,5 +96,5 @@ class File(Resource):
             return {'success': 'DELETE', 'message': f'File successfully deleted!'}, 200
 
         except Exception as error:
-            logging.error("An unexpected error occurred during file upload")
-            return {'error': 'Internal Server Error', 'message': str(error)}, 500
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
