@@ -487,9 +487,9 @@ class ScanFiles(Resource):
             logging.exception(f"Value error: {str(e)}")
             return {'error': 'Bad Request', 'message': str(e)}, 400
 
-        except Exception as e:
-            logging.exception(f"Unexpected error occurred for record: {record_name}")
-            return {'error': 'Unexpected Error', 'message': str(e)}, 500
+        except Exception as error:
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
 
     @jwt_required()
     def get(self, record_name, scan_id):
@@ -534,9 +534,9 @@ class ScanFiles(Resource):
         except FileNotFoundError as e:
             logging.exception(f"File not found: {e}")
             return {'error': 'File Not Found', 'message': str(e)}, 404
-        except Exception as e:
-            logging.exception(f"Unexpected Error: {e}")
-            return {'error': 'Unexpected Error', 'message': str(e)}, 500
+        except Exception as error:
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
 
     @jwt_required()
     def delete(self, record_name, scan_id):
@@ -578,6 +578,6 @@ class ScanFiles(Resource):
             logging.info(f"File deleted successfully: {file_path}")
             return success_response, 200
 
-        except Exception as e:
-            logging.exception(f"Unexpected error during deletion: {str(e)}")
-            return {'error': 'Unexpected Error', 'message': str(e)}, 500
+        except Exception as error:
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
