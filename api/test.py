@@ -26,12 +26,12 @@ class Test(Resource):
                 logging.info("Test resource retrieved successfully")
                 return {'success': 'GET', 'message': response.text}, 200
             else:
-                logging.error("Test resource error")
+                logging.error("Test resource error: " + response.text)
                 return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
         except Exception as error:
-            logging.exception("An unexpected error occurred")
+            logging.exception("An unexpected error occurred: " + str(error))
             error_response = {
                 'error': 'Internal Server Error',
-                'message': 'An unexpected error occurred: ' + str(error)
+                'message': 'An unexpected error occurred'
             }
             return error_response, 500
