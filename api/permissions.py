@@ -70,7 +70,9 @@ class Permissions(Resource):
             # Ensure user has no permissions on record
             response = nextcloud_client.get_user_permissions(dir_name)
             dir_users = {}
-            if ['ocs'] not in response:
+            logging.info('REPONSE I AM LOOKING FOR')
+            logging.info(response)
+            if 'ocs' not in response:
                 logging.error(f"Record name '{record_name}' does not exist or missing information")
                 return {"error": "Not Found",
                         "message": f"Record name '{record_name}' does not exist or is missing information"}, 404
@@ -110,7 +112,7 @@ class Permissions(Resource):
             response = nextcloud_client.get_user_permissions(dir_name)
 
             dir_users = {}
-            if ['ocs'] not in response:
+            if 'ocs' not in response:
                 logging.error(f"Record name '{record_name}' does not exist or missing information")
                 return {"error": "Not Found",
                         "message": f"Record name '{record_name}' does not exist or is missing information"}, 404
