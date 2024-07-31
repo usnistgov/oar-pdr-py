@@ -232,7 +232,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertIs(resp['meta']["creatorisContact"], False)
         self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0002')
         self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0002')
-        self.assertNotIn('keyword', resp['data'])    # because ['data'] is just a summary
+        self.assertNotIn('authors', resp['data'])    # because ['data'] is just a summary
         self.assertIn('contactPoint', resp['data'])  # this is included in ['data'] summary
 
         self.resp = []
@@ -298,7 +298,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertIs(resp['meta']["creatorisContact"], False)
         self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
         self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
-        self.assertNotIn('keyword', resp['data'])    # because ['data'] is just a summary
+        self.assertNotIn('authors', resp['data'])    # because ['data'] is just a summary
         self.assertIn('contactPoint', resp['data'])  # this is included in ['data'] summary
         
         self.resp = []
