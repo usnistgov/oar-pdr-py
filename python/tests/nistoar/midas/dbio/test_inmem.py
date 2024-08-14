@@ -321,7 +321,6 @@ class TestInMemoryDBClient(test.TestCase):
         recs = list(self.cli.adv_select_records(constraint_or))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
-        print(recs[1].data["keyword"])
         self.assertEqual(recs[1].id, "pdr0:0003")
         self.assertEqual(recs[1].data["keyword"][0], "Ray")
         self.assertEqual(recs[1].data["theme"][0], "Gretchen")
