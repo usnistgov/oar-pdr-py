@@ -365,7 +365,7 @@ class DAPService(ProjectService):
                 m = re.search(r'/v(\d+\.\d+(\.\d+)*)#?$', schemaid)
                 if schemaid.startswith(NERDM_SCH_ID_BASE) and m:
                     ver = m.group(1).split('.')
-                    for v in range(len(ver)):
+                    for i in range(len(ver)):
                         if i >= len(self._minnerdmver):
                             break;
                         if ver[i] < self._minnerdmver[1]:
@@ -800,6 +800,13 @@ class DAPService(ProjectService):
             out["contactPoint"] = resmd["contactPoint"]
         if 'landingPage' in resmd:
             out["landingPage"] = resmd["landingPage"]
+        out["keyword"] = resmd.get("keyword", [])
+        out["theme"] = list(set(resmd.get("theme", []) + [t.get('tag') for t in resmd.get('topic', [])]))
+        if resmd.get('responsibleOrganization'):
+            out['responsibleOrganization'] = list(set(
+                [org.title for org in resmd['responsibleOrganization']] + \
+                reduce(lambda x, y: x+y, [org.subunit for org in resmd['responsibleOrganization']], [])
+            ))
         out["author_count"] = nerd.authors.count
         out["file_count"] = nerd.files.count
         out["nonfile_count"] = nerd.nonfiles.count
