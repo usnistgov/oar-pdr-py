@@ -286,13 +286,18 @@ class TestInMemoryDBClient(test.TestCase):
 
         id = "pdr0:0003"
         rec = base.ProjectRecord(
-            base.DMP_PROJECTS, {"id": id, "name": "test3", "status": {
+            base.DMP_PROJECTS, {"id": id, "name": "test3","title":"Gretchen", "status": {
                 "created": 1689021185.5037804,
                 "state": "edit",
                 "action": "create",
                 "since": 1689021185.5038593,
                 "modified": 1689021185.5050585,
                 "message": "draft created"
+            },
+            "data": {
+                "keyword": ["Ray", "Bob"],
+                "theme": ["Gretchen", "Deo"]
+
             }}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
@@ -316,7 +321,10 @@ class TestInMemoryDBClient(test.TestCase):
         recs = list(self.cli.adv_select_records(constraint_or))
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
+        print(recs[1].data["keyword"])
         self.assertEqual(recs[1].id, "pdr0:0003")
+        self.assertEqual(recs[1].data["keyword"][0], "Ray")
+        self.assertEqual(recs[1].data["theme"][0], "Gretchen")
 
         recs = list(self.cli.adv_select_records(constraint_and))
         self.assertEqual(len(recs), 1)
