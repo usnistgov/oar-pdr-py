@@ -28,6 +28,8 @@ This includes:
    * :py:mod:`nistoar.midas.dap.review` -- validators for completeness and correctness of a DAP draft
      record.
 """
+__all__ = [ "Validator", "ValidationResults", "ValidationTest", "ValidationIssue", "AggregatedValidator",
+            "ERROR", "WARN", "REC", "ALL", "PROB", "ValidatorBase" ]
 
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
 from collections import OrderedDict
@@ -343,6 +345,7 @@ class ValidationResults(object):
         """
         issue = ValidationIssue.from_test(test, passed, comments)
         self.results[issue.type].append(issue)
+        return issue
 
 class Validator(ABC):
     """
@@ -406,7 +409,7 @@ class AggregatedValidator(Validator):
 
         out = results
         if not out:
-            out = ValidationResults(bag.name, want)
+            out = ValidationResults(bag.name, want, **kw)
 
         for v in self._vals:
             v.validate(bag, want, out)
@@ -477,10 +480,8 @@ class ValidatorBase(Validator):
                 getattr(self, test)(target, want, out, **kw) 
             except Exception as ex:
                 out._add_applied( ValidationTest(self.profile[0], self.profile[1],
-                                                 "validator failure", REQ, 
-                                                 "test method, {0}, raised an exception: {1}"
-                                                 .format(test, str(ex))),
-                                  False )
+                                                 f"{test} execution failure", REQ), 
+                                  False, f"test method, {test}, raised an exception: {str(ex)}" )
         return out
 
     def define_test(self, label, desc, type):

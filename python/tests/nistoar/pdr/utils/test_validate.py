@@ -222,11 +222,9 @@ class LifeValidator(base.ValidatorBase):
             out = base.ValidationResults(target.get("name", "unkn"))
 
         t = self._err("A1.2", "Life should self-replicate.")
-        comments = []
-        res = "replicate" in target
-        if not res:
-            comments="infertile"
-        out._add_applied(t, res, comments)
+        t = out._add_applied(t, "replicate" in target)
+        if t.failed():
+            t.add_comment("infertile")
 
         return out
 
@@ -297,7 +295,24 @@ class TestValidator(test.TestCase):
 
         self.assertFalse(res.ok())
 
-    
+    def test_validate_exec_fail(self):
+        target = set("convert".split())
+        val = LifeValidator({})
+
+        res = val.validate(40)
+        self.assertEqual(res.target, "Maude")
+        
+        self.assertEqual(res.count_applied(), 2)
+        self.assertEqual(len(res.applied()), 2)
+        tests = res.applied()
+        self.assertEqual(tests[0].label, "test_converts_energy execution failure")
+        self.assertTrue(tests[0].failed())
+        self.assertEqual(len(tests[0].comments), 1)
+        self.assertEqual(tests[1].label, "test_replicates execution failure")
+        self.assertTrue(tests[1].failed())
+        self.assertEqual(len(tests[1].comments), 1)
+        
+        
 
 
 if __name__ == '__main__':
