@@ -800,7 +800,7 @@ class DAPService(ProjectService):
             out["contactPoint"] = resmd["contactPoint"]
         if 'landingPage' in resmd:
             out["landingPage"] = resmd["landingPage"]
-        out["keyword"] = resmd.get("keyword", [])
+        out["keywords"] = resmd.get("keywords", [])
         out["theme"] = list(set(resmd.get("theme", []) + [t.get('tag') for t in resmd.get('topic', [])]))
         if resmd.get('responsibleOrganization'):
             out['responsibleOrganization'] = list(set(
