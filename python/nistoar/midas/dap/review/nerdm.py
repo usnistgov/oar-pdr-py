@@ -22,9 +22,12 @@ class DAPNERDmValidator(ValidatorBase):
         if not out:
             out = ValidationResults(self._target_name(nerd), want)
 
-        for prop in "title description keyword".split():
+        for prop in "title description".split():
             t = self._err(f"1.1#{prop}", f"A value for {prop} is required")
-            t = out._add_applied(t, bool(nerd.get(prop)))
+            t = out._add_applied(t, bool(nerd.get(prop)), f"Add a {prop}")
+
+        t = self._err("1.1#keyword", f"A value for keyword is required")
+        t = out._add_applied(t, bool(nerd.get(prop)), f"Add some keywords")
 
         return out
 

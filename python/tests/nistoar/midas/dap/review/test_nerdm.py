@@ -20,6 +20,12 @@ class TestDAPNERDmValidator(test.TestCase):
         res = self.val.test_simple_props(self.nerd)
         self.assertEqual(res.count_applied(), 3)
         self.assertEqual(res.count_passed(), 3)
+        self.assertTrue(res.passed()[0].label.endswith("#title"))
+        self.assertTrue(res.passed()[1].label.endswith("#description"))
+        self.assertTrue(res.passed()[2].label.endswith("#keyword"))
+        self.assertEqual(res.passed()[0].comments[0], "Add a title")
+        self.assertEqual(res.passed()[1].comments[0], "Add a description")
+        self.assertEqual(res.passed()[2].comments[0], "Add some keywords")
 
         self.nerd["description"] = ""
         del self.nerd["keyword"]
@@ -29,7 +35,10 @@ class TestDAPNERDmValidator(test.TestCase):
         self.assertEqual(res.count_passed(), 1)
         self.assertIn("#title", res.passed()[0].label)
         self.assertEqual(res.count_failed(), 2)
-
+        self.assertTrue(res.failed()[0].label.endswith("#description"))
+        self.assertTrue(res.failed()[1].label.endswith("#keyword"))
+        self.assertEqual(res.failed()[0].comments[0], "Add a description")
+        self.assertEqual(res.failed()[1].comments[0], "Add some keywords")
 
         
 
