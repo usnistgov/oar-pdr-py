@@ -41,9 +41,10 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence, Callable
 from typing import Iterator
 from urllib.parse import parse_qs
-import json
+import json, re
 
 from nistoar.web.rest import ServiceApp, Handler, Agent
+from nistoar.pdr.utils.validate import ValidationResults
 from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
@@ -839,12 +840,20 @@ class ProjectStatusHandler(ProjectRecordHandler):
         elif path == "action":
             out = out.action
         elif path == "message":
-            out = out.action
+            out = out.message
+        elif path == "todo":
+            out = self.review()
+            if out is None:
+                return self.send_error_resp(404, "todo property not accessible",
+                                            "Status property, todo, is not accessible",
+                                            self._id, ashead=ashead)                
         elif path:
             return self.send_error_resp(404, "Status property not accessible",
                                         "Requested status property is not accessible", self._id, ashead=ashead)
+        else:
+            out = out.to_dict()
             
-        return self.send_json(out.to_dict(), ashead=ashead)
+        return self.send_json(out, ashead=ashead)
 
     def do_PUT(self, path):
         """
@@ -905,7 +914,57 @@ class ProjectStatusHandler(ProjectRecordHandler):
 
         return self.send_json(stat.to_dict())
 
+    def review(self, ashead=False):
+        """
+        run the review operation on the project record and send the results back to the client
+        """
+        try:
+
+            res = self.svc.review(self._id)
+
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found", self._id)
         
+        if res is None:
+            return self.send_error_resp(404, "todo property not accessible",
+                                        "Status property, todo, is not accessible", self._id, ashead=ashead)
+
+        return self.send_json(self.__class__.export_review(res))
+
+    @classmethod
+    def export_review(cls, res: ValidationResults) -> Mapping:
+        """
+        return JSON-encodable version of review results appropriate for sending back to web clients
+        """
+        subjre = re.compile("#(\w\S*)$")
+        
+        # convert ValidationResults to todo export JSON
+        todo = { "req": [], "warn": [], "rec": [] }
+        for issue in res.failed():
+            jissue = { "id": issue.label, "subject": "" }
+            m = subjre.search(issue.label)
+            if m:
+                jissue["subject"] = m.group(1)
+            if len(issue.comments) > 0:
+                jissue["summary"] = issue.comments[0]
+                jissue["details"] = [ issue.specification ] + list(issue.comments[1:])
+            else:
+                jissue["summary"] = issue.specification
+                jissue["details"] = []
+
+            if issue._type & issue.REQ:
+                todo["req"].append(jissue)
+            elif issue._type & issue.WARN:
+                todo["warn"].append(jissue)
+            elif issue._type & issue.REC:
+                todo["rec"].append(jissue)
+
+        return todo
+
+            
         
 class MIDASProjectApp(ServiceApp):
     """

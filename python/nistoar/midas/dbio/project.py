@@ -23,6 +23,7 @@ from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus,
 from . import status
 from .. import MIDASException, MIDASSystem
 from nistoar.pdr.utils.prov import Agent, Action
+from nistoar.pdr.utils.validate import ValidationResults, ALL
 from nistoar.id.versions import OARVersion
 from nistoar.pdr import ARK_NAAN
 
@@ -190,6 +191,19 @@ class ProjectService(MIDASSystem):
         :raises NotAuthorized:   if the record exists but the current user is not authorized to read it.
         """
         return self.get_record(id).status
+
+    def review(self, id, want=ALL) -> ValidationResults:
+        """
+        Review the record with the given identifier for completeness and correctness, and return lists of 
+        suggestions for completing the record.  If None is returned, review is not supported for this type
+        of project.  
+        :raises ObjectNotFound:  if a record with that ID does not exist
+        :raises NotAuthorized:   if the record exists but the current user is not authorized to read it.
+        :return: the review results
+                 :rtype: ValidationResults
+        """
+        prec = self.get_record(id)   # may raise exceptions
+        return None
 
     def get_data(self, id, part=None):
         """

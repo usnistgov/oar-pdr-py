@@ -125,7 +125,7 @@ class ValidationTest:
     def specification(self, text):
         self._spec = text
 
-type_labels = { REQ: "error", WARN: "warning", REC: "recommendation" }
+type_labels = { REQ: "requirement", WARN: "warning", REC: "recommendation" }
 REQ_LAB   = type_labels[REQ]
 ERROR_LAB = type_labels[REQ]
 WARN_LAB  = type_labels[WARN]
@@ -409,7 +409,7 @@ class AggregatedValidator(Validator):
 
         out = results
         if not out:
-            out = ValidationResults(bag.name, want, **kw)
+            out = ValidationResults(self._target_name(target), want, **kw)
 
         for v in self._vals:
             v.validate(bag, want, out)

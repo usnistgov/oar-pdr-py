@@ -40,6 +40,11 @@ class TestDAPNERDmValidator(test.TestCase):
         self.assertEqual(res.failed()[0].comments[0], "Add a description")
         self.assertEqual(res.failed()[1].comments[0], "Add some keywords")
 
+
+    def test_validate(self):
+        res = self.val.validate(self.nerd)
+        self.assertEqual(res.count_applied(), 3)
+        self.assertEqual(res.count_passed(), 3)
         
 
 

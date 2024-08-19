@@ -15,7 +15,7 @@ The key features of the mds3 conventions are:
     ``_moderate_*`` functions in the :py:class:`DAPService` class.)
 
 Support for the web service frontend is provided via :py:class:`DAPApp` class, an implementation
-of the WSGI-based :ref:class:`~nistoar.pdr.publish.service.wsgi.ServiceApp`.
+of the WSGI-based :ref:class:`~nistoar.web.rest.ServiceApp`.
 """
 import os, re, pkg_resources, random, string, time, math
 from datetime import datetime
@@ -37,6 +37,7 @@ from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
 from nistoar.pdr.utils import build_mime_type_map, read_json
 from nistoar.pdr.utils.prov import Agent, Action
+from nistoar.pdr.utils.validate import ValidationResults, ALL
 
 from . import validate
 from .. import nerdstore
@@ -1645,16 +1646,23 @@ class DAPService(ProjectService):
         #         objlist.set(i, item)
         #     else:
         #         objlist.append(item)
-            
 
-            
-            
-        
-                        
 
-#################
 
-            
+    def review(self, id, want=ALL) -> ValidationResults:
+        """
+        Review the record with the given identifier for completeness and correctness, and return lists of 
+        suggestions for completing the record.  If None is returned, review is not supported for this type
+        of project.  
+        :raises ObjectNotFound:  if a record with that ID does not exist
+        :raises NotAuthorized:   if the record exists but the current user is not authorized to read it.
+        :return: the review results
+                 :rtype: ValidationResults
+        """
+        prec = self.get_record(id)   # may raise exceptions
+        reviewer = DAPReviewer.create_reviewer(self._store)
+        return reviewer.validate(prec, want)
+
     def validate_json(self, json, schemauri=None):
         """
         validate the given JSON data record against the give schema, raising an exception if it 
@@ -2395,5 +2403,3 @@ class DAPProjectSelectionHandler(ProjectSelectionHandler):
         for rec in self._dbcli.select_constraint_records(filter, perms):
             yield to_DAPRec(rec, self._fmcli)
 
-
-    
