@@ -40,6 +40,10 @@ class TestProjectService(test.TestCase):
                     "default_shoulder": "mdm0"
                 }
             },
+            "default_perms": {
+                "read":  ["grp0:public"],
+                "edit":  ["grp0:overlord"]
+            },
             "dbio": {
                 "allowed_project_shoulders": ["mdm1", "spc1"],
                 "default_shoulder": "mdm0"
@@ -113,6 +117,10 @@ class TestProjectService(test.TestCase):
         self.assertEqual(prec.status.action, "create")
         self.assertEqual(prec.status.message, "draft created")
         self.assertEqual(prec.status.state, "edit")
+
+        self.assertEqual(prec.acls._perms.get("read"), [ self.project.who.actor, "grp0:public"])
+        self.assertEqual(prec.acls._perms.get("write"), [ self.project.who.actor ])
+        self.assertEqual(prec.acls._perms.get("edit"), [ "grp0:overlord"])
 
         self.assertTrue(self.project.dbcli.name_exists("goob"))
         prec2 = self.project.get_record(prec.id)
