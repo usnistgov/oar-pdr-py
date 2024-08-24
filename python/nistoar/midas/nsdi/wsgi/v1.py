@@ -42,7 +42,7 @@ from urllib.parse import parse_qs
 from nistoar.web.rest import ServiceApp, Handler, ErrorHandling, FatalError
 from nistoar.web.formats import FormatSupport, Format, Unacceptable, UnsupportedFormat
 from nistoar.nsd.client import NSDClient, NSDServerError
-from nistoar.pdr.publish.prov import PubAgent
+from nistoar.pdr.utils.prov import Agent
 from nistoar.midas.dbio.index import NSDPeopleIndexClient, NSDOrgIndexClient
 
 class PeopleIndexHandler(Handler, ErrorHandling):
@@ -193,7 +193,7 @@ class NSDIndexerApp(ServiceApp):
             nsdclient = NSDClient(ep)
         self.nsdcli = nsdclient
 
-    def create_handler(self, env: Mapping, start_resp: Callable, path: str, who: PubAgent) -> Handler:
+    def create_handler(self, env: Mapping, start_resp: Callable, path: str, who: Agent) -> Handler:
         """
         return a handler instance to handle a particular request to a path
         :param Mapping env:  the WSGI environment containing the request

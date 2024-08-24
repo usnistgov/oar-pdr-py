@@ -779,7 +779,7 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(data['id'], 'mds3:0001')
         self.assertEqual(data['name'], "first")
         self.assertTrue(data['data']['title'].startswith("Microscopy of "))
-        self.assertEqual(data['data']['author_count'], 0)
+        self.assertEqual(len(data['data']['authors']), 0)
 
         self.resp = []
         authors = [
@@ -876,8 +876,8 @@ class TestMIDASServer(test.TestCase):
         data = self.body2dict(body)
         self.assertEqual(data['id'], 'mds3:0001')
         self.assertEqual(data['name'], "first")
-        self.assertEqual(data['data']['author_count'], 2)
-        self.assertNotIn('authors', data['data'])   # not included in summary
+        self.assertIn('authors', data['data'])
+        self.assertEqual(len(data['data']['authors']), 2)
         
     def test_put_landingpage(self):
         req = {

@@ -30,7 +30,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-class PoorHandler(Handler, jsonerr.ErrorHandler):
+class PoorHandler(Handler, jsonerr.ErrorHandling):
 
     def do_GET(self, path, ashead=False, format=None):
         params = {}
