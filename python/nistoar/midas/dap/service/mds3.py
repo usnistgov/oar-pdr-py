@@ -25,6 +25,7 @@ from collections.abc import Mapping, MutableMapping, Sequence, Callable
 from typing import List, Union, Iterator
 from copy import deepcopy
 from urllib.parse import urlparse
+from functools import reduce
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
                      InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable,
@@ -844,11 +845,12 @@ class DAPService(ProjectService):
         out["theme"] = list(set(resmd.get("theme", []) + [t.get('tag') for t in resmd.get('topic', [])]))
         if resmd.get('responsibleOrganization'):
             out['responsibleOrganization'] = list(set(
-                [org.title for org in resmd['responsibleOrganization']] + \
-                reduce(lambda x, y: x+y, [org.subunit for org in resmd['responsibleOrganization']], [])
+                [org['title'] for org in resmd['responsibleOrganization']] + \
+                reduce(lambda x, y: x+y,
+                       [org.get('subunit',[]) for org in resmd['responsibleOrganization']], [])
             ))
-        out["authors"] = nerd.references.get_data()
-        out["references"] = nerd.authors.get_data()
+        out["authors"] = nerd.authors.get_data()
+        out["references"] = nerd.references.get_data()
 #        out["author_count"] = nerd.authors.count
 #        out["reference_count"] = nerd.references.count
         out["file_count"] = nerd.files.count
