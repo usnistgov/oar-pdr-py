@@ -1,11 +1,12 @@
 """
 The WSGI implementation of the web API to the NSD Indexer Service.  See :py:mod:`nistoar.midas.nsdi`
 for a description of what this service does and :py:mod:`nistoar.midas.dbio.index` for what the index 
-looks like. 
+looks like.  This web service front end is designed to index an NSD service with an independent web 
+service endpoint (as in, hosted on another server).  
 
-In this implementation, all endpoints feature the same interface: a GET request will return an index
-document based on a prompt string given by a ``prompt`` query parameter.  The endpoint relects the 
-NSD query endpoint that will be indexed.  The endpoints are:
+In this implementation ("v1"), all endpoints feature the same interface: a GET request will return an 
+index document based on a prompt string given by a ``prompt`` query parameter.  The endpoint reflects 
+the NSD query endpoint that will be indexed.  The endpoints are:
 
   ``/People`` 
        indexes people whose last or first name begins with the prompt string
