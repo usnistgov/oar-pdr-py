@@ -1,14 +1,17 @@
 """
-A RESTful web service interface to the PeopleService
+A RESTful web service interface to the PeopleService. This implementation is intended to be compatible
+with the NIST Staff Directory (NSD) Service. 
 """
 import logging, json, re
 from collections import OrderedDict
 from collections.abc import Mapping, Callable
+from typing import List
 
-from .service import MongoPeopleService, PeopleService, NSDClientError
+from ..service import MongoPeopleService, PeopleService, NSDClientError
 from nistoar.web.rest import ServiceApp, Handler, WSGIServiceApp, authenticate_via_jwt
+from nistoar.pdr.utils.prov import Agent
 from nistoar.base.config import ConfigurationException
-from . import system
+from .. import system
 
 deflog = logging.getLogger(system.system_abbrev)   \
                 .getChild('wsgi')
@@ -20,13 +23,14 @@ class NSDHandler(Handler):
     Base Handler class for NSD queries
     """
 
-    def __init__(self, service: PeopleService, path: str,
-                 wsgienv: Mapping, start_resp: Callable, config: Mapping={}, log: logging.Logger=None):
+    def __init__(self, service: PeopleService, path: str, wsgienv: Mapping, start_resp: Callable, 
+                 who=None, config: Mapping={}, log: logging.Logger=None, app=None):
         if not log:
             log = deflog
-        super(NSDHandler, self).__init__(path, wsgienv, start_resp, config=config, log=log)
+        super(NSDHandler, self).__init__(path, wsgienv, start_resp, who, config, log)
 
         self.svc = service
+        self._format_qp = "format"
 
 class OrgHandler(NSDHandler):
     """
@@ -79,7 +83,7 @@ class PeopleHandler(NSDHandler):
             return self.send_error(400, "Input not parseable as JSON")
 
         try:
-            return self.send_json(self.svc.select_people(query))
+            return self.send_json(list(self.svc.select_people(query)))
         except NSDClientError as ex:
             self.log.debug("client error: %s", str(ex))
             return self.send_error(400, "Bad input")

@@ -4,7 +4,7 @@ from io import StringIO
 from pathlib import Path
 import unittest as test
 
-from nistoar.nsd import wsgi
+from nistoar.nsd.wsgi import nsd1 as wsgi
 from nistoar.nsd import service
 
 
@@ -31,7 +31,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-testdir = Path(__file__).parents[0]
+testdir = Path(__file__).parents[1]
 datadir = testdir / 'data'
 
 dburl = None
