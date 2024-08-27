@@ -34,10 +34,11 @@ testdir = Path(__file__).parents[0]
 datadir = testdir / 'data'
 
 dburl = None
+dbname = None
 if os.environ.get('MONGO_TESTDB_URL'):
     dburl = os.environ.get('MONGO_TESTDB_URL')
-dbname = re.sub(r'\?.*$', '', dburl).split('/')[-1]
-assert dbname
+    dbname = re.sub(r'\?.*$', '', dburl).split('/')[-1]
+    assert dbname
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
 class TestMongoPeopleService(test.TestCase):
@@ -55,12 +56,18 @@ class TestMongoPeopleService(test.TestCase):
         self.assertEqual(self.svc._cli[dbname]['OUs'].count_documents({}), 0)
         self.assertEqual(self.svc._cli[dbname]['Divisions'].count_documents({}), 0)
         self.assertEqual(self.svc._cli[dbname]['Groups'].count_documents({}), 0)
+        self.assertEqual(self.svc._cli[dbname]['Orgs'].count_documents({}), 0)
         self.assertEqual(self.svc._cli[dbname]['People'].count_documents({}), 0)
 
         self.svc.load(self.cfg, rootlog)
-        self.assertEqual(self.svc._cli[dbname]['OUs'].count_documents({}), 4)
-        self.assertEqual(self.svc._cli[dbname]['Divisions'].count_documents({}), 2)
-        self.assertEqual(self.svc._cli[dbname]['Groups'].count_documents({}), 2)
+        self.assertEqual(self.svc._cli[dbname]['OUs'].count_documents({}), 0)
+        self.assertEqual(self.svc._cli[dbname]['Divisions'].count_documents({}), 0)
+        self.assertEqual(self.svc._cli[dbname]['Groups'].count_documents({}), 0)
+
+        self.assertEqual(self.svc._cli[dbname]['Orgs'].count_documents({}), 8)
+        self.assertEqual(self.svc._cli[dbname]['Orgs'].count_documents({"orG_LVL_ID": self.svc.OU_LVL_ID}), 4)
+        self.assertEqual(self.svc._cli[dbname]['Orgs'].count_documents({"orG_LVL_ID": self.svc.DIV_LVL_ID}), 2)
+        self.assertEqual(self.svc._cli[dbname]['Orgs'].count_documents({"orG_LVL_ID": self.svc.GRP_LVL_ID}), 2)
         self.assertEqual(self.svc._cli[dbname]['People'].count_documents({}), 4)
         
     def test_OUs(self):
@@ -84,31 +91,31 @@ class TestMongoPeopleService(test.TestCase):
     def test_select_people(self):
         self.svc.load(self.cfg, rootlog)
 
-        peops = self.svc.select_people({"firstName": ["Phillip"]})
+        peops = list(self.svc.select_people({"firstName": ["Phillip"]}))
         self.assertEqual(len(peops), 2)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Austin Proctor".split()))
     
-        peops = self.svc.select_people({"firstName": ["Phillip"], "lastName": ["Austin"]})
+        peops = list(self.svc.select_people({"firstName": ["Phillip"], "lastName": ["Austin"]}))
         self.assertEqual(len(peops), 2)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Austin Proctor".split()))
     
-        peops = self.svc.select_people({"firstName": ["Phillip"], "lastName": ["Austin"]})
+        peops = list(self.svc.select_people({"firstName": ["Phillip"], "lastName": ["Austin"]}))
         self.assertEqual(len(peops), 2)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Austin Proctor".split()))
 
-        peops = self.svc.select_people({"firstName": ["Peter", "David"]})
+        peops = list(self.svc.select_people({"firstName": ["Peter", "David"]}))
         self.assertEqual(len(peops), 2)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Bergman Ossman".split()))
     
-        peops = self.svc.select_people({"firstName": ["phil", "hank"]})
+        peops = list(self.svc.select_people({"firstName": ["phil", "hank"]}))
         self.assertEqual(len(peops), 2)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Austin Proctor".split()))
     
-        peops = self.svc.select_people({"groupNumber": ["10001"]})
+        peops = list(self.svc.select_people({"groupNumber": ["10001"]}))
         self.assertEqual(len(peops), 3)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Austin Ossman Bergman".split()))
 
-        peops = self.svc.select_people({"firstName": ["i"]})
+        peops = list(self.svc.select_people({"firstName": ["i"]}))
         self.assertEqual(len(peops), 3)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Austin Proctor Ossman".split()))
 
@@ -117,30 +124,30 @@ class TestMongoPeopleService(test.TestCase):
         self.svc = serv.MongoPeopleService(dburl, True)
         self.svc.load(self.cfg, rootlog)
 
-        peops = self.svc.select_people({"firstName": ["Phillip"]})
+        peops = list(self.svc.select_people({"firstName": ["Phillip"]}))
         self.assertEqual(len(peops), 2)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Austin Proctor".split()))
     
-        peops = self.svc.select_people({"firstName": ["Phillip"], "lastName": ["Austin"]})
+        peops = list(self.svc.select_people({"firstName": ["Phillip"], "lastName": ["Austin"]}))
         self.assertEqual(len(peops), 2)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Austin Proctor".split()))
     
-        peops = self.svc.select_people({"firstName": ["Phillip"], "lastName": ["Austin"]})
+        peops = list(self.svc.select_people({"firstName": ["Phillip"], "lastName": ["Austin"]}))
         self.assertEqual(len(peops), 2)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Austin Proctor".split()))
 
-        peops = self.svc.select_people({"firstName": ["Peter", "David"]})
+        peops = list(self.svc.select_people({"firstName": ["Peter", "David"]}))
         self.assertEqual(len(peops), 2)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Bergman Ossman".split()))
     
-        peops = self.svc.select_people({"firstName": ["phil", "hank"]})
+        peops = list(self.svc.select_people({"firstName": ["phil", "hank"]}))
         self.assertEqual(len(peops), 0)
     
-        peops = self.svc.select_people({"groupNumber": ["10001"]})
+        peops = list(self.svc.select_people({"groupNumber": ["10001"]}))
         self.assertEqual(len(peops), 3)
         self.assertEqual(set([u['lastName'] for u in peops]), set("Austin Ossman Bergman".split()))
 
-        peops = self.svc.select_people({"firstName": ["i"]})
+        peops = list(self.svc.select_people({"firstName": ["i"]}))
         self.assertEqual(len(peops), 0)
 
     def test_get_person(self):

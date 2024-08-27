@@ -1,0 +1,89 @@
+[
+  {
+    "orG_Name": "Department of Leftovers",
+    "parenT_ORG_ID": null,
+    "parenT_ORG_CD": null,
+    "orG_CD": "01", 
+    "orG_ID": 1, 
+    "activE_YN": "Y", 
+    "orG_ACRNM": "DOL",
+    "orG_LVL_ID": 1
+  }, 
+  {
+    "orG_Name": "Department of Covers", 
+    "parenT_ORG_ID": null,
+    "parenT_ORG_CD": null,
+    "orG_CD": "02", 
+    "orG_ID": 2, 
+    "activE_YN": "Y", 
+    "orG_ACRNM": "DOC",
+    "orG_LVL_ID": 1
+  }, 
+  {
+    "orG_Name": "Department of Failure", 
+    "parenT_ORG_ID": null,
+    "parenT_ORG_CD": null,
+    "orG_CD": "03", 
+    "orG_ID": 3, 
+    "activE_YN": "Y", 
+    "orG_ACRNM": "DOF",
+    "orG_LVL_ID": 1
+  }, 
+  {
+    "orG_Name": "Department of Spies", 
+    "parenT_ORG_ID": null,
+    "parenT_ORG_CD": null,
+    "orG_CD": "04", 
+    "orG_ID": 4, 
+    "activE_YN": "Y", 
+    "orG_ACRNM": "DOS",
+    "orG_LVL_ID": 1
+  },
+  {
+    "orG_Name": "Lost Electricity Reclamation Agency", 
+    "parenT_ORG_ID": 3,
+    "parenT_ORG_CD": "03",
+    "activE_YN": "Y", 
+    "orG_ID": 5, 
+    "oU_ORG_ID": 3, 
+    "orG_CD": "100", 
+    "orG_ACRNM": "LERA",
+    "orG_LVL_ID": 2
+  }, 
+  {
+    "orG_Name": "Small Animal Administration", 
+    "parenT_ORG_ID": 2,
+    "parenT_ORG_CD": "02",
+    "activE_YN": "Y", 
+    "orG_ID": 6, 
+    "oU_ORG_ID": 2, 
+    "orG_CD": "101", 
+    "orG_ACRNM": "SAA",
+    "orG_LVL_ID": 2
+  },
+  {
+    "orG_Name": "Bureau of Western Mythology", 
+    "parenT_ORG_ID": 5,
+    "parenT_ORG_CD": "100",
+    "diV_ORG_ID": 5, 
+    "activE_YN": "Y", 
+    "oU_ORG_ID": 3, 
+    "orG_ID": 7, 
+    "orG_CD": "10000", 
+    "orG_ACRNM": "BWM",
+    "orG_LVL_ID": 3
+  }, 
+  {
+    "orG_Name": "Verterans' Tapdance Administration", 
+    "parenT_ORG_ID": 5,
+    "parenT_ORG_CD": "100",
+    "diV_ORG_ID": 5, 
+    "activE_YN": "Y", 
+    "oU_ORG_ID": 3, 
+    "orG_ID": 8, 
+    "orG_CD": "10001", 
+    "orG_ACRNM": "VTA",
+    "orG_LVL_ID": 3
+  }
+]
+

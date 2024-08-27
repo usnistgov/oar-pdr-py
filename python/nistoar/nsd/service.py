@@ -5,7 +5,7 @@ import json, os
 from collections import OrderedDict
 from collections.abc import Mapping
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Iterator
 
 from . import NSDException, NSDServerError, NSDClientError, NSDResourceNotFound
 
@@ -57,6 +57,9 @@ class MongoPeopleService(PeopleService):
     """
     An implementation of a PeopleService that uses a Mongo database to store its data
     """
+    OU_LVL_ID = 1
+    DIV_LVL_ID = 2
+    GRP_LVL_ID = 3
 
     def __init__(self, mongourl, exactmatch=False):
         """
@@ -69,13 +72,13 @@ class MongoPeopleService(PeopleService):
                                      self._make_prop_constraint_like
 
     def OUs(self) -> List[Mapping]:
-        return list(self._db['OUs'].find({}, {"_id": False}))
+        return list(self._db['Orgs'].find({"orG_LVL_ID": self.OU_LVL_ID}, {"_id": False}))
 
     def divs(self) -> List[Mapping]:
-        return list(self._db['Divisions'].find({}, {"_id": False}))
+        return list(self._db['Orgs'].find({"orG_LVL_ID": self.DIV_LVL_ID}, {"_id": False}))
 
     def groups(self) -> List[Mapping]:
-        return list(self._db['Groups'].find({}, {"_id": False}))
+        return list(self._db['Orgs'].find({"orG_LVL_ID": self.GRP_LVL_ID}, {"_id": False}))
 
     def _get_rec(self, id: int, coll: str, idprop: str='orG_ID') -> Mapping:
         try:
@@ -87,14 +90,26 @@ class MongoPeopleService(PeopleService):
             return None
         return hits[0]
 
+    def get_org(self, id: int) -> Mapping:
+        return self._get_rec(id, "Orgs")
+
     def get_OU(self, id: int) -> Mapping:
-        return self._get_rec(id, "OUs")
+        out = self.get_org(id)
+        if out['orG_LVL_ID'] != self.OU_LVL_ID:
+            return None
+        return out
     
     def get_div(self, id: int) -> Mapping:
-        return self._get_rec(id, "Divisions")
+        out = self.get_org(id)
+        if out['orG_LVL_ID'] != self.DIV_LVL_ID:
+            return None
+        return out
 
     def get_group(self, id: int) -> Mapping:
-        return self._get_rec(id, "Groups")
+        out = self.get_org(id)
+        if out['orG_LVL_ID'] != self.GRP_LVL_ID:
+            return None
+        return out
 
     def get_person(self, id: int) -> Mapping:
         return self._get_rec(id, "People", "peopleID")
@@ -126,7 +141,7 @@ class MongoPeopleService(PeopleService):
     def _make_prop_constraint_like(self, prop, values):
         return {prop: {"$regex": "|".join(values), "$options": "i"}}
 
-    def select_people(self, filter: Mapping) -> List[Mapping]:
+    def select_people(self, filter: Mapping) -> Iterator[Mapping]:
         try:
             cnsts = self._make_mongo_constraints(filter)
         except (TypeError, ValueError) as ex:
@@ -134,7 +149,7 @@ class MongoPeopleService(PeopleService):
                                  f"Bad input query syntax: {str(filter)} ({str(ex)})")
             
         try:
-            return list(self._db['People'].find(cnsts, {"_id": False}))
+            return self._db['People'].find(cnsts, {"_id": False})
         except OperationFailure as ex:
             raise NSDClientError('People', 400, "Bad input", "Bad input query syntax: "+str(filter))
         except PyMongoError as ex:
@@ -167,21 +182,30 @@ class MongoPeopleService(PeopleService):
         """
         self._db['People'].insert_many(data)
 
+    def load_orgs(self, data: List[Mapping]):
+        """
+        load the given data into the Orgs collection.
+        """
+        self._db['Orgs'].insert_many(data)
+
+
     def load(self, config, log=None, clear=True):
         """
         load all data described in the given configuration object
         """
         if clear:
-            self._db['OUs'].delete_many({})
-            self._db['Divisions'].delete_many({})
-            self._db['Groups'].delete_many({})
+#            self._db['OUs'].delete_many({})
+#            self._db['Divisions'].delete_many({})
+#            self._db['Groups'].delete_many({})
             self._db['People'].delete_many({})
+            self._db['Orgs'].delete_many({})
 
         datadir = config.get('dir', '.')
-        self._load_file(self.load_OUs, config.get('ou_file', "ou.json"), datadir, log)
-        self._load_file(self.load_divs, config.get('div_file', "div.json"), datadir, log)
-        self._load_file(self.load_groups, config.get('group_file', "group.json"), datadir, log)
+#        self._load_file(self.load_OUs, config.get('ou_file', "ou.json"), datadir, log)
+#        self._load_file(self.load_divs, config.get('div_file', "div.json"), datadir, log)
+#        self._load_file(self.load_groups, config.get('group_file', "group.json"), datadir, log)
         self._load_file(self.load_people, config.get('person_file', "person.json"), datadir, log)
+        self._load_file(self.load_orgs, config.get('orgs_file', "orgs.json"), datadir, log)
 
     def _load_file(self, loader, file, dir='.', log=None):
         try:
