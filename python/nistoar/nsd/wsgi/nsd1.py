@@ -95,6 +95,30 @@ class PeopleHandler(NSDHandler):
         return self.send_options(["POST"])
 
 
+class PeopleServiceApp(ServiceApp):
+    """
+    A ServiceApp wrapper around the PeopleService that can be deployed into a larger WSGI app.
+    """
+    def __init__(self, config, log, appname=None):
+        if not appname:
+            appname = "nsd"
+        super(PeopleServiceApp, self).__init__(appname, log, config)
+
+        dburl = self.cfg.get('db_url')
+        if not dburl:
+            raise ConfigurationException("Missing required config param: db_url")
+        if not dburl.startswith("mongodb:"):
+            raise ConfigurationException("Unsupported (non-MongoDB) database URL: "+dburl)
+
+        self.svc = MongoPeopleService(dburl)
+
+    def create_handler(self, env, start_resp, path, who) -> Handler:
+        if path.startswith("People/"):
+            return PeopleHandler(self.svc, path, env, start_resp)
+
+        return OrgHandler(self.svc, path, env, start_resp)
+
+
 class PeopleApp(WSGIServiceApp):
     """
     A partial implementation of the NIST Staff Directory web service
@@ -111,7 +135,7 @@ class PeopleApp(WSGIServiceApp):
         if base_ep is None:
             base_ep = config.get('base_endpoint', DEF_BASE_PATH).strip('/')
 
-        svcapp = self.SvcApp(config, log)
+        svcapp = PeopleServiceApp(config, log)
         super(PeopleApp, self).__init__(svcapp, log, base_ep, config)
                                     
         if not self.cfg.get('authentication'):  # formerly jwt_auth
@@ -129,24 +153,6 @@ class PeopleApp(WSGIServiceApp):
         """
         authcfg = self.cfg.get('authentication', {})
         return authenticate_via_jwt("midas", env, authcfg, self.log, agents, client_id)
-
-    class SvcApp(ServiceApp):
-        def __init__(self, config, log):
-            ServiceApp.__init__(self, "nsd", log, config)
-
-            dburl = self.cfg.get('db_url')
-            if not dburl:
-                raise ConfigurationException("Missing required config param: db_url")
-            if not dburl.startswith("mongodb:"):
-                raise ConfigurationException("Unsupported (non-MongoDB) database URL: "+dburl)
-
-            self.svc = MongoPeopleService(dburl)
-
-        def create_handler(self, env, start_resp, path, who) -> Handler:
-            if path.startswith("People/"):
-                return PeopleHandler(self.svc, path, env, start_resp)
-
-            return OrgHandler(self.svc, path, env, start_resp)
 
 
 app = PeopleApp

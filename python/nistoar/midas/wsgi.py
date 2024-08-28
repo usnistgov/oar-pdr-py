@@ -156,6 +156,8 @@ from .dbio.mongo import MongoDBClientFactory
 from .nsdi.wsgi import v1 as nsdiv1
 from nistoar.base.config import ConfigurationException, merge_config
 
+from nistoar.nsd.wsgi import nsd1, oar1
+
 log = logging.getLogger(system.system_abbrev)   \
              .getChild(system.subsystem_abbrev) \
              .getChild('wsgi')
@@ -461,14 +463,21 @@ class About(ServiceApp):
         """
         return self._Handler(self, path, env, start_resp, who, log=self.log)
     
-
+def PeopleServiceFactory(servicemodule):
+    if not hasattr(servicemodule, "PeopleServiceApp"):
+        raise ValueError(f"service module {servicemodule.__name__} is missing a PeopleServiceApp symbol")
+    def factory(dbiofact, log, config, name):
+        return servicemodule.PeopleServiceApp(config, log, name)
+    return factory
 
 _MIDASServiceApps = {
 #    "dmp/mdm1":  mdm1.DMPApp,
     "dmp/mdm1":  prj.MIDASProjectApp.factory_for("dmp"),
     "dap/mdsx":  mdsx.DAPApp,
     "dap/mds3":  mds3.DAPApp,
-    "nsdi/v1":   nsdiv1.NSDIndexerAppFactory
+#    "nsdi/v1":   nsdiv1.NSDIndexerAppFactory
+    "nsd/oar1":  PeopleServiceFactory(oar1),
+    "nsd/nsd1":  PeopleServiceFactory(nsd1)
 }
 
 class MIDASApp(AuthenticatedWSGIApp):
