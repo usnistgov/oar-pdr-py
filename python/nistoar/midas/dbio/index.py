@@ -365,6 +365,8 @@ class NSDPeopleResponseIndexer(Indexer):
                                                     self._dispfmt))
 
     def make_index(self, data: Indexable[Mapping], caseins: bool=True) -> Index:
+        if len(self.delegates) > 1 and isinstance(data, Iterator):
+            data = list(data)  # allows us to go through the data more than once
         out = Index()
         for delg in self.delegates:
             out |= delg.make_index(data, caseins)
@@ -386,6 +388,8 @@ class NSDOrgResponseIndexer(Indexer):
                                                     self._dispfmt))
 
     def make_index(self, data: Indexable[Mapping], caseins: bool=True) -> Index:
+        if len(self.delegates) > 1 and isinstance(data, Iterator):
+            data = list(data)  # allows us to go through the data more than once
         out = Index()
         for delg in self.delegates:
             out |= delg.make_index(data, caseins)
