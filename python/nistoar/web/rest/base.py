@@ -22,8 +22,8 @@ from nistoar.base.config import ConfigurationException
 import nistoar.base.config as cfgmod
 from nistoar.pdr.utils.prov import Agent
 
-__all__ = ["Handler", "ServiceApp", "Unauthenticated", "WSGIServiceApp", "AuthenticatedWSGIApp",
-           "WSGIAppSuite", "Agent",
+__all__ = ["Handler", "NotFoundHandler", "ServiceApp", "Unauthenticated", "WSGIServiceApp", 
+           "AuthenticatedWSGIApp", "WSGIAppSuite", "Agent",
            "authenticate_via_authkey", "authenticate_via_proxy_x509", "authenticate_via_jwt" ]
 
 class Handler(object):
@@ -377,7 +377,19 @@ class Handler(object):
 
     def _set_default_format_support(self, fmtsup: FormatSupport):
         self._fmtsup = fmtsup
-        
+
+class NotFoundHandler(Handler):
+    """
+    a request Handler that always returns 404 Not Found.  This can be used in :py:class:`ServiceApp`
+    implementations that create a handler (via :py:meth:`~ServiceApp.create_handler`) based on the 
+    requested path.  If the path is not recognized, an instance of this class can be returned.
+    """
+    def do_GET(self, path, ashead=False, format=None):
+        return send_error(404, "Not Found")
+
+    def do_OPTIONS(self, path):
+        return self.send_options(["GET"])
+
     
 class ServiceApp(metaclass=ABCMeta):
     """
