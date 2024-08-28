@@ -16,6 +16,9 @@ class PeopleService(ABC):
     """
     An implementation of the NSD
     """
+    OU_ORG_TYPE = "ou"
+    DIV_ORG_TYPE = "div"
+    GRP_ORG_TYPE = "group"
 
     @abstractmethod
     def OUs(self) -> List[Mapping]:
@@ -39,10 +42,34 @@ class PeopleService(ABC):
         raise NotImplemented()
 
     @abstractmethod
-    def select_people(self, filter: Mapping) -> List[Mapping]:
+    def select_orgs(self, filter: Mapping, like: List[str]=None, orgtype: str=None) -> List[Mapping]:
+        """
+        return a list of matching organizations that match given search constraints.
+        :param dict filter:  a filter object used to select records.  Schema and 
+                             syntax expected is implementation-dependent
+        :param [str]  like:  a list of prompt strings; a record will be match this 
+                             constraint if any one of a set of key properties 
+                             (defined by the implementation) starts with any of the 
+                             values.  The prompt string constraints will be OR-ed 
+                             together, and that aggregate will be AND-ed with 
+                             ``filter``, if provided.
+        :param str orgtype:  the type of organization to restrict the query to, one
+                             of OU_ORG_TYPE, DIV_ORG_TYPE, GRP_ORG_TYPE
+        """
+        raise NotImplemented()
+
+    @abstractmethod
+    def select_people(self, filter: Mapping, like: List[str]=None) -> List[Mapping]:
         """
         return a list of matching person descriptions that match a given search query.
-        Native schemas are used for the query filter and search results
+        :param dict filter:  a filter object used to select records.  Schema and 
+                             syntax expected is implementation-dependent
+        :param [str]  like:  a list of prompt strings; a record will be match this 
+                             constraint if any one of a set of key properties 
+                             (defined by the implementation) starts with any of the 
+                             values.  The prompt string constraints will be OR-ed 
+                             together, and that aggregate will be AND-ed with 
+                             ``filter``, if provided.
         """
         raise NotImplemented()
 
@@ -60,6 +87,9 @@ class MongoPeopleService(PeopleService):
     OU_LVL_ID = 1
     DIV_LVL_ID = 2
     GRP_LVL_ID = 3
+    org_lvl = { PeopleService.OU_ORG_TYPE:   OU_LVL_ID,
+                PeopleService.DIV_ORG_TYPE: DIV_LVL_ID,
+                PeopleService.GRP_ORG_TYPE: GRP_LVL_ID }
 
     def __init__(self, mongourl, exactmatch=False):
         """
@@ -114,7 +144,9 @@ class MongoPeopleService(PeopleService):
     def get_person(self, id: int) -> Mapping:
         return self._get_rec(id, "People", "peopleID")
 
-    def _make_mongo_constraints(self, filter: Mapping) -> Mapping:
+    def _to_mongo_filter(self, filter: Mapping) -> Mapping:
+        # The input filter is assumed to be an NSD-compatible filter where properties
+        # match properties in the record objects and the values are lists of values.
         cnsts = []
         for prop in filter:
             if filter[prop]:
@@ -132,6 +164,18 @@ class MongoPeopleService(PeopleService):
             cnsts = {"$or": cnsts}
         return cnsts
 
+    def _like_to_mongo_filter(self, likes: List[str], props: List[str]) -> Mapping:
+        if not isinstance(likes, list):
+            likes = [likes]
+        likes = "|".join(likes)
+        if "|" in likes:
+            likes = f"({likes})"
+
+        cnsts = []
+        for field in props:
+            cnsts.append({field: {"$regex": f"^{likes}", "$options": "i"}})
+        return {"$or": cnsts}
+
     def _make_prop_constraint_exact(self, prop, values):
         if len(values) == 1:
             return {prop: values[0]}
@@ -141,19 +185,39 @@ class MongoPeopleService(PeopleService):
     def _make_prop_constraint_like(self, prop, values):
         return {prop: {"$regex": "|".join(values), "$options": "i"}}
 
-    def select_people(self, filter: Mapping) -> Iterator[Mapping]:
+    def select_people(self, filter: Mapping, like: List[str]=None) -> Iterator[Mapping]:
         try:
-            cnsts = self._make_mongo_constraints(filter)
+            mfilt = self._to_mongo_filter(filter) if filter else OrderedDict()
+            if like:
+                mlike = self._like_to_mongo_filter(like, "lastName firstName".split())
+                mfilt = {"$and": [ mfilt, mlike ]} if mfilt else mlike
         except (TypeError, ValueError) as ex:
-            raise NSDClientError('People', 400, "Bad input",
+            raise NSDClientError(collname, 400, "Bad input",
                                  f"Bad input query syntax: {str(filter)} ({str(ex)})")
             
+        return self._select_from('People', mfilt)
+
+    def select_orgs(self, filter: Mapping, like: List[str]=None, orgtype: str=None) -> List[Mapping]:
         try:
-            return self._db['People'].find(cnsts, {"_id": False})
+            mfilt = self._to_mongo_filter(filter) if filter else OrderedDict()
+            if orgtype and orgtype in self.org_lvl:
+                mfilt["orG_LVL_ID"] = self.org_lvl[orgtype]
+            if like:
+                mlike = self._like_to_mongo_filter(like, "orG_Name orG_ACRNM orG_CD".split())
+                mfilt = {"$and": [ mfilt, mlike ]} if mfilt else mlike
+        except (TypeError, ValueError) as ex:
+            raise NSDClientError(collname, 400, "Bad input",
+                                 f"Bad input query syntax: {str(filter)} ({str(ex)})")
+            
+        return self._select_from('Orgs', mfilt)
+
+    def _select_from(self, collname: str, filter: Mapping) -> Iterator[Mapping]:
+        try:
+            return self._db[collname].find(filter, {"_id": False})
         except OperationFailure as ex:
-            raise NSDClientError('People', 400, "Bad input", "Bad input query syntax: "+str(filter))
+            raise NSDClientError(collname, 400, "Bad input", "Bad input query syntax: "+str(filter))
         except PyMongoError as ex:
-            raise NSDServerError(message="people select failed due to MongoDB failure: "+str(ex)) from ex
+            raise NSDServerError(message=collname+" select failed due to MongoDB failure: "+str(ex)) from ex
 
     def _load_org(self, coll: str, data: List[Mapping]):
         self._db[coll].insert_many(data)

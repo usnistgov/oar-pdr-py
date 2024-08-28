@@ -150,6 +150,24 @@ class TestMongoPeopleService(test.TestCase):
         peops = list(self.svc.select_people({"firstName": ["i"]}))
         self.assertEqual(len(peops), 0)
 
+    def test_select_people_like(self):
+        self.svc.load(self.cfg, rootlog)
+
+        peops = list(self.svc.select_people({}, like="phi"))
+        self.assertEqual(len(peops), 2)
+        self.assertEqual(set([u['lastName'] for u in peops]), set("Austin Proctor".split()))
+
+        peops = list(self.svc.select_people({}, like="au"))
+        self.assertEqual(len(peops), 1)
+        self.assertEqual(set([u['lastName'] for u in peops]), set("Austin".split()))
+
+        peops = list(self.svc.select_people({"lastName": ["st"]}, like="phi"))
+        self.assertEqual(len(peops), 1)
+        self.assertEqual(set([u['lastName'] for u in peops]), set("Austin".split()))
+
+        peops = list(self.svc.select_people({"lastName": ["ss"]}, like="phi"))
+        self.assertEqual(len(peops), 0)
+
     def test_get_person(self):
         self.svc.load(self.cfg, rootlog, False)
 
@@ -160,6 +178,37 @@ class TestMongoPeopleService(test.TestCase):
         who = self.svc.get_person(10)
         self.assertIsNotNone(who)
         self.assertEqual(who["lastName"], "Proctor")
+
+    def test_select_orgs(self):
+        self.svc.load(self.cfg, rootlog, False)
+
+        orgs = list(self.svc.select_orgs({}, orgtype=self.svc.OU_ORG_TYPE))
+        self.assertEqual(len(orgs), 4)
+        self.assertEqual(set([u['orG_ACRNM'] for u in orgs]), set("DOL DOC DOF DOS".split()))
+
+        orgs = list(self.svc.select_orgs({"orG_ACRNM": "F"}, orgtype=self.svc.OU_ORG_TYPE))
+        self.assertEqual(len(orgs), 1)
+        self.assertEqual(set([u['orG_ACRNM'] for u in orgs]), set("DOF".split()))
+
+        orgs = list(self.svc.select_orgs({}))
+        self.assertEqual(len(orgs), 8)
+        self.assertEqual(set([u['orG_ACRNM'] for u in orgs]), set("DOL DOC DOF DOS LERA SAA BWM VTA".split()))
+
+        orgs = list(self.svc.select_orgs({"orG_ACRNM": "DO"}))
+        self.assertEqual(len(orgs), 4)
+        self.assertEqual(set([u['orG_ACRNM'] for u in orgs]), set("DOL DOC DOF DOS".split()))
+
+        orgs = list(self.svc.select_orgs({"orG_Name": "s"}))
+        self.assertEqual(len(orgs), 7)
+        self.assertEqual(set([u['orG_ACRNM'] for u in orgs]), set("DOL DOC DOS LERA SAA BWM VTA".split()))
+
+        orgs = list(self.svc.select_orgs({"orG_Name": "s"}, ["DO", "VTA"]))
+        self.assertEqual(len(orgs), 4)
+        self.assertEqual(set([u['orG_ACRNM'] for u in orgs]), set("DOL DOC DOS VTA".split()))
+
+        orgs = list(self.svc.select_orgs({"orG_Name": "s"}, ["DO", "VTA"], self.svc.GRP_ORG_TYPE))
+        self.assertEqual(len(orgs), 1)
+        self.assertEqual(set([u['orG_ACRNM'] for u in orgs]), set("VTA".split()))
 
     def test_get_OU(self):
         self.svc.load(self.cfg, rootlog, False)
