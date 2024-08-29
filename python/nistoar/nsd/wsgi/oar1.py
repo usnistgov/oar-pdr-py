@@ -79,6 +79,29 @@ class OARNSDHandler(NSDHandler, ErrorHandling):
                 out[key[len("with_"):]] = self._qp[key]
         return out if out else None
 
+    def preauthorize(self):
+        """
+        do an initial test to see if the client identity is authorized to access this service.  
+        This method will get called prior to calling the specific method handling function (e.g. 
+        ``do_GET()``).  In this implementation, this method will reject any client that has not 
+        authenticated successfully with a token.  
+        """
+        # return True if the app was not configured for authentication
+        if not self.app or not self.app.cfg.get('authentication'):
+            self.log.debug("Authentication not configured")
+            return True
+
+        # otherwise, the user agent must be set and it can't be anonymous or invalid
+        out = bool(self.who) and self.who.actor != Agent.ANONYMOUS and \
+               self.agent_class != Agent.INVALID_AGENT_CLASS
+        if not out:
+            if self.who:
+                self.log.info("Unauthorized user: %s", str(self.who))
+            else:
+                self.log.info("No user authenticated")
+        return out
+        
+
 class PeopleHandler(OARNSDHandler):
     """
     Handle people queries (e.g. everything under "/oar1/People")
@@ -223,7 +246,7 @@ class OrgHandler(OARNSDHandler):
             # path is taken as an identifier
             if op:
                 # incompatible with an id
-                return send_error_obj(404, "Not Found")
+                return send_error_obj(404, "Not Found", ashead=ashead)
 
             out = None
             try: 
@@ -240,9 +263,9 @@ class OrgHandler(OARNSDHandler):
             except Exception as ex:
                 self.log.exception("service error while retrieving person record by id: %s", str(ex))
             if not out:
-                return self.send_error_obj(404, "Not Found")
+                return self.send_error_obj(404, "Not Found", ashead=ashead)
 
-            return self.send_json(out)
+            return self.send_json(out, ashead=ashead)
 
         # requesting a selection (a list of matching people)
         withfilt = self.get_with_selection()
@@ -260,16 +283,16 @@ class OrgHandler(OARNSDHandler):
             # return an index
             idx = self.idxr.make_index(iter)
             if format.name == "csv":
-                return self.send_ok(self.export_as_csv(), format.ctype)
+                return self.send_ok(self.export_as_csv(), format.ctype, ashead=ashead)
             else:
-                return self.send_ok(idx.export_as_json(), jsonfmt.ctype)
+                return self.send_ok(idx.export_as_json(), jsonfmt.ctype, ashead=ashead)
                 
         else:
             # return the records
             if format.name == "csv":
-                return self.send_ok(self.to_csv(iter), format.ctype)
+                return self.send_ok(self.to_csv(iter), format.ctype, ashead=ashead)
             else:
-                return self.send_json(list(iter))
+                return self.send_json(list(iter), ashead=ashead)
 
     def do_POST(self, path, format=None):
         try:
@@ -314,8 +337,25 @@ class OrgHandler(OARNSDHandler):
             return self.send_error(500, "Server error")
 
     def do_OPTIONS(self, path):
-        return self.send_options(["GET", "POST"])
+        return self.send_options(["POST", "GET"])
 
+        
+class ReadyHandler(OARNSDHandler):
+    """
+    Handle requests for organization information (e.g. everything under "/oar1/org")
+    """
+    def do_GET(self, path, ashead=False, format=None):
+        try:
+            format = self.select_format(format)
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
+        return self.send_json(self.svc.status(), ashead=ashead)
+
+    def do_OPTIONS(self, path):
+        return self.send_options(["GET"])
 
 class PeopleServiceApp(ServiceApp):
     """
@@ -334,17 +374,26 @@ class PeopleServiceApp(ServiceApp):
 
         self.svc = MongoPeopleService(dburl)
 
+    def load_from(self, datadir):
+        """
+        initialize the people database from files in the given data directory
+        """
+        self.svc.load({"dir": datadir}, self.log, True)
+
     def create_handler(self, env, start_resp, path, who) -> Handler:
         parts = path.split('/', 1)
         what = parts.pop(0).lower()
         path = parts[0] if parts else ""
 
+        if not what:
+            return ReadyHandler(self.svc, path, env, start_resp, who, log=self.log, app=self)
+
         if what == "people":
-            return PeopleHandler(self.svc, path, env, start_resp, log=self.log.getChild("people"),
+            return PeopleHandler(self.svc, path, env, start_resp, who, log=self.log.getChild("people"),
                                  app=self)
 
         if what == "orgs":
-            return OrgHandler(self.svc, path, env, start_resp, log=self.log.getChild("people"),
+            return OrgHandler(self.svc, path, env, start_resp, who, log=self.log.getChild("people"),
                               app=self)
 
         return NotFoundHandler(path, env, start_resp, log=self.log, app=self)

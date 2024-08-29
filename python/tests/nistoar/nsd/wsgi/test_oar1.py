@@ -320,8 +320,21 @@ class TestApp(test.TestCase):
         self.assertEqual(len(resp), 1)        
         self.assertEqual(set([u['lastName'] for u in resp]), set("Ossman".split()))
         
+    def test_status(self):
+        path = ""
+        req = {
+            "REQUEST_METHOD": "GET",
+            "PATH_INFO": "/"
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2data(body)
 
-        
+        self.assertEqual(resp['status'], "ready")
+        self.assertEqual(resp['person_count'], 4)
+        self.assertEqual(resp['org_count'], 8)
+        self.assertTrue(resp['message'].startswith("Ready"))
+
 
 
         

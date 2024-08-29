@@ -385,7 +385,7 @@ class NotFoundHandler(Handler):
     requested path.  If the path is not recognized, an instance of this class can be returned.
     """
     def do_GET(self, path, ashead=False, format=None):
-        return send_error(404, "Not Found")
+        return self.send_error(404, "Not Found")
 
     def do_OPTIONS(self, path):
         return self.send_options(["GET"])

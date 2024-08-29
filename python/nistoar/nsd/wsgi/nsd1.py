@@ -95,6 +95,24 @@ class PeopleHandler(NSDHandler):
         return self.send_options(["POST"])
 
 
+class ReadyHandler(NSDHandler):
+    """
+    Handle requests for organization information (e.g. everything under "/oar1/org")
+    """
+    def do_GET(self, path, ashead=False, format=None):
+        try:
+            format = self.select_format(format)
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
+        return self.send_json(self.svc.status(), ashead=ashead)
+
+    def do_OPTIONS(self, path):
+        return self.send_options(["GET"])
+
+
 class PeopleServiceApp(ServiceApp):
     """
     A ServiceApp wrapper around the PeopleService that can be deployed into a larger WSGI app.
@@ -113,10 +131,18 @@ class PeopleServiceApp(ServiceApp):
         self.svc = MongoPeopleService(dburl)
 
     def create_handler(self, env, start_resp, path, who) -> Handler:
+        if not path:
+            return ReadyHandler(self.svc, path, env, start_resp, who, log=self.log, app=self)
         if path.startswith("People/"):
-            return PeopleHandler(self.svc, path, env, start_resp)
+            return PeopleHandler(self.svc, path, env, start_resp, who, log=self.log, app=self)
 
-        return OrgHandler(self.svc, path, env, start_resp)
+        return OrgHandler(self.svc, path, env, start_resp, who, log=self.log, app=self)
+
+    def load_from(self, datadir):
+        """
+        initialize the people database from files in the given data directory
+        """
+        self.svc.load({"dir": datadir}, self.log, True)
 
 
 class PeopleApp(WSGIServiceApp):

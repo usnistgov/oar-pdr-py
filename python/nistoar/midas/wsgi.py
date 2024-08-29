@@ -552,8 +552,10 @@ class MIDASApp(AuthenticatedWSGIApp):
         """
         determine the authenticated user
         """
-        authcfg = self.cfg.get('authentication', {})
-        return authenticate_via_jwt("midas", env, authcfg, self.log, agents, client_id)
+        authcfg = self.cfg.get('authentication')
+        if authcfg:
+            return authenticate_via_jwt("midas", env, authcfg, self.log, agents, client_id)
+        return None
 
     def handle_path_request(self, path: str, env: Mapping, start_resp: Callable, who = None):
         path = path.split('/')
@@ -574,6 +576,11 @@ class MIDASApp(AuthenticatedWSGIApp):
             subapp = self.subapps.get('')
 
         return subapp.handle_path_request(env, start_resp, "/".join(path), who)
+
+    def load_people_from(self, datadir):
+        if any(k.startswith("nsd/") for k in self.subapps.keys()):
+            nsdapp = [v for k,v in self.subapps.items() if k.startswith("nsd/")][0]
+            nsdapp.load_from(datadir)
 
 
 app = MIDASApp

@@ -284,5 +284,35 @@ class MongoPeopleService(PeopleService):
             if log:
                 log.warning("Source data not parseable as JSON: %s: %s", datafile, str(ex))
 
+    def status(self) -> Mapping:
+        """
+        return a status message that indicates if the service appears ready
+        """
+        pc = 0
+        oc = 0
+        try:
+            pc = self._db["People"].count_documents({})
+            oc = self._db["Orgs"].count_documents({})
+        except Exception as ex:
+            return {
+                "status": "not ready",
+                "message": "Server error: failed to access database",
+                "person_count": pc,
+                "org_count": oc
+            }
+        if pc > 0 and oc > 0:
+            return {
+                "status": "ready",
+                "message": f"Ready with {oc} organizations and {pc} people",
+                "person_count": pc,
+                "org_count": oc
+            }
+        return {
+            "status": "not ready",
+            "message": f"Not Ready: {oc} organizations and {pc} people loaded",
+            "person_count": pc,
+            "org_count": oc
+        }
+            
 
-    
+

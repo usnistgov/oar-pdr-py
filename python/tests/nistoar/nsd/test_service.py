@@ -242,6 +242,21 @@ class TestMongoPeopleService(test.TestCase):
         what = self.svc.get_group(8)
         self.assertIsNotNone(what)
         self.assertEqual(what["orG_ACRNM"], "VTA")
+
+    def test_status(self):
+        stat = self.svc.status()
+        self.assertEqual(stat['status'], "not ready")
+        self.assertEqual(stat['person_count'], 0)
+        self.assertEqual(stat['org_count'], 0)
+        self.assertTrue(stat['message'].startswith("Not Ready"))
+        
+        self.svc.load(self.cfg, rootlog, False)
+
+        stat = self.svc.status()
+        self.assertEqual(stat['status'], "ready")
+        self.assertEqual(stat['person_count'], 4)
+        self.assertEqual(stat['org_count'], 8)
+        self.assertTrue(stat['message'].startswith("Ready"))
         
                          
 if __name__ == '__main__':
