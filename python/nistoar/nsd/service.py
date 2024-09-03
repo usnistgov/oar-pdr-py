@@ -255,21 +255,38 @@ class MongoPeopleService(PeopleService):
 
     def load(self, config, log=None, clear=True):
         """
-        load all data described in the given configuration object
+        load all data described in the given configuration object.  This is done safely within a
+        database transaction so that it rolls back if there is a failure.  
         """
-        if clear:
-#            self._db['OUs'].delete_many({})
-#            self._db['Divisions'].delete_many({})
-#            self._db['Groups'].delete_many({})
-            self._db['People'].delete_many({})
-            self._db['Orgs'].delete_many({})
-
         datadir = config.get('dir', '.')
-#        self._load_file(self.load_OUs, config.get('ou_file', "ou.json"), datadir, log)
-#        self._load_file(self.load_divs, config.get('div_file', "div.json"), datadir, log)
-#        self._load_file(self.load_groups, config.get('group_file', "group.json"), datadir, log)
-        self._load_file(self.load_people, config.get('person_file', "person.json"), datadir, log)
-        self._load_file(self.load_orgs, config.get('orgs_file', "orgs.json"), datadir, log)
+        if not os.path.isdir(datadir):
+            raise ConfigurationException(f"{datadir}: NSD data directory does not exist as a directory")
+        personfile = config.get('person_file', "person.json")
+        orgfile = config.get('org_file', "orgs.json")
+        if not os.path.isfile(os.path.join(datadir, personfile)):
+            raise ConfigurationException(f"{personfile}: NSD data directory does not exist as a file")
+        if not os.path.isfile(os.path.join(datadir, orgfile)):
+            raise ConfigurationException(f"{orgfile}: NSD data directory does not exist as a file")
+
+        def _loadit(session):
+            people = session.client[self._db.name].People
+            orgs   = session.client[self._db.name].Orgs
+
+            if clear:
+#                self._db['OUs'].delete_many({})
+#                self._db['Divisions'].delete_many({})
+#                self._db['Groups'].delete_many({})
+                self._db['People'].delete_many({})
+                self._db['Orgs'].delete_many({})
+
+#            self._load_file(self.load_OUs, config.get('ou_file', "ou.json"), datadir, log)
+#            self._load_file(self.load_divs, config.get('div_file', "div.json"), datadir, log)
+#            self._load_file(self.load_groups, config.get('group_file', "group.json"), datadir, log)
+            self._load_file(self.load_people, personfile, datadir, log)
+            self._load_file(self.load_orgs, orgfile, datadir, log)
+
+        with self._cli.start_session() as session:
+            session.with_transaction(_loadit)
 
     def _load_file(self, loader, file, dir='.', log=None):
         try:
