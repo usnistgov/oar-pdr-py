@@ -15,6 +15,7 @@ SED_RE_OPT=r
 
 PACKAGE_NAME=oar-pdr-py
 DEFAULT_CONFIGFILE=$dockerdir/midasserver/midas-dmpdap_conf.yml
+NSD_CONFIGFILE=$dockerdir/midasserver/midas-dmpdapnsd_conf.yml
 
 set -e
 
@@ -51,6 +52,9 @@ ARGUMENTS
   -M, --use-mongodb             Use a MongoDB backend; DIR must also be provided.
                                 If not set, a file-based database (using JSON 
                                 files) will be used, stored under DIR/dbfiles.
+  -P, --add-people-service      Include the staff directory service within the application.
+                                This will trigger use of a MongoDB database, but it 
+                                does not effect the DBIO backend (use -M for this).  
   -p, --port NUM                The port that the service should listen to 
                                 (default: 9091)
   -h, --help                    Print this text to the terminal and then exit
@@ -79,7 +83,9 @@ CONFIGFILE=
 USEMONGO=
 STOREDIR=
 DBTYPE=
+ADDNSD=
 DETACH=
+VOLOPTS="-v $repodir/dist:/app/dist"
 while [ "$1" != "" ]; do
     case "$1" in
         -b|--build)
@@ -107,6 +113,18 @@ while [ "$1" != "" ]; do
             ;;
         -M|--use-mongo)
             DBTYPE="mongo"
+            ;;
+        -P|--add-people-service)
+            ADDNSD=1
+            ;;
+        --mount-volume=*)
+            vol=`echo $1 | sed -e 's/[^=]*=//'`
+            VOLOPTS="$VOLOPTS -v $vol"
+            ;;
+        -V)
+            vol=$1
+            shift
+            VOLOPTS="$VOLOPTS -v $vol"
             ;;
         -h|--help)
             usage
@@ -143,12 +161,14 @@ done
     echo ${prog}: Python library not found in dist directory: $repodir/dist
     false
 }
-VOLOPTS="-v $repodir/dist:/app/dist"
 
 # build the docker images if necessary
 (docker_images_built midasserver && [ -z "$DODOCKBUILD" ]) || build_server_image
 
-[ -n "$CONFIGFILE" ] || CONFIGFILE=$DEFAULT_CONFIGFILE
+[ -n "$CONFIGFILE" ] || {
+    CONFIGFILE=$DEFAULT_CONFIGFILE
+    [ -z "$ADDNSD" ] || CONFIGFILE=$NSD_CONFIGFILE
+}
 [ -f "$CONFIGFILE" ] || {
     echo "${prog}: Config file ${CONFIGFILE}: does not exist as a file"
     false
@@ -184,7 +204,7 @@ fi
 
 NETOPTS=
 STOP_MONGO=true
-if [ "$DBTYPE" = "mongo" ]; then
+if [ "$DBTYPE" = "mongo" -o -n "$ADDNSD" ]; then
     DOCKER_COMPOSE="docker compose"
     (docker compose version > /dev/null 2>&1) || DOCKER_COMPOSE=docker-compose
     ($DOCKER_COMPOSE version  > /dev/null 2>&1) || {
@@ -196,7 +216,7 @@ if [ "$DBTYPE" = "mongo" ]; then
     source $dockerdir/midasserver/mongo/mongo.env
 
     [ -n "$STOREDIR" -o "$ACTION" = "stop" ] || {
-        echo ${prog}: DIR argument must be provided with -M/--use-mongo
+        echo ${prog}: DIR argument must be provided with -M/--use-mongo or -P/--add-people-service
         false
     }
     export OAR_MONGODB_DBDIR=`cd $STOREDIR; pwd`/mongo

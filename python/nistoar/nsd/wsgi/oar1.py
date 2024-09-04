@@ -352,7 +352,23 @@ class ReadyHandler(OARNSDHandler):
         except UnsupportedFormat as ex:
             return self.send_error(400, "Unsupported Format", str(ex))
 
-        return self.send_json(self.svc.status(), ashead=ashead)
+        out = self.svc.status()
+        if out.get("status") == "ready":
+            return self.send_json(out, ashead=ashead)
+        return self.send_json(out, "Not Ready", 503, ashead=ashead)
+
+    def do_LOAD(self, path):
+        if self.who.actor not in self.cfg.get("loaderusers", []):
+            self.log.warning("Unauthorized user attempted reload NSD data: %s", self.who.actor)
+            return self.send_error_obj(401, "Not Authorized",
+                                       f"{self.who.actor} is not authorized to reload")
+
+        try:
+            self.app.load_from()
+            return self.send_error_obj(200, "Data Reloaded", "Successfully reloaded NSD data")
+        except Exception as ex:
+            self.log.error("Failed to reload NSD data: %s", str(ex))
+            return self.send_error_obj(500, "Internal Server Error")
 
     def do_OPTIONS(self, path):
         return self.send_options(["GET"])
@@ -374,11 +390,21 @@ class PeopleServiceApp(ServiceApp):
 
         self.svc = MongoPeopleService(dburl)
 
-    def load_from(self, datadir):
+    def load_from(self, datadir=None):
         """
-        initialize the people database from files in the given data directory
+        initialize the people database.  This will use the configuration under the ``data`` 
+        parameter to control the loading (see :py:class:`~nistoar.nsd.service.PeopleService` 
+        supported parameters).
+
+        :param str datadir:   the directory to look for data files in, overriding the value
+                              provided in the configuration.  
         """
-        self.svc.load({"dir": datadir}, self.log, True)
+        datacfg = self.cfg.get("data", {})
+        datacfg.setdefault("dir", "/data/nsd")
+        if datadir:
+            datacfg = dict(self.cfg.items())
+            datacfg['datadir'] = datadir
+        self.svc.load(datacfg, self.log, True)
 
     def create_handler(self, env, start_resp, path, who) -> Handler:
         parts = path.split('/', 1)
@@ -386,17 +412,17 @@ class PeopleServiceApp(ServiceApp):
         path = parts[0] if parts else ""
 
         if not what:
-            return ReadyHandler(self.svc, path, env, start_resp, who, log=self.log, app=self)
+            return ReadyHandler(self.svc, path, env, start_resp, who, self.cfg, log=self.log, app=self)
 
         if what == "people":
-            return PeopleHandler(self.svc, path, env, start_resp, who, log=self.log.getChild("people"),
-                                 app=self)
+            return PeopleHandler(self.svc, path, env, start_resp, who, self.cfg, 
+                                 log=self.log.getChild("people"), app=self)
 
         if what == "orgs":
-            return OrgHandler(self.svc, path, env, start_resp, who, log=self.log.getChild("people"),
-                              app=self)
+            return OrgHandler(self.svc, path, env, start_resp, who, self.cfg, 
+                              log=self.log.getChild("people"), app=self)
 
-        return NotFoundHandler(path, env, start_resp, log=self.log, app=self)
+        return NotFoundHandler(path, env, start_resp, self.cfg, log=self.log, app=self)
 
 
 class PeopleApp(WSGIServiceApp):
@@ -433,6 +459,12 @@ class PeopleApp(WSGIServiceApp):
         """
         authcfg = self.cfg.get('authentication', {})
         return authenticate_via_jwt("nsd", env, authcfg, self.log, agents, client_id)
+
+    def load(self):
+        """
+        (re-)initialize the underlying database with data from the configured data directory
+        """
+        self.svcapps[''].load_from()
 
 
 app = PeopleApp

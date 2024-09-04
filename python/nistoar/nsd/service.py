@@ -253,10 +253,28 @@ class MongoPeopleService(PeopleService):
         self._db['Orgs'].insert_many(data)
 
 
-    def load(self, config, log=None, clear=True):
+    def load(self, config, log=None, clear=True, withtrans=False):
         """
         load all data described in the given configuration object.  This is done safely within a
         database transaction so that it rolls back if there is a failure.  
+
+        The configuration provided to this function is used to control the loading.  In particular,
+        the following parameters will be looked for:
+
+        ``dir``
+            the directory where data files to be loaded should be found (default: "/data/nsd").
+        ``person_file``
+            the name of the file containing records describing people
+        ``org_file``
+            the name of the file containing records describing that organizations the people are 
+            assigned to.
+
+        :param dict config:  the configuration to use during loading (see above)
+        :param Logger  log:  the Logger to send messages to
+        :param bool  clear:  if True, all previously loaded records in the database will be deleted 
+                             before loading (default: True)
+        :param bool withtrans:  if True, use a database transaction to do the loading.  (Note this 
+                             requires that the MongoDB be started with replicaSets; default: False.)
         """
         datadir = config.get('dir', '.')
         if not os.path.isdir(datadir):
@@ -268,32 +286,44 @@ class MongoPeopleService(PeopleService):
         if not os.path.isfile(os.path.join(datadir, orgfile)):
             raise ConfigurationException(f"{orgfile}: NSD data directory does not exist as a file")
 
+        if not withtrans:
+            self._load_notrans(datadir, personfile, orgfile, log, clear)
+        else:
+            self._load_notrans(datadir, personfile, orgfile, log, clear)
+
+    def _load_notrans(self, datadir, personfile, orgfile, log, clear):
+        people = self._db.People
+        orgs = self._db.Orgs
+        
+        if clear:
+            people.delete_many({})
+            orgs.delete_many({})
+
+        self._load_file(people, personfile, datadir, log)
+        self._load_file(orgs, orgfile, datadir, log)
+
+    def _load_withtrans(self, datadir, personfile, orgfile, log, clear):
+
         def _loadit(session):
             people = session.client[self._db.name].People
             orgs   = session.client[self._db.name].Orgs
 
             if clear:
-#                self._db['OUs'].delete_many({})
-#                self._db['Divisions'].delete_many({})
-#                self._db['Groups'].delete_many({})
-                self._db['People'].delete_many({})
-                self._db['Orgs'].delete_many({})
+                people.delete_many({}, session=session)
+                orgs.delete_many({}, session=session)
 
-#            self._load_file(self.load_OUs, config.get('ou_file', "ou.json"), datadir, log)
-#            self._load_file(self.load_divs, config.get('div_file', "div.json"), datadir, log)
-#            self._load_file(self.load_groups, config.get('group_file', "group.json"), datadir, log)
-            self._load_file(self.load_people, personfile, datadir, log)
-            self._load_file(self.load_orgs, orgfile, datadir, log)
+            self._load_file(people, personfile, datadir, log, session)
+            self._load_file(orgs, orgfile, datadir, log, session)
 
         with self._cli.start_session() as session:
             session.with_transaction(_loadit)
 
-    def _load_file(self, loader, file, dir='.', log=None):
+    def _load_file(self, mongocoll, file, dir='.', log=None, session=None):
         try:
             datafile = os.path.join(dir, file)
             with open(datafile) as fd:
                 data = json.load(fd)
-            loader(data)
+            mongocoll.insert_many(data, session=session)
         except FileNotFoundError as ex:
             if log:
                 log.warning("Source data file not found: %s", datafile)

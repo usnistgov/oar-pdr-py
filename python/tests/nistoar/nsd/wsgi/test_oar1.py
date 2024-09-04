@@ -1,4 +1,4 @@
-import os, json, pdb, logging, tempfile
+import os, json, pdb, logging, tempfile, warnings
 from collections import OrderedDict
 from io import StringIO
 from pathlib import Path
@@ -38,6 +38,13 @@ dburl = None
 if os.environ.get('MONGO_TESTDB_URL'):
     dburl = os.environ.get('MONGO_TESTDB_URL')
 
+def ignore_warnings(test_func):
+    def do_test(self, *args, **kwargs):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", ResourceWarning)
+            test_func(self, *args, **kwargs)
+    return do_test
+
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
 class TestHandlers(test.TestCase):
 
@@ -52,6 +59,7 @@ class TestHandlers(test.TestCase):
     def tostr(self, resplist):
         return [e.decode() for e in resplist]
 
+    @ignore_warnings
     def setUp(self):
         self.cfg = {
             "dir": datadir
@@ -270,7 +278,7 @@ class TestHandlers(test.TestCase):
 
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
-class TestApp(test.TestCase):
+class TestPeopleApp(test.TestCase):
 
     def start(self, status, headers=None, extup=None):
         self.resp.append(status)
@@ -283,16 +291,18 @@ class TestApp(test.TestCase):
     def tostr(self, resplist):
         return [e.decode() for e in resplist]
 
+    @ignore_warnings
     def setUp(self):
         self.cfg = {
             "db_url": dburl,
             "data": {
                 "dir": datadir
-            }
+            },
+            "loaderusers": ['anonymous']
         }
-        self.svc = service.MongoPeopleService(dburl)
-        self.svc.load(self.cfg['data'], rootlog)
+#        self.svc = service.MongoPeopleService(dburl)
         self.app = wsgi.PeopleApp(self.cfg)
+        self.app.load()
         self.resp = []
 
     def test_divs(self):
@@ -335,6 +345,28 @@ class TestApp(test.TestCase):
         self.assertEqual(resp['org_count'], 8)
         self.assertTrue(resp['message'].startswith("Ready"))
 
+    @ignore_warnings
+    def test_load(self):
+        path = ""
+        req = {
+            "REQUEST_METHOD": "LOAD",
+            "PATH_INFO": "/"
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 Data Reloaded", self.resp[0])
+        resp = self.body2data(body)
+        self.assertEqual(resp['oar:message'], "Successfully reloaded NSD data")
+
+        self.resp = []
+        req["REQUEST_METHOD"] = "GET"
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2data(body)
+
+        self.assertEqual(resp['status'], "ready")
+        self.assertEqual(resp['person_count'], 4)
+        self.assertEqual(resp['org_count'], 8)
+        self.assertTrue(resp['message'].startswith("Ready"))
 
 
         

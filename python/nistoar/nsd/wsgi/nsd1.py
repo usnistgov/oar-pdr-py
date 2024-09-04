@@ -27,7 +27,7 @@ class NSDHandler(Handler):
                  who=None, config: Mapping={}, log: logging.Logger=None, app=None):
         if not log:
             log = deflog
-        super(NSDHandler, self).__init__(path, wsgienv, start_resp, who, config, log)
+        super(NSDHandler, self).__init__(path, wsgienv, start_resp, who, config, log, app)
 
         self.svc = service
         self._format_qp = "format"
