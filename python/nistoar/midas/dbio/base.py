@@ -12,6 +12,7 @@ model and how to interact with the database.
 """
 import time
 import math
+import asyncio
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
 from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
@@ -24,6 +25,7 @@ from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils.prov import Action
 from .. import MIDASException
 from .status import RecordStatus
+from .websocket import WebsocketServer
 from nistoar.pdr.utils.prov import ANONYMOUS_USER
 
 DAP_PROJECTS = "dap"
@@ -830,6 +832,9 @@ class DBClient(ABC):
         self._whogrps = None
 
         self._dbgroups = DBGroups(self)
+        # Start the WebSocket server
+        self.websocket_server = WebsocketServer()
+        asyncio.run(self.websocket_server.start())
 
     @property
     def project(self) -> str:
@@ -891,6 +896,10 @@ class DBClient(ABC):
         rec['name'] = name
         rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
+        # Send a message through the WebSocket
+        message = f"Record created: {name} for user {foruser}"
+        if self.websocket_server.is_running():
+            asyncio.run(self.websocket_server.send_message_to_clients(message))
         return rec
 
     def _default_shoulder(self):
