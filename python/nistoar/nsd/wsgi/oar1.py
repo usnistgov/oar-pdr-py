@@ -377,18 +377,20 @@ class PeopleServiceApp(ServiceApp):
     """
     A ServiceApp wrapper around the PeopleService that can be deployed into a larger WSGI app.
     """
-    def __init__(self, config, log, appname=None):
+    def __init__(self, config, log, appname=None, service: PeopleService=None):
         if not appname:
             appname = "nsd"
         super(PeopleServiceApp, self).__init__(appname, log, config)
 
-        dburl = self.cfg.get('db_url')
-        if not dburl:
-            raise ConfigurationException("Missing required config param: db_url")
-        if not dburl.startswith("mongodb:"):
-            raise ConfigurationException("Unsupported (non-MongoDB) database URL: "+dburl)
+        if not service:
+            dburl = self.cfg.get('db_url')
+            if not dburl:
+                raise ConfigurationException("Missing required config param: db_url")
+            if not dburl.startswith("mongodb:"):
+                raise ConfigurationException("Unsupported (non-MongoDB) database URL: "+dburl)
 
-        self.svc = MongoPeopleService(dburl)
+            service = MongoPeopleService(dburl)
+        self.svc = service
 
     def load_from(self, datadir=None):
         """

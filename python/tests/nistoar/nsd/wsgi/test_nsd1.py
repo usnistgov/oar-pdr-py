@@ -137,7 +137,7 @@ class TestApp(test.TestCase):
         }
         self.svc = service.MongoPeopleService(dburl)
         self.svc.load(self.cfg['data'], rootlog)
-        self.app = wsgi.PeopleApp(self.cfg)
+        self.app = wsgi.NSDApp(self.cfg)
         self.resp = []
 
     def test_divs(self):

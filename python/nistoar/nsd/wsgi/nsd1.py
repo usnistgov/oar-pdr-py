@@ -113,22 +113,24 @@ class ReadyHandler(NSDHandler):
         return self.send_options(["GET"])
 
 
-class PeopleServiceApp(ServiceApp):
+class NSDServiceApp(ServiceApp):
     """
     A ServiceApp wrapper around the PeopleService that can be deployed into a larger WSGI app.
     """
-    def __init__(self, config, log, appname=None):
+    def __init__(self, config, log, appname=None, service: PeopleService=None):
         if not appname:
             appname = "nsd"
-        super(PeopleServiceApp, self).__init__(appname, log, config)
+        super(NSDServiceApp, self).__init__(appname, log, config)
 
-        dburl = self.cfg.get('db_url')
-        if not dburl:
-            raise ConfigurationException("Missing required config param: db_url")
-        if not dburl.startswith("mongodb:"):
-            raise ConfigurationException("Unsupported (non-MongoDB) database URL: "+dburl)
+        if not service:
+            dburl = self.cfg.get('db_url')
+            if not dburl:
+                raise ConfigurationException("Missing required config param: db_url")
+            if not dburl.startswith("mongodb:"):
+                raise ConfigurationException("Unsupported (non-MongoDB) database URL: "+dburl)
 
-        self.svc = MongoPeopleService(dburl)
+            service = MongoPeopleService(dburl)
+        self.svc = service
 
     def create_handler(self, env, start_resp, path, who) -> Handler:
         if not path:
@@ -138,14 +140,24 @@ class PeopleServiceApp(ServiceApp):
 
         return OrgHandler(self.svc, path, env, start_resp, who, log=self.log, app=self)
 
-    def load_from(self, datadir):
+    def load_from(self, datadir=None):
         """
-        initialize the people database from files in the given data directory
+        initialize the people database.  This will use the configuration under the ``data`` 
+        parameter to control the loading (see :py:class:`~nistoar.nsd.service.PeopleService` 
+        supported parameters).
+
+        :param str datadir:   the directory to look for data files in, overriding the value
+                              provided in the configuration.  
         """
-        self.svc.load({"dir": datadir}, self.log, True)
+        datacfg = self.cfg.get("data", {})
+        datacfg.setdefault("dir", "/data/nsd")
+        if datadir:
+            datacfg = dict(self.cfg.items())
+            datacfg['datadir'] = datadir
+        self.svc.load(datacfg, self.log, True)
 
 
-class PeopleApp(WSGIServiceApp):
+class NSDApp(WSGIServiceApp):
     """
     A partial implementation of the NIST Staff Directory web service
     """
@@ -161,8 +173,8 @@ class PeopleApp(WSGIServiceApp):
         if base_ep is None:
             base_ep = config.get('base_endpoint', DEF_BASE_PATH).strip('/')
 
-        svcapp = PeopleServiceApp(config, log)
-        super(PeopleApp, self).__init__(svcapp, log, base_ep, config)
+        svcapp = NSDServiceApp(config, log)
+        super(NSDApp, self).__init__(svcapp, log, base_ep, config)
                                     
         if not self.cfg.get('authentication'):  # formerly jwt_auth
             log.warning("JWT Authentication is not configured")
@@ -181,5 +193,5 @@ class PeopleApp(WSGIServiceApp):
         return authenticate_via_jwt("midas", env, authcfg, self.log, agents, client_id)
 
 
-app = PeopleApp
+app = NSDApp
 

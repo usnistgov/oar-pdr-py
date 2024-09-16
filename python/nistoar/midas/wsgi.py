@@ -579,12 +579,8 @@ class MIDASApp(AuthenticatedWSGIApp):
 
     def load_people_from(self, datadir=None):
         if any(k.startswith("nsd/") for k in self.subapps.keys()):
-            if not datadir:
-                nsdcfg = self.cfg.get('services',{}).get("nsd")
-                datadir = nsdcfg.get("data", {}).get("dir", "/data/nsd")
-
             nsdapp = [v for k,v in self.subapps.items() if k.startswith("nsd/")][0]
-            nsdapp.load_from(datadir)
+            nsdapp.load_from()
 
 
 app = MIDASApp

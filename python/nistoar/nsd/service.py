@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from typing import List, Iterator
 
 from . import NSDException, NSDServerError, NSDClientError, NSDResourceNotFound
+from nistoar.base.config import ConfigurationException
 
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError, OperationFailure
@@ -282,9 +283,9 @@ class MongoPeopleService(PeopleService):
         personfile = config.get('person_file', "person.json")
         orgfile = config.get('org_file', "orgs.json")
         if not os.path.isfile(os.path.join(datadir, personfile)):
-            raise ConfigurationException(f"{personfile}: NSD data directory does not exist as a file")
+            raise ConfigurationException(f"{personfile}: NSD data does not exist as a file")
         if not os.path.isfile(os.path.join(datadir, orgfile)):
-            raise ConfigurationException(f"{orgfile}: NSD data directory does not exist as a file")
+            raise ConfigurationException(f"{orgfile}: NSD data does not exist as a file")
 
         if not withtrans:
             self._load_notrans(datadir, personfile, orgfile, log, clear)
