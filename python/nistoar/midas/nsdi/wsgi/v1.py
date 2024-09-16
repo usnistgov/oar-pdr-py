@@ -59,7 +59,7 @@ class PeopleIndexHandler(Handler, ErrorHandling):
         self.idxcli = NSDPeopleIndexClient(nsdclient, idxprops)
         supp_fmts = FormatSupport()
         supp_fmts.support(Format("json", "application/json"), ["text/json", "application/json"], True)
-        supp_fmts.support(Format("csv", "text/csv"), ["text/csv", "application/csv"], True)
+        supp_fmts.support(Format("csv", "text/csv"), ["text/csv", "application/csv"], False)
         self._set_default_format_support(supp_fmts)
 
     def do_GET(self, path, ashead=False, format=None):
@@ -116,7 +116,7 @@ class OrgIndexHandler(Handler, ErrorHandling):
         self.idxcli = NSDOrgIndexClient(nsdclient, idxprops)
         supp_fmts = FormatSupport()
         supp_fmts.support(Format("json", "application/json"), ["text/json", "application/json"], True)
-        supp_fmts.support(Format("csv", "text/csv"), ["text/csv", "application/csv"], True)
+        supp_fmts.support(Format("csv", "text/csv"), ["text/csv", "application/csv"], False)
         self._set_default_format_support(supp_fmts)
 
     def do_GET(self, path, ashead=False, format=None):

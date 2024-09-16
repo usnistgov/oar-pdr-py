@@ -116,7 +116,7 @@ class TestOrgIndexHandler(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         resp = self.body2data(body)
 
-        self.assertEqual(set(resp.keys()), set(["verterans' tapdance administration"]))
+        self.assertEqual(set(resp.keys()), set(["veterans' tapdance administration"]))
 
     def test_bad_path(self):
         req = {
@@ -179,7 +179,7 @@ class TestNSDIndexerApp(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         resp = self.body2data(body)
 
-        self.assertEqual(set(resp.keys()), set(["verterans' tapdance administration"]))
+        self.assertEqual(set(resp.keys()), set(["veterans' tapdance administration"]))
 
     def test_people(self):
         req = {
