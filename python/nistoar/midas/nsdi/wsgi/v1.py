@@ -203,11 +203,10 @@ class NSDIndexerApp(ServiceApp):
                              be :py:mod:`one of the endpoints supported by this class<.v1>`.
         """
         path = path.strip('/')
+        if not path:
+            return Ready(path, env, start_resp, who, self.cfg.get('ready', {}), self.log, self)
+
         pathels = path.split('/')
-
-        if len(pathels) == 0:
-            return Ready(self.cfg.get('ready', {}), path)
-
         pathels[0] = pathels[0].lower()  # path case-insensitive
         if pathels[0] not in self._supported_eps:
             return Unsupported(env, start_resp, path, self.cfg.get('unsupported', {}), self.log, self)
