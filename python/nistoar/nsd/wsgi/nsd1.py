@@ -156,6 +156,8 @@ class NSDServiceApp(ServiceApp):
             datacfg['datadir'] = datadir
         self.svc.load(datacfg, self.log, True)
 
+PeopleServiceApp = NDSServiceApp
+
 
 class NSDApp(WSGIServiceApp):
     """

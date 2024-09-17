@@ -147,7 +147,7 @@ else:
 application = wsgi.app(cfg, factory)
 
 if nsdcfg:
-    application.load_from()
+    application.load_people_from()
 
 print("MIDAS service ready with "+dbtype+" backend")
 logging.info("MIDAS service ready with "+dbtype+" backend")

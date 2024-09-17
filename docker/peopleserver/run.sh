@@ -46,6 +46,11 @@ ARGUMENTS
   -c FILE, --config-file FILE   Use a custom service configuration given in FILE.
                                 This file must be in YAML or JSON format.
                                 Defaut: docker/peopleserver/people_config.yml
+  -d DIR, --data-dir DIR        local directory where staff directory data files 
+                                can be initially loaded into the database from.  
+                                Be default, the people data will be loaded from 
+                                a file called "person.json" and organizations, 
+                                from "orgs.json".  
   -B, --bg                      Run the server in the background (returning the 
                                 command prompt after successful launch)
   -N, --no-mongo                Do not start a mongo server; use this if you want

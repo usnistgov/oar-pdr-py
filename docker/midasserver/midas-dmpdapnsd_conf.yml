@@ -86,10 +86,14 @@ services:
          title:       "NIST Staff Directory Service API"
          describedBy: "http://localhost:9091/docs/nsdsvc-elements.html"
          href:        "http://localhost:9091/midas/nsd"
+      include_headers:
+         "Access-Control-Allow-Origin": "*"
       default_convention: nsd1
       db_url: "mongodb://oarop:oarop@mongodb:27017/midas"
       data:
         dir: /data/nsd
+        person_file: person.json
+        org_file: nistorg.json
       conventions: 
          nsd1:
             about: 

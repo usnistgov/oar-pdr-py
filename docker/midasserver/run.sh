@@ -122,8 +122,8 @@ while [ "$1" != "" ]; do
             VOLOPTS="$VOLOPTS -v $vol"
             ;;
         -V)
-            vol=$1
             shift
+            vol=$1
             VOLOPTS="$VOLOPTS -v $vol"
             ;;
         -h|--help)
