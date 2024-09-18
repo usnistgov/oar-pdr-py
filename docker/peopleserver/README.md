@@ -24,7 +24,7 @@ To run this server "out of the box" requires:
 ## Starting and stopping the server
 
 To run the server, you should open a terminal and change into you local clone of the `oar-pdr-py`
-repository.  The server is launched using the `midasserver` script located in the `scripts`
+repository.  The server is launched using the `peopleserver` script located in the `scripts`
 directory.  Note when you run the script for the first time, it will automatically build all of
 the python code and docker images (producing a lot of output to the screen); these are not rebuilt
 by default on subsequent executions.
@@ -45,12 +45,12 @@ retrieved from the NSD service at NIST) using the `-d` option which identifies a
 where the data records will be found; for example:
 
 ```bash
-scripts/peopleserver --bg -d docker/people-server/data start
+scripts/peopleserver --bg -d docker/peopleserver/data start
 ```
 
 The start-up script will look for two files in that directory, `people.json` and `orgs.json`
 (by default, these can be changed via the configuration file,
-`docker/people-server/people_conf.yml`).  These contain the person and organization records,
+`docker/peopleserver/people_conf.yml`).  These contain the person and organization records,
 respectivel, formatted in JSON as an array of objects.
 
 For more start-up options, see the help documentation by typing,

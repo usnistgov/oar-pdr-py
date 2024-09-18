@@ -84,7 +84,7 @@ scripts/midasserver -M -P midasdata
 ```
 
 These will be available under the `http://localhost:9091/nsd` endpoint.  See the
-[people-service README documentation](../people-server/README.md) for details about using these
+[peopleservice README documentation](../peopleserver/README.md) for details about using these
 APIs. 
 
 ## Using the service
