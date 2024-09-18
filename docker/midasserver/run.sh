@@ -85,6 +85,7 @@ STOREDIR=
 DBTYPE=
 ADDNSD=
 DETACH=
+PPLDATADIR=
 VOLOPTS="-v $repodir/dist:/app/dist"
 while [ "$1" != "" ]; do
     case "$1" in
@@ -116,6 +117,13 @@ while [ "$1" != "" ]; do
             ;;
         -P|--add-people-service)
             ADDNSD=1
+            ;;
+        -d|--people-data-dir)
+            shift
+            PPLDATADIR=$1
+            ;;
+        --people-data-dir=*)
+            PPLDATADIR=`echo $1 | sed -e 's/[^=]*=//'`
             ;;
         --mount-volume=*)
             vol=`echo $1 | sed -e 's/[^=]*=//'`
@@ -151,6 +159,12 @@ while [ "$1" != "" ]; do
     esac
     shift
 done
+if [ -z "$PPLDATADIR" ]; then
+    PPLDATADIR=$repodir/python/tests/nistoar/nsd/data
+else
+    PPLDATADIR=`(cd $PPLDATADIR > /dev/null 2>&1; pwd)`
+fi
+[ -n "$PPLDATADIR" ] || 
 [ -n "$ACTION" ] || ACTION=start
 
 ([ -z "$DOPYBUILD" ] && [ -e "$repodir/dist/pdr" ]) || {
@@ -161,6 +175,15 @@ done
     echo ${prog}: Python library not found in dist directory: $repodir/dist
     false
 }
+
+[ -n "$PPLDATADIR" ] || PPLDATADIR=$repodir/docker/peopleserver/data
+ls $PPLDATADIR/*.json > /dev/null 2>&1 || {
+    # no JSON data found in datadir; reset the datadir to test data
+    echo "${prog}: no people data found; will load db with test data"
+    PPLDATADIR=$repodir/python/tests/nistoar/nsd/data
+}
+[ "$ACTION" = "stop" ] || echo "${prog}: loading staff directory DB from $PPLDATADIR"
+VOLOPTS="$VOLOPTS -v ${PPLDATADIR}:/data/nsd"
 
 # build the docker images if necessary
 (docker_images_built midasserver && [ -z "$DODOCKBUILD" ]) || build_server_image
