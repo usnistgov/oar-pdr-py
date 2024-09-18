@@ -1184,6 +1184,7 @@ class TestMIDASNSDServer(test.TestCase):
             os.path.join(self.workdir, 'nerdm')
         self.config['services']['nsd']['db_url'] = os.environ.get("MONGO_TESTDB_URL",
                                                                   "mongodb://admin:admin@localhost/testdb")
+        self.config['services']['nsd']['data']['dir'] = str(peopledatadir)
         cliagents = {'ark:/88434/tl0-0001': ["Unit testing agent"]}
         self.config['authentication'] = { "key": "XXXXX", "algorithm": "HS256", "require_expiration": False,
                                           'client_agents': cliagents }

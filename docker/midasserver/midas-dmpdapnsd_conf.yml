@@ -93,7 +93,7 @@ services:
       data:
         dir: /data/nsd
         person_file: person.json
-        org_file: nistorg.json
+        org_file: orgs.json
       conventions: 
          nsd1:
             about: 

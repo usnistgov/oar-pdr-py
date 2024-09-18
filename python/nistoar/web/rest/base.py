@@ -511,7 +511,7 @@ class WSGIApp(metaclass=ABCMeta):
             self.name = self.cfg.get("name", "")
         self.base_ep = None
         if not base_ep:
-            base_ep = self.cfg.get("base_ep")
+            base_ep = self.cfg.get("base_ep", "")
         base_ep = base_ep.strip('/')
         if base_ep:
             self.base_ep = '/%s/' % base_ep

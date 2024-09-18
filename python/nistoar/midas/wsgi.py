@@ -580,7 +580,7 @@ class MIDASApp(AuthenticatedWSGIApp):
     def load_people_from(self, datadir=None):
         if any(k.startswith("nsd/") for k in self.subapps.keys()):
             nsdapp = [v for k,v in self.subapps.items() if k.startswith("nsd/")][0]
-            nsdapp.load_from()
+            nsdapp.load_from(datadir)
 
 
 app = MIDASApp

@@ -153,7 +153,7 @@ class NSDServiceApp(ServiceApp):
         datacfg.setdefault("dir", "/data/nsd")
         if datadir:
             datacfg = dict(self.cfg.items())
-            datacfg['datadir'] = datadir
+            datacfg['dir'] = str(datadir)
         self.svc.load(datacfg, self.log, True)
 
 PeopleServiceApp = NSDServiceApp

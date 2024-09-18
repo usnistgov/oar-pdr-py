@@ -283,9 +283,9 @@ class MongoPeopleService(PeopleService):
         personfile = config.get('person_file', "person.json")
         orgfile = config.get('org_file', "orgs.json")
         if not os.path.isfile(os.path.join(datadir, personfile)):
-            raise ConfigurationException(f"{personfile}: NSD data does not exist as a file")
+            raise ConfigurationException(f"{personfile}: NSD data does not exist as a file in {datadir}")
         if not os.path.isfile(os.path.join(datadir, orgfile)):
-            raise ConfigurationException(f"{orgfile}: NSD data does not exist as a file")
+            raise ConfigurationException(f"{orgfile}: NSD data does not exist as a file in {datadir}")
 
         if not withtrans:
             self._load_notrans(datadir, personfile, orgfile, log, clear)
