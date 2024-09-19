@@ -210,7 +210,8 @@ class PeopleHandler(OARNSDHandler):
             return self.send_error(500, "Server error")
 
     def do_OPTIONS(self, path):
-        return self.send_options(["POST", "GET"])
+        return self.send_options(["POST", "GET"],
+                                 extra={'Access-Control-Allow-Headers': 'Authorization'})
 
         
 class OrgHandler(OARNSDHandler):
@@ -337,7 +338,8 @@ class OrgHandler(OARNSDHandler):
             return self.send_error(500, "Server error")
 
     def do_OPTIONS(self, path):
-        return self.send_options(["POST", "GET"])
+        return self.send_options(["POST", "GET"],
+                                 extra={'Access-Control-Allow-Headers': 'Authorization'})
 
         
 class ReadyHandler(OARNSDHandler):
@@ -371,7 +373,8 @@ class ReadyHandler(OARNSDHandler):
             return self.send_error_obj(500, "Internal Server Error")
 
     def do_OPTIONS(self, path):
-        return self.send_options(["GET"])
+        return self.send_options(["GET"],
+                                 extra={'Access-Control-Allow-Headers': 'Authorization'})
 
 class PeopleServiceApp(ServiceApp):
     """

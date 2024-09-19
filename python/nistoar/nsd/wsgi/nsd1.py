@@ -54,7 +54,8 @@ class OrgHandler(NSDHandler):
             return self.send_error(500, "Internal Server Error")
 
     def do_OPTIONS(self, path):
-        return self.send_options(["GET"])
+        return self.send_options(["GET"],
+                                 extra={'Access-Control-Allow-Headers': 'Authorization'})
 
 
 class PeopleHandler(NSDHandler):
@@ -92,7 +93,8 @@ class PeopleHandler(NSDHandler):
             return self.send_error(500, "Server error")
 
     def do_OPTIONS(self, path):
-        return self.send_options(["POST"])
+        return self.send_options(["POST"],
+                                 extra={'Access-Control-Allow-Headers': 'Authorization'})
 
 
 class ReadyHandler(NSDHandler):
@@ -110,7 +112,8 @@ class ReadyHandler(NSDHandler):
         return self.send_json(self.svc.status(), ashead=ashead)
 
     def do_OPTIONS(self, path):
-        return self.send_options(["GET"])
+        return self.send_options(["GET"],
+                                 extra={'Access-Control-Allow-Headers': 'Authorization'})
 
 
 class NSDServiceApp(ServiceApp):
