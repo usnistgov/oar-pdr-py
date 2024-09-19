@@ -4,7 +4,7 @@ The intention of this Docker container is a to run a fully functional Staff Dire
 suite for development purposes.  It supports two APIs to the directory data: one (`nsd1`)
 that is meant to be partially compliant with the NIST Staff Directory service (NSD) and another
 (`oar1`) that is optimized for use with the OAR/MIDAS application.  This can be launched via
-the [`peopleserver` script](../scripts/peopleserver) in the {`scripts` directory](../scripts).
+the [`peopleserver` script](../scripts/peopleserver) in the [`scripts` directory](../scripts).
 
 We note that the [`midasserver`](../midas-server) can now be configured to host the directory
 APIs along with the DBIO ones.  This `peopleserver` represents a stand-alone configuration.
