@@ -152,7 +152,11 @@ while [ "$1" != "" ]; do
     esac
     shift
 done
-[ -n "$DATADIR" ] || DATADIR=$repodir/python/tests/nistoar/nsd/data
+if [ -z "$DATADIR" ]; then
+    DATADIR=$repodir/python/tests/nistoar/nsd/data
+else
+    DATADIR=`(cd $DATADIR > /dev/null 2>&1; pwd)`
+fi
 [ -n "$ACTION" ] || ACTION=start
 
 ([ -z "$DOPYBUILD" ] && [ -e "$repodir/dist/pdr" ]) || {

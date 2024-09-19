@@ -3,6 +3,6 @@ data:
   dir: /app/data
   person_file: person.json
   org_file: orgs.json
-include_header:
+include_headers:
   "Access-Control-Allow-Origin": "*"
   
