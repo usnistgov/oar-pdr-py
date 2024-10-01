@@ -21,6 +21,9 @@ To run this server "out of the box" requires:
       `docker compose version`.
   * The [oar-pdr-py repository](https://github.com/usnistgov/oar-pdr-py) cloned onto your machine.
 
+It is not necessary to build the python software separately; this can be done on-the-fly the first
+time your script run the server script.
+
 ## Starting and stopping the server
 
 To run the server, you should open a terminal and change into your local clone of the `oar-pdr-py`
