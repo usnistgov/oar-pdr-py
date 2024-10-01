@@ -139,24 +139,24 @@ class TestResolverReady(test.TestCase):
         body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
-                         "Content-Type: text/html")
+                         "Content-Type: text/plain")
         cthdr = [h for h in self.resp if 'Content-Length:' in h][0]
-        self.assertEqual(int(re.sub(r'^.*: ', '', cthdr)), 552)
+        self.assertEqual(int(re.sub(r'^.*: ', '', cthdr)), 17)
         self.resp = []
 
         req = {
             'REQUEST_METHOD': "GET",
             'PATH_INFO': '/',
-            'QUERY_STRING': "format=text"
+            'QUERY_STRING': "format=html"
         }
         self.hdlr = self.gethandler('', req)
 
         body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
-                         "Content-Type: text/plain")
+                         "Content-Type: text/html")
         cthdr = [h for h in self.resp if 'Content-Length:' in h][0]
-        self.assertEqual(int(re.sub(r'^.*: ', '', cthdr)), 17)
+        self.assertEqual(int(re.sub(r'^.*: ', '', cthdr)), 552)
         self.resp = []
 
         req = {
@@ -243,6 +243,22 @@ class TestResolverReady(test.TestCase):
         req = {
             'REQUEST_METHOD': "HEAD",
             'PATH_INFO': '/'
+        }
+        self.hdlr = self.gethandler('', req)
+
+        body = self.tostr( self.hdlr.handle() )
+        self.assertEqual(self.resp[0], "200 Ready")
+        self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
+                         "Content-Type: text/plain")
+        cthdr = [h for h in self.resp if 'Content-Length:' in h][0]
+        self.assertEqual(int(re.sub(r'^.*: ', '', cthdr)), 17)
+        self.assertEqual("\n".join(body), "")
+        self.resp = []
+
+        req = {
+            'REQUEST_METHOD': "HEAD",
+            'PATH_INFO': '/',
+            'QUERY_STRING': "format=html"
         }
         self.hdlr = self.gethandler('', req)
 
