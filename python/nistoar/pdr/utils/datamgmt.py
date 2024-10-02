@@ -3,6 +3,9 @@ Utility functions managing data and files
 """
 from collections.abc import Mapping
 import hashlib, os, shutil, time, re, math
+from zipfile import ZipFile
+
+from ..exceptions import StateException
 
 __all__ = [
     'update_mimetypes_from_file', 'build_mime_type_map', 'checksum_of', 'measure_dir_size',
@@ -178,3 +181,41 @@ def rmtree_retry(rootdir, retries=1):
             rmtree(root, retries=retries-1)
     
 rmtree = rmtree_retry
+
+def unpack_zip_into(zipfile, destdir, _whatfile="zipfile"):
+    if not os.path.exists(destdir):
+        raise StateException(f"Destination directory for {_whatfile} contents not found: {destdir}")
+                             
+    # this coder gratefully drew on the example by Jawaad Ahmad (jia103) at
+    # https://stackoverflow.com/questions/9813243/extract-files-from-zip-file-and-retain-mod-date-python-2-7-1-on-windows-7
+    # for restoring the content's original data-time stamps.
+
+    dirs = {}
+    with ZipFile(zipfile, 'r') as zip:
+        contents = zip.namelist()
+        root = None
+        for name in contents:
+            parts = name.split("/")
+            root = parts[0]
+            if root:
+                break
+
+        if not root:
+            raise StateException(f"{_whatfile} appears to be empty: {aipfile}")
+
+        for entry in zip.infolist():
+            zip.extract(entry, destdir)
+            extracted = os.path.join(destdir, entry.filename)
+            date_time = time.mktime(entry.date_time + (0, 0, -1))
+
+            if os.path.isdir(extracted):
+                dirs[extracted] = date_time
+            else:
+                os.utime(extracted, (date_time, date_time))
+
+    for name in dirs:
+        os.utime(name, (dirs[name], dirs[name]))
+
+    return root
+
+

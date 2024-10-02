@@ -1,11 +1,14 @@
 """
 Reuseable classes for providing a proof-of-life endpoint in a NIST-OAR web app
 """
+import json
 from typing import Callable, Mapping
 from logging import Logger
+from collections import OrderedDict
 
 from .base import ServiceApp, Handler
-from ..formats import Unacceptable, UnsupportedFormat, FormatSupport, XHTMLSupport, TextSupport
+from ..formats import (Unacceptable, UnsupportedFormat, FormatSupport,
+                       XHTMLSupport, TextSupport, JSONSupport)
 
 class Ready(Handler):
     """
@@ -17,17 +20,21 @@ class Ready(Handler):
     ``format`` query parameter.
     """
 
-    def __init__(self, path, wsgienv, start_resp, who=None, config={}, log=None, app=None):
+    def __init__(self, path, wsgienv, start_resp, who=None, config={}, log=None, app=None,
+                 deffmt: str="text"):
         """
         instantiate the handler
         """
         super(Ready, self).__init__(path, wsgienv, start_resp, who, config, log, app)
 
         self._set_format_qp("format")
+        if deffmt not in [ TextSupport.FMT_TEXT, XHTMLSupport.FMT_HTML, JSONSupport.FMT_JSON ]:
+            deffmt = TextSupport.FMT_TEXT
 
         fmtsup = FormatSupport()
-        XHTMLSupport.add_support(fmtsup)
-        TextSupport.add_support(fmtsup)
+        TextSupport.add_support(fmtsup, deffmt == TextSupport.FMT_TEXT)
+        XHTMLSupport.add_support(fmtsup, deffmt == XHTMLSupport.FMT_HTML)
+        JSONSupport.add_support(fmtsup, ["application/json", "text/json"], deffmt == JSONSupport.FMT_JSON)
         self._set_default_format_support(fmtsup)
 
     def do_GET(self, path, ashead=False, format=None):
@@ -49,6 +56,9 @@ class Ready(Handler):
             
         if format.name == XHTMLSupport.FMT_HTML:
             return self.get_ready_html(format.ctype, ashead)
+
+        if format.name == JSONSupport.FMT_JSON:
+            return self.get_ready_json(format.ctype, ashead)
 
         if format.name == TextSupport.FMT_TEXT:
             name = ""
@@ -79,14 +89,30 @@ u  </body>
 </html>
 """      
         return self.send_ok(out, contenttype, "Ready", ashead=ashead)
+
+    def get_ready_json(self, contenttype, ashead=None):
+        servicename = None
+        if self.app:
+            servicename = self.app.name
+        if not servicename:
+            servicename = ""
+
+        out = OrderedDict([
+            ("service", servicename),
+            ("status",  "ready"),
+            ("message", f"{servicename} service is ready.")
+        ])
+        return self.send_ok(json.dumps(out, indent=2), contenttype, ashead=ashead)
+        
         
 class ReadyApp(ServiceApp):
     """
     a WSGI sub-app that handles unsupported path or proof-of-life requests
     """
 
-    def __init__(self, log: Logger, appname: str="Ready", config: Mapping=None):
+    def __init__(self, log: Logger, appname: str="Ready", config: Mapping=None, deffmt="text"):
         super(ReadyApp, self).__init__(appname, log, config)
+        self._deffmt = deffmt
 
     def create_handler(self, env: dict, start_resp: Callable, path: str, who) -> Handler:
         """
@@ -97,5 +123,5 @@ class ReadyApp(ServiceApp):
                              relative to a parent path that this ServiceApp is configured to 
                              handle.  
         """
-        return Ready(path, env, start_resp, who, log=self.log, app=self)
+        return Ready(path, env, start_resp, who, log=self.log, app=self, deffmt=self._deffmt)
 

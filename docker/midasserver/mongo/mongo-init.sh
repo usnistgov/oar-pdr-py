@@ -8,4 +8,4 @@ echo '
             roles: [ "readWrite" ]
         }
     )
-    exit' | mongo -u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD
+    exit' | mongosh -u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD

@@ -14,6 +14,8 @@ the following endpoints:
     Repository (PDR)
   * ``/groups/`` -- the API for creating and managing access permission groups for collaborative 
     authoring.
+  * ``/nsdi/v1/`` -- an API for retrieving fast indexes matching entries in the NIST Staff Directory
+    (see :py:mod:`nistoar.midas.nsdi` for details).
 
 These endpoint send and receive data stored in the backend database through the common 
 :py:mod:` DBIO layer <nistoar.midas.dbio>`.  
@@ -151,7 +153,10 @@ from .dap.service import mdsx, mds3
 from .dbio.inmem import InMemoryDBClientFactory
 from .dbio.fsbased import FSBasedDBClientFactory
 from .dbio.mongo import MongoDBClientFactory
+from .nsdi.wsgi import v1 as nsdiv1
 from nistoar.base.config import ConfigurationException, merge_config
+
+from nistoar.nsd.wsgi import nsd1, oar1
 
 log = logging.getLogger(system.system_abbrev)   \
              .getChild(system.subsystem_abbrev) \
@@ -458,13 +463,21 @@ class About(ServiceApp):
         """
         return self._Handler(self, path, env, start_resp, who, log=self.log)
     
-
+def PeopleServiceFactory(servicemodule):
+    if not hasattr(servicemodule, "PeopleServiceApp"):
+        raise ValueError(f"service module {servicemodule.__name__} is missing a PeopleServiceApp symbol")
+    def factory(dbiofact, log, config, name):
+        return servicemodule.PeopleServiceApp(config, log, name)
+    return factory
 
 _MIDASServiceApps = {
 #    "dmp/mdm1":  mdm1.DMPApp,
     "dmp/mdm1":  prj.MIDASProjectApp.factory_for("dmp"),
     "dap/mdsx":  mdsx.DAPApp,
-    "dap/mds3":  mds3.DAPApp
+    "dap/mds3":  mds3.DAPApp,
+#    "nsdi/v1":   nsdiv1.NSDIndexerAppFactory
+    "nsd/oar1":  PeopleServiceFactory(oar1),
+    "nsd/nsd1":  PeopleServiceFactory(nsd1)
 }
 
 class MIDASApp(AuthenticatedWSGIApp):
@@ -539,8 +552,10 @@ class MIDASApp(AuthenticatedWSGIApp):
         """
         determine the authenticated user
         """
-        authcfg = self.cfg.get('authentication', {})
-        return authenticate_via_jwt("midas", env, authcfg, self.log, agents, client_id)
+        authcfg = self.cfg.get('authentication')
+        if authcfg:
+            return authenticate_via_jwt("midas", env, authcfg, self.log, agents, client_id)
+        return None
 
     def handle_path_request(self, path: str, env: Mapping, start_resp: Callable, who = None):
         path = path.split('/')
@@ -561,6 +576,11 @@ class MIDASApp(AuthenticatedWSGIApp):
             subapp = self.subapps.get('')
 
         return subapp.handle_path_request(env, start_resp, "/".join(path), who)
+
+    def load_people_from(self, datadir=None):
+        if any(k.startswith("nsd/") for k in self.subapps.keys()):
+            nsdapp = [v for k,v in self.subapps.items() if k.startswith("nsd/")][0]
+            nsdapp.load_from(datadir)
 
 
 app = MIDASApp

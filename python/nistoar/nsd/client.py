@@ -158,15 +158,18 @@ class NSDClient:
             raise NSDServerError(self.GROUP_EP, message="Unexpected org description: missing properties"
                                  " (has service changed?)")
 
-    def select_people(self, name=None, lname=None, fname=None, ou=None, filter=None) -> List[Mapping]:
+    def select_people(self, name=None, lname=None, fname=None, ou=None, email=None,
+                      filter=None) -> List[Mapping]:
         """
         search for people records given constraints
         :param str|[str]  name:  a name or partial name or a list of the same to compare against 
                                  the first and last names
-        :param str|[str] lname:  a name or partial name a list of the same to compare against
+        :param str|[str] lname:  a name or partial name or a list of the same to compare against
                                  the last names
-        :param str|[str] fname:  a name or partial name a list of the same to compare against
+        :param str|[str] fname:  a name or partial name or a list of the same to compare against
                                  the first names
+        :param str|[str] email:  the email address or a list of the same to compare against people's
+                                 email addresses
         :param str|int|[str]|[int] ou:  an OU or list of OUs, given either as string representing
                                  the OU abbreviation or an integer representing its number,
                                  to compare against people's OU affiliation
@@ -182,6 +185,8 @@ class NSDClient:
             lname = [lname]
         if ou is not None and not isinstance(ou, list):
             ou = [ou]
+        if email is not None and not isinstance(email, list):
+            email = [email]            
         if filter is None:
             filter = {}
 
@@ -192,6 +197,8 @@ class NSDClient:
         if name:
             filter['firstName'] = list(set(filter.get('firstName',{})) | set(name))
             filter['lastName']  = list(set(filter.get('lastName', [])) | set(name))
+        if email:
+            filter['emailAddress'] = list(set(filter.get('emailAddress', [])) | set(name))
 
         if ou:
             filter['ouNumber'] = []
