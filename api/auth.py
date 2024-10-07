@@ -41,5 +41,5 @@ class Authentication(Resource):
             logging.error("Invalid request format")
             return {"error": "Bad Request", "message": "Invalid request format"}, 400
         except Exception as error:
-            logging.exception("An unexpected error occurred")
-            return {"error": "Internal Server Error", "message": str(error)}, 500
+            logging.exception("An unexpected error occurred: " + str(error))
+            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500

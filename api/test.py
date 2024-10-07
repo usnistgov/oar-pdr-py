@@ -7,7 +7,8 @@ import logging
 from flask_jwt_extended import jwt_required
 from flask_restful import Resource
 
-from app.utils.test import get_test
+from app.clients.nextcloud.api import NextcloudApi
+from config import Config
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,18 +17,21 @@ class Test(Resource):
     @jwt_required()
     def get(self):
         try:
-            response = get_test()
+            nextcloud_client = NextcloudApi(Config)
+            response = nextcloud_client.test()
             if response is None:
                 logging.error("Test resource not found")
                 return {"error": "Not Found", "message": "Test resource not found"}, 404
-
-            logging.info("Test resource retrieved successfully")
-            return response, 200
-
+            if response.status_code == 200:
+                logging.info("Test resource retrieved successfully")
+                return {'success': 'GET', 'message': response.text}, 200
+            else:
+                logging.error("Test resource error: " + response.text)
+                return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
         except Exception as error:
-            logging.exception("An unexpected error occurred")
+            logging.exception("An unexpected error occurred: " + str(error))
             error_response = {
                 'error': 'Internal Server Error',
-                'message': 'An unexpected error occurred: ' + str(error)
+                'message': 'An unexpected error occurred'
             }
             return error_response, 500
