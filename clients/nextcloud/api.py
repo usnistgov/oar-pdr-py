@@ -5,7 +5,7 @@ import json
 import logging
 
 import requests
-from requests.auth import HTTPBasicAuth
+import OpenSSL
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -14,18 +14,40 @@ class NextcloudApi:
     def __init__(self, config):
         self.is_prod = config.PROD
         if self.is_prod:
-            self.base_url = config.NEXTCLOUD_API_PROD_URL + config.API_USER + '/'
+            self.base_url = config.NEXTCLOUD_API_PROD_URL + config.NEXTCLOUD_ADMIN_USER + '/'
         else:
             self.base_url = config.NEXTCLOUD_API_DEV_URL
-        self.auth_user = config.API_USER
-        self.auth_pass = config.API_PWD
+        self.cert_path = config.CLIENT_CERT_PATH
+        self.key_path = config.CLIENT_KEY_PATH
+        self.ca_path = config.SERVER_CA_PATH
+        self.nextcloud_superuser = config.NEXTCLOUD_ADMIN_USER
+
+    def get_cert_cn(self, cert_path):
+        """ Extract CN (Common Name) from the client certificate """
+        with open(cert_path, 'rb') as cert_file:
+            cert_data = cert_file.read()
+
+        cert = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert_data)
+        subject = cert.get_subject()
+        return subject.CN
 
     def handle_request(self, method, url, **kwargs):
         """ Generic request handler. """
+        # Certificate must have CN matching nextcloud admin username
+        cert_cn = self.get_cert_cn(self.cert_path)
+        if cert_cn != self.nextcloud_superuser:
+            logging.error(f"CN '{cert_cn}' does not match the superuser name '{self.nextcloud_superuser}'.")
+            raise Exception(f"CN '{cert_cn}' does not match the superuser name '{self.nextcloud_superuser}'.")
+
         full_url = f"{self.base_url}/{url}"
         try:
-            auth = HTTPBasicAuth(self.auth_user, self.auth_pass)
-            response = requests.request(method, full_url, auth=auth, verify=self.is_prod, **kwargs)
+            response = requests.request(
+                method,
+                full_url,
+                cert=(self.cert_path, self.key_path),
+                verify=self.ca_path,
+                **kwargs
+            )
             response.raise_for_status()
             return response
         except requests.exceptions.HTTPError as e:

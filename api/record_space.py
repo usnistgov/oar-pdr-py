@@ -46,13 +46,14 @@ class RecordSpace(Resource):
             user_dir_response = webdav_client.create_directory(user_dir)
 
             # Check requests were successful
-            if not all(response['status'] == 200 for response in
+            successful_statuses = [200, 201]
+            if not all(response['status'] in successful_statuses for response in
                        [parent_dir_response, system_dir_response, user_dir_response]):
                 logging.error("Failed to create directories")
                 return {"error": "Internal Server Error", "message": "Failed to create directories"}, 500
 
             # Share space with user
-            if user_name != Config.API_USER:
+            if user_name != Config.NEXTCLOUD_ADMIN_USER:
                 permissions_response = nextcloud_client.set_user_permissions(user_name, 31, user_dir)
                 if permissions_response['ocs']['meta']['statuscode'] != 200:
                     logging.error("Error setting user permissions")
@@ -101,15 +102,17 @@ class RecordSpace(Resource):
         try:
             webdav_client = WebDAVApi(Config)
             dir_name = record_name
-            response = webdav_client.delete_directory(dir_name)
 
-            if 'not found' in response['message']:
+            # Check if directory exists before attempting to delete
+            if not webdav_client.is_directory(dir_name):
                 logging.error(f"Record name '{record_name}' does not exist")
                 return {"error": "Not Found", "message": f"Record name '{record_name}' does not exist!"}, 404
-            elif response['status'] != 200:
+
+            response = webdav_client.delete_directory(dir_name)
+
+            if response['status'] not in [200, 204]:
                 logging.error(f"Failed to delete '{dir_name}' with status code {response['status']}")
-                return {"error": "Internal Server Error",
-                        "message": "Unknown error"}, 500
+                return {"error": "Internal Server Error", "message": "Failed to delete directory"}, 500
 
             success_response = {
                 'success': 'DELETE',

@@ -226,7 +226,13 @@ class FileManagerDirectoryScanner(UserSpaceScannerBase):
             # Go back to the beginning of the file
             temp_file.seek(0)
             webdav_client = WebDAVApi(Config)
+            webdav_client = WebDAVApi(Config)
             response = webdav_client.upload_file(str(fm_system_path), temp_file.name, filename)
+
+            if response['status'] not in [200, 201, 204]:
+                logging.error(f"Failed to upload scan report '{filename}'")
+                raise Exception("Failed to upload scan report")
+
             logging.info('Upload file:' + filename)
 
         except KeyError as e:
@@ -365,8 +371,7 @@ class ScanFiles(Resource):
         nextcloud_md = helpers.parse_nextcloud_scan_xml(fm_file_path, nextcloud_xml)
 
         for resource in nextcloud_md:
-            resource_path = re.split(Config.API_USER, resource['path'], flags=re.IGNORECASE)[-1].lstrip('/')
-            nextcloud_resource_info = webdav_client.get_file_info(resource_path)
+            resource_path = re.split(Config.NEXTCLOUD_ADMIN_USER, resource['path'], flags=re.IGNORECASE)[-1].lstrip('/')
             resource_type = 'file' if 'getcontenttype' in resource else 'folder'
             file_type = resource.get('getcontenttype', '')
             size = resource.get('getcontentlength', resource.get('quota-used-bytes', '0'))
@@ -561,16 +566,10 @@ class ScanFiles(Resource):
             logging.info(f"Attempting to delete file: {file_path}")
             response = webdav_client.delete_file(file_path)
 
-            if len(response) > 0:
-                exception_message = helpers.extract_exception_message(response)
+            if response['status'] not in [200, 204]:
+                logging.error(f"Failed to delete scan report '{scan_id}'")
+                return {'error': 'Internal Server Error', 'message': 'Failed to delete scan report'}, 500
 
-                if exception_message is not None:
-                    error_type = exception_message.get('error', '')
-                    logging.error(f"Error in file deletion: {error_type} - {exception_message.get('message')}")
-                    if 'NotFound' in error_type:
-                        return {'error': 'File Not Found', 'message': exception_message.get('message')}, 404
-                    else:
-                        return {'error': 'Server Error', 'message': exception_message.get('message')}, 500
             success_response = {
                 'success': 'DELETE',
                 'message': f"Scanning '{scan_id}' deleted successfully!",

@@ -1,3 +1,4 @@
+
 """
 Registers all API endpoints
 """
@@ -22,7 +23,6 @@ api.add_resource(RecordSpace,
                  )
 api.add_resource(File,
                  "/file/<string:destination_path>",
-                 "/file",
                  )
 api.add_resource(ScanFiles,
                  "/record-space/<string:record_name>/scan/<string:scan_id>",

@@ -40,7 +40,11 @@ class File(Resource):
                 logging.error("No file selected for uploading")
                 return {'error': 'Bad Request', 'message': 'No file selected for uploading'}, 400
 
-            webdav_client.upload_file(destination_path, file)
+            upload_response = webdav_client.upload_file(destination_path, file)
+
+            if upload_response['status'] not in [200, 201, 204]:
+                logging.error(f"Failed to upload file '{file.filename}'")
+                return {'error': 'Internal Server Error', 'message': 'Failed to upload file'}, 500
             logging.info(f"Uploaded file '{file.filename}' to '{destination_path}'")
 
             success_response = {
@@ -74,7 +78,11 @@ class File(Resource):
                 return {'error': 'Not Found', 'message': f'File {filename} does not exist'}, 404
 
             content = file.stream.read().decode('utf-8')
-            webdav_client.modify_file_content(path, content)
+            modify_response = webdav_client.modify_file_content(path, content)
+            if modify_response['status'] not in [200, 201, 204]:
+                logging.error(f"Failed to modify file '{filename}'")
+                return {'error': 'Internal Server Error', 'message': 'Failed to modify file'}, 500
+
             logging.info(f"file '{filename}' modified successfully")
             return {'success': 'PUT',
                     'message': f'Modified file {filename} in {destination_path} successfully'}, 200
@@ -91,7 +99,12 @@ class File(Resource):
                 logging.error(f"File '{path}' not found")
                 return {'error': 'File Not Found', 'message': 'File does not exist'}, 404
 
-            webdav_client.delete_file(path)
+            delete_response = webdav_client.delete_file(path)
+
+            if delete_response['status'] not in [200, 204]:
+                logging.error(f"Failed to delete file '{path}'")
+                return {'error': 'Internal Server Error', 'message': 'Failed to delete file'}, 500
+
             logging.info(f"Deleted file '{path}'")
             return {'success': 'DELETE', 'message': f'File successfully deleted!'}, 200
 
