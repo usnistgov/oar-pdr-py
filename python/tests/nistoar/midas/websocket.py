@@ -40,7 +40,7 @@ class WebSocketServer:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(self.start())
-
+    
     async def stop(self):
         if self.server:
             self.server.close()

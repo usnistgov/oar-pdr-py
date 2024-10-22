@@ -1,9 +1,11 @@
-import os, json, pdb, logging
+import os, json, pdb, logging,asyncio
 from pathlib import Path
 import unittest as test
+import websockets
 
 from nistoar.midas.dbio import inmem, base
 from nistoar.pdr.utils.prov import Action, Agent
+from nistoar.midas.dbio.websocket import WebSocketServer
 
 testuser = Agent("dbio", Agent.AUTO, "tester", "test")
 testdir = Path(__file__).parents[0]
@@ -26,12 +28,54 @@ with open(asc_andor, 'r') as file:
 with open(dmp_path, 'r') as file:
     dmp = json.load(file)
 
+
+
+
+
 class TestInMemoryDBClientFactory(test.TestCase):
+
+    @classmethod
+    def initialize_websocket_server(cls):
+        websocket_server = WebSocketServer()
+        try:
+            cls.loop = asyncio.get_event_loop()
+            if cls.loop.is_closed():
+                raise RuntimeError
+        except RuntimeError:
+            cls.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(cls.loop)
+        cls.loop.run_until_complete(websocket_server.start())
+        print("WebSocketServer initialized:", websocket_server)
+        return websocket_server
+    
+    @classmethod
+    def setUpClass(cls):
+        cls.websocket_server = cls.initialize_websocket_server()
+
+    @classmethod
+    def tearDownClass(cls):
+        # Ensure the WebSocket server is properly closed
+        cls.loop.run_until_complete(cls.websocket_server.stop())
+        cls.loop.run_until_complete(cls.websocket_server.wait_closed())
+        print("WebSocketServer closed")
+
+        # Cancel all lingering tasks
+        asyncio.set_event_loop(cls.loop)  # Set the event loop as the current event loop
+        tasks = asyncio.all_tasks(loop=cls.loop)
+        for task in tasks:
+            task.cancel()
+        cls.loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+
+        # Close the event loop
+        cls.loop.close()
+        print("Event loop closed")
+    
+    
 
     def setUp(self):
         self.cfg = {"goob": "gurn"}
         self.fact = inmem.InMemoryDBClientFactory(
-            self.cfg, {"nextnum": {"hank": 2}})
+            self.cfg,self.websocket_server, {"nextnum": {"hank": 2}})
 
     def test_ctor(self):
         self.assertEqual(self.fact._cfg, self.cfg)
@@ -55,11 +99,46 @@ class TestInMemoryDBClientFactory(test.TestCase):
 
 class TestInMemoryDBClient(test.TestCase):
 
+    @classmethod
+    def initialize_websocket_server(cls):
+        websocket_server = WebSocketServer()
+        try:
+            cls.loop = asyncio.get_event_loop()
+        except RuntimeError:
+            cls.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(cls.loop)
+        cls.loop.run_until_complete(websocket_server.start())
+        print("WebSocketServer initialized:", websocket_server)
+        return websocket_server
+    
+    @classmethod
+    def setUpClass(cls):
+        cls.websocket_server = cls.initialize_websocket_server()
+
+    @classmethod
+    def tearDownClass(cls):
+        # Ensure the WebSocket server is properly closed
+        cls.loop.run_until_complete(cls.websocket_server.stop())
+        cls.loop.run_until_complete(cls.websocket_server.wait_closed())
+        print("WebSocketServer closed")
+
+        # Cancel all lingering tasks
+        asyncio.set_event_loop(cls.loop) 
+        tasks = asyncio.all_tasks(loop=cls.loop)
+        for task in tasks:
+            task.cancel()
+        cls.loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+
+        # Close the event loop
+        cls.loop.close()
+        print("Event loop closed")
+
     def setUp(self):
         self.cfg = {"default_shoulder": "mds3"}
         self.user = "nist0:ava1"
-        self.cli = inmem.InMemoryDBClientFactory({}).create_client(
+        self.cli = inmem.InMemoryDBClientFactory({},self.websocket_server).create_client(
             base.DMP_PROJECTS, self.cfg, self.user)
+    
 
     def test_next_recnum(self):
         self.assertEqual(self.cli._next_recnum("goob"), 1)

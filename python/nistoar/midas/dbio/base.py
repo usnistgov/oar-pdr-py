@@ -13,6 +13,9 @@ model and how to interact with the database.
 import time
 import math
 import asyncio
+import threading
+import inspect
+from concurrent.futures import ThreadPoolExecutor
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
 from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
@@ -25,7 +28,7 @@ from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils.prov import Action
 from .. import MIDASException
 from .status import RecordStatus
-from .websocket import WebsocketServer
+from .websocket import WebSocketServer
 from nistoar.pdr.utils.prov import ANONYMOUS_USER
 
 DAP_PROJECTS = "dap"
@@ -824,17 +827,35 @@ class DBClient(ABC):
          the only allowed shoulder will be the default, ``grp0``. 
     """
 
-    def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS):
+    def __init__(self, config: Mapping, projcoll: str,websocket_server: WebSocketServer, nativeclient=None, foruser: str = ANONYMOUS):
+        print("Arguments passed to __init__:", locals())
+        print("\n")
+        print("websocket_server == ", websocket_server)
         self._cfg = config
         self._native = nativeclient
         self._projcoll = projcoll
         self._who = foruser
         self._whogrps = None
+        # Get the current stack frame
+        stack = inspect.stack()
+        
+        # Print the caller function
+        caller = stack[1]
+        print(f"__init__ called from {caller.function} in {caller.filename} at line {caller.lineno}")
+        print("----- \n")
+        # Print the caller function
+        caller = stack[2]
+        print(f"__init__ called from {caller.function} in {caller.filename} at line {caller.lineno}")
+
+        caller = stack[3]
+        print(f"__init__ called from {caller.function} in {caller.filename} at line {caller.lineno}")
 
         self._dbgroups = DBGroups(self)
-        # Start the WebSocket server
-        self.websocket_server = WebsocketServer()
-        asyncio.run(self.websocket_server.start())
+        
+        self.websocket_server = websocket_server
+        message = f"Record created: {self._projcoll} for user {foruser}"
+        asyncio.run(self.websocket_server.send_message_to_clients(message))
+
 
     @property
     def project(self) -> str:
@@ -898,8 +919,7 @@ class DBClient(ABC):
         rec.save()
         # Send a message through the WebSocket
         message = f"Record created: {name} for user {foruser}"
-        if self.websocket_server.is_running():
-            asyncio.run(self.websocket_server.send_message_to_clients(message))
+        #asyncio.run(self.websocket_server.send_message_to_clients(message))
         return rec
 
     def _default_shoulder(self):
@@ -1291,7 +1311,7 @@ class DBClientFactory(ABC):
     an abstract class for creating client connections to the database
     """
 
-    def __init__(self, config):
+    def __init__(self, config,websocket_server: WebSocketServer):
         """
         initialize the factory with its configuration.  The configuration provided here serves as 
         the default parameters for the cient as these can be overridden by the configuration parameters
@@ -1301,6 +1321,7 @@ class DBClientFactory(ABC):
         depend on the type of project being access (e.g. "dmp" vs. "dap").
         """
         self._cfg = config
+        self.websocket_server = websocket_server
 
     @abstractmethod
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = ANONYMOUS):
