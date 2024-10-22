@@ -22,8 +22,8 @@ from nistoar.base.config import ConfigurationException
 import nistoar.base.config as cfgmod
 from nistoar.pdr.utils.prov import Agent
 
-__all__ = ["Handler", "ServiceApp", "Unauthenticated", "WSGIApp", "AuthenticatedWSGIApp",
-           "WSGIAppSuite", "Agent",
+__all__ = ["Handler", "NotFoundHandler", "ServiceApp", "Unauthenticated", "WSGIServiceApp", 
+           "AuthenticatedWSGIApp", "WSGIAppSuite", "Agent",
            "authenticate_via_authkey", "authenticate_via_proxy_x509", "authenticate_via_jwt" ]
 
 class Handler(object):
@@ -377,7 +377,19 @@ class Handler(object):
 
     def _set_default_format_support(self, fmtsup: FormatSupport):
         self._fmtsup = fmtsup
-        
+
+class NotFoundHandler(Handler):
+    """
+    a request Handler that always returns 404 Not Found.  This can be used in :py:class:`ServiceApp`
+    implementations that create a handler (via :py:meth:`~ServiceApp.create_handler`) based on the 
+    requested path.  If the path is not recognized, an instance of this class can be returned.
+    """
+    def do_GET(self, path, ashead=False, format=None):
+        return self.send_error(404, "Not Found")
+
+    def do_OPTIONS(self, path):
+        return self.send_options(["GET"])
+
     
 class ServiceApp(metaclass=ABCMeta):
     """
@@ -465,10 +477,32 @@ class WSGIApp(metaclass=ABCMeta):
     """
     A WSGI application base class for wrapping one or more ServiceApp classes.  It provides a 
     common authentication authentication check.  
+
+    This base implementation will leverage two parameters from the configuration:
+    
+    ``base_ep``
+        _str_ (required).  The base endpoint URL for the web app given as a path starting with 
+                           a forward slash, ``/``.  All resource path requests must start with 
+                           this path; otherwise 403 (Forbidden) is returned.
+    ``name``
+        _str_ (required).  A short name to use to identify this web app (e.g. in log messages, 
+                           authentication, authorization, etc.)
+
+    WSGIApp subclasses may expand on this base set of configuration parameters.  
     """
 
     def __init__(self, config: Mapping, log: Logger, base_ep: str = None, name: str = None):
         """
+        initialize the base information for the app.  
+        :param dict config:  configuration data for the app.  (See 
+                             :py:class:`the class documentation<WSGIApp>` as well as for 
+                             subclasses for more information.)
+        :param Logger  log:  the Logger this app should use to record log messages
+        :param str base_ep:  the base endpoint URL for the suite of services.  If not provided,
+                             the base URL is set by the configuration (via the ``base_ep`` 
+                             parameter).
+        :param str    name:  a name to use to identify this app for context (e.g. in logs, 
+                             authentication, authorization, etc.) default: None.
         """
         self.log = log
         self.cfg = config
@@ -477,9 +511,10 @@ class WSGIApp(metaclass=ABCMeta):
             self.name = self.cfg.get("name", "")
         self.base_ep = None
         if not base_ep:
-            base_ep = self.cfg.get("base_ep")
+            base_ep = self.cfg.get("base_ep", "")
+        base_ep = base_ep.strip('/')
         if base_ep:
-            self.base_ep = '/%s/' % base_ep.strip('/')
+            self.base_ep = '/%s/' % base_ep
 
     def authenticate(self, env) -> Union[object,str,None]:
         """
@@ -555,8 +590,19 @@ class WSGIApp(metaclass=ABCMeta):
 
 class AuthenticatedWSGIApp(WSGIApp):
     """
-    a WSGIApp with a NIST-OAR-specific model for authentication built around the 
+    a WSGIApp base class with a NIST-OAR-specific model for authentication built around the 
     :py:class:`~nistoar.pdr.utils.prov.Agent` class as the representation for the client identity.  
+    Subclasses provide a specific authentication mechanism via the :py:meth:`authenticate_user`
+    method.  See :py:meth:`authenticate` for more details.  
+
+    This WSGIApp subclass expands the set of parameters looked for the app configuration with the 
+    following parameters:
+
+    ``authentication``
+        an object whose sub-parameters control the authentication process.  Beyond a base set, the 
+        set of parameters expected in this object depends on the authentication implementation 
+        provided by the specific ``AuthenticatedWSGIApp`` subclass.  See :py:meth:`authenticate`
+        for a description of the base set of parameters.  
     """
 
     def authenticate(self, env) -> Agent:
@@ -888,6 +934,13 @@ class WSGIAppSuite(AuthenticatedWSGIApp):
                  base_ep: str = None):
         """
         initialize the suite of web services
+        :param dict  config:  the configuration for the suite of services
+        :param dict svcapps:  a mapping of resource paths (relative to the base endpoint URL)
+                              to the ServiceApp instances that should serve them. 
+        :param Logger   log:  the base logger to use among the suite
+        :param str  base_ep:  the base endpoint URL for the suite of services.  If not provided,
+                              the base URL is set by the configuration (via the ``base_ep`` 
+                              parameter).
         """
         super(WSGIAppSuite, self).__init__(config, log, base_ep)
         self.svcapps = dict(svcapps.items())

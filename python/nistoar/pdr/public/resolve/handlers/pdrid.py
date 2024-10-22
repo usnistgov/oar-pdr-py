@@ -118,8 +118,8 @@ class PDRIDHandler(Handler):
             format = self.select_format(format)
             if not format:
                 if self.log:
-                    self.log.failure("Failed to determine output format")
-                return send_error(500, "Server Error")
+                    self.log.error("Failed to determine output format")
+                return self.send_error(500, "Server Error")
         except Unacceptable as ex:
             return self.send_unacceptable(content=str(ex))
         except UnsupportedFormat as ex:
@@ -204,8 +204,8 @@ class PDRIDHandler(Handler):
             format = self.select_format(format)
             if not format:
                 if self.log:
-                    self.log.failure("Failed to determine output format")
-                return send_error(500, "Server Error")
+                    self.log.error("Failed to determine output format")
+                return self.send_error(500, "Server Error")
         except Unacceptable as ex:
             return self.send_unacceptable(content=str(ex))
         except UnsupportedFormat as ex:
@@ -302,8 +302,8 @@ class PDRIDHandler(Handler):
             format = self.select_format(format)
             if not format:
                 if self.log:
-                    self.log.failure("Failed to determine output format")
-                return send_error(500, "Server Error")
+                    self.log.error("Failed to determine output format")
+                return self.send_error(500, "Server Error")
         except Unacceptable as ex:
             return self.send_unacceptable(content=str(ex))
         except UnsupportedFormat as ex:

@@ -1,23 +1,19 @@
 # MIDAS Web Services (for development mode)
 
 The intention of this Docker container is to run a fully functional MIDAS web service 
-suite<sup>*</sup> primarily for development and purposes.  It can be launched via the
-[`midasserver` script](https://github.com/usnistgov/oar-pdr-py/tree/feature/draft-service/scripts/midasserver)
-in the [`scripts` directory](https://github.com/usnistgov/oar-pdr-py/tree/feature/draft-service/scripts).
+suite primarily for development purposes.  It can be launched via the
+[`midasserver` script](../scripts/midasserver) in the [`scripts` directory](../scripts).
 
 By default, the server operates with a storage backend in which records are stored in JSON
 files beneath a specified data directory.  This makes it easy to inspect the current contents
 of the stored records during development.  However, the server can optionally be run using a
 MongoDB backend.
 
-<sup>*</sup>_Note: While the server is designed to provided the full suite of MIDAS APIs,
-as of this writing, only the DMP project service is available._
-
 ## Prerequisites for running the server
 
 To run this server "out of the box" requires:
 
-  * Python 3 (>= 3.8.X)
+  * Python 3 (>= 3.10.X)
   * Docker Engine with command-line tools
     * if you want to use the option MongoDB backend, you will also need the [docker compose
       plugin](https://docs.docker.com/get-started/08_using_compose/).  This is included with
@@ -25,9 +21,12 @@ To run this server "out of the box" requires:
       `docker compose version`.
   * The [oar-pdr-py repository](https://github.com/usnistgov/oar-pdr-py) cloned onto your machine.
 
+It is not necessary to build the python software separately; this can be done on-the-fly the first
+time your script run the server script.
+
 ## Starting and stopping the server
 
-To run the server, you should open a terminal and change into you local clone of the `oar-pdr-py`
+To run the server, you should open a terminal and change into your local clone of the `oar-pdr-py`
 repository.  The server is launched using the `midasserver` script located in the `scripts`
 directory.  Note when you run the script for the first time, it will automatically build all of
 the python code and docker images (producing a lot of output to the screen); these are not rebuilt
@@ -37,7 +36,7 @@ To start the server, you provide the name of the directory where you want the ba
 For example, you can type:
 
 ```bash
-scripts/midasserver midasdata
+scripts/midasserver midasdata --bg
 ```
 
 This will create a `midasdata` subdirectory in the current directory.  The actual record data will
@@ -77,6 +76,19 @@ shutdown as well:
 ```bash
 scripts/midasserver -M stop
 ```
+
+### Launching with staff directory APIs included
+
+If the server is started with the `-P` (or `--add-people-service`) option, the staff directory
+service APIs will be included among the MIDAS APIs.
+
+```bash
+scripts/midasserver -M -P midasdata
+```
+
+These will be available under the `http://localhost:9091/nsd` endpoint.  See the
+[peopleservice README documentation](../peopleserver/README.md) for details about using these
+APIs. 
 
 ## Using the service
 

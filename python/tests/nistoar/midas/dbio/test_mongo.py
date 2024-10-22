@@ -21,6 +21,8 @@ asc_or    = datadir / 'asc_or.json'
 dmp_path  = datadir / 'dmp.json'
 asc_dates = datadir / 'asc_dates.json'
 asc_text  = datadir / 'asc_text.json'
+asc_keyandtheme = datadir / 'asc_keyandtheme.json'
+asc_orkeywords = datadir / 'asc_orkeywords.json'
 
 with open(asc_or, 'r') as file:
     constraint_or = json.load(file)
@@ -39,6 +41,12 @@ with open(asc_dates, 'r') as file:
 
 with open(asc_text, 'r') as file:
     constraint_text = json.load(file)
+
+with open(asc_keyandtheme, 'r') as file:
+    constraint_keyandtheme = json.load(file)
+
+with open(asc_orkeywords, 'r') as file:
+    constraint_orkeywords = json.load(file)
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
 class TestInMemoryDBClientFactory(test.TestCase):
@@ -334,7 +342,13 @@ class TestMongoDBClient(test.TestCase):
                 "since": 1689021185.5038593,
                 "modified": 1689021185.5050585,
                 "message": "draft created"
-            }}, self.cli)
+            },
+            "data": {
+                "keywords": ["Chemistry", "Bob"],
+                "theme": ["Physics", "Deo"]
+
+            }
+            }, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
 
         id = "pdr0:0006"
@@ -346,7 +360,13 @@ class TestMongoDBClient(test.TestCase):
                 "since": 1689021185.5038593,
                 "modified": 1689021180.5050585,
                 "message": "draft created"
-            }}, self.cli)
+            },
+            "data": {
+                "keywords": ["Ray", "Bob"],
+                "theme": ["Gretchen", "Deo"]
+
+            }
+            }, self.cli)
         self.cli.native[base.DMP_PROJECTS].insert_one(rec.to_dict())
 
         id = "pdr0:0003"
@@ -414,6 +434,16 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0002")
         self.assertEqual(recs[2].id, "pdr0:0008")
+
+        recs = list(self.cli.adv_select_records(constraint_keyandtheme, base.ACLs.READ))
+        self.assertEqual(len(recs), 1)
+        self.assertEqual(recs[0].id, "pdr0:0006")
+
+        recs = list(self.cli.adv_select_records(constraint_orkeywords, base.ACLs.READ))
+        self.assertEqual(len(recs), 2)
+        self.assertEqual(recs[0].id, "pdr0:0002")
+        self.assertEqual(recs[1].id, "pdr0:0006")
+
         
 
     def test_action_log_io(self):

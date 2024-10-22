@@ -206,9 +206,9 @@ class TestReady(test.TestCase):
         body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
-                         "Content-Type: text/html")
+                         "Content-Type: text/plain")
         cthdr = [h for h in self.resp if 'Content-Length:' in h][0]
-        self.assertEqual(int(re.sub(r'^.*: ', '', cthdr)), 280)
+        self.assertEqual(int(re.sub(r'^.*: ', '', cthdr)), 17)
         self.resp = []
 
         req = {
@@ -316,9 +316,9 @@ class TestReady(test.TestCase):
         body = self.tostr( self.hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
-                         "Content-Type: text/html")
+                         "Content-Type: text/plain")
         cthdr = [h for h in self.resp if 'Content-Length:' in h][0]
-        self.assertEqual(int(re.sub(r'^.*: ', '', cthdr)), 280)
+        self.assertEqual(int(re.sub(r'^.*: ', '', cthdr)), 17)
         self.assertEqual("\n".join(body), "")
         self.resp = []
 
@@ -365,7 +365,7 @@ class TestReadyApp(test.TestCase):
         body = self.tostr( hdlr.handle() )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
-                         "Content-Type: text/html")
+                         "Content-Type: text/plain")
         
 class TestWSGISuiteAppReady(test.TestCase):
 
@@ -394,7 +394,7 @@ class TestWSGISuiteAppReady(test.TestCase):
         body = self.tostr( self.app(req, self.start) )
         self.assertEqual(self.resp[0], "200 Ready")
         self.assertEqual([h for h in self.resp if 'Content-Type:' in h][0],
-                         "Content-Type: text/html")
+                         "Content-Type: text/plain")
 
     def testForbidden(self):
         req = {
