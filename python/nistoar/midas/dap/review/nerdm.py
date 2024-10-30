@@ -29,5 +29,8 @@ class DAPNERDmValidator(ValidatorBase):
         t = self._err("1.1#keyword", f"A value for keyword is required")
         t = out._add_applied(t, bool(nerd.get(prop)), f"Add some keywords")
 
+        t = self._err("1.1#topic", f"At least one NIST research topic is required")
+        t = out._add_applied(t, bool(nerd.get(prop)), f"Add some research topics")
+
         return out
 
