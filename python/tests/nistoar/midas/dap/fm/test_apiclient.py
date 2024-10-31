@@ -23,11 +23,16 @@ class FileManagerTest(test.TestCase):
         self.mock_response_200 = Mock()
         self.mock_response_200.status_code = 200
 
+        # with mock auth
+        self.file_manager = self.make_fm()
+
+    def make_fm(self):
         # Mock the authenticate method to prevent the FileManager constructor
         # from making a real HTTP request upon object instantiation
         with patch.object(FileManager, 'authenticate', return_value='mock_token'):
-            self.file_manager = FileManager(self.config)
-            self.file_manager.token = "token"
+            file_manager = FileManager(self.config)
+            file_manager.token = "token"
+            return file_manager
 
     @patch('requests.post')
     def test_authenticate_success(self, mock_post):
@@ -200,6 +205,39 @@ class FileManagerTest(test.TestCase):
         self.assertEqual(props.get('permissions'), "RGDNVCK")
         self.assertIn("created", props)
         self.assertIn("modified", props)
+        
+    @patch('requests.post')
+    def test_webdav_auth_by_private_net(self, mock_request):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = '{"temporary_password": "dontguessmeplease"}'
+        def tojson():
+            return json.loads(mock_response.text)
+        mock_response.json = tojson
+        mock_request.return_value = mock_response
+
+        pw = self.file_manager._webdav_auth_by_private_net("https://whoknows/auth")
+        self.assertEqual(pw, "dontguessmeplease")
+        
+    @patch('requests.post')
+    def test_webdav_auth(self, mock_request):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = '{"temporary_password": "dontguessmeplease"}'
+        def tojson():
+            return json.loads(mock_response.text)
+        mock_response.json = tojson
+        mock_request.return_value = mock_response
+
+        self.assertEqual(self.file_manager.auth_user, self.config['auth']['username'])
+        self.assertEqual(self.file_manager.auth_pass, self.config['auth']['password'])
+        self.assertNotEqual(self.config['auth']['password'], "dontguessmeplease")
+        wdaurl = "https://whoknows/auth"
+        self.assertEqual(self.file_manager._webdav_auth(None, None), self.config['auth']['password'])
+        self.assertEqual(self.file_manager._webdav_auth(wdaurl, "userpass"), self.config['auth']['password'])
+        self.assertEqual(self.file_manager._webdav_auth(wdaurl, None), self.config['auth']['password'])
+        self.assertEqual(self.file_manager._webdav_auth(wdaurl, ""), self.config['auth']['password'])
+        self.assertEqual(self.file_manager._webdav_auth(wdaurl, "private_net"), "dontguessmeplease")
 
     @patch('requests.request')
     def test_determine_uploads_url(self, mock_request):
@@ -215,7 +253,25 @@ class FileManagerTest(test.TestCase):
         self.assertEqual(self.file_manager.determine_uploads_url("mds3-0012"),
                          "http://goober.net/nc/192?dir=/mds3-0012/mds3-0012")
         
-                
+
+    @patch('requests.request')
+    def test_get_uploads_directory_with_wdauth(self, mock_request):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        with open(pfrespf) as fd:
+            mock_response.text = fd.read()
+        mock_request.return_value = mock_response
+
+        self.config['auth']['webdav_auth_url'] = "https://whoknows/auth"
+        self.file_manager = self.make_fm()
+        props = self.file_manager.get_uploads_directory("mds3-0012")
+        self.assertEqual(props.get('type'), "folder")
+        self.assertEqual(props.get('fileid'), "192")
+        self.assertEqual(props.get('size'), "4997166")
+        self.assertEqual(props.get('permissions'), "RGDNVCK")
+        self.assertIn("created", props)
+        self.assertIn("modified", props)
+        
 
 
 if __name__ == '__main__':
