@@ -406,8 +406,8 @@ class DAPService(ProjectService):
                     if prec.file_space.get('file_count', -2) < 0:
                         self.log.warning("Failed to initialize file listing from file manager")
                 except Exception as ex:
-                    self.log.error("Failed to initialize file listing: problem accessing file manager: %s",
-                                   str(ex))
+                    self.log.exception("Failed to initialize file listing: problem accessing file manager: %s",
+                                       str(ex))
             prec.data = self._summarize(nerd)
 
             if data:

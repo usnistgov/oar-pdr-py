@@ -256,11 +256,11 @@ class FileManager:
             raise FileSpaceException("File manager server error: {resp.reason}")
         elif resp.status_code >= 400:
             msg = resp.reason
-            if '/json' in resp.headers.get("content-header"):
+            if '/json' in resp.headers.get("content-type"):
                 body = response.json()
                 if isinstance(body, Mapping) and 'message' in body:
-                    msg = body['message']
-            elif '/xml' in resp.headers.get("content-header"):
+                    msg = str(body['message'])
+            elif '/xml' in resp.headers.get("content-type"):
                 try:
                     body = etree.parse(resp.text).getroot()
                     msgel = body.find(".//{DAV:}message")
@@ -268,6 +268,8 @@ class FileManager:
                         msg = msgel.text
                 except Exception as ex:
                     msg += " (no parseable message in response body)"
+            else:
+                msg += " (detail not specified)"
             raise FileSpaceException(msg, resp.status_code)
 
         base = self.dav_base
