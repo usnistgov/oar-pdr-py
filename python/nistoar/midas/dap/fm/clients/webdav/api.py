@@ -8,25 +8,69 @@ import xml.etree.ElementTree as ET
 
 from datetime import datetime
 from urllib.parse import urlparse, unquote
+from collections.abc import Mapping
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+from nistoar.base.config import ConfigurationException
 
 class WebDAVApi:
-    def __init__(self, config):
-        self.is_prod = config.PROD
-        self.api_user = config.NEXTCLOUD_ADMIN_USER
-        if self.is_prod:
-            self.webdav_url = config.WEBDAV_PROD_URL
-            self.nextcloud_api_url = config.NEXTCLOUD_API_PROD_URL + config.NEXTCLOUD_ADMIN_USER + '/'
-        else:
-            self.webdav_url = config.WEBDAV_DEV_URL
-            self.nextcloud_api_url = config.NEXTCLOUD_API_DEV_URL
-        self.cert_path = config.CLIENT_CERT_PATH
-        self.key_path = config.CLIENT_KEY_PATH
-        self.ca_path = config.SERVER_CA_PATH
+    def __init__(self, config: Mapping, log: logging.Logger=None):
+        """
+        initialize the client
+
+        :param dict config:  the configuration parameters for this client; see class documentation for 
+                             the parameter descriptions.
+        :param Logger log:   the Logger object to use for messages from this client.  If not provided,
+                             a default logger with the name "nextcloudcli" will be used. 
+        """
+        if not log:
+            log = logging.getLogger("webdavcli")
+        self.log = log
+        
+        self.base_url = config.get("service_endpoint")
+        if not self.base_url:
+            raise ConfigurationException("WebDAVApi: Missing required config parameter: service_endpoint")
+        self.authkw = self._prep_auth(config.get("authentication"))
+
+        if config.get("ca_bundle"):
+            self.authkw['verify'] = config['ca_bundle']
+
         self.temp_pwd = None
         self.auth = None
+
+    def _prep_auth(self, authcfg):
+        if not authcfg:
+            self.log.warning("No authentication parameters provided; assuming none are needed")
+
+        out = {}
+        if authcfg.get("client_cert_path"):
+            if not os.path.isfile(authcfg["client_cert_path"]):
+                raise ConfigurationException(f"{authcfg['client_cert_path']}: client cert file not found")
+            if not authcfg.get("client_key_path"):
+                raise ConfigurationException("NextclouApi: missing required config parameter: "
+                                             "authentication.client_key_path")
+            if not os.path.isfile(authcfg["client_key_path"]):
+                raise ConfigurationException(f"{authcfg['client_key_path']}: client key file not found")
+            out['cert'] = (authcfg["client_cert_path"], authcfg["client_key_path"])
+
+#            if authcfg.get("user"):
+#                # Certificate must have CN matching nextcloud admin username
+#                try:
+#                    certuser = self._get_cert_cn(authcfg['client_cert_path'])
+#                except Exception as ex:
+#                    raise ConfigurationException("%s: trouble reading client cert: %s" %
+#                                                 (authcfg['client_cert_path'], str(ex))) from ex
+#
+#                if authcfg['user'] != certuser:
+#                    raise ConfigurationException("%s: CN does not match %s" %
+#                                                 (authcfg['client_cert_path'], certuser))
+
+        elif authcfg.get("user"):
+            if not authcfg.get("pass"):
+                raise ConfigurationException("NextclouApi: missing required config parameter: "
+                                             "authentication.pass")
+            out['auth'] = (authcfg['user'], authcfg['pass'])
+
+        return out
 
     def authenticate(self):
         """Authenticate using the client certificate and get the temporary password from Nextcloud"""
