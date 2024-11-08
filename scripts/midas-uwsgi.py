@@ -147,7 +147,10 @@ else:
 application = wsgi.app(cfg, factory)
 
 if nsdcfg:
-    application.load_people_from()
+    try:
+        application.load_people_from()
+    except ConfigurationException as ex:
+        logging.warning("Unable to initialize NSD database: %s", str(ex))
 
 print("MIDAS service ready with "+dbtype+" backend")
 logging.info("MIDAS service ready with "+dbtype+" backend")

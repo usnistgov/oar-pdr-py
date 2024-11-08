@@ -368,6 +368,10 @@ class ReadyHandler(OARNSDHandler):
         try:
             self.app.load_from()
             return self.send_error_obj(200, "Data Reloaded", "Successfully reloaded NSD data")
+        except ConfigurationException as ex:
+            # raised if any of the configured data locations does not exist
+            self.log.warning("Unable to reload NSD data: %s", str(ex))
+            return self.send_error_obj(503, "NSD data not available for reloading")
         except Exception as ex:
             self.log.error("Failed to reload NSD data: %s", str(ex))
             return self.send_error_obj(500, "Internal Server Error")
@@ -403,6 +407,8 @@ class PeopleServiceApp(ServiceApp):
 
         :param str datadir:   the directory to look for data files in, overriding the value
                               provided in the configuration.  
+
+        :raises ConfigurationException:  if any of the configured files or directory does not exist
         """
         datacfg = self.cfg.get("data", {})
         datacfg.setdefault("dir", "/data/nsd")

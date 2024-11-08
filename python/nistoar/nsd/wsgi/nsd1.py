@@ -151,6 +151,8 @@ class NSDServiceApp(ServiceApp):
 
         :param str datadir:   the directory to look for data files in, overriding the value
                               provided in the configuration.  
+
+        :raises ConfigurationException:  if any of the configured files or directory does not exist
         """
         datacfg = self.cfg.get("data", {})
         datacfg.setdefault("dir", "/data/nsd")
