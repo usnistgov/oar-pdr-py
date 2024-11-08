@@ -199,7 +199,7 @@ class FMFSFileComps(FSBasedFileComps):
             if not isinstance(resp, Mapping):
                 self._res.log.error("Unexpected response from scan request: "+
                                     "not a JSON object (is URL correct?)")
-                raise RemoteStorageException("%s: failed to trigger file scan")
+                raise RemoteStorageException(f"{self._res.id}: failed to trigger file scan")
 
             elif 'scan_id' not in resp:
                 self._res.log.error("Unexpected response from scan request; no scan_id included")
@@ -218,11 +218,11 @@ class FMFSFileComps(FSBasedFileComps):
             self._res.log.error("Unexected response from scan request: failed to parse as JSON (%s)",
                                 str(ex))
             self._res.log.warning("(Is the fm base URL correct?)")
-            raise RemoteStorageException("%s: Failed to trigger file scan (unexpected response format)") \
-                from ex
+            raise RemoteStorageException("%s: Failed to trigger file scan (unexpected response format)" %
+                                         self._res.id) from ex
 
         except Exception as ex:
-            raise RemoteStorageException("%s: failed to trigger file scan: %s", self._res.id, str(ex)) \
+            raise RemoteStorageException(f"{self._res.id}: failed to trigger file scan: {str(ex)}") \
                 from ex
             
         return self._get_file_scan()
@@ -241,11 +241,11 @@ class FMFSFileComps(FSBasedFileComps):
             self._res.log.error("Unexected response while retrieving scan: failed to parse as JSON (%s)",
                                 str(ex))
             self._res.log.warning("(Is the fm base URL correct?)")
-            raise RemoteStorageException("%s: Failed to trigger file scan (unexpected response format)") \
-                from ex
+            raise RemoteStorageException("%s: Failed to trigger file scan (unexpected response format)" %
+                                         self._res.id) from ex
 
         except Exception as ex:
-            raise RemoteStorageException("%s: failed to trigger file scan: %s", self._res.id, str(ex)) \
+            raise RemoteStorageException(f"{self._res.id}: failed to trigger file scan: {str(ex)}") \
                 from ex
 
         if 'contents' not in resp or not isinstance(resp['contents'], list):

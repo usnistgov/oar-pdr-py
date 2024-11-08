@@ -98,6 +98,8 @@ class FileManager:
                                          "auth.username and/or auth.password")
         self.auth_user = authcfg['username']
         self.auth_pass = authcfg['password']
+        self.webdavauthurl = authcfg.get('webdav_auth_url')
+        self.webdavauthtype = authcfg.get('webdav_auth_type', 'userpass')
         self.token = None
 
     def authenticate(self):
@@ -234,19 +236,79 @@ class FileManager:
         """
         path = f"{record_name}/{record_name}"
         url = f"{self.dav_base}/{path}"
-        auth = (self.auth_user, self.auth_pass)
         header = {"Depth": "0", "Content-type": "application/xml"}
+        passw = self.auth_pass
+        if self.webdavauthurl:
+            passw = self._webdav_auth(self.webdavauthurl, self.webdavauthtype)
+        auth = (self.auth_user, passw)
 
         try:
             resp = requests.request("PROPFIND", url, data=webdav.info_request,
                                     headers=header, auth=auth)
         except requests.RequestException as ex:
-            raise FileSpaceConnectionError("Problem communicating with file manaager: "+str(ex))
+            raise FileSpaceConnectionError("Problem communicating with file manager: "+str(ex))
 
         if resp.status_code == 401:  # Expired token or authentication failure
             raise AuthenticationFailure("File manager credentials not accepted")
         elif resp.status_code == 404:  # Not Found
             raise FileSpaceNotFound("Requested file-space (or uploads folder) does not exist")
+        elif resp.status_code >= 500:
+            raise FileSpaceException("File manager server error: {resp.reason}")
+        elif resp.status_code >= 400:
+            msg = resp.reason
+            if '/json' in resp.headers.get("content-type"):
+                body = response.json()
+                if isinstance(body, Mapping) and 'message' in body:
+                    msg = str(body['message'])
+            elif '/xml' in resp.headers.get("content-type"):
+                try:
+                    body = etree.parse(resp.text).getroot()
+                    msgel = body.find(".//{DAV:}message")
+                    if msgel:
+                        msg = msgel.text
+                except Exception as ex:
+                    msg += " (no parseable message in response body)"
+            else:
+                msg += " (detail not specified)"
+            raise FileSpaceException(msg, resp.status_code)
+
+        base = self.dav_base
+        if self.cfg.get('public_prefix'):
+            base = urljoin(self.cfg['public_prefix'], urlparse(base).path.lstrip('/'))
+
+        try:
+            return webdav.parse_propfind(resp.text, path, base)
+        except webdav.RemoteResourceNotFound as ex:
+            raise FileSpaceNotFound(record_name)
+        except etree.XMLSyntaxError as ex:
+            raise FileSpaceServerError("Server returned unparseable XML")
+
+    def _webdav_auth(self, authurl: str, authtype: str):
+        if not authurl:
+            return self.auth_pass
+
+        if not authtype:
+            authtype = "userpass"
+
+        if authtype == 'private_net':
+            return self._webdav_auth_by_private_net(authurl)
+        if authtype == 'userpass':
+            return self.auth_pass
+
+        raise FileSpaceException(f"Unknown WebDAV authentication type: {authtype}")
+
+    def _webdav_auth_by_private_net(self, authurl: str):
+        header = {"X-Client-Verify": "SUCCESS", "X-Client-CN": self.auth_user,
+                  "X-Client-DN": f"CN={self.auth_user}"}
+        try:
+            resp = requests.post(authurl, headers=header)
+        except requests.RequestException as ex:
+            raise FileSpaceConnectionError("Problem communicating with file manager authenticater: "+str(ex))
+
+        if resp.status_code == 401:  # authentication failure
+            raise AuthenticationFailure("File manager WebDAV credentials not accepted")
+        elif resp.status_code == 404:  # Not Found
+            raise FileSpaceException("WebDAV authenticater URL apparently incorrect")
         elif resp.status_code >= 500:
             raise FileSpaceException("File manager server error: {resp.reason}")
         elif resp.status_code >= 400:
@@ -265,16 +327,11 @@ class FileManager:
                     msg += " (no parseable message in response body)"
             raise FileSpaceException(msg, resp.status_code)
 
-        base = self.dav_base
-        if self.cfg.get('public_prefix'):
-            base = urljoin(self.cfg['public_prefix'], urlparse(base).path.lstrip('/'))
-
+        resp = resp.json()
         try:
-            return webdav.parse_propfind(resp.text, path, base)
-        except webdav.RemoteResourceNotFound as ex:
-            raise FileSpaceNotFound(record_name)
-        except etree.XMLSyntaxError as ex:
-            raise FileSpaceServerError("Server returned unparseable XML")
+            return resp['temporary_password']
+        except KeyError:
+            raise FileSpaceServerException("Unexpected output from WebDAV authenticator: "+resp.text)
 
 
     def determine_uploads_url(self, record_name):
