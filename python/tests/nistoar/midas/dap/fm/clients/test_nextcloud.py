@@ -4,8 +4,10 @@ from unittest.mock import patch, Mock
 from pathlib import Path
 from logging import Logger
 from copy import deepcopy
+import requests
 
 from nistoar.midas.dap.fm.clients.nextcloud import NextcloudApi
+from nistoar.midas.dap.fm.exceptions import *
 from nistoar.base.config import ConfigurationException
 
 execdir = Path(__file__).parents[0]
@@ -13,6 +15,14 @@ datadir = execdir.parents[0] / 'data'
 certpath = datadir / 'clientAdmin.crt'
 keypath = datadir / 'clientAdmin.key'
 capath = datadir / 'serverCa.crt'
+
+STATUS_TESTER_URL = None
+try:
+    r = requests.get("https://httpstat.us/201")
+    if r.status_code == 201:
+        STATUS_TESTER_URL = "https://httpstat.us/"
+except Exception:
+    pass
 
 class NextcloudApiTest(test.TestCase):
 
@@ -72,6 +82,7 @@ class NextcloudApiTest(test.TestCase):
     @patch('requests.request')
     def test_test(self, mock_request):
         mock_resp = Mock()
+        mock_resp.status_code = 200
         mock_request.return_value = mock_resp
 
         res = self.cli.test()
@@ -99,7 +110,26 @@ class NextcloudApiTest(test.TestCase):
                                         cert=(certpath, keypath))
 
 
+    @test.skipIf(not STATUS_TESTER_URL, "Network unavailable")
+    def test_check_status_code(self):
+        self.cli.base_url = STATUS_TESTER_URL
 
+        r = self.cli._handle_request("GET", "200")
+        self.assertEqual(r.status_code, 200)
+
+        with self.assertRaises(FileManagerResourceNotFound):
+            self.cli._handle_request("GET", "404")
+        with self.assertRaises(FileManagerServerError):
+            self.cli._handle_request("GET", "500")
+        with self.assertRaises(FileManagerClientError):
+            self.cli._handle_request("GET", "400")
+        with self.assertRaises(FileManagerClientError):
+            self.cli._handle_request("GET", "401")
+
+        # requests will redirect automatically
+        #
+        # with self.assertRaises(UnexpectedFileManagerResponse):
+        #     self.cli._handle_request("GET", "301")
 
                         
 

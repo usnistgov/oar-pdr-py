@@ -13,6 +13,7 @@ import os
 from collections.abc import Mapping
 
 from nistoar.base.config import ConfigurationException
+from ..exceptions import *
 
 class NextcloudApi:
     """
@@ -129,72 +130,85 @@ class NextcloudApi:
                 full_url,
                 **kw
             )
-            response.raise_for_status()
-            return response
-        except requests.exceptions.HTTPError as e:
-            err_msg = "Error occurred"
-            if response.text:
+
+            err_msg = None
+            if response.status_code >= 400 and response.text:
                 try:
-                    err_msg = response.json().get('error', str(e))
-                except json.JSONDecodeError:
-                    err_msg = response.text
-            self.log.error(f"HTTP Error {response.status_code} for {method} {full_url}: {err_msg}")
-            if response.status_code == 404:
-                return response
-            raise Exception(f"HTTP Error {response.status_code}: {err_msg}")
+                    err_msg = response.json().get('error')
+                except ValueError as ex:
+                    pass
+
+            if response.status_code >= 500:
+                if err_msg:
+                    err_msg = "File Manager Server Error: "+err_msg
+                raise FileManagerServerError(response.status_code, url, response.text, err_msg)
+            elif response.status_code == 404:
+                raise FileManagerResourceNotFound(url, resptext=err_msg)
+            elif response.status_code >= 400:
+                raise FileManagerClientError(err_msg, response.status_code, url)
+            elif response.status_code < 200 or response.status_code >= 300:
+                if not err_msg:
+                    err_msg = response.reason
+                raise UnexpectedFileManagerResponse("Unexpected response (%d): %s" %
+                                                    (response.status_code, err_msg))
+
+            return response
+
+        except requests.RequestException as ex:
+            raise FileManagerCommError(str(ex), full_url) from ex
+
+    def _get_json(self, method, url, **kwargs):
+        response = self._handle_request(method, url, **kwargs)
+
+        try:
+            return response.json()
+        except ValueError as ex:
+            raise UnexpectedFileManagerResponse("File manager response could not be decoded " +
+                                                "as decoded as JSON: " + str(ex)) from ex
 
     def test(self):
         """ Test the API connection. """
-        response = self._handle_request('GET', 'test')
-        return response
+        return self._handle_request('GET', 'test')
 
     def headers(self):
         """ Fetch headers for debugging purposes. """
-        response = self._handle_request('GET', 'headers')
-        return response.json()
+        return self._get_json('GET', 'headers')
 
     def get_user_permissions(self, dir_name):
         """ Get all users permissions for a directory. """
-        response = self._handle_request('GET', f'files/userpermissions/{dir_name}')
-        return response.json()
+        return self._get_json('GET', f'files/userpermissions/{dir_name}')
 
     def set_user_permissions(self, user_name, perm_type, dir_name):
         """ Set user permissions for a directory. """
-        response = self._handle_request('POST', f'files/userpermissions/{user_name}/{perm_type}/{dir_name}')
-        return response.json()
+        return self._get_json('POST', f'files/userpermissions/{user_name}/{perm_type}/{dir_name}')
 
     def delete_user_permissions(self, user_name, dir_name):
         """ Delete user permissions for a directory. """
-        response = self._handle_request('DELETE', f'files/userpermissions/{user_name}/{dir_name}')
-        return response.json()
+        return self._get_json('DELETE', f'files/userpermissions/{user_name}/{dir_name}')
 
     def scan_all_files(self):
         """ Trigger a scan for all files. """
-        response = self._handle_request('PUT', 'files/scan')
+        return self._get_json('PUT', 'files/scan')
         return response.json()
 
     def scan_user_files(self, user_name):
         """ Trigger a scan for all files from a user. """
-        response = self._handle_request('PUT', f'files/scan/{user_name}')
-        return response.json()
+        return self._get_json('PUT', f'files/scan/{user_name}')
 
     def scan_directory_files(self, dir_path):
         """ Trigger a scan for all files inside a directory. """
-        response = self._handle_request('PUT', f'files/scan/directory/{dir_path}')
-        return response.text
+        return self._get_json('PUT', f'files/scan/directory/{dir_path}')
 
     def get_users(self):
         """ Get all users. """
-        response = self._handle_request('GET', 'files/users')
-        return response.json()
+        return self._get_json('GET', 'files/users')
 
     def get_user(self, user_name):
         """ Get a single user. """
         try:
-            response = self._handle_request('GET', f'users/{user_name}')
-            if response.status_code == 404:
-                return {}
-            return response.json()
+            return self._get_json('GET', f'users/{user_name}')
+        except FileManagerResourceNotFound as ex:
+            return {}
         except Exception as e:
             self.log.error(f"Error getting user {user_name}: {e}")
             return {}
