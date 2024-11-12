@@ -223,6 +223,13 @@ class FMSpace:
     trash_subfolder = "TRASH"
     exclude_subfolder = "EXCLUDE"
 
+    PERM_NONE   = PERM_NONE
+    PERM_READ   = PERM_READ
+    PERM_WROTE  = PERM_WRITE
+    PERM_DELETE = PERM_DELETE
+    PERM_SHARE  = PERM_SHARE
+    PERM_ALL    = PERM_ALL
+
     def __init__(self, id: str, fmsvc: MIDASFileManagerService, log: Logger=None):
         """
         initialize the view of the file space
