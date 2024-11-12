@@ -60,9 +60,9 @@ def get_webdav_password(ep: str, certpath: str, keypath: str, capath: str=None,
                                              (response.status_code, err_msg), response.status)
         elif response.status_code >= 400:
             if not err_msg:
-                err_msg = response.text
-            raise FileManagerServiceException("File manager access failure, %s (programmer error?):\n   %s"
-                                              % (response.status_code, err_msg))
+                err_msg = response.reason
+            raise FileManagerClientError("File manager access failure, %s (programmer error?): %s"
+                                          % (response.status_code, err_msg), response.status_code, ep)
 
         temp_password_data = response.json()
         pwd = temp_password_data.get('temporary_password')
@@ -77,7 +77,7 @@ def get_webdav_password(ep: str, certpath: str, keypath: str, capath: str=None,
 
     except requests.RequestException as ex:
         if log:
-            log.error(f"Error during authentication: {e}")
+            log.error(f"Error during authentication: {str(ex)}")
         raise FileManagerCommError("File Manager communication failure during authentication: " +
                                    str(ex), ep) from ex
 
@@ -125,7 +125,8 @@ class FMWebDAVClient:
         ``client_cert_path``.
     ``client_auth_url``
         _str_ (optional).  the URL to use to authenticate using an X.509 certificate.  If not provided,
-        a default may be constructed based on the ``service_endpoint``
+        a default will be constructed based on the ``service_endpoint`` and assuming the NIST Nextcloud 
+        generic layer API.
     ``user``
         _str_ (optional).  the user name of the identity to authenticate to the WebDAV service as.
         If ``password`` is not provided, it must match the CN (common name) of the identity in the 
@@ -173,6 +174,7 @@ class FMWebDAVClient:
         self.wdcli = None
         if self._wdcopts['webdav_password']:
             self.wdcli = wd3c.Client(self._wdcopts)
+            self.wdcli.verify = self.cfg.get('cert_ca_path', True)
 
     def _add_auth_opts(self, authcfg, wd3opts):
         if not authcfg:
@@ -215,12 +217,12 @@ class FMWebDAVClient:
         present X.509 credentials to the remote file manager service to get back temporary 
         credentials for using the WebDAV API.  This creates a new client session with the service.
         """
-        auth_url = self.cfg.get('client_auth_url')
+        authcfg = self.cfg.get('authentication', {})
+        auth_url = authcfg.get('client_auth_url')
         if not auth_url:
             auth_url = self.cfg.get('service_endpoint').split("remote.php/dav/file")[0] + \
-                       "genapi.php/auth"
+                       "api/genapi.php/auth"
 
-        authcfg = self.cfg.get('authentication', {})
         certpath = authcfg.get('client_cert_path')
         keypath = authcfg.get('client_key_path')
         capath = self.cfg.get('cert_ca_path')
@@ -292,19 +294,24 @@ class FMWebDAVClient:
         if not self.wdcli:
             self.authenticate()
 
+        if not path:
+            path = "/"
+        elif not path.startswith('/'):
+            path = "/"+path
+
         try:
             resp = self.wdcli.execute_request("info", path, info_request)
         except (wd3c.NoConnection, wd3c.ConnectionException) as ex:
-            raise FileManagerCommError("Failed to get resource info: "+str(ex)) from ex
+            raise FileManagerCommError("Failed to get resource info: "+str(ex), ep=path) from ex
         except wd3c.NotEnoughSpace as ex:
-            raise FileManagerServerError("Failed to get resource info: "+str(ex)) from ex
+            raise FileManagerServerError("Failed to get resource info: "+str(ex), ep=path) from ex
         except wd3c.RemoteResourceNotFound as ex:
-            raise FileManagerResourceNotFound("Unable to get resource info: "+str(ex)) from ex
+            raise FileManagerResourceNotFound(path, "Unable to get resource info: "+str(ex)) from ex
         except wd3c.ResponseErrorCode as ex:
             if ex.code < 500:
-                raise FileManagerClientError("Unable to get resource info: "+str(ex)) from ex
+                raise FileManagerClientError("Unable to get resource info: "+str(ex), ep=path) from ex
             else:
-                raise FileManagerServerError("Failed to get resource info: "+str(ex)) from ex
+                raise FileManagerServerError("Failed to get resource info: "+str(ex), ep=path) from ex
             
         base = self.cfg['service_endpoint']
         if self.cfg.get('public_prefix'):
