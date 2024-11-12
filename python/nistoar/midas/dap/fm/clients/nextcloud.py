@@ -68,6 +68,8 @@ class NextcloudApi:
         self.base_url = config.get("service_endpoint")
         if not self.base_url:
             raise ConfigurationException("NextclouApi: Missing required config parameter: service_endpoint")
+        if not self.base_url.endswith('/'):
+            self.base_url += '/'
         self.authkw = self._prep_auth(config.get("authentication"))
 
         if config.get("ca_bundle"):

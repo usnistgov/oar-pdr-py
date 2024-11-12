@@ -1,5 +1,13 @@
 """
-This module provides a client class, WebDAVClient, designed to perform WebDAV operations that interact with a Nextcloud instance to manage directories and files using the requests library.
+This module provides a client class, :py:class:`FMWebDAVClient`, designed to perform WebDAV operations 
+that interact with a Nextcloud instance to manage directories and files.  It leverages the 
+``webdav3.client`` package to carry out standard WebDAV operations.  The module also includes some 
+utility functions assisting with authentication and resource property processing.
+
+Clients can authenticate to Nextcloud's WebDAV interface either with a long-term password or a temporary
+password; in the MIDAS system, long-term passwords are not made available to external clients.  The 
+Nextcloud's (NIST-enhanced) generic layer provides a special endpoint for retrieving a temporary password
+with requires X.509 client certificate authentication.  The 
 """
 import logging, os, re
 import xml.etree.ElementTree as ET
@@ -22,7 +30,8 @@ def get_webdav_password(ep: str, certpath: str, keypath: str, capath: str=None,
     :param str       ep:  the URL for the password-generating endpoint.  This should be the 
                           full endpoint URL (i.e. ending in "/auth").
     :param str certpath:  the file path to the X.509 certificate (in PEM format) to use to 
-                          authenticate to the password-generating endpoint
+                          authenticate to the password-generating endpoint.  The certificate
+                          subject's common name (CN) must match an existing nextcloud username.
     :param str  keypath:  the file path to the X.509 private key (in PEM format) to use with 
                           the certificate.
     :param str   capath:  the file path to a CA certificate bundle for validating the endpoint's 
@@ -104,7 +113,7 @@ class FMWebDAVClient:
     ``service_endpoint``
         _str_ (required).  the WebDAV endpoint URL pointing to the remote collection (directory) 
         that should be the root of subsequent accesses.
-    ``cert_ca_path``
+    ``ca_bundle``
         _str_ (optional).  the path to a CA certificate bundle which should be used to verify 
         the WebDAV's site certificate.
     ``public_prefix``
@@ -174,7 +183,7 @@ class FMWebDAVClient:
         self.wdcli = None
         if self._wdcopts['webdav_password']:
             self.wdcli = wd3c.Client(self._wdcopts)
-            self.wdcli.verify = self.cfg.get('cert_ca_path', True)
+            self.wdcli.verify = self.cfg.get('ca_bundle', True)
 
     def _add_auth_opts(self, authcfg, wd3opts):
         if not authcfg:
@@ -225,7 +234,7 @@ class FMWebDAVClient:
 
         certpath = authcfg.get('client_cert_path')
         keypath = authcfg.get('client_key_path')
-        capath = self.cfg.get('cert_ca_path')
+        capath = self.cfg.get('ca_bundle')
         if not certpath or not keypath:
             raise ConfigurationException("FMWebDAVClient.authenticate() requires config params: "+
                                          "client_cert_path, client_key_path")
@@ -237,8 +246,8 @@ class FMWebDAVClient:
             raise FileManagerClientError("Unable to get temp password: "+str(ex)) from ex
 
         self.wdcli = wd3c.Client(self._wdcopts)
-        if self.cfg.get('cert_ca_path'):
-            self.wdcli.verify = self.cfg['cert_ca_path']
+        if self.cfg.get('ca_bundle'):
+            self.wdcli.verify = self.cfg['ca_bundle']
             
     def is_directory(self, path):
         """Check if arg path leads to a directory, returns bool accordingly"""
@@ -273,7 +282,7 @@ class FMWebDAVClient:
             self.authenticate()
 
         try:
-            self.wdcli.create_directory(path)
+            self.wdcli.mkdir(path)
         except (wd3c.NoConnection, wd3c.ConnectionException) as ex:
             raise FileManagerCommError("Failed to create directory: "+str(ex)) from ex
         except wd3c.NotEnoughSpace as ex:
@@ -328,8 +337,11 @@ class FMWebDAVClient:
         """
         delete the named resource.
         """
+        if not self.wdcli:
+            self.authenticate()
+
         try:
-            resp = self.cli.execute_request("info", path, info_request)
+            resp = self.wdcli.clean(path)
         except (wd3c.NoConnection, wd3c.ConnectionException) as ex:
             raise FileManagerCommError("Failed to delete resource: "+str(ex)) from ex
         except wd3c.NotEnoughSpace as ex:
@@ -405,5 +417,9 @@ def parse_propfind(content, reqpath, davbase):
     """
     path = f"/{reqpath.strip('/')}/"
     respel = wd3c.WebDavXmlUtils.extract_response_for_path(content, path, davbase)
-    return propfind_resp_to_dict(respel)
+    out = propfind_resp_to_dict(respel)
+    out['name'] = reqpath
+    if out['name'].startswith(davbase):
+        out['name'] = out['name'][len(davbase):]
+    return out
 
