@@ -276,6 +276,8 @@ class MongoPeopleService(PeopleService):
                              before loading (default: True)
         :param bool withtrans:  if True, use a database transaction to do the loading.  (Note this 
                              requires that the MongoDB be started with replicaSets; default: False.)
+
+        :raises ConfigurationException:  if any of the configured files or directory does not exist
         """
         datadir = config.get('dir', '.')
         if not os.path.isdir(datadir):
