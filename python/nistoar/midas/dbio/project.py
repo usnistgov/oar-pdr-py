@@ -25,6 +25,7 @@ from .. import MIDASException, MIDASSystem
 from nistoar.pdr.utils.prov import Agent, Action
 from nistoar.id.versions import OARVersion
 from nistoar.pdr import ARK_NAAN
+from nistoar.base.config import ConfigurationException
 
 _STATUS_ACTION_CREATE   = RecordStatus.CREATE_ACTION
 _STATUS_ACTION_UPDATE   = RecordStatus.UPDATE_ACTION
@@ -42,9 +43,15 @@ class ProjectService(MIDASSystem):
     to a particular user at construction time (as given by a :py:class:`~nistoar.pdr.utils.Agent`
     instance); thus, requests to this service are subject to internal Authorization checks.
 
-    This base service supports a two parameters, ``dbio`` and ``clients``.  The optional ``dbio`` 
-    parameter will be passed to the :py:class:`~nistoar.midas.dbio.base.DBClientFactory`'s 
+    This base service supports three parameters, ``dbio``, ``default_perms``, and ``clients``.  The 
+    optional ``dbio`` parameter will be passed to the :py:class:`~nistoar.midas.dbio.base.DBClientFactory`'s 
     ``create_client()`` function to create the :py:class:`~nistoar.midas.dbio.base.DBClient`. 
+
+    The optional ``default_perms`` is an object that sets the ACLs for newly created project records.  
+    Its optional properties name the permisson types that defaults are to be set for, including "read", 
+    "write", "admin", and "delete" but can also include other (non-standard) category names.  Each 
+    property is a list of user identifiers that the should be given the particular type of permission.
+    Typically, only virtual group identifiers (like "grp0:public") make sense.
 
     The ``clients`` parameter is an object that places restrictions on the 
     creation of records based on which group the user is part of.  The keys of the object
@@ -92,7 +99,24 @@ class ProjectService(MIDASSystem):
         if not _subsysabbrev:
             _subsysabbrev = "DBIO"
         super(ProjectService, self).__init__(_subsys, _subsysabbrev)
+
+        # set configuration, check values
         self.cfg = config
+        for param in "clients default_perms".split():
+            if not isinstance(self.cfg.get(param,{}), Mapping):
+                raise ConfigurationException("%s: value is not a object as required: %s" %
+                                             (param, type(self.cfg.get(param))))
+        for param,val in self.cfg.get('clients',{}).items():
+            if not isinstance(val, Mapping):
+                raise ConfigurationException("clients.%s: value is not a object as required: %s" %
+                                             (param, repr(val)))
+        for param,val in self.cfg.get('default_perms',{}).items():
+            if not isinstance(val, list) or not all(isinstance(p, str) for p in val):
+                raise ConfigurationException(
+                    "default_perms.%s: value is not a list of strings as required: %s" %
+                    (param, repr(val))
+                )
+        
         if not who:
             who = Agent("dbio.project", Agent.USER, Agent.ANONYMOUS, Agent.PUBLIC)
         self.who = who
@@ -124,6 +148,7 @@ class ProjectService(MIDASSystem):
         if self.dbcli.user_id == ANONYMOUS:
             self.log.warning("A new record requested for an anonymous user")
         prec = self.dbcli.create_record(name, shoulder)
+        self._set_default_perms(prec.acls)
 
         if meta:
             meta = self._moderate_metadata(meta, shoulder)
@@ -143,6 +168,11 @@ class ProjectService(MIDASSystem):
         self._record_action(Action(Action.CREATE, prec.id, self.who, prec.status.message))
         self.log.info("Created %s record %s (%s) for %s", self.dbcli.project, prec.id, prec.name, self.who)
         return prec
+
+    def _set_default_perms(self, acls: ACLs):
+        defs = self.cfg.get("default_perms", {})
+        for perm in defs:
+            acls.grant_perm_to(perm, *defs[perm])
 
     def delete_record(self, id) -> ProjectRecord:
         """
