@@ -23,6 +23,9 @@ are handled accordingly:
 ``/{projid}/name`` -- :py:class:`ProjectNameHandler`
      returns (GET) or updates (PUT) the user-supplied name of the record.
 
+``/{projid}/owner`` -- :py:class:`ProjectNameHandler`
+     returns ID of current owner (GET) or reassigns ownership to given ID (PUT).
+
 ``/{projid}/data[/...]`` -- :py:class:`ProjectDataHandler`
      returns (GET), updates (PUT, PATCH), or clears (DELETE) the data content of the record.  This
      implementation supports updating individual parts of the data object via PUT, PATCH, DELETE 
