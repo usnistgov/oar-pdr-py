@@ -98,7 +98,7 @@ class TestMIDASProjectApp(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectNameHandler))
         self.assertNotEqual(hdlr.cfg, {})
-        self.assertEqual(hdlr._path, "")
+        self.assertEqual(hdlr._path, "name")
         self.assertEqual(hdlr._id, "mdm1:0001")
 
         # throw in tests for acceptable
@@ -106,6 +106,8 @@ class TestMIDASProjectApp(test.TestCase):
         hdlr._env['HTTP_ACCEPT'] = "application/json"
         self.assertTrue(hdlr.acceptable())
         hdlr._env['HTTP_ACCEPT'] = "text/json"
+        self.assertTrue(hdlr.acceptable())
+        hdlr._env['HTTP_ACCEPT'] = "text/plain"
         self.assertTrue(hdlr.acceptable())
         hdlr._env['HTTP_ACCEPT'] = "*/json"
         self.assertTrue(hdlr.acceptable())
@@ -451,6 +453,63 @@ class TestMIDASProjectApp(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
         self.assertIn("405 ", self.resp[0])
+
+    def test_get_owner(self):
+        path = "mdm1:0003/owner"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        prec = self.create_record("goob")
+        prec = self.create_record("goob1")
+        prec = self.create_record("goob2")
+
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: application/json", ct)
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "nstr1")
+
+        self.resp = []
+        req['HTTP_ACCEPT'] = "text/plain"
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: text/plain", ct)
+        self.assertEqual(body, [b"nstr1"])
+
+    def test_put_owner(self):
+        path = "mdm1:0003/owner"
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps("gary"))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        prec = self.create_record("goob")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "gary")
+
+        self.resp = []
+        path = "mdm1:0003/owner"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "gary")
 
     def test_create_handler_full(self):
         path = "mdm1:0001/"

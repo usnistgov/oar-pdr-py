@@ -208,13 +208,14 @@ class ProjectInfoHandler(ProjectRecordHandler):
 
 class ProjectNameHandler(ProjectRecordHandler):
     """
-    handle retrieval/update of a project records mnumonic name
+    handle retrieval/update of a project records owner or mnemonic name
     """
 
     MAX_NAME_LENGTH = 1024
+    ALLOWED_PROPS = ["name", "owner"]
 
     def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
-                 who: Agent, id: str, config: dict=None, log: Logger=None):
+                 who: Agent, id: str, prop: str, config: dict=None, log: Logger=None):
         """
         Initialize this handler with the request particulars.  This constructor is called 
         by the webs service ServiceApp.  
@@ -227,13 +228,16 @@ class ProjectNameHandler(ProjectRecordHandler):
         :param Callable start_resp:  the WSGI start-response function used to send the response
         :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
+        :param str      prop:  the project record property to be updated; restricted to "name" or "owner"
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
                                will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
                                logger attached to the ServiceApp will be used.  
         """
-        super(ProjectNameHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, "", config, log)
+        if prop not in self.ALLOWED_PROPS:
+            raise ValueError("ProjectNameHandler(): Disallowed prop: "+str(prop))
+        super(ProjectNameHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, prop, config, log)
                                                    
         self._id = id
         if not id:
@@ -248,10 +252,20 @@ class ProjectNameHandler(ProjectRecordHandler):
         # allows client to request format via query parameter "format"
         self._set_format_qp("format")
 
+    def acceptable(self):
+        # not sure if this is really needed
+        if super(ProjectNameHandler, self).acceptable():
+            return True
+        return "text/plain" in self.get_accepts()
+        
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "PUT"])
 
     def do_GET(self, path, ashead=False):
+        if path not in self.ALLOWED_PROPS:
+            self.log.error("ProjectNameHandler: unexpected property request (programmer error?): %s", path)
+            return self.send_error(500, "Internal Server Error")
+
         try:
             format = self.select_format()
         except Unacceptable as ex:
@@ -268,11 +282,15 @@ class ProjectNameHandler(ProjectRecordHandler):
                                         self._id, ashead=ashead)
 
         if format.name == "text":
-            return self.send_ok(prec.name, contenttype=format.ctype, ashead=ashead)
+            return self.send_ok(getattr(prec, path), contenttype=format.ctype, ashead=ashead)
         else:
-            return self.send_json(prec.name, ashead=ashead)
+            return self.send_json(getattr(prec, path), ashead=ashead)
 
     def do_PUT(self, path):
+        if path not in self.ALLOWED_PROPS:
+            self.log.error("ProjectNameHandler: unexpected property request (programmer error?): %s", path)
+            return self.send_error(500, "Internal Server Error")
+
         try:
             format = self.select_format()
         except Unacceptable as ex:
@@ -294,13 +312,16 @@ class ProjectNameHandler(ProjectRecordHandler):
 
         if len(name) > self.MAX_NAME_LENGTH:
             return self.send_error_resp(400, "Value length too long"
-                                        "Supplied value is tool long for name", self._id)
+                                        "Supplied value is tool long for "+path, self._id)
 
         try:
             prec = self.svc.get_record(self._id)
-            prec.name = name
+            if path == "owner":
+                prec.reassign(name)
+            else:
+                setattr(prec, path, name)
             if not prec.authorized(dbio.ACLs.ADMIN):
-                raise dbio.NotAuthorized(self._dbcli.user_id, "change record name")
+                raise dbio.NotAuthorized(self._dbcli.user_id, "change record "+path)
             prec.save()
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
@@ -309,9 +330,9 @@ class ProjectNameHandler(ProjectRecordHandler):
                                         "Record with requested identifier not found", self._id)
 
         if format.name == "text":
-            return self.send_ok(prec.name, contenttype=format.ctype)
+            return self.send_ok(getattr(prec, path), contenttype=format.ctype)
         else:
-            return self.send_json(prec.name)
+            return self.send_json(getattr(prec, path))
 
         
 class ProjectDataHandler(ProjectRecordHandler):
@@ -996,9 +1017,9 @@ class MIDASProjectApp(ServiceApp):
                 # path is just an ID: 
                 return self._update_handler(service, self, env, start_resp, who, idattrpart[0])
             
-        elif idattrpart[1] == "name":
-            # path=ID/name: get/change the mnumonic name of record ID
-            return self._name_update_handler(service, self, env, start_resp, who, idattrpart[0])
+        elif idattrpart[1] == "name" or idattrpart[1] == "owner":
+            # path=ID/name: get/change the owner or the mnemonic name of record ID
+            return self._name_update_handler(service, self, env, start_resp, who, idattrpart[0], idattrpart[1])
         elif idattrpart[1] == "data":
             # path=ID/data[/...]: get/change the content of record ID
             if len(idattrpart) == 2:
