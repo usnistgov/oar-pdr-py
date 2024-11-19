@@ -333,7 +333,7 @@ class ProtectedRecord(ABC):
 
         :param str who:   the identifier for the user to set as the owner of this record
         :raises NotAuthorized:  if the calling user is not authorized to change the owner.  
-        :raises ValueError:     if the target user identifier is not recognized
+        :raises InvalidUpdate:  if the target user identifier is not recognized or not legal
         """
         if not self.authorized(ACLs.ADMIN):
             raise NotAuthorized(self._cli.user_id, "change owner")
