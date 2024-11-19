@@ -317,8 +317,10 @@ class ProjectNameHandler(ProjectRecordHandler):
         try:
             prec = self.svc.get_record(self._id)
             if path == "owner":
+                self.log.info("Reassigning ownership of %s from %s to %s", self._id, prec.owner, name)
                 prec.reassign(name)
             else:
+                self.log.info("Changing short name of %s from %s to %s", self._id, prec.name, name)
                 setattr(prec, path, name)
             if not prec.authorized(dbio.ACLs.ADMIN):
                 raise dbio.NotAuthorized(self._dbcli.user_id, "change record "+path)
@@ -328,6 +330,9 @@ class ProjectNameHandler(ProjectRecordHandler):
         except dbio.ObjectNotFound as ex:
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
+        except dbio.InvalidUpdate as ex:
+            return self.send_error_resp(400, "Invalid Input",
+                                        "Invalid value provided for %s: %s" % (path, str(ex)), self._id)
 
         if format.name == "text":
             return self.send_ok(getattr(prec, path), contenttype=format.ctype)
