@@ -279,8 +279,34 @@ class TestMIDASProjectApp(test.TestCase):
 
         body = hdlr.handle()
         self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: application/json", ct)
         resp = self.body2dict(body)
         self.assertEqual(resp, "goob")
+
+        self.resp = []
+        req['HTTP_ACCEPT'] = "text/plain"
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: text/plain", ct)
+        self.assertEqual(body, [b"goob"])
+
+        self.resp = []
+        req['HTTP_ACCEPT'] = "application/json"
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: application/json", ct)
+        self.assertEqual(body, [b'"goob"'])
 
         self.resp = []
         path = "mdm1:0001/name"
@@ -322,8 +348,79 @@ class TestMIDASProjectApp(test.TestCase):
         resp = self.body2dict(body)
         self.assertEqual(resp, "gary")
 
+        # test sending content-type
         self.resp = []
-        path = "mdm1:0001/name"
+        path = "mdm1:0003/name"
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path,
+            'CONTENT_TYPE': 'text/json',
+            'HTTP_ACCEPT':  'text/plain'
+        }
+        req['wsgi.input'] = StringIO(json.dumps("hank"))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: text/plain", ct)
+        self.assertEqual(body[0].decode('utf-8'), "hank")
+
+        # check for error when text is not encoded into JSON
+        self.resp = []
+        path = "mdm1:0003/name"
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path,
+            'CONTENT_TYPE': 'application/json'
+        }
+        req['wsgi.input'] = StringIO("harry")   # not JSON
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+
+        # check for unsupported content-type
+        self.resp = []
+        path = "mdm1:0003/name"
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path,
+            'CONTENT_TYPE': 'text/csv'
+        }
+        req['wsgi.input'] = StringIO(json.dumps("harry"))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("415 ", self.resp[0])
+
+        # check that the value is unchanged after failed attempts
+        self.resp = []
+        path = "mdm1:0003/name"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "hank")
+
+        # check requesting plain text input
+        self.resp = []
+        path = "mdm1:0003/name"
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path,
+            'CONTENT_TYPE': 'text/plain'
+        }
+        req['wsgi.input'] = StringIO("harry")
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), "harry")
+
+        self.resp = []
+        path = "mdm1:0001/name"   # does not exist
         req = {
             'REQUEST_METHOD': 'PUT',
             'PATH_INFO': self.rootpath + path

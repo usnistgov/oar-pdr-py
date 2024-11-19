@@ -44,6 +44,7 @@ from urllib.parse import parse_qs
 import json
 
 from nistoar.web.rest import ServiceApp, Handler, Agent
+from nistoar.web.formats import JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
 from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
@@ -210,6 +211,8 @@ class ProjectNameHandler(ProjectRecordHandler):
     handle retrieval/update of a project records mnumonic name
     """
 
+    MAX_NAME_LENGTH = 1024
+
     def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
                  who: Agent, id: str, config: dict=None, log: Logger=None):
         """
@@ -237,10 +240,25 @@ class ProjectNameHandler(ProjectRecordHandler):
             # programming error
             raise ValueError("Missing ProjectRecord id")
 
+        # allow output in JSON (default) or plain text
+        fmtsup = JSONSupport()
+        TextSupport.add_support(fmtsup)
+        self._set_default_format_support(fmtsup)
+
+        # allows client to request format via query parameter "format"
+        self._set_format_qp("format")
+
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "PUT"])
 
     def do_GET(self, path, ashead=False):
+        try:
+            format = self.select_format()
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
         try:
             prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
@@ -249,13 +267,34 @@ class ProjectNameHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
                                         self._id, ashead=ashead)
 
-        return self.send_json(prec.name, ashead=ashead)
+        if format.name == "text":
+            return self.send_ok(prec.name, contenttype=format.ctype, ashead=ashead)
+        else:
+            return self.send_json(prec.name, ashead=ashead)
 
     def do_PUT(self, path):
         try:
-            name = self.get_json_body()
+            format = self.select_format()
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
+        rctype = self._env.get('CONTENT_TYPE', 'application/json')
+        try:
+            if rctype == "text/plain":
+                name = self.get_text_body(self.MAX_NAME_LENGTH+1)
+            elif "/json" in rctype:
+                name = self.get_json_body()
+            else:
+                return self.send_error_resp(415, "Unsupported Media Type",
+                                            "Input content-type is not supported", self._id)
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
+
+        if len(name) > self.MAX_NAME_LENGTH:
+            return self.send_error_resp(400, "Value length too long"
+                                        "Supplied value is tool long for name", self._id)
 
         try:
             prec = self.svc.get_record(self._id)
@@ -263,13 +302,18 @@ class ProjectNameHandler(ProjectRecordHandler):
             if not prec.authorized(dbio.ACLs.ADMIN):
                 raise dbio.NotAuthorized(self._dbcli.user_id, "change record name")
             prec.save()
-            return self.send_json(prec.name)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
 
+        if format.name == "text":
+            return self.send_ok(prec.name, contenttype=format.ctype)
+        else:
+            return self.send_json(prec.name)
+
+        
 class ProjectDataHandler(ProjectRecordHandler):
     """
     handle retrieval/update of a project record's data content
