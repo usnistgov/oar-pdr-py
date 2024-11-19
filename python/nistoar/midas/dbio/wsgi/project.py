@@ -299,6 +299,8 @@ class ProjectNameHandler(ProjectRecordHandler):
             return self.send_error(400, "Unsupported Format", str(ex))
 
         rctype = self._env.get('CONTENT_TYPE', 'application/json')
+        if rctype == "application/x-www-form-urlencoded":  # default for python requests
+            rctype = "application/json"
         try:
             if rctype == "text/plain":
                 name = self.get_text_body(self.MAX_NAME_LENGTH+1)
