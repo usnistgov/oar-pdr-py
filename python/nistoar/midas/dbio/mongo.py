@@ -333,6 +333,6 @@ class MongoDBClientFactory(base.DBClientFactory):
         if not peopsvc:
             peopsvc = self.create_people_service(cfg.get("people_service", {}))
 
-        return MongoDBClient(self._dburl, cfg, servicetype, foruser)
+        return MongoDBClient(self._dburl, cfg, servicetype, foruser, peopsvc)
 
 

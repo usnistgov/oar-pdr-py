@@ -305,6 +305,7 @@ class ProjectNameHandler(ProjectRecordHandler):
             elif "/json" in rctype:
                 name = self.get_json_body()
             else:
+                self.log.debug("Attempt to change %s with unsupported content type: %s", path, rctype)
                 return self.send_error_resp(415, "Unsupported Media Type",
                                             "Input content-type is not supported", self._id)
         except self.FatalError as ex:

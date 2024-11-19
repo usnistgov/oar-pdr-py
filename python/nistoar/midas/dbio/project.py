@@ -127,6 +127,8 @@ class ProjectService(MIDASSystem):
 
         user = who.actor if who else None
         self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), user)
+        if not self.dbcli.people_service:
+            self.log.warning("No people service available for %s service", project_type)
 
     @property
     def user(self) -> Agent:
