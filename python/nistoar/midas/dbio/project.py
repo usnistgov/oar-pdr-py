@@ -19,7 +19,8 @@ from copy import deepcopy
 import jsonpatch
 
 from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus, ANONYMOUS,
-                   AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException)
+                   AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException,
+                   InvalidUpdate, InvalidRecord)
 from . import status
 from .. import MIDASException, MIDASSystem
 from nistoar.pdr.utils.prov import Agent, Action
@@ -916,91 +917,6 @@ class ProjectServiceFactory:
         return ProjectService(self._prjtype, self._dbclifact, self._cfg, who, self._log)
 
 
-class InvalidRecord(DBIORecordException):
-    """
-    an exception indicating that record data is invalid and requires correction or completion.
-
-    The determination of invalid data may result from detailed data validation which may uncover 
-    multiple errors.  The ``errors`` property will contain a list of messages, each describing a
-    validation error encounted.  The :py:meth:`format_errors` will format all these messages into 
-    a single string for a (text-based) display. 
-    """
-    def __init__(self, message: str=None, recid: str=None, part: str=None,
-                 errors: List[str]=None, sys=None):
-        """
-        initialize the exception
-        :param str message:  a brief description of the problem with the user input
-        :param str   recid:  the id of the record that data was provided for
-        :param str    part:  the part of the record that was requested for update.  Do not provide 
-                             this parameter if the entire record was provided.
-        :param [str] errors: a listing of the individual errors uncovered in the data
-        """
-        if errors:
-            if not message:
-                if len(errors) == 1:
-                    message = "Validation Error: " + errors[0]
-                elif len(errors) == 0:
-                    message = "Unknown validation errors encountered"
-                else:
-                    message = "Encountered %d validation errors, including: %s" % (len(errors), errors[0])
-        elif message:
-            errors = [message]
-        else:
-            message = "Unknown validation errors encountered while updating data"
-            errors = []
-        
-        super(InvalidRecord, self).__init__(recid, message, sys)
-        self.record_part = part
-        self.errors = errors
-
-    def __str__(self):
-        out = ""
-        if self.record_id:
-            out += "%s: " % self.record_id
-        if self.record_part:
-            out += "%s: " % self.record_part
-        return out + super().__str__()
-
-    def format_errors(self):
-        """
-        format into a string the listing of the validation errors encountered that resulted in 
-        this exception.  The returned string will have embedded newline characters for multi-line
-        text-based display.
-        """
-        if not self.errors:
-            return str(self)
-
-        out = ""
-        if self.record_id:
-            out += "%s: " % self.record_id
-        out += "Validation errors encountered"
-        if self.record_part:
-            out += " in data submitted to update %s" % self.record_part
-        out += ":\n  * "
-        out += "\n  * ".join([str(e) for e in self.errors])
-        return out
-
-class InvalidUpdate(InvalidRecord):
-    """
-    an exception indicating that the user-provided data is invalid or otherwise would result in 
-    invalid data content for a record. 
-
-    The determination of invalid data may result from detailed data validation which may uncover 
-    multiple errors.  The ``errors`` property will contain a list of messages, each describing a
-    validation error encounted.  The :py:meth:`format_errors` will format all these messages into 
-    a single string for a (text-based) display. 
-    """
-    def __init__(self, message: str=None, recid=None, part=None, errors: List[str]=None, sys=None):
-        """
-        initialize the exception
-        :param str message:  a brief description of the problem with the user input
-        :param str   recid:  the id of the record that data was provided for
-        :param str    part:  the part of the record that was requested for update.  Do not provide 
-                             this parameter if the entire record was provided.
-        :param [str] errors: a listing of the individual errors uncovered in the data
-        """
-        super(InvalidUpdate, self).__init__(message, recid, part, errors, sys)
-    
 class PartNotAccessible(DBIORecordException):
     """
     an exception indicating that the user-provided data is invalid or otherwise would result in 

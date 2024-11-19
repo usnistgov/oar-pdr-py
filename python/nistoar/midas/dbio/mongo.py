@@ -10,6 +10,7 @@ from . import base
 from pymongo import MongoClient, ASCENDING
 
 from nistoar.base.config import ConfigurationException, merge_config
+from nistoar.nsd.service import PeopleService, MongoPeopleService, create_people_service
 
 _dburl_re = re.compile(r"^mongodb://(\w+(:\S+)?@)?\w+(\.\w+)*(:\d+)?/\w+(\?\w.*)?$")
 
@@ -20,7 +21,8 @@ class MongoDBClient(base.DBClient):
     ACTION_LOG_COLL = base.PROV_ACT_LOG
     HISTORY_COLL = 'history'
 
-    def __init__(self, dburl: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS):
+    def __init__(self, dburl: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS,
+                 peopsvc: PeopleService = None):
         """
         create the client with its connector to the MongoDB database
 
@@ -28,13 +30,15 @@ class MongoDBClient(base.DBClient):
         :param dict config:  the configuration for the DBClient
         :param str foruser:  the user requesting records from the database; this will be the identity 
                              used to authorize access to its contents
+        :param PeopleService peopsvc:  a PeopleService that the client can use to look up people in the 
+                             organization.
         """
         if not _dburl_re.match(dburl):
             raise ValueError("DBClient: Bad dburl format (need 'mongodb://[USER:PASS@]HOST[:PORT]/DBNAME'): "+
                              dburl)
         self._dburl = dburl
         self._mngocli = None
-        super(MongoDBClient, self).__init__(config, projcoll, None, foruser)
+        super(MongoDBClient, self).__init__(config, projcoll, None, foruser, peopsvc)
 
     def connect(self):
         """
@@ -311,6 +315,24 @@ class MongoDBClientFactory(base.DBClientFactory):
                              dburl)
         self._dburl = dburl
 
+    def create_people_service(self, config: Mapping = {}):
+        """
+        create a PeopleService that a DBClient can use.  This implementation allows for the people 
+        service to be integrated into DBIO's Mongo database; this will be assumed if the ``factory``
+        parameter is "mongo" and either the ``type`` parameter equals "embedded" or the ``db_url``
+        parameter is not given.  
+        """
+        if config.get("factory") == "mongo" and (config.get("embedded") or not config.get("db_url")):
+            return MongoPeopleService(self._dburl)
+        return super(MongoDBClientFactory, self).create_people_service(config)
+
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
         cfg = merge_config(config, deepcopy(self._cfg))
+
+        peopsvc = self._peopsvc
+        if not peopsvc:
+            peopsvc = self.create_people_service(cfg.get("people_service", {}))
+
         return MongoDBClient(self._dburl, cfg, servicetype, foruser)
+
+
