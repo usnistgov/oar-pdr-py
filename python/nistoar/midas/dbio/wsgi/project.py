@@ -321,29 +321,24 @@ class ProjectNameHandler(ProjectRecordHandler):
                                         "Supplied value is tool long for "+path, self._id)
 
         try:
-            prec = self.svc.get_record(self._id)
             if path == "owner":
-                self.log.info("Reassigning ownership of %s from %s to %s", self._id, prec.owner, name)
-                prec.reassign(name)
-            else:
-                self.log.info("Changing short name of %s from %s to %s", self._id, prec.name, name)
-                setattr(prec, path, name)
-            if not prec.authorized(dbio.ACLs.ADMIN):
-                raise dbio.NotAuthorized(self._dbcli.user_id, "change record "+path)
-            prec.save()
+                newname = self.svc.reassign_record(self._id, name)  # may raise NotAuthorized
+
+            elif path == "name":
+                newname = self.svc.rename_record(self._id, name)  # may raise NotAuthorized, AlreadyExists
+
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
-        except dbio.InvalidUpdate as ex:
-            return self.send_error_resp(400, "Invalid Input",
-                                        "Invalid value provided for %s: %s" % (path, str(ex)), self._id)
+        except (dbio.InvalidUpdate, dbio.AlreadyExists) as ex:
+            return self.send_error_resp(400, "Invalid Input", str(ex), self._id)
 
         if format.name == "text":
-            return self.send_ok(getattr(prec, path), contenttype=format.ctype)
+            return self.send_ok(newname, contenttype=format.ctype)
         else:
-            return self.send_json(getattr(prec, path))
+            return self.send_json(newname)
 
         
 class ProjectDataHandler(ProjectRecordHandler):

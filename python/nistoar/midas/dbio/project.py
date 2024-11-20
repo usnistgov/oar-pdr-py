@@ -185,11 +185,69 @@ class ProjectService(MIDASSystem):
         # TODO:  handling previously published records
         raise NotImplementedError()
 
+    def reassign_record(self, id, recipient: str):
+        """
+        reassign ownership of the record with the given recepient ID.  This is a wrapper around 
+        :py:class:`~nistoar.midas.dbio.base.ProjectRecord`.reassign() that also logs the change.
+        :param            id:  the record identifier to reassign
+        :param str recipient:  the identifier of the user to reassign ownership to
+        :raises InvalidUpdate:  if the recipient ID is not legal or unrecognized
+        :raises NotAuthorized:  if the current user does is not authorized to reassign.  Non-superusers 
+                                must have "admin" permission to reassign.
+        :raises ObjectNotFound: if the record ``id`` is not found
+        :returns:  the identifier for the new owner that was set for the record
+                   :rtype: str
+        """
+        prec = self.dbcli.get_record_for(id)  # may raise ObjectNotFound
+
+        message = "from %s to %s" % (prec.owner, recipient)
+        try:
+            self.log.info("Reassigning ownership of %s %s", id, message)
+            prec.reassign(recipient)
+            prec.save()
+            self._record_action(Action(Action.COMMENT, prec.id, self.who,
+                                       f"Reassigned ownership {message}"))
+            return prec.owner
+
+        except Exception as ex:
+            self.log.error("Failed to reassign record %s to %s: %s", id, recipient, str(ex))
+            raise
+
+    def rename_record(self, id, newname: str):
+        """
+        change the short, mnemonic name assigned to the record with the given recepient ID.  This is 
+        a wrapper around :py:class:`~nistoar.midas.dbio.base.ProjectRecord`.rename() that also logs 
+        the change.
+        :param          id:  the record identifier to rename
+        :param str newname:  the new name to give to the record
+        :raises AlreadyExists:  if the name has already been assigned to another record owned by the 
+                                current user.
+        :raises NotAuthorized:  if the current user does is not authorized to reassign.  Non-superusers 
+                                must have "admin" permission to reassign.
+        :raises ObjectNotFound: if the record ``id`` is not found
+        :returns:  the identifier for the new owner that was set for the record
+                   :rtype: str
+        """
+        prec = self.dbcli.get_record_for(id)  # may raise ObjectNotFound
+
+        message = "from %s to %s" % (prec.name, newname)
+        try:
+            self.log.info("Renaming %s %s", id, message)
+            prec.rename(newname)
+            prec.save()
+            self._record_action(Action(Action.COMMENT, prec.id, self.who,
+                                       f"Renaming {message}"))
+            return prec.name
+
+        except Exception as ex:
+            self.log.error("Failed to rename record %s to %s: %s", id, newname, str(ex))
+            raise
+
     def _get_id_shoulder(self, user: Agent):
         """
         return an ID shoulder that is appropriate for the given user agent
         :param Agent user:  the user agent that is creating a record, requiring a shoulder
-        :raises NotAuthorized: if an uathorized shoulder appropriate for the user cannot be determined.
+        :raises NotAuthorized: if an authorized shoulder appropriate for the user cannot be determined.
         """
         out = None
         client_ctl = self.cfg.get('clients', {}).get(user.agent_class)

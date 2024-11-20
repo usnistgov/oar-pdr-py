@@ -215,6 +215,39 @@ class ProtectedRecord(ABC):
     def owner(self):
         return self._data.get('owner', "")
 
+    @owner.setter
+    def owner(self, val):
+        self.reassign(val)
+
+    def reassign(self, who: str):
+        """
+        transfer ownership to the given user.  To transfer ownership, the calling user must have 
+        "admin" permission on this record.  Note that this will not remove any permissions assigned 
+        to the former owner.
+
+        :param str who:   the identifier for the user to set as the owner of this record
+        :raises NotAuthorized:  if the calling user is not authorized to change the owner.  
+        :raises InvalidUpdate:  if the target user identifier is not recognized or not legal
+        """
+        if not self.authorized(ACLs.ADMIN):
+            raise NotAuthorized(self._cli.user_id, "change owner")
+
+        # make sure the target user is valid
+        if not self._validate_user_id(who):
+            raise InvalidUpdate("Unable to update owner: invalid user ID: "+str(who))
+
+        self._data['owner'] = who
+        for perm in ACLs.OWN:
+            self.acls.grant_perm_to(perm, who)
+
+    def _validate_user_id(self, who: str):
+        if not bool(who) or not isinstance(who, str):
+            # default test: ensure user is a non-empty string
+            return False
+        if self._cli and self._cli.people_service:
+            return bool(self._cli.people_service.get_person_by_eid(who))
+        return True
+
     @property
     def created(self) -> float:
         """
@@ -324,35 +357,6 @@ class ProtectedRecord(ABC):
             (self._data['modified'], self._data['created'],
              self._data['since']) = olddates
             raise
-
-    def reassign(self, who: str):
-        """
-        transfer ownership to the given user.  To transfer ownership, the calling user must have 
-        "admin" permission on this record.  Note that this will not remove any permissions assigned 
-        to the former owner.
-
-        :param str who:   the identifier for the user to set as the owner of this record
-        :raises NotAuthorized:  if the calling user is not authorized to change the owner.  
-        :raises InvalidUpdate:  if the target user identifier is not recognized or not legal
-        """
-        if not self.authorized(ACLs.ADMIN):
-            raise NotAuthorized(self._cli.user_id, "change owner")
-
-        # make sure the target user is valid
-        if not self._validate_user_id(who):
-            raise InvalidUpdate("Unable to update owner: invalid user ID: "+str(who))
-
-        self._data['owner'] = who
-        for perm in ACLs.OWN:
-            self.acls.grant_perm_to(perm, who)
-
-    def _validate_user_id(self, who: str):
-        if not bool(who) or not isinstance(who, str):
-            # default test: ensure user is a non-empty string
-            return False
-        if self._cli and self._cli.people_service:
-            return bool(self._cli.people_service.get_person_by_eid(who))
-        return True
 
     def authorized(self, perm: Permissions, who: str = None):
         """
@@ -794,10 +798,26 @@ class ProjectRecord(ProtectedRecord):
 
     @name.setter
     def name(self, val):
+        self.rename(val)
+
+    def rename(self, newname):
         """
-        assign the given name as the record's mnemonic name
+        assign the given name as the record's mnemonic name.  If this record was pulled from 
+        the backend storage, then a check will be done to ensure that the name does not match 
+        that of any other record owned by the current user.  
+
+        :param str newname:  the new name to assign to the record
+        :raises NotAuthorized:  if the calling user is not authorized to changed the name; for 
+                                non-superusers, ADMIN permission is required to rename a record.
+        :raises AlreadyExists:  if the name has already been given to a record owned by the 
+                                current user.  
         """
-        self._data['name'] = val
+        if not self.authorized(ACLs.ADMIN):
+            raise NotAuthorized(self._cli.user_id, "change owner")
+        if self._cli and self._cli.name_exists(newname):
+            raise AlreadyExists(f"User {self_cli.user_id} has already defined a record with name={newname}")
+
+        self._data['name'] = newname
 
     @property
     def data(self) -> MutableMapping:
@@ -1003,7 +1023,7 @@ class DBClient(ABC):
 
     def name_exists(self, name: str, owner: str = None) -> bool:
         """
-        return True if a group with the given name exists.  READ permission on the identified 
+        return True if a project with the given name exists.  READ permission on the identified 
         record is not required to use this method.
         :param str name:  the mnemonic name of the group given to it by its owner
         :param str owner: the ID of the user owning the group of interest; if not given, the 
