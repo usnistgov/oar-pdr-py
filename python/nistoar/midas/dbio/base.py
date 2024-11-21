@@ -513,6 +513,30 @@ class Group(ProtectedRecord):
         """
         return self._data['name']
 
+
+    @name.setter
+    def name(self, val):
+        self.rename(val)
+
+    def rename(self, newname):
+        """
+        assign the given name as the groups's mnemonic name.  If this record was pulled from 
+        the backend storage, then a check will be done to ensure that the name does not match 
+        that of any other group owned by the current user.  
+
+        :param str newname:  the new name to assign to the record
+        :raises NotAuthorized:  if the calling user is not authorized to changed the name; for 
+                                non-superusers, ADMIN permission is required to rename a record.
+        :raises AlreadyExists:  if the name has already been given to a record owned by the 
+                                current user.  
+        """
+        if not self.authorized(ACLs.ADMIN):
+            raise NotAuthorized(self._cli.user_id, "change name")
+        if self._cli and self._cli.name_exists(newname):
+            raise AlreadyExists(f"User {self_cli.user_id} has already defined a group with name={newname}")
+
+        self._data['name'] = newname
+
     def validate(self, errs=None, data=None) -> List[str]:
         """
         validate this record and return a list of error statements about its validity or an empty list
@@ -813,7 +837,7 @@ class ProjectRecord(ProtectedRecord):
                                 current user.  
         """
         if not self.authorized(ACLs.ADMIN):
-            raise NotAuthorized(self._cli.user_id, "change owner")
+            raise NotAuthorized(self._cli.user_id, "change name")
         if self._cli and self._cli.name_exists(newname):
             raise AlreadyExists(f"User {self_cli.user_id} has already defined a record with name={newname}")
 
