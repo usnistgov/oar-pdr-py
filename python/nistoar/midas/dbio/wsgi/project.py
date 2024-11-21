@@ -545,11 +545,32 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         except self.FatalError as ex:
             print("fatal Error")
             return self.send_fatal_error(ex)
-        
+
         path = path.rstrip('/')
         if not path:
+            # create a record
+
+            # support foruser query parameter to set owner
+            foruser = None
+            if 'QUERY_STRING' in self._env:
+                params = parse_qs(self._env['QUERY_STRING'])
+                foruser = params.get('foruser')
+                if foruser:
+                    if len(foruser) > 1:
+                        return send_error_resp(400, "Bad foruser param",
+                                               "foruser parameter may only be applied once")
+                    foruser = None if len(foruser) == 0 else foruser[0]
+            if foruser:
+                input.setdefault("meta", OrderedDict())
+                if foruser.lower() == "true" and input.get("owner"):
+                    input["meta"]["foruser"] = input['owner']
+                else:
+                    input["meta"]["foruser"] = foruser
+
             return self.create_record(input)
+
         elif path == ':selected':
+            # respond to an advanced search
             try: 
                 return self.adv_select_records(input)
             except SyntaxError as syntax:

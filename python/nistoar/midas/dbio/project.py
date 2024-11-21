@@ -148,10 +148,30 @@ class ProjectService(MIDASSystem):
         :raises AlreadyExists:  if a record owned by the user already exists with the given name
         """
         shoulder = self._get_id_shoulder(self.who)
+
+        foruser = None
+        if meta and meta.get("foruser"):
+            # format of value: either "newuserid" or "olduserid:newuserid"
+            foruser = meta.get("foruser", "").split(":")
+            if not foruser or len(foruser) > 2:
+                foruser = None
+            else:
+                foruser = foruser[-1]
+                
         if self.dbcli.user_id == ANONYMOUS:
+            foruser = None
             self.log.warning("A new record requested for an anonymous user")
+
         prec = self.dbcli.create_record(name, shoulder)
         self._set_default_perms(prec.acls)
+
+        prec.status._data["created_by"] = self.who.id  # don't do this: violates encapsulation
+        if foruser:
+            try:
+                prec.reassign(foruser)  
+            except NotAuthorized as ex:
+                self.log.warning("%s: %s not authorized to reassign owner to %s",
+                                 prec.id, self.dbcli.user_id, foruser)
 
         if meta:
             meta = self._moderate_metadata(meta, shoulder)

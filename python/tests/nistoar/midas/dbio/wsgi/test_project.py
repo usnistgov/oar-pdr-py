@@ -620,6 +620,58 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertEqual(resp['id'], "mdm1:0003")
         self.assertEqual(resp['data'], {"color": "red"})
         self.assertEqual(resp['meta'], {})
+        self.assertEqual(resp['status']['created_by'], "dbio/nstr1")
+
+        # test reassign on creation: via meta
+        self.resp = []
+        req['wsgi.input'] = StringIO(json.dumps({"name": "else", "owner": "nobody",
+                                                 "meta": {"foruser": "harry"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "else")
+        self.assertEqual(resp['owner'], "harry")
+        self.assertEqual(resp['id'], "mdm1:0004")
+        self.assertEqual(resp['meta'], {"foruser": "harry", "agent_vehicle": "dbio"})
+        self.assertEqual(resp['status']['created_by'], "dbio/nstr1")
+
+        # test reassign on creation: via query parameter
+        self.resp = []
+        req['QUERY_STRING'] = "foruser=True"
+        req['wsgi.input'] = StringIO(json.dumps({"name": "else", "owner": "nobody"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "else")
+        self.assertEqual(resp['owner'], "nobody")
+        self.assertEqual(resp['id'], "mdm1:0005")
+        self.assertEqual(resp['meta'], {"foruser": "nobody", "agent_vehicle": "dbio"})
+        self.assertEqual(resp['status']['created_by'], "dbio/nstr1")
+
+        # test reassign on creation: via query parameter
+        self.resp = []
+        req['QUERY_STRING'] = "foruser=sally"
+        req['wsgi.input'] = StringIO(json.dumps({"name": "else", "owner": "nobody"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "else")
+        self.assertEqual(resp['owner'], "sally")
+        self.assertEqual(resp['id'], "mdm1:0006")
+        self.assertEqual(resp['meta'], {"foruser": "sally", "agent_vehicle": "dbio"})
+        self.assertEqual(resp['status']['created_by'], "dbio/nstr1")
 
     def test_delete(self):
         path = ""

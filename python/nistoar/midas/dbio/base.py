@@ -1036,7 +1036,7 @@ class DBClient(ABC):
         return a dictionary containing data that will constitue a new ProjectRecord with the given 
         identifier assigned to it.  Generally, this record should not be committed yet.
         """
-        return {"id": id}
+        return {"id": id, "status": {"created_by": self.user_id}}
 
     def exists(self, gid: str) -> bool:
         """
