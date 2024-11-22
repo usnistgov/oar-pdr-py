@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Python: Current File",
+        "type": "python",
+        "request": "launch",
+        "program": "/Users/alexloembe/NIST/usnistgov/oar-pdr-py/python/tests/nistoar/midas/dbio/test_inmem.py",
+        "console": "integratedTerminal",
+        "pythonPath": "/Users/alexloembe/anaconda3/envs/dbio/bin/python",
+        "env": {
+          "PYTHONPATH": "/Users/alexloembe/NIST/usnistgov/oar-pdr-py/python",
+        },
+        "terminal": "integrated",
+        "justMyCode": false
+      }
+    ]
+  }
+  
