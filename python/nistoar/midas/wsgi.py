@@ -502,7 +502,6 @@ class MIDASApp(AuthenticatedWSGIApp):
         if base_ep is None:
             base_ep = config.get('base_endpoint', DEF_BASE_PATH)
         super(MIDASApp, self).__init__(config, log, base_ep)
-        print("DBClientFactory")
             
         if not self.cfg.get("services"):
             raise ConfigurationException("No MIDAS apps configured (missing 'services' parameter)")
