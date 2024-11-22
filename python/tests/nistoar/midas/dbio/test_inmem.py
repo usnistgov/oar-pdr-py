@@ -29,9 +29,6 @@ with open(dmp_path, 'r') as file:
     dmp = json.load(file)
 
 
-
-
-
 class TestInMemoryDBClientFactory(test.TestCase):
 
     @classmethod
@@ -45,7 +42,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
             cls.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(cls.loop)
         cls.loop.run_until_complete(websocket_server.start())
-        print("WebSocketServer initialized:", websocket_server)
+        #print("WebSocketServer initialized:", websocket_server)
         return websocket_server
     
     @classmethod
@@ -57,7 +54,6 @@ class TestInMemoryDBClientFactory(test.TestCase):
         # Ensure the WebSocket server is properly closed
         cls.loop.run_until_complete(cls.websocket_server.stop())
         cls.loop.run_until_complete(cls.websocket_server.wait_closed())
-        print("WebSocketServer closed")
 
         # Cancel all lingering tasks
         asyncio.set_event_loop(cls.loop)  # Set the event loop as the current event loop
@@ -68,7 +64,6 @@ class TestInMemoryDBClientFactory(test.TestCase):
 
         # Close the event loop
         cls.loop.close()
-        print("Event loop closed")
     
     
 
@@ -108,7 +103,7 @@ class TestInMemoryDBClient(test.TestCase):
             cls.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(cls.loop)
         cls.loop.run_until_complete(websocket_server.start())
-        print("WebSocketServer initialized:", websocket_server)
+        #print("WebSocketServer initialized:", websocket_server)
         return websocket_server
     
     @classmethod
@@ -120,7 +115,6 @@ class TestInMemoryDBClient(test.TestCase):
         # Ensure the WebSocket server is properly closed
         cls.loop.run_until_complete(cls.websocket_server.stop())
         cls.loop.run_until_complete(cls.websocket_server.wait_closed())
-        print("WebSocketServer closed")
 
         # Cancel all lingering tasks
         asyncio.set_event_loop(cls.loop) 
@@ -131,7 +125,6 @@ class TestInMemoryDBClient(test.TestCase):
 
         # Close the event loop
         cls.loop.close()
-        print("Event loop closed")
 
     def setUp(self):
         self.cfg = {"default_shoulder": "mds3"}
@@ -349,8 +342,6 @@ class TestInMemoryDBClient(test.TestCase):
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
         
-        
-
         id = "pdr0:0006"
         rec = base.ProjectRecord(
             base.DMP_PROJECTS, {"id": id, "name": "test 2", "status": {
@@ -521,6 +512,60 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(acts[0]['type'], Action.CREATE)
         self.assertEqual(acts[1]['type'], Action.COMMENT)
 
+
+class TestWebSocketServer(test.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.websocket_server = WebSocketServer()
+        self.loop = asyncio.get_event_loop()
+        await self.websocket_server.start()
+
+        # Initialize the InMemoryDBClientFactory with the websocket_server
+        self.cfg = {"default_shoulder": "mds3"}
+        self.user = "nist0:ava1"
+        self.cli = inmem.InMemoryDBClientFactory({},self.websocket_server).create_client(
+            base.DMP_PROJECTS, self.cfg, self.user)
+
+    async def asyncTearDown(self):
+        await self.websocket_server.stop()
+        await self.websocket_server.wait_closed()
+        
+
+    async def test_create_records_websocket(self):
+        messages = []
+
+        async def receive_messages(uri):
+            try:
+                async with websockets.connect(uri) as websocket:
+                    while True:
+                        message = await websocket.recv()
+                        #print(f"Received message: {message}")
+                        messages.append(message)
+                        #print(f"Messages: {messages}")
+                        # Break the loop after receiving the first message for this test
+                        break
+            except Exception as e:
+                print(f"Failed to connect to WebSocket server: {e}")
+
+        # Start the WebSocket client to receive messages
+        uri = 'ws://localhost:8765'
+        receive_task = asyncio.create_task(receive_messages(uri))
+        await asyncio.sleep(2)
+
+        #await self.websocket_server.send_message_to_clients("Connection established")
+        # Inject some data into the database
+        await self.websocket_server.send_message_to_clients("test1")
+        await asyncio.sleep(2)
+        id = "pdr0:0002"
+        rec = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": id, "name": "test 1"}, self.cli)
+        self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
+
+
+        # Assert the number of messages received
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0], "test1")
+
+    
 
 if __name__ == '__main__':
     test.main()

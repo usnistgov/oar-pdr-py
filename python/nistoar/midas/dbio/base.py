@@ -828,9 +828,6 @@ class DBClient(ABC):
     """
 
     def __init__(self, config: Mapping, projcoll: str,websocket_server: WebSocketServer, nativeclient=None, foruser: str = ANONYMOUS):
-        print("Arguments passed to __init__:", locals())
-        print("\n")
-        print("websocket_server == ", websocket_server)
         self._cfg = config
         self._native = nativeclient
         self._projcoll = projcoll
@@ -838,23 +835,8 @@ class DBClient(ABC):
         self._whogrps = None
         # Get the current stack frame
         stack = inspect.stack()
-        
-        # Print the caller function
-        caller = stack[1]
-        print(f"__init__ called from {caller.function} in {caller.filename} at line {caller.lineno}")
-        print("----- \n")
-        # Print the caller function
-        caller = stack[2]
-        print(f"__init__ called from {caller.function} in {caller.filename} at line {caller.lineno}")
-
-        caller = stack[3]
-        print(f"__init__ called from {caller.function} in {caller.filename} at line {caller.lineno}")
-
         self._dbgroups = DBGroups(self)
-        
         self.websocket_server = websocket_server
-        message = f"Record created: {self._projcoll} for user {foruser}"
-        asyncio.run(self.websocket_server.send_message_to_clients(message))
 
 
     @property
@@ -918,8 +900,9 @@ class DBClient(ABC):
         rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
         # Send a message through the WebSocket
-        message = f"Record created: {name} for user {foruser}"
-        #asyncio.run(self.websocket_server.send_message_to_clients(message))
+        message = f"{name}"
+        asyncio.run(self.websocket_server.send_message_to_clients(message))
+        #print(message)
         return rec
 
     def _default_shoulder(self):

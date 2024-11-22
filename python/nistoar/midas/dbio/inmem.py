@@ -80,7 +80,6 @@ class InMemoryDBClient(base.DBClient):
             for p in perm:
                 if rec.authorized(p):
                     yield deepcopy(rec)
-                    break
     
     def adv_select_records(self, filter:dict,
                            perm: base.Permissions=base.ACLs.OWN,) -> Iterator[base.ProjectRecord]:
@@ -167,11 +166,5 @@ class InMemoryDBClientFactory(base.DBClientFactory):
         cfg = merge_config(config, deepcopy(self._cfg))
         if servicetype not in self._db:
             self._db[servicetype] = {}
-        print("\n AZZ \n")
-        print(self._db)
-        print(cfg)
-        print(servicetype)
-        print(self.websocket_server)
-        print(foruser)
         return InMemoryDBClient(self._db, cfg, servicetype,self.websocket_server, foruser)
         
