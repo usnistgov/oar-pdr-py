@@ -31,7 +31,7 @@ This script also pays attention to the following environment variables:
 """
 import os, sys, logging, copy,asyncio
 from copy import deepcopy
-from websocket import WebsocketServer
+
 
 try:
     import nistoar
@@ -44,6 +44,7 @@ except ImportError:
     import nistoar
 
 from nistoar.base import config
+from nistoar.midas.dbio.websocket import WebSocketServer
 from nistoar.midas.dbio import MongoDBClientFactory, InMemoryDBClientFactory, FSBasedDBClientFactory
 from nistoar.midas import wsgi
 
