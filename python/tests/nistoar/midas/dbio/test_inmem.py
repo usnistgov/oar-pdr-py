@@ -542,7 +542,6 @@ class TestWebSocketServer(test.IsolatedAsyncioTestCase):
                         messages.append(message)
                         #print(f"Messages: {messages}")
                         # Break the loop after receiving the first message for this test
-                        break
             except Exception as e:
                 print(f"Failed to connect to WebSocket server: {e}")
 
@@ -553,17 +552,12 @@ class TestWebSocketServer(test.IsolatedAsyncioTestCase):
 
         #await self.websocket_server.send_message_to_clients("Connection established")
         # Inject some data into the database
-        await self.websocket_server.send_message_to_clients("test1")
+        rec = self.cli.create_record("mine1")
         await asyncio.sleep(2)
-        id = "pdr0:0002"
-        rec = base.ProjectRecord(
-            base.DMP_PROJECTS, {"id": id, "name": "test 1"}, self.cli)
-        self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
-
-        # Assert the number of messages received
+        #print(f"Messages: {messages}")
         self.assertEqual(len(messages), 1)
-        self.assertEqual(messages[0], "test1")
+        self.assertEqual(messages[0], "mine1")
 
     
 

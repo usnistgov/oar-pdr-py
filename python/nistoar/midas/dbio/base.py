@@ -901,9 +901,15 @@ class DBClient(ABC):
         rec.save()
         # Send a message through the WebSocket
         message = f"{name}"
-        asyncio.run(self.websocket_server.send_message_to_clients(message))
-        #print(message)
+        self._send_message_async(message)
         return rec
+    
+    def _send_message_async(self, message):
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(self.websocket_server.send_message_to_clients(message))
+        else:
+            asyncio.run(self.websocket_server.send_message_to_clients(message))
 
     def _default_shoulder(self):
         out = self._cfg.get("default_shoulder")
