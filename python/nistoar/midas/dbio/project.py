@@ -159,7 +159,8 @@ class ProjectService(MIDASSystem):
                 foruser = foruser[-1]
                 
         if self.dbcli.user_id == ANONYMOUS:
-            foruser = None
+            # Do we need to be more careful in production by cancelling reassign request?
+            # foruser = None
             self.log.warning("A new record requested for an anonymous user")
 
         prec = self.dbcli.create_record(name, shoulder)
@@ -167,6 +168,8 @@ class ProjectService(MIDASSystem):
 
         prec.status._data["created_by"] = self.who.id  # don't do this: violates encapsulation
         if foruser:
+            if self.dbcli.user_id == ANONYMOUS:
+                self.log.warning("%s wants to reassign new record to %s", self.dbcli.user_id, foruser)
             try:
                 prec.reassign(foruser)  
             except NotAuthorized as ex:
