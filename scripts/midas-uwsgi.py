@@ -94,6 +94,7 @@ else:
 workdir = _dec(uwsgi.opt.get("oar_working_dir"))
 if workdir:
     cfg['working_dir'] = workdir
+nsdcfg = cfg.get('services',{}).get("nsd")
 
 config.configure_log(config=cfg)
 
@@ -103,6 +104,28 @@ if not dbtype:
     dbtype = cfg.get("dbio", {}).get("factory")
 if not dbtype:
     dbtype = DEF_MIDAS_DB_TYPE
+
+dburl = None
+if dbtype == "mongo" or nsdcfg:
+    # determinne the DB URL
+    dbcfg = cfg.get("dbio", {})
+    dburl = os.environ.get("OAR_MONGODB_URL")
+    if not dburl:
+        dburl = dbcfg.get("db_url")
+    if not dburl:
+        # Build the DB URL from its pieces with env vars taking precedence over the config
+        port = ":%s" % os.environ.get("OAR_MONGODB_PORT", dbcfg.get("port", "27017"))
+        user = os.environ.get("OAR_MONGODB_USER", dbcfg.get("user"))
+        cred = ""
+        if user:
+            pasw = os.environ.get("OAR_MONGODB_PASS", dbcfg.get("pw", os.environ.get("OAR_MONGODB_USER")))
+            cred = "%s:%s@" % (user, pasw)
+        host = os.environ.get("OAR_MONGODB_HOST", dbcfg.get("host", "localhost"))
+        dburl = "mongodb://%s%s%s/midas" % (cred, host, port)
+
+    # print(f"dburl: {dburl}")
+    if nsdcfg:
+        nsdcfg["db_url"] = dburl
 
 if dbtype == "fsbased":
     # determine the DB's root directory
@@ -123,23 +146,10 @@ if dbtype == "fsbased":
     if not os.path.exists(dbdir):
         os.mkdir(dbdir)
     factory = FSBasedDBClientFactory(cfg.get("dbio", {}), dbdir)
+
 elif dbtype == "mongo":
-    dbcfg = cfg.get("dbio", {})
-    dburl = os.environ.get("OAR_MONGODB_URL")
-    if not dburl:
-        dburl = dbcfg.get("db_url")
-    if not dburl:
-        # Build the DB URL from its pieces with env vars taking precedence over the config
-        port = ":%s" % os.environ.get("OAR_MONGODB_PORT", dbcfg.get("port", "27017"))
-        user = os.environ.get("OAR_MONGODB_USER", dbcfg.get("user"))
-        cred = ""
-        if user:
-            pasw = os.environ.get("OAR_MONGODB_PASS", dbcfg.get("pw", os.environ.get("OAR_MONGODB_USER")))
-            cred = "%s:%s@" % (user, pasw)
-        host = os.environ.get("OAR_MONGODB_HOST", dbcfg.get("host", "localhost"))
-        dburl = "mongodb://%s%s%s/midas" % (cred, host, port)
-    print(f"dburl: {dburl}")
     factory = MongoDBClientFactory(cfg.get("dbio", {}), dburl)
+
 elif dbtype == "inmem":
     factory = InMemoryDBClientFactory(cfg.get("dbio", {}),websocket_server=websocket_server)
 else:
@@ -147,4 +157,14 @@ else:
 
 application = wsgi.app(cfg, factory)
 websocket_server.start_in_thread()
+
+if nsdcfg:
+    try:
+        application.load_people_from()
+    except ConfigurationException as ex:
+        logging.warning("Unable to initialize NSD database: %s", str(ex))
+
+print("MIDAS service ready with "+dbtype+" backend")
 logging.info("MIDAS service ready with "+dbtype+" backend")
+if nsdcfg:
+    logging.info("...and NSD service built-in")

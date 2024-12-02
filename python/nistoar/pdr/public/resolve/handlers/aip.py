@@ -69,7 +69,7 @@ class AIPHandler(Handler):
                 ver = parts[2]
             return self.resolve_aip_version(aipid, ver, '/'.join(parts[3:]))
 
-        return send_error(404, "Not Found")
+        return self.send_error(404, "Not Found")
 
     def _determine_request_formats(self, format=None):
         if isinstance(format, str):
@@ -97,8 +97,8 @@ class AIPHandler(Handler):
             format = self.select_format(format)
             if not format:
                 if self.log:
-                    self.log.failure("Failed to determine output format")
-                return send_error(500, "Server Error")
+                    self.log.error("Failed to determine output format")
+                return self.send_error(500, "Server Error")
         except Unacceptable as ex:
             return self.send_unacceptable(content=str(ex))
         except UnsupportedFormat as ex:
@@ -186,8 +186,8 @@ class AIPHandler(Handler):
             format = self.select_format(format)
             if not format:
                 if self.log:
-                    self.log.failure("Failed to determine output format")
-                return send_error(500, "Server Error")
+                    self.log.error("Failed to determine output format")
+                return self.send_error(500, "Server Error")
         except Unacceptable as ex:
             return self.send_unacceptable(content=str(ex))
         except UnsupportedFormat as ex:
@@ -268,8 +268,8 @@ class AIPHandler(Handler):
             format = self.select_format(format)
             if not format:
                 if self.log:
-                    self.log.failure("Failed to determine output format")
-                return send_error(500, "Server Error")
+                    self.log.error("Failed to determine output format")
+                return self.send_error(500, "Server Error")
         except Unacceptable as ex:
             return self.send_unacceptable(content=str(ex))
         except UnsupportedFormat as ex:
@@ -337,8 +337,8 @@ class AIPHandler(Handler):
             format = self.select_format(format)
             if not format:
                 if self.log:
-                    self.log.failure("Failed to determine output format")
-                return send_error(500, "Server Error")
+                    self.log.error("Failed to determine output format")
+                return self.send_error(500, "Server Error")
         except Unacceptable as ex:
             return self.send_unacceptable(content=str(ex))
         except UnsupportedFormat as ex:
@@ -417,8 +417,8 @@ class AIPHandler(Handler):
             format = self.select_format(format)
             if not format:
                 if self.log:
-                    self.log.failure("Failed to determine output format")
-                return send_error(500, "Server Error")
+                    self.log.error("Failed to determine output format")
+                return self.send_error(500, "Server Error")
         except Unacceptable as ex:
             return self.send_unacceptable(content=str(ex))
         except UnsupportedFormat as ex:

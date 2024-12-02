@@ -1,4 +1,5 @@
 import os, json, pdb, logging, tempfile, pathlib
+from typing import Mapping
 import unittest as test
 
 from nistoar.midas.dbio import inmem, base, AlreadyExists, InvalidUpdate, ObjectNotFound, PartNotAccessible
@@ -57,6 +58,11 @@ class TestMDS3DAPService(test.TestCase):
 #                "type": "fsbased",
 #                "store_dir": os.path.join(tmpdir.name)
                 "type": "inmem",
+            },
+            "default_responsible_org": {
+                "@type": "org:Organization",
+                "@id": mds3.NIST_ROR,
+                "title": "NIST"
             }
         }
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdsy": 2 }})
@@ -121,12 +127,14 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.id, "mdsy:0003")
         self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data",
                                      "agent_vehicle": "midas" })
-        for key in "_schema @type author_count file_count reference_count".split():
+        for key in "_schema @type authors references file_count nonfile_count".split():
             self.assertIn(key, prec.data)
         self.assertNotIn('color', prec.data)
         self.assertNotIn('contactPoint', prec.data)
         self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0003")
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0003")
+        self.assertEqual(prec.data['authors'], [])
+        self.assertEqual(prec.data['references'], [])
         self.assertEqual(prec.data['nonfile_count'], 0)
 
         # some legit metadata but no legit identity info
@@ -142,10 +150,16 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0004")
         self.assertEqual(prec.data['nonfile_count'], 1)
         self.assertNotIn('contactPoint', prec.data)
+        self.assertTrue(isinstance(prec.data.get('responsibleOrganization'), list))
+        self.assertEqual(prec.data['responsibleOrganization'][0], 'NIST')
         nerd = self.svc._store.open(prec.id)
+        resmd = nerd.get_res_data()
         links = nerd.nonfiles
         self.assertEqual(len(links), 1)
         self.assertEqual(links.get(0)['accessURL'], prec.meta['softwareLink'])
+        self.assertTrue(isinstance(resmd.get('responsibleOrganization'), list))
+        self.assertEqual(len(resmd['responsibleOrganization']), 1)
+        self.assertEqual(resmd['responsibleOrganization'][0]['title'], 'NIST')
         
 
         # inject some identity info into service and try again
@@ -164,7 +178,8 @@ class TestMDS3DAPService(test.TestCase):
         self.assertIn('contactPoint', prec.data)
         self.assertEqual(prec.data['contactPoint'], {"@type": "vcard:Contact", "fn": "Gurn Cranston",
                                                      "hasEmail": "mailto:gurn@thejerk.org"})
-        
+        self.assertTrue(isinstance(prec.data.get('responsibleOrganization'), list))
+        self.assertEqual(prec.data['responsibleOrganization'][0], 'NIST')
     
     def test_moderate_restype(self):
         self.create_service()
@@ -859,14 +874,15 @@ class TestMDS3DAPService(test.TestCase):
         pdrid = "ark:/88434/%s-%s" % tuple(prec.id.split(":"))
         nerd = self.svc.get_nerdm_data(prec.id)
         self.assertEqual(set(nerd.keys()),
-                         {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type"})
+                         {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type",
+                          "responsibleOrganization"})
 
         nerd = self.svc.update_data(prec.id,
                              {"landingPage": "https://example.com",
                               "contactPoint": { "fn": "Gurn Cranston", "hasEmail": "mailto:gjc1@nist.gov"}})
         self.assertEqual(set(nerd.keys()),
                          {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type",
-                          "contactPoint", "landingPage"})
+                          "contactPoint", "landingPage", "responsibleOrganization"})
         self.assertEqual(set(nerd["contactPoint"].keys()), {"@type", "fn", "hasEmail"})
 
         with self.assertRaises(PartNotAccessible):
@@ -876,20 +892,21 @@ class TestMDS3DAPService(test.TestCase):
         nerd = self.svc.get_nerdm_data(prec.id)
         self.assertEqual(set(nerd.keys()),
                          {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type",
-                          "contactPoint", "landingPage"})
+                          "contactPoint", "landingPage", "responsibleOrganization"})
         self.assertEqual(set(nerd["contactPoint"].keys()), {"@type", "fn", "hasEmail"})
 
         self.assertIs(self.svc.clear_data(prec.id, "landingPage"), True)
         nerd = self.svc.get_nerdm_data(prec.id)
         self.assertEqual(set(nerd.keys()),
                          {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type",
-                          "contactPoint"})
+                          "contactPoint", "responsibleOrganization"})
         self.assertIs(self.svc.clear_data(prec.id, "references"), False)
 
         self.assertIs(self.svc.clear_data(prec.id), True)
         nerd = self.svc.get_nerdm_data(prec.id)
         self.assertEqual(set(nerd.keys()),
-                         {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type"})
+                         {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type",
+                          "responsibleOrganization"})
         
 
     def test_update(self):

@@ -4,7 +4,7 @@ from io import StringIO
 from pathlib import Path
 import unittest as test
 
-from nistoar.nsd import wsgi
+from nistoar.nsd.wsgi import nsd1 as wsgi
 from nistoar.nsd import service
 
 
@@ -31,7 +31,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-testdir = Path(__file__).parents[0]
+testdir = Path(__file__).parents[1]
 datadir = testdir / 'data'
 
 dburl = None
@@ -137,7 +137,7 @@ class TestApp(test.TestCase):
         }
         self.svc = service.MongoPeopleService(dburl)
         self.svc.load(self.cfg['data'], rootlog)
-        self.app = wsgi.PeopleApp(self.cfg)
+        self.app = wsgi.NSDApp(self.cfg)
         self.resp = []
 
     def test_divs(self):
@@ -164,6 +164,21 @@ class TestApp(test.TestCase):
         resp = self.body2data(body)
         self.assertEqual(len(resp), 1)        
         self.assertEqual(set([u['lastName'] for u in resp]), set("Ossman".split()))
+        
+    def test_status(self):
+        path = ""
+        req = {
+            "REQUEST_METHOD": "GET",
+            "PATH_INFO": "/"
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2data(body)
+
+        self.assertEqual(resp['status'], "ready")
+        self.assertEqual(resp['person_count'], 4)
+        self.assertEqual(resp['org_count'], 8)
+        self.assertTrue(resp['message'].startswith("Ready"))
         
 
 

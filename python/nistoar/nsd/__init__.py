@@ -37,12 +37,12 @@ class NSDServiceException(NSDException):
                 message = f"Trouble accessing {resource} from the NSD service"
             else:
                 message = f"Problem accessing the NSD service"
-            if http_code or http_status:
+            if http_code or http_reason:
                 message += ":"
                 if http_code:
                     message += " "+str(http_code)
-                if http_status:
-                    message += " "+str(http_status)
+                if http_reason:
+                    message += " "+str(http_reason)
             elif cause:
                 message += ": "+str(cause)
 

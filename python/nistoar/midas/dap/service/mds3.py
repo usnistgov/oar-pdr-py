@@ -25,6 +25,7 @@ from collections.abc import Mapping, MutableMapping, Sequence, Callable
 from typing import List, Union, Iterator
 from copy import deepcopy
 from urllib.parse import urlparse
+from functools import reduce
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
                      InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable,
@@ -37,6 +38,7 @@ from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
 from nistoar.pdr.utils import build_mime_type_map, read_json
 from nistoar.pdr.utils.prov import Agent, Action
+from nistoar.nsd.client import NSDClient
 
 from . import validate
 from .. import nerdstore
@@ -226,6 +228,9 @@ class DAPService(ProjectService):
     ``file_manager``
         a dictionary of properties configuring access to the file manager; if not used, a file
         manager will not be used to get file information.  
+    ``default_responsible_org``
+        a dictionary containing NERDm Affiliation metadata to be provided as the default to the 
+        ``responsibleOrganization`` NERDm property. 
 
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
@@ -233,7 +238,7 @@ class DAPService(ProjectService):
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: Agent=None,
                  log: Logger=None, nerdstore: NERDResourceStorage=None, project_type=DAP_PROJECTS,
-                 minnerdmver=(0, 6), fmcli=None):
+                 minnerdmver=(0, 6), fmcli=None, nsdcli=None):
         """
         create the service
         :param DBClientFactory dbclient_factory:  the factory to create the DBIO service client from
@@ -248,6 +253,8 @@ class DAPService(ProjectService):
                                    subclass constructors.
         :param FileManager fmcli:  The FileManager client to use; if None, one will be constructed 
                                    from the configuration.
+        :param NSDClient  nsdcli:  The NSD client to use to look up people and organizations; if None, 
+                                   one will be constructed from the configuration.
         """
         super(DAPService, self).__init__(project_type, dbclient_factory, config, who, log,
                                          _subsys="Digital Asset Publication Authoring System",
@@ -262,6 +269,13 @@ class DAPService(ProjectService):
         if not nerdstore:
             nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), log)
         self._store = nerdstore
+
+        self._nsdcli = nsdcli
+        if not self._nsdcli:
+            if not self.cfg.get('nsd', {}).get('service_endpoint'):
+                self.log.warning("NSD service is not configured; name lookups are not possible")
+            else:
+                self._nsdcli = self._make_nsd_client(config['nsd'])
 
         self.cfg.setdefault('assign_doi', ASSIGN_DOI_REQUEST)
         if not self.cfg.get('doi_naan') and self.cfg.get('assign_doi') != ASSIGN_DOI_NEVER:
@@ -281,6 +295,11 @@ class DAPService(ProjectService):
 
     def _make_fm_client(self, fmcfg):
         return FileManager(fmcfg)
+
+    def _make_nsd_client(self, nsdcfg):
+        if not nsdcfg.get('service_endpoint'):
+            raise ConfigurationException("nsd config missing 'service_endpoint' parameter")
+        return NSDClient(nsdcfg['service_endpoint'])
 
     def _choose_mediatype(self, fext):
         defmt = 'application/octet-stream'
@@ -387,8 +406,8 @@ class DAPService(ProjectService):
                     if prec.file_space.get('file_count', -2) < 0:
                         self.log.warning("Failed to initialize file listing from file manager")
                 except Exception as ex:
-                    self.log.error("Failed to initialize file listing: problem accessing file manager: %s",
-                                   str(ex))
+                    self.log.exception("Failed to initialize file listing: problem accessing file manager: %s",
+                                       str(ex))
             prec.data = self._summarize(nerd)
 
             if data:
@@ -453,6 +472,28 @@ class DAPService(ProjectService):
                     out['contactPoint'] = cp
             elif meta.get("contactName"):
                 out['contactPoint'] = self._moderate_contactPoint({"fn": meta["contactName"]}, doval=False)
+
+            ro = self.cfg.get('default_responsible_org', {})
+            if self._nsdcli and out.get('contactPoint', {}).get('hasEmail'):
+                try:
+                    conrec = self._nsdcli.select_people(email=out.get['contactPoint']['hasEmail'])
+                except NSDServerError as ex:
+                    self.log.warning("Unable to get org info on contact from NSD service: %s", str(ex))
+                except Exception as ex:
+                    self.log.exception("Unexpected error while accessing NSD service: %s", str(ex))
+                else:
+                    if len(conrec) > 0:
+                        conrec = conrec[0]
+                    if conrec:
+                        ro['subunits'] = []
+                        if not ro.get('title'):
+                            ro['title'] = conrec.get("ouName", "")
+                        else:
+                            ro['subunits'].append(conrec.get("ouName", ""))
+                        ro['subunits'].append(conrec.get("divisionName", ""))
+                        ro['subunits'].append(conrec.get("groupName", ""))
+            if ro:
+                out['responsibleOrganization'] = [ ro ]
 
         return out
 
@@ -804,13 +845,19 @@ class DAPService(ProjectService):
         out["theme"] = list(set(resmd.get("theme", []) + [t.get('tag') for t in resmd.get('topic', [])]))
         if resmd.get('responsibleOrganization'):
             out['responsibleOrganization'] = list(set(
-                [org.title for org in resmd['responsibleOrganization']] + \
-                reduce(lambda x, y: x+y, [org.subunit for org in resmd['responsibleOrganization']], [])
+                [org['title'] for org in resmd['responsibleOrganization']] + \
+                reduce(lambda x, y: x+y,
+                       [org.get('subunit',[]) for org in resmd['responsibleOrganization']], [])
             ))
-        out["author_count"] = nerd.authors.count
+        out["authors"] = nerd.authors.get_data()
+        out["references"] = nerd.references.get_data()
+#        out["author_count"] = nerd.authors.count
+#        out["reference_count"] = nerd.references.count
         out["file_count"] = nerd.files.count
         out["nonfile_count"] = nerd.nonfiles.count
-        out["reference_count"] = nerd.references.count
+        if resmd.get('responsibleOrganization', [{}])[0].get('title'):
+            out['responsibleOrganization'] = [ resmd['responsibleOrganization'][0]['title'] ] + \
+                                             resmd['responsibleOrganization'][0].get('subunits', [])
         return out
 
     _handsoff = ("@id @context publisher issued firstIssued revised annotated version " + \
