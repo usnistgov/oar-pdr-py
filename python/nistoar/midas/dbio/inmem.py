@@ -7,7 +7,7 @@ from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
-from .websocket import WebSocketServer
+from .notifier import Notifier
 
 from nistoar.base.config import merge_config
 
@@ -16,9 +16,9 @@ class InMemoryDBClient(base.DBClient):
     an in-memory DBClient implementation 
     """
 
-    def __init__(self, dbdata: Mapping, config: Mapping, projcoll: str, websocket=WebSocketServer ,foruser: str = base.ANONYMOUS):
+    def __init__(self, dbdata: Mapping, config: Mapping, projcoll: str, notification_server: Notifier = None ,foruser: str = base.ANONYMOUS):
         self._db = dbdata
-        super(InMemoryDBClient, self).__init__(config, projcoll, websocket, self._db, foruser)
+        super(InMemoryDBClient, self).__init__(config, projcoll, notification_server, self._db, foruser)
 
     def _next_recnum(self, shoulder):
         if shoulder not in self._db['nextnum']:
@@ -139,7 +139,7 @@ class InMemoryDBClientFactory(base.DBClientFactory):
     clients it creates.  
     """
 
-    def __init__(self, config: Mapping, websocket_server:WebSocketServer, _dbdata = None):
+    def __init__(self, config: Mapping, notification_server: Notifier = None, _dbdata = None):
         """
         Create the factory with the given configuration.
 
@@ -148,8 +148,8 @@ class InMemoryDBClientFactory(base.DBClientFactory):
                               of the in-memory data structure required to use this input.)  If 
                               not provided, an empty database is created.
         """
-        super(InMemoryDBClientFactory, self).__init__(config, websocket_server)
-        self.websocket_server = websocket_server
+        super(InMemoryDBClientFactory, self).__init__(config, notification_server)
+        self.notification_server = notification_server
         self._db = {
             base.DAP_PROJECTS: {},
             base.DMP_PROJECTS: {},
@@ -166,5 +166,5 @@ class InMemoryDBClientFactory(base.DBClientFactory):
         cfg = merge_config(config, deepcopy(self._cfg))
         if servicetype not in self._db:
             self._db[servicetype] = {}
-        return InMemoryDBClient(self._db, cfg, servicetype, self.websocket_server, foruser)
+        return InMemoryDBClient(self._db, cfg, servicetype, self.notification_server, foruser)
         

@@ -1,10 +1,14 @@
-# websocket_server.py
+# notifier.py
 import asyncio
 import websockets
 from concurrent.futures import ThreadPoolExecutor
 import copy
+import logging
 
-class WebSocketServer:
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class Notifier:
     def __init__(self, host="localhost", port=8765):
         self.host = host
         self.port = port
@@ -12,8 +16,11 @@ class WebSocketServer:
         self.clients = set()  # Initialize the clients set
 
     async def start(self):
-        self.server = await websockets.serve(self.websocket_handler, self.host, self.port)
-        #print(f"WebSocket server started on ws://{self.host}:{self.port}")
+        try:
+            self.server = await websockets.serve(self.websocket_handler, self.host, self.port)
+            logger.info(f"WebSocket server started on ws://{self.host}:{self.port}")
+        except Exception as e:
+            logger.error(f"Failed to start WebSocket server: {e}")
         
 
     async def websocket_handler(self, websocket):
@@ -22,22 +29,26 @@ class WebSocketServer:
         try:
             async for message in websocket:
                 await self.send_message_to_clients(message)
+        except Exception as e:
+            logger.error(f"Error in websocket_handler: {e}")
         finally:
             # Remove the client from the set when they disconnect
             self.clients.remove(websocket)
 
     async def send_message_to_clients(self, message):
-        for client in self.clients:
-            print(client)
         if self.clients:
             for client in self.clients:
-                asyncio.create_task(client.send(message))
+                try:
+                    asyncio.create_task(client.send(message))
+                except Exception as e:
+                    logger.error(f"Failed to send message to client: {e}")
 
     async def stop(self):
         if self.server:
             self.server.close()
             await self.server.wait_closed()
             self.server = None
+            logger.info("WebSocket server stopped")
 
     async def wait_closed(self):
         if self.server:

@@ -1,9 +1,11 @@
-import os, json, pdb, logging
+import os, json, pdb, logging,asyncio
 from pathlib import Path
 import unittest as test
+import websockets
 
 from nistoar.midas.dbio import inmem, base
 from nistoar.pdr.utils.prov import Action, Agent
+from nistoar.midas.dbio.notifier import Notifier
 
 testuser = Agent("dbio", Agent.AUTO, "tester", "test")
 testdir = Path(__file__).parents[0]
@@ -26,12 +28,48 @@ with open(asc_andor, 'r') as file:
 with open(dmp_path, 'r') as file:
     dmp = json.load(file)
 
+
 class TestInMemoryDBClientFactory(test.TestCase):
+
+    @classmethod
+    def initialize_notification_server(cls):
+        notification_server = Notifier()
+        try:
+            cls.loop = asyncio.get_event_loop()
+            if cls.loop.is_closed():
+                raise RuntimeError
+        except RuntimeError:
+            cls.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(cls.loop)
+        cls.loop.run_until_complete(notification_server.start())
+        return notification_server
+    
+    @classmethod
+    def setUpClass(cls):
+        cls.notification_server = cls.initialize_notification_server()
+
+    @classmethod
+    def tearDownClass(cls):
+        # Ensure the WebSocket server is properly closed
+        cls.loop.run_until_complete(cls.notification_server.stop())
+        cls.loop.run_until_complete(cls.notification_server.wait_closed())
+
+        # Cancel all lingering tasks
+        asyncio.set_event_loop(cls.loop)  # Set the event loop as the current event loop
+        tasks = asyncio.all_tasks(loop=cls.loop)
+        for task in tasks:
+            task.cancel()
+        cls.loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+
+        # Close the event loop
+        cls.loop.close()
+    
+    
 
     def setUp(self):
         self.cfg = {"goob": "gurn"}
         self.fact = inmem.InMemoryDBClientFactory(
-            self.cfg, {"nextnum": {"hank": 2}})
+            self.cfg,self.notification_server, {"nextnum": {"hank": 2}})
 
     def test_ctor(self):
         self.assertEqual(self.fact._cfg, self.cfg)
@@ -55,11 +93,43 @@ class TestInMemoryDBClientFactory(test.TestCase):
 
 class TestInMemoryDBClient(test.TestCase):
 
+    @classmethod
+    def initialize_notification_server(cls):
+        notification_server = Notifier()
+        try:
+            cls.loop = asyncio.get_event_loop()
+        except RuntimeError:
+            cls.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(cls.loop)
+        cls.loop.run_until_complete(notification_server.start())
+        return notification_server
+    
+    @classmethod
+    def setUpClass(cls):
+        cls.notification_server = cls.initialize_notification_server()
+
+    @classmethod
+    def tearDownClass(cls):
+        # Ensure the WebSocket server is properly closed
+        cls.loop.run_until_complete(cls.notification_server.stop())
+        cls.loop.run_until_complete(cls.notification_server.wait_closed())
+
+        # Cancel all lingering tasks
+        asyncio.set_event_loop(cls.loop) 
+        tasks = asyncio.all_tasks(loop=cls.loop)
+        for task in tasks:
+            task.cancel()
+        cls.loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+
+        # Close the event loop
+        cls.loop.close()
+
     def setUp(self):
         self.cfg = {"default_shoulder": "mds3"}
         self.user = "nist0:ava1"
-        self.cli = inmem.InMemoryDBClientFactory({}).create_client(
+        self.cli = inmem.InMemoryDBClientFactory({},self.notification_server).create_client(
             base.DMP_PROJECTS, self.cfg, self.user)
+    
 
     def test_next_recnum(self):
         self.assertEqual(self.cli._next_recnum("goob"), 1)
@@ -270,8 +340,6 @@ class TestInMemoryDBClient(test.TestCase):
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
         
-        
-
         id = "pdr0:0006"
         rec = base.ProjectRecord(
             base.DMP_PROJECTS, {"id": id, "name": "test 2", "status": {
@@ -442,6 +510,53 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(acts[0]['type'], Action.CREATE)
         self.assertEqual(acts[1]['type'], Action.COMMENT)
 
+
+class TestNotifier(test.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.notification_server = Notifier()
+        self.loop = asyncio.get_event_loop()
+        await self.notification_server.start()
+
+        # Initialize the InMemoryDBClientFactory with the notification_server
+        self.cfg = {"default_shoulder": "mds3"}
+        self.user = "nist0:ava1"
+        self.cli = inmem.InMemoryDBClientFactory({},self.notification_server).create_client(
+            base.DMP_PROJECTS, self.cfg, self.user)
+
+    async def asyncTearDown(self):
+        await self.notification_server.stop()
+        await self.notification_server.wait_closed()
+        
+
+    async def test_create_records_with_notifier(self):
+        messages = []
+
+        async def receive_messages(uri):
+            try:
+                async with websockets.connect(uri) as websocket:
+                    while True:
+                        message = await websocket.recv()
+                        #print(f"Received message: {message}")
+                        messages.append(message)
+                        #print(f"Messages: {messages}")
+                        # Break the loop after receiving the first message for this test
+            except Exception as e:
+                print(f"Failed to connect to WebSocket server: {e}")
+
+        # Start the WebSocket client to receive messages
+        uri = 'ws://localhost:8765'
+        receive_task = asyncio.create_task(receive_messages(uri))
+        await asyncio.sleep(2)
+
+        # Inject some data into the database
+        rec = self.cli.create_record("mine1")
+        await asyncio.sleep(2)
+
+        #print(f"Messages: {messages}")
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0], "New record created : mine1")
+
+    
 
 if __name__ == '__main__':
     test.main()

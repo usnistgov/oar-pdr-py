@@ -28,7 +28,7 @@ from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils.prov import Action
 from .. import MIDASException
 from .status import RecordStatus
-from .websocket import WebSocketServer
+from .notifier import Notifier
 from nistoar.pdr.utils.prov import ANONYMOUS_USER
 
 DAP_PROJECTS = "dap"
@@ -383,14 +383,6 @@ class ProtectedRecord(ABC):
                 else:
                     and_conditions[key] = value
 
-        #print("======== and_conditions =========")
-        #for key, value in and_conditions.items():
-        #    print(f"{key}: {value}")
-        #print("======== or_conditions =========")
-        #for key, values in or_conditions.items():
-        #    for value in values:
-        #        print(f"{key}: {value}")
-
         rec = self._data
 
         and_met = True
@@ -417,8 +409,6 @@ class ProtectedRecord(ABC):
                     if rec.get(key) == value:
                         or_met = True
                         break
-        #print(or_met)
-        #print(and_met)
         if (not or_conditions or or_met) and and_met:
             return True
         return False
@@ -827,14 +817,14 @@ class DBClient(ABC):
          the only allowed shoulder will be the default, ``grp0``. 
     """
 
-    def __init__(self, config: Mapping, projcoll: str, websocket_server: WebSocketServer, nativeclient=None, foruser: str = ANONYMOUS):
+    def __init__(self, config: Mapping, projcoll: str, notification_server: Notifier = None, nativeclient=None, foruser: str = ANONYMOUS):
         self._cfg = config
         self._native = nativeclient
         self._projcoll = projcoll
         self._who = foruser
         self._whogrps = None
         self._dbgroups = DBGroups(self)
-        self.websocket_server = websocket_server
+        self.notification_server = notification_server
 
 
     @property
@@ -897,17 +887,17 @@ class DBClient(ABC):
         rec['name'] = name
         rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
-        # Send a message through the WebSocket
-        message = f"{name}"
-        self._send_message_async(message)
+        if self.notification_server:
+            message = "New record created : "f"{name}"
+            self._notify(message)
         return rec
     
-    def _send_message_async(self, message):
+    def _notify(self, message):
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            asyncio.create_task(self.websocket_server.send_message_to_clients(message))
+            asyncio.create_task(self.notification_server.send_message_to_clients(message))
         else:
-            asyncio.run(self.websocket_server.send_message_to_clients(message))
+            asyncio.run(self.notification_server.send_message_to_clients(message))
 
     def _default_shoulder(self):
         out = self._cfg.get("default_shoulder")
@@ -1298,7 +1288,7 @@ class DBClientFactory(ABC):
     an abstract class for creating client connections to the database
     """
 
-    def __init__(self, config, websocket_server: WebSocketServer):
+    def __init__(self, config, notification_server: Notifier = None):
         """
         initialize the factory with its configuration.  The configuration provided here serves as 
         the default parameters for the cient as these can be overridden by the configuration parameters
@@ -1308,7 +1298,7 @@ class DBClientFactory(ABC):
         depend on the type of project being access (e.g. "dmp" vs. "dap").
         """
         self._cfg = config
-        self.websocket_server = websocket_server
+        self.notification_server = notification_server
 
     @abstractmethod
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = ANONYMOUS):
