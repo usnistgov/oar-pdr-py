@@ -827,14 +827,12 @@ class DBClient(ABC):
          the only allowed shoulder will be the default, ``grp0``. 
     """
 
-    def __init__(self, config: Mapping, projcoll: str,websocket_server: WebSocketServer, nativeclient=None, foruser: str = ANONYMOUS):
+    def __init__(self, config: Mapping, projcoll: str, websocket_server: WebSocketServer, nativeclient=None, foruser: str = ANONYMOUS):
         self._cfg = config
         self._native = nativeclient
         self._projcoll = projcoll
         self._who = foruser
         self._whogrps = None
-        # Get the current stack frame
-        stack = inspect.stack()
         self._dbgroups = DBGroups(self)
         self.websocket_server = websocket_server
 
@@ -1300,7 +1298,7 @@ class DBClientFactory(ABC):
     an abstract class for creating client connections to the database
     """
 
-    def __init__(self, config,websocket_server: WebSocketServer):
+    def __init__(self, config, websocket_server: WebSocketServer):
         """
         initialize the factory with its configuration.  The configuration provided here serves as 
         the default parameters for the cient as these can be overridden by the configuration parameters
