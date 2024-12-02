@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor
 import copy
 import logging
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Notifier:
@@ -13,18 +12,17 @@ class Notifier:
         self.host = host
         self.port = port
         self.server = None
-        self.clients = set()  # Initialize the clients set
+        self.clients = set()
 
     async def start(self):
         try:
             self.server = await websockets.serve(self.websocket_handler, self.host, self.port)
-            logger.info(f"WebSocket server started on ws://{self.host}:{self.port}")
+            #logger.info(f"WebSocket server started on ws://{self.host}:{self.port}")
         except Exception as e:
             logger.error(f"Failed to start WebSocket server: {e}")
         
 
     async def websocket_handler(self, websocket):
-        # Add the new client to the set
         self.clients.add(websocket)
         try:
             async for message in websocket:
@@ -32,7 +30,6 @@ class Notifier:
         except Exception as e:
             logger.error(f"Error in websocket_handler: {e}")
         finally:
-            # Remove the client from the set when they disconnect
             self.clients.remove(websocket)
 
     async def send_message_to_clients(self, message):
@@ -48,7 +45,7 @@ class Notifier:
             self.server.close()
             await self.server.wait_closed()
             self.server = None
-            logger.info("WebSocket server stopped")
+            #logger.info("WebSocket server stopped")
 
     async def wait_closed(self):
         if self.server:
