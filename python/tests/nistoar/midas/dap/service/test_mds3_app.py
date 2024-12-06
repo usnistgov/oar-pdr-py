@@ -103,7 +103,7 @@ class TestMDS3DAPApp(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectNameHandler))
         self.assertNotEqual(hdlr.cfg, {})
-        self.assertEqual(hdlr._path, "")
+        self.assertEqual(hdlr._path, "name")
         self.assertEqual(hdlr._id, "mdm1:0001")
 
     def test_get_name(self):

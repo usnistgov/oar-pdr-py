@@ -94,6 +94,37 @@ class TestProjectRecord(test.TestCase):
         self.assertFalse(self.rec.deactivated)
         self.rec.save()
         self.assertTrue(self.cli.name_exists("brains"))
+    def test_reassign(self):
+        # test_validate_user_id()
+        self.assertTrue(self.rec._validate_user_id("henry"))
+        self.assertFalse(self.rec._validate_user_id(["henry"]))
+
+        self.assertEqual(self.rec.owner, "nist0:ava1")
+        self.rec.reassign("nist0:gob")
+        self.assertEqual(self.rec.owner, "nist0:gob")
+        with self.assertRaises(base.InvalidUpdate):
+            self.rec.reassign(["goob"])
+
+    @test.skipIf(not os.environ.get('MONGO_PEOPLE_URL'), "test mongodb people database not available")
+    def test_reassign_useps(self):
+        self.cfg["people_service"] = { "factory": "mongo", "db_url": os.environ.get('MONGO_PEOPLE_URL') }
+        self.fact = inmem.InMemoryDBClientFactory(self.cfg)
+        self.cli = self.fact.create_client(base.DRAFT_PROJECTS, {}, self.user)
+        self.rec = base.ProjectRecord(base.DRAFT_PROJECTS,
+                                      {"id": "pdr0:2222", "name": "brains", "owner": self.user}, self.cli)
+        self.assertTrue(self.cli.people_service)
+
+        # test_validate_user_id()
+        self.assertTrue(self.rec._validate_user_id("pgp1"))
+        self.assertFalse(self.rec._validate_user_id("henry"))
+
+        self.assertEqual(self.rec.owner, "nist0:ava1")
+        self.rec.reassign("pgp1")
+        self.assertEqual(self.rec.owner, "pgp1")
+        with self.assertRaises(base.InvalidUpdate):
+            self.rec.reassign("nist0:gob")
+
+
 
                          
 if __name__ == '__main__':

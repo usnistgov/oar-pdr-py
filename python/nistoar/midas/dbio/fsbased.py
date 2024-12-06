@@ -10,17 +10,19 @@ from . import base
 
 from nistoar.pdr.utils import read_json, write_json
 from nistoar.base.config import ConfigurationException, merge_config
+from nistoar.nsd.service import PeopleService, MongoPeopleService, create_people_service
 
 class FSBasedDBClient(base.DBClient):
     """
     an implementation of DBClient in which the data is persisted to flat files on disk.
     """
 
-    def __init__(self, dbroot: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS):
+    def __init__(self, dbroot: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS,
+                 peopsvc: PeopleService = None):
         self._root = Path(dbroot)
         if not self._root.is_dir():
             raise base.DBIOException("FSBasedDBClient: %s: does not exist as a directory" % dbroot)
-        super(FSBasedDBClient, self).__init__(config, projcoll, self._root, foruser)
+        super(FSBasedDBClient, self).__init__(config, projcoll, self._root, foruser, peopsvc)
 
     def _ensure_collection(self, collname):
         collpath = self._root / collname
@@ -254,5 +256,10 @@ class FSBasedDBClientFactory(base.DBClientFactory):
 
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
         cfg = merge_config(config, deepcopy(self._cfg))
-        return FSBasedDBClient(self._dbroot, cfg, servicetype, foruser)
+
+        peopsvc = self._peopsvc
+        if not peopsvc:
+            peopsvc = self.create_people_service(cfg.get("people_service", {}))
+
+        return FSBasedDBClient(self._dbroot, cfg, servicetype, foruser, peopsvc)
 

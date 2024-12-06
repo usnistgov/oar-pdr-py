@@ -31,6 +31,7 @@ _action_p   = "action"
 _modified_p = "modified"
 _created_p  = "created"
 _message_p  = "message"
+_creatby_p  = "created_by"
 
 # Common record actions
 # 
@@ -114,6 +115,13 @@ class RecordStatus:
         if self.created <= 0:
             return "pending"
         return datetime.fromtimestamp(math.floor(self.created)).isoformat()
+
+    @property
+    def created_by(self) -> str:
+        """
+        a label indicating who originally created the record.  This may be a user ID or an Agent ID.   
+        """
+        return self._data.get(_creatby_p, "unspecified")
 
     @property
     def since(self) -> float:

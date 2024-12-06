@@ -10,6 +10,7 @@ import urllib.request, urllib.parse, urllib.error
 import requests
 
 from . import NSDException, NSDServerError, NSDClientError, NSDResourceNotFound
+from nistoar.base.config import ConfigurationException
 
 NISTOrg = namedtuple('NISTOrg', "id title abbrev number")
 _org_prop_nm = {
@@ -28,13 +29,15 @@ class NSDClient:
     GROUP_EP = "/NISTGroup"
     PEOPLE_EP = "/People/list"
 
-    def __init__(self, baseurl, restrict_ou: List[str]=None):
+    def __init__(self, baseurl, authconfig: Mapping=None, restrict_ou: List[str]=None):
         """
         initialize the client
-        :param str baseurl:  the base URL for the service.  This should include everything up to 
-                             (and including) the version field (e.g. "https://..../.../v1").
+        :param str     baseurl:  the base URL for the service.  This should include everything up to 
+                                 (and including) the version field (e.g. "https://..../.../v1").
+        :param str  authconfig:  a dictionary providing credentials for connecting to the service; if 
+                                 not provided, it will be assumed that authentication is not required.
         :param str restrict_ou:  if non-None, restrict people search results to those who are 
-                             members of OUs in the given list of OU abbreviated names (e.g. "MML"). 
+                                 members of OUs in the given list of OU abbreviated names (e.g. "MML"). 
         """
         self.baseurl = baseurl.rstrip('/')
         if restrict_ou and not isintance(restrict_ou, list):
@@ -42,13 +45,68 @@ class NSDClient:
         self._def_ou = restrict_ou
         self._ou_nums = None
 
+        self._authkw = {}
+        self._authhdr = {}
+        self._setup_auth(authconfig)
+
+    def _setup_auth(self, config: Mapping=None):
+        # erase any previously set-up authentication
+        self._authkw = {}
+        self._authhdr = {}
+
+        if not config or config.get('type', '') is None:
+            return      # no authentication required
+
+        authtype = config.get('type', 'bearer')
+        if isinstance(authtype, str):
+            authtype = authtype.lower()
+
+        if authtype == "none":
+            pass      # no authentication required
+
+        elif authtype == "userpass":
+            self._authkw = { "user": (config.get('user'), config.get('pass')) }
+            if not all(self._authkw["user"]):
+                raise ConfigurationException("NSDClient: authentication type userpass requires both "+
+                                             "'user' and 'pass' config parameters")
+
+        elif authtype == "bearer":
+            token = config.get("token")
+            if not token:
+                raise ConfigurationException("NSDClient: authentication type bearer requires "+
+                                             "'token' config parameter")
+            self._authhdr = { "Authorization": f"Bearer {token}" }
+
+        elif authtype == "cert":
+            self._authkw = { 'cert': (config.get('client_cert_path'), config.get('client_key_path')) }
+            if not all(self._authkw["cert"]):
+                raise ConfigurationException("NSDClient: authentication type userpass requires both "+
+                                             "'user' and 'pass' config parameters")
+
+            unreadable = []
+            for cfile in self._authkw['cert']:
+                try:
+                    with open(cfile) as fd:
+                        pass
+                except OSError as ex:
+                    unreadable.append(f"{cfile} ({str(ex)})")
+            if unreadable:
+                s = "s" if len(unreadable) > 1 else ""
+                raise ConfigurationException("NSDClient: certificate file%s unreadable:\n  %s" %
+                                             (s, "\n  ".join(unreadable)))
+
+        else:
+            raise ConfigurationException("NSDClient: authentication 'type' param value not supported: "+
+                                         authtype)
+            
+
     def _get(self, relurl):
         if not relurl.startswith('/'):
             relurl = '/'+relurl
-        hdrs = { }
+        hdrs = self._authhdr
         
         try:
-            resp = requests.get(self.baseurl+relurl, headers=hdrs)
+            resp = requests.get(self.baseurl+relurl, headers=hdrs, **self._authkw)
 
             if resp.status_code >= 500:
                 raise NSDServerError(relurl, resp.status_code, resp.reason)
@@ -84,9 +142,10 @@ class NSDClient:
         if not relurl.startswith('/'):
             relurl = '/'+relurl
         hdrs = { "Content-type": "application/json" }
+        hdrs.update(self._authhdr)
         
         try:
-            resp = requests.post(self.baseurl+relurl, headers=hdrs, json=filter)
+            resp = requests.post(self.baseurl+relurl, headers=hdrs, json=filter, **self._authkw)
 
             if resp.status_code >= 500:
                 raise NSDServerError(relurl, resp.status_code, resp.reason)

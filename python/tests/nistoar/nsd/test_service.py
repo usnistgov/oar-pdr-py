@@ -257,6 +257,20 @@ class TestMongoPeopleService(test.TestCase):
         self.assertEqual(stat['person_count'], 4)
         self.assertEqual(stat['org_count'], 8)
         self.assertTrue(stat['message'].startswith("Ready"))
+
+    def test_get_person_by(self):
+        self.svc.load(self.cfg, rootlog, False)
+
+        who = self.svc.get_person_by_eid("pgp1")
+        self.assertIsNotNone(who)
+        self.assertEqual(who["lastName"], "Proctor")
+
+        who = self.svc.get_person_by_email("phillip.austin@nist.gov")
+        self.assertIsNotNone(who)
+        self.assertEqual(who["lastName"], "Austin")
+
+        
+        
         
                          
 if __name__ == '__main__':

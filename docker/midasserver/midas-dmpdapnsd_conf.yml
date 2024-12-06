@@ -1,7 +1,12 @@
 logfile: midas.log
 loglevel: DEBUG
+loglevelsfor :
+   pymongo: INFO 
 dbio:
    factory:  fsbased
+   people_service:
+     factory:  mongo
+     db_url: "mongodb://oarop:oarop@mongodb:27017/midas"
 about: 
    title: "MIDAS Authoring Services"
    describedBy: "http://localhost:9091/midas/docs"

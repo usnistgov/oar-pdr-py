@@ -247,7 +247,7 @@ class JSONSupport(FormatSupport):
     @classmethod
     def add_support(cls, fmtsup: FormatSupport, ctypes: List[str]=[], asdefault: bool=False):
         """
-        Add support for HTML content types to the given FormatSupport instance
+        Add support for JSON content types to the given FormatSupport instance
         """
         if not ctypes:
             ctypes = [ JSONSupport.DEF_CONTENT_TYPE ]
