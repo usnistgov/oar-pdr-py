@@ -1,5 +1,7 @@
 logfile: midas.log
 loglevel: DEBUG
+loglevelsfor :
+   pymongo: INFO 
 dbio:
    factory:  fsbased
    people_service:
