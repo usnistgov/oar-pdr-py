@@ -1,4 +1,0 @@
-locations:
-   metadataService:     https://data.nist.gov/rmm
-   landingPageService:  https://data.nist.gov/pdr/lps
-   distributionService: https://data.nist.gov/od/ds
