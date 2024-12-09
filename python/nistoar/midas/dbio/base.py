@@ -817,7 +817,7 @@ class DBClient(ABC):
          the only allowed shoulder will be the default, ``grp0``. 
     """
 
-    def __init__(self, config: Mapping, projcoll: str,  nativeclient=None,notification_server: Notifier = None, foruser: str = ANONYMOUS):
+    def __init__(self, config: Mapping, projcoll: str,  nativeclient=None, foruser: str = ANONYMOUS,notification_server: Notifier = None):
         self._cfg = config
         self._native = nativeclient
         self._projcoll = projcoll
