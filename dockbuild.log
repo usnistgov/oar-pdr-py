@@ -1,0 +1,218 @@
+Exec: dockbuild.sh
+   started at Mon Dec 9 09:47:10 EST 2024
++ docker build --build-arg=devuid=501 -t oar-pdr-py/pyenv pyenv
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.82kB done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/oar-metadata/ejsonschema:latest
+#3 DONE 0.0s
+
+#4 [1/8] FROM docker.io/oar-metadata/ejsonschema
+#4 DONE 0.0s
+
+#5 [3/8] RUN pip install funcsigs 'bagit>=1.6.3,<2.0' 'fs>=2.0.21' jsonpatch mako pyjwt                 jsonpath_ng lxml webdavclient3 websockets
+#5 CACHED
+
+#6 [7/8] RUN grep -Pqs ":501:\d+:" /etc/passwd ||     useradd -m --comment "OAR Developer" --shell /bin/bash             --gid 501 --uid 501 developer
+#6 CACHED
+
+#7 [5/8] RUN sed --in-place -e '/CREATE_MAIL_SPOOL/ s/=yes/=no/' /etc/default/useradd
+#7 CACHED
+
+#8 [6/8] RUN grep -qs :501: /etc/group ||     groupadd --gid 501 developer
+#8 CACHED
+
+#9 [2/8] RUN apt-get update && apt-get install -y python3-yaml curl wget less sudo zip                                          p7zip-full ca-certificates git
+#9 CACHED
+
+#10 [4/8] RUN multibag_ver=0.5 &&     curl -L -o multibag-py.zip     https://github.com/usnistgov/multibag-py/archive/$multibag_ver.zip &&     unzip -oq multibag-py.zip &&     cd multibag-py-$multibag_ver &&     echo __version__ = $multibag_ver >> multibag/__init__.py &&     python setup.py install --install-purelib=/usr/local/lib/python3.10/dist-packages
+#10 CACHED
+
+#11 [8/8] RUN echo developer "ALL=(ALL)" NOPASSWD:ALL > /etc/sudoers.d/90-developers
+#11 CACHED
+
+#12 exporting to image
+#12 exporting layers done
+#12 writing image sha256:a1bfc243145fcb114dd1cfe33c6f74b71280ebebd772183f6e0733e43bffe215 done
+#12 naming to docker.io/oar-pdr-py/pyenv done
+#12 DONE 0.0s
+
+What's Next?
+  View summary of image vulnerabilities and recommendations → docker scout quickview
++ docker build --build-arg=devuid=501 -t oar-pdr-py/pdrpytest pdrpytest
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load .dockerignore
+#1 transferring context: 2B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.14kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/oar-pdr-py/pyenv:latest
+#3 DONE 0.0s
+
+#4 [1/7] FROM docker.io/oar-pdr-py/pyenv
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 66B done
+#5 DONE 0.0s
+
+#6 [6/7] RUN mkdir -p /dev/oar-pdr-py /app && chmod a+rwx /app
+#6 CACHED
+
+#7 [3/7] RUN chmod a+rx /usr/local/bin/entrypoint.sh
+#7 CACHED
+
+#8 [5/7] RUN chmod a+rx /usr/local/bin/runtests.sh
+#8 CACHED
+
+#9 [2/7] COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+#9 CACHED
+
+#10 [4/7] COPY runtests.sh /usr/local/bin/runtests.sh
+#10 CACHED
+
+#11 [7/7] WORKDIR /dev/oar-pdr-py
+#11 CACHED
+
+#12 exporting to image
+#12 exporting layers done
+#12 writing image sha256:dd2fe66de29008fe182f2005fff361dd18859cf3f80cb1b6ad7a971e8889fd14 done
+#12 naming to docker.io/oar-pdr-py/pdrpytest done
+#12 DONE 0.0s
+
+What's Next?
+  View summary of image vulnerabilities and recommendations → docker scout quickview
++ docker build --build-arg=devuid=501 -t oar-pdr-py/pdpserver pdpserver
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load .dockerignore
+#1 transferring context: 2B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 688B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/oar-pdr-py/pyenv:latest
+#3 DONE 0.0s
+
+#4 [1/5] FROM docker.io/oar-pdr-py/pyenv
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 35B done
+#5 DONE 0.0s
+
+#6 [2/5] COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+#6 CACHED
+
+#7 [4/5] RUN mkdir -p /dev/oar-pdr-py /app && chmod a+rwx /app
+#7 CACHED
+
+#8 [3/5] RUN chmod a+rx /usr/local/bin/entrypoint.sh
+#8 CACHED
+
+#9 [5/5] WORKDIR /dev/oar-pdr-py
+#9 CACHED
+
+#10 exporting to image
+#10 exporting layers done
+#10 writing image sha256:922d46dbfbbfad43d2941c034e8ca29e5a165028ee5869e3a15accc42602cb7d done
+#10 naming to docker.io/oar-pdr-py/pdpserver done
+#10 DONE 0.0s
+
+What's Next?
+  View summary of image vulnerabilities and recommendations → docker scout quickview
++ docker build --build-arg=devuid=501 -t oar-pdr-py/midasserver midasserver
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 717B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/oar-pdr-py/pyenv:latest
+#3 DONE 0.0s
+
+#4 [1/5] FROM docker.io/oar-pdr-py/pyenv
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 35B done
+#5 DONE 0.0s
+
+#6 [2/5] COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+#6 CACHED
+
+#7 [3/5] RUN chmod a+rx /usr/local/bin/entrypoint.sh
+#7 CACHED
+
+#8 [4/5] RUN mkdir -p /dev/oar-pdr-py /app && chmod a+rwx /app
+#8 CACHED
+
+#9 [5/5] WORKDIR /dev/oar-pdr-py
+#9 CACHED
+
+#10 exporting to image
+#10 exporting layers done
+#10 writing image sha256:a10c5e025cc3832c74664fe3baa66867038e46eef5e7cfc9ea13915a66b1caa0 done
+#10 naming to docker.io/oar-pdr-py/midasserver done
+#10 DONE 0.0s
+
+What's Next?
+  View summary of image vulnerabilities and recommendations → docker scout quickview
++ docker build --build-arg=devuid=501 -t oar-pdr-py/peopleserver peopleserver
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load .dockerignore
+#1 transferring context: 2B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 680B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/oar-pdr-py/pyenv:latest
+#3 DONE 0.0s
+
+#4 [1/5] FROM docker.io/oar-pdr-py/pyenv
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 35B done
+#5 DONE 0.0s
+
+#6 [3/5] RUN chmod a+rx /usr/local/bin/entrypoint.sh
+#6 CACHED
+
+#7 [2/5] COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+#7 CACHED
+
+#8 [4/5] RUN mkdir -p /dev/oar-pdr-py /app /data/nsd && chmod a+rwx /app
+#8 CACHED
+
+#9 [5/5] WORKDIR /dev/oar-pdr-py
+#9 CACHED
+
+#10 exporting to image
+#10 exporting layers done
+#10 writing image sha256:0c788720fc1fb862ab3f5fbb475afb864646ed79b985c93fc1cba528c44664f0 done
+#10 naming to docker.io/oar-pdr-py/peopleserver done
+#10 DONE 0.0s
+
+What's Next?
+  View summary of image vulnerabilities and recommendations → docker scout quickview
