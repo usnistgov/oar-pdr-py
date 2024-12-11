@@ -554,7 +554,7 @@ class TestNotifier(test.IsolatedAsyncioTestCase):
 
         #print(f"Messages: {messages}")
         self.assertEqual(len(messages), 1)
-        self.assertEqual(messages[0], "New dmp created: mine1")
+        self.assertEqual(messages[0], "New record created : mine1")
 
     
 

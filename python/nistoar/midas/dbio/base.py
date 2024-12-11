@@ -888,7 +888,7 @@ class DBClient(ABC):
         rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
         if self.notification_server:
-            message = f"New {self._projcoll} created: {name}"
+            message = "New record created : "f"{name}"
             self._notify(message)
         return rec
     
