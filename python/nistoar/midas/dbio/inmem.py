@@ -139,7 +139,7 @@ class InMemoryDBClientFactory(base.DBClientFactory):
     clients it creates.  
     """
 
-    def __init__(self, config: Mapping,  _dbdata = None,notification_server: Notifier = None):
+    def __init__(self, config: Mapping, notification_server: Notifier = None, _dbdata = None):
         """
         Create the factory with the given configuration.
 

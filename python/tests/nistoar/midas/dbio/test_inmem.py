@@ -31,7 +31,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
     def setUp(self):
         self.cfg = {"goob": "gurn"}
         self.fact = inmem.InMemoryDBClientFactory(
-            self.cfg,{"nextnum": {"hank": 2}})
+            self.cfg,_dbdata= {"nextnum": {"hank": 2}})
 
     def test_ctor(self):
         self.assertEqual(self.fact._cfg, self.cfg)

@@ -69,7 +69,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
     def setUp(self):
         self.cfg = {"goob": "gurn"}
         self.fact = inmem.InMemoryDBClientFactory(
-            self.cfg, {"nextnum": {"hank": 2}},self.notification_server)
+            self.cfg,self.notification_server, {"nextnum": {"hank": 2}})
 
     def test_ctor(self):
         self.assertEqual(self.fact._cfg, self.cfg)
@@ -127,7 +127,7 @@ class TestInMemoryDBClient(test.TestCase):
     def setUp(self):
         self.cfg = {"default_shoulder": "mds3"}
         self.user = "nist0:ava1"
-        self.cli = inmem.InMemoryDBClientFactory({},notification_server=self.notification_server).create_client(
+        self.cli = inmem.InMemoryDBClientFactory({},self.notification_server).create_client(
             base.DMP_PROJECTS, self.cfg, self.user)
     
 
@@ -520,7 +520,7 @@ class TestNotifier(test.IsolatedAsyncioTestCase):
         # Initialize the InMemoryDBClientFactory with the notification_server
         self.cfg = {"default_shoulder": "mds3"}
         self.user = "nist0:ava1"
-        self.cli = inmem.InMemoryDBClientFactory({},notification_server=self.notification_server).create_client(
+        self.cli = inmem.InMemoryDBClientFactory({},self.notification_server).create_client(
             base.DMP_PROJECTS, self.cfg, self.user)
 
     async def asyncTearDown(self):
