@@ -1,63 +1,0 @@
-
-Running pyunit tests...
-
-+ scripts/testall.pyunit
-Warning: running describe-uwsgi in simulate mode
-Warning: running ingest-uwsgi in simulate mode
-.......................................................................................................................................................................................................................................ss.sss.....................................................................................................sssssss........................................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-......................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-.........open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-......................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-....open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-.......open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-.....open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-............................................................................................................................................................................ssss.ssss.s.sss.............................................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-..........open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-..........open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-..............................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-......................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-..........................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-.......................................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-........................................................................................................................................................
-----------------------------------------------------------------------
-Ran 975 tests in 93.054s
-
-OK (skipped=24)
-['mine2', 'mine3', 'mine3', 'test1', 'test1', 'test1', 'test1', 'test2', 'test2', 'test2', 'test2']
-Failed to connect to WebSocket server: received 1001 (going away); then sent 1001 (going away)
-Running services tests...
-
-+ scripts/testall.services
-Testing all services...
-+ /dev/oar-pdr-py/scripts/tests/test_resolver.sh
-starting uwsgi for resolver on port 9090...
-open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
-!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
-stopping uwsgi for resolver...
-OK: All resolver tests passed.
-+ /dev/oar-pdr-py/scripts/tests/test_pdrdownload.py
-.ss.ssss..
-----------------------------------------------------------------------
-Ran 10 tests in 0.197s
-
-OK (skipped=6)
-  checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...                                      checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                    All services OK
-All OK
