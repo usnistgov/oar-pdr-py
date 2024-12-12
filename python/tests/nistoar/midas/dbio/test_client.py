@@ -190,6 +190,7 @@ class TestDBClient(test.TestCase):
         self.assertIn("test2", names)
         self.assertIn("mine2", names)
         self.assertIn("mine3", names)
+        print(names)
         self.assertEqual(len(names), 4)
 
     def test_record_action(self):

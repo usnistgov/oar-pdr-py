@@ -29,8 +29,9 @@ This script also pays attention to the following environment variables:
                           configuration data for (default: pdr-resolve);
                           this is only used if OAR_CONFIG_SERVICE is used.
 """
-import os, sys, logging, copy
+import os, sys, logging, copy,asyncio
 from copy import deepcopy
+
 
 try:
     import nistoar
@@ -43,6 +44,7 @@ except ImportError:
     import nistoar
 
 from nistoar.base import config
+from nistoar.midas.dbio.websocket import WebSocketServer
 from nistoar.midas.dbio import MongoDBClientFactory, InMemoryDBClientFactory, FSBasedDBClientFactory
 from nistoar.midas import wsgi
 
@@ -61,6 +63,16 @@ DEF_MIDAS_DB_TYPE="fsbased"
 
 # determine where the configuration is coming from
 confsrc = _dec(uwsgi.opt.get("oar_config_file"))
+
+def initialize_websocket_server():
+    websocket_server = WebSocketServer()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(websocket_server.start())
+    print("WebSocketServer initialized:", websocket_server)
+    return websocket_server
+
+websocket_server = initialize_websocket_server()
+
 if confsrc:
     cfg = config.resolve_configuration(confsrc)
 
@@ -139,12 +151,12 @@ elif dbtype == "mongo":
     factory = MongoDBClientFactory(cfg.get("dbio", {}), dburl)
 
 elif dbtype == "inmem":
-    factory = InMemoryDBClientFactory(cfg.get("dbio", {}))
-
+    factory = InMemoryDBClientFactory(cfg.get("dbio", {}),websocket_server=websocket_server)
 else:
     raise RuntimeError("Unsupported database type: "+dbtype)
 
 application = wsgi.app(cfg, factory)
+websocket_server.start_in_thread()
 
 if nsdcfg:
     try:
