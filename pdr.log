@@ -1,0 +1,1631 @@
+2024-12-11 17:04:20,412 Notify.cli WARNING: unable to define 'email' channel without --mailserver argument
+2024-12-11 17:04:20,413 Notify.cli WARNING: unable to define 'email' channel without --mailserver argument
+2024-12-11 17:04:20,500 Notify WARNING: Overriding channel class referred to as fakeemail
+2024-12-11 17:04:20,534 Notify WARNING: Overriding channel class referred to as fakeemail
+2024-12-11 17:04:20,551 Notify WARNING: Overriding channel class referred to as fakeemail
+2024-12-11 17:04:20,552 Notify WARNING: Overriding channel class referred to as fakeemail
+2024-12-11 17:04:20,554 Notify WARNING: Overriding channel class referred to as fakeemail
+2024-12-11 17:04:20,566 Notify WARNING: Overriding channel class referred to as fakeemail
+2024-12-11 17:04:20,752 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:20,776 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at goob/trial1.json
+2024-12-11 17:04:20,792 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at gurn/trial1.json
+2024-12-11 17:04:20,796 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:20,802 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: gurn
+2024-12-11 17:04:20,835 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:20,840 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Adding POD data
+2024-12-11 17:04:20,867 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:20,873 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Adding POD data and converting to NERDm
+2024-12-11 17:04:20,888 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:20,891 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:04:20,915 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:20,921 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Adding POD data and converting to NERDm
+2024-12-11 17:04:20,935 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:20,938 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:04:20,944 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial3/trial3a.json
+2024-12-11 17:04:20,951 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial3
+2024-12-11 17:04:20,958 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial2.json
+2024-12-11 17:04:20,965 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial1.json
+2024-12-11 17:04:20,971 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating Subcollection metadata: trial3
+2024-12-11 17:04:21,007 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:21,015 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:04:21,022 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:04:21,034 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:04:21,044 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSph20160701.m
+2024-12-11 17:04:21,057 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:04:21,067 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:04:21,077 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:04:21,117 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:21,126 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: setting resource ID: ark:/88434/edi00hw91c
+2024-12-11 17:04:21,189 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:21,201 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: i did it!
+2024-12-11 17:04:21,217 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial
+2024-12-11 17:04:21,255 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:21,258 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new nrd:Hidden component with default metadata: #doi
+2024-12-11 17:04:21,279 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new nrdg:Goober component with default metadata: #gurn
+2024-12-11 17:04:21,302 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:21,313 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new DataFile component with default metadata: trial/readme.txt
+2024-12-11 17:04:21,321 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial
+2024-12-11 17:04:21,354 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:21,356 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Setting ediid: goober
+2024-12-11 17:04:21,359 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Setting ediid: ark:/88434/goober
+2024-12-11 17:04:21,374 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial1.json
+2024-12-11 17:04:21,386 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating DataFile metadata: trial1.json
+2024-12-11 17:04:21,413 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:21,426 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial1
+2024-12-11 17:04:21,454 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:21,480 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:21,492 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:21,500 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new resource-level metadata
+2024-12-11 17:04:21,511 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: setting resource ID: ark:/88434/mds00kkd13
+2024-12-11 17:04:21,534 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1/gold/trial1.json
+2024-12-11 17:04:21,539 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:21,548 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial1/gold
+2024-12-11 17:04:21,556 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial1
+2024-12-11 17:04:21,573 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1/trial2.json
+2024-12-11 17:04:21,578 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:21,587 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Adding POD data and converting to NERDm
+2024-12-11 17:04:21,603 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:04:21,610 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial3/trial3a.json
+2024-12-11 17:04:21,617 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial3
+2024-12-11 17:04:21,624 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial2.json
+2024-12-11 17:04:21,634 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial1.json
+2024-12-11 17:04:21,641 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating Subcollection metadata: trial3
+2024-12-11 17:04:21,713 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:22,195 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:22,217 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1.json
+2024-12-11 17:04:22,223 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:22,238 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial2.json
+2024-12-11 17:04:22,244 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:22,264 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial3/trial3a.json
+2024-12-11 17:04:22,270 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating None metadata: trial2.json
+2024-12-11 17:04:22,284 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: adding file metadata for trial3/trial3a.json
+2024-12-11 17:04:22,294 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial3
+2024-12-11 17:04:22,302 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating checksum for trial3/trial3a.json
+2024-12-11 17:04:22,318 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating None metadata: trial1.json
+2024-12-11 17:04:22,328 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating None metadata: trial2.json
+2024-12-11 17:04:22,339 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating None metadata: trial3/trial3a.json
+2024-12-11 17:04:22,378 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:22,433 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:22,439 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Adding POD data and converting to NERDm
+2024-12-11 17:04:22,456 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:22,459 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:04:22,466 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial3/trial3a.json
+2024-12-11 17:04:22,474 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial3
+2024-12-11 17:04:22,479 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial2.json
+2024-12-11 17:04:22,488 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial1.json
+2024-12-11 17:04:22,500 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating Subcollection metadata: trial3
+2024-12-11 17:04:22,518 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Over-writing resource-level metadata
+2024-12-11 17:04:22,525 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Merging in annotations into all metdata
+2024-12-11 17:04:22,622 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Over-writing component metadata: filepath=trial3
+2024-12-11 17:04:22,628 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Merging in annotations into all metdata
+2024-12-11 17:04:22,692 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:22,730 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:22,745 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: setting resource ID: ark:/88434/mds00kkd13
+2024-12-11 17:04:22,771 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1/gold/trial1.json
+2024-12-11 17:04:22,776 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:22,782 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial1/gold
+2024-12-11 17:04:22,788 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial1
+2024-12-11 17:04:22,800 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1/trial2.json
+2024-12-11 17:04:22,803 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:22,809 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Adding POD data and converting to NERDm
+2024-12-11 17:04:22,826 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:04:22,838 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating None metadata: trial1/trial2.json
+2024-12-11 17:04:22,848 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating None metadata: trial1/gold/trial1.json
+2024-12-11 17:04:22,854 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Merging in annotations into all metdata
+2024-12-11 17:04:22,904 /dev/oar-pdr-py/_test152/testbag.bldr ERROR: Implementation of Bag finalization is not complete!
+2024-12-11 17:04:22,906 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Bag does not include PREMIS and ORE files
+2024-12-11 17:04:23,019 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,023 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: i did it!
+2024-12-11 17:04:23,028 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: i did it!
+2024-12-11 17:04:23,050 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,060 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: adding file metadata for goob/trial1.json
+2024-12-11 17:04:23,067 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: goob
+2024-12-11 17:04:23,077 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new DataFile component with default metadata: goob/trial2.json
+2024-12-11 17:04:23,083 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: adding file metadata for goob/trial2.json
+2024-12-11 17:04:23,104 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,126 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1/gold/trial1.json
+2024-12-11 17:04:23,130 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:23,135 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial1/gold
+2024-12-11 17:04:23,140 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial1
+2024-12-11 17:04:23,147 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Removed component: trial1/gold/trial1.json
+2024-12-11 17:04:23,153 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: adding file metadata for trial1/gold/trial1.json
+2024-12-11 17:04:23,161 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Removed component: trial1/gold/trial1.json
+2024-12-11 17:04:23,172 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Removed component: trial1.json
+2024-12-11 17:04:23,197 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,229 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1/gold/trial1.json
+2024-12-11 17:04:23,234 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:23,242 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial1/gold
+2024-12-11 17:04:23,250 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial1
+2024-12-11 17:04:23,266 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1/trial2.json
+2024-12-11 17:04:23,269 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:23,291 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Removed component: trial1/gold/trial1.json; cleaned empty parents collections
+2024-12-11 17:04:23,333 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,337 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new nrd:Goober component with default metadata: goober
+2024-12-11 17:04:23,354 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new nrd:Hidden component with default metadata: #readme.txt
+2024-12-11 17:04:23,368 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Removing non-file component, id=goober
+2024-12-11 17:04:23,401 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Removing non-file component, id=#readme.txt
+2024-12-11 17:04:23,585 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, goobbag
+2024-12-11 17:04:23,598 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,607 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Setting component metadata: filepath=readme.txt
+2024-12-11 17:04:23,617 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new DataFile component with default metadata: readme.txt
+2024-12-11 17:04:23,626 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Over-writing component metadata: filepath=readme.txt
+2024-12-11 17:04:23,646 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,652 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Setting metadata for new component: id=#readme
+2024-12-11 17:04:23,660 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Over-writing metadata for component: id=#readme
+2024-12-11 17:04:23,666 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Setting metadata for new component: id=#goob
+2024-12-11 17:04:23,684 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,693 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Setting component metadata: filepath=readme.txt
+2024-12-11 17:04:23,704 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Over-writing component metadata: filepath=readme.txt
+2024-12-11 17:04:23,709 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Setting resource-level metadata
+2024-12-11 17:04:23,736 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,745 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Setting metadata for new component: id=#readme
+2024-12-11 17:04:23,755 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Over-writing metadata for component: id=#readme
+2024-12-11 17:04:23,768 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Setting metadata for new component: id=#goob
+2024-12-11 17:04:23,781 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Saving POD data
+2024-12-11 17:04:23,786 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,804 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Saving POD data
+2024-12-11 17:04:23,809 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,840 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:23,859 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1.json
+2024-12-11 17:04:23,868 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:23,893 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial2.json
+2024-12-11 17:04:23,897 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:23,924 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial3/trial3a.json
+2024-12-11 17:04:23,931 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:23,938 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial3
+2024-12-11 17:04:24,052 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:24,076 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1.json
+2024-12-11 17:04:24,080 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:24,094 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial2.json
+2024-12-11 17:04:24,117 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:24,141 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial3/trial3a.json
+2024-12-11 17:04:24,145 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:24,152 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial3
+2024-12-11 17:04:24,294 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:24,311 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new DataFile component with default metadata: trial/readme.txt
+2024-12-11 17:04:24,318 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial
+2024-12-11 17:04:24,326 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Adding annotations for trial/readme.txt
+2024-12-11 17:04:24,337 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating DataFile metadata: trial/readme.txt
+2024-12-11 17:04:24,410 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating annotations for trial/readme.txt
+2024-12-11 17:04:24,422 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating annotations for trial/readme.txt
+2024-12-11 17:04:24,431 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating annotations for trial/readme.txt
+2024-12-11 17:04:24,458 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:24,466 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new nrd:Hidden component with default metadata: #readme.txt
+2024-12-11 17:04:24,504 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:24,509 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:04:24,513 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:04:24,521 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:04:24,528 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSph20160701.m
+2024-12-11 17:04:24,535 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:04:24,543 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:04:24,550 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:04:24,567 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new DataFile component with default metadata: foo/bar.json
+2024-12-11 17:04:24,572 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: foo
+2024-12-11 17:04:24,578 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: adding file metadata for foo/bar.json
+2024-12-11 17:04:24,584 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Setting ediid: gurn
+2024-12-11 17:04:24,647 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:24,657 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Syncing metadata to new POD...
+2024-12-11 17:04:24,685 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:24,690 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating resource-level due to change in POD
+2024-12-11 17:04:24,893 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Syncing metadata to new POD...
+2024-12-11 17:04:24,910 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:24,922 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating resource-level due to change in POD
+2024-12-11 17:04:24,947 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial1.json
+2024-12-11 17:04:24,968 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial2.json
+2024-12-11 17:04:24,989 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: trial3/trial3a.json
+2024-12-11 17:04:25,004 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial3
+2024-12-11 17:04:25,010 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Updated 4 components due to POD distribution changes
+2024-12-11 17:04:25,029 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Syncing metadata to new POD...
+2024-12-11 17:04:25,044 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:25,053 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating resource-level due to change in POD
+2024-12-11 17:04:25,076 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Saving POD data
+2024-12-11 17:04:25,093 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Syncing metadata to new POD...
+2024-12-11 17:04:25,108 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:25,118 /dev/oar-pdr-py/_test152/testbag.bldr INFO: No changes detected in distributions: no components updated.
+2024-12-11 17:04:25,120 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Saving POD data
+2024-12-11 17:04:25,126 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Syncing metadata to new POD...
+2024-12-11 17:04:25,138 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:25,144 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating resource-level due to change in POD
+2024-12-11 17:04:25,162 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating DataFile metadata: trial1.json
+2024-12-11 17:04:25,167 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating DataFile metadata: trial2.json
+2024-12-11 17:04:25,172 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating DataFile metadata: trial3/trial3a.json
+2024-12-11 17:04:25,179 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Updated 4 components due to POD distribution changes
+2024-12-11 17:04:25,187 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Saving POD data
+2024-12-11 17:04:25,196 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Syncing metadata to new POD...
+2024-12-11 17:04:25,209 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:25,213 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating DataFile metadata: trial1.json
+2024-12-11 17:04:25,218 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Updated 1 components due to POD distribution changes
+2024-12-11 17:04:25,224 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Saving POD data
+2024-12-11 17:04:25,229 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Syncing metadata to new POD...
+2024-12-11 17:04:25,241 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:25,248 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Deleting component with filepath=trial1.json
+2024-12-11 17:04:25,252 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Removed component: trial1.json
+2024-12-11 17:04:25,253 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Saving POD data
+2024-12-11 17:04:25,260 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Syncing metadata to new POD...
+2024-12-11 17:04:25,271 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:25,274 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating resource-level due to change in POD
+2024-12-11 17:04:25,281 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Updated 1 components due to POD distribution changes
+2024-12-11 17:04:25,286 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Deleting component with filepath=trial2.json
+2024-12-11 17:04:25,290 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Removed component: trial2.json
+2024-12-11 17:04:25,292 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Deleting component with filepath=trial3/trial3a.json
+2024-12-11 17:04:25,304 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Removed component: trial3/trial3a.json; cleaned empty parents collections
+2024-12-11 17:04:25,305 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Saving POD data
+2024-12-11 17:04:25,325 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:25,456 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:25,467 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new DataFile component with default metadata: trial/readme.txt
+2024-12-11 17:04:25,474 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial
+2024-12-11 17:04:25,482 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating None metadata: trial/readme.txt
+2024-12-11 17:04:25,489 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating None metadata: trial/readme.txt
+2024-12-11 17:04:25,495 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating None metadata: trial/readme.txt
+2024-12-11 17:04:25,503 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating DataFile metadata: trial/readme.txt
+2024-12-11 17:04:25,584 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:25,591 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new grn:Goober component with default metadata: #readme.txt
+2024-12-11 17:04:25,605 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating non-file component: id=#readme.txt
+2024-12-11 17:04:25,613 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating non-file component: id=#readme.txt
+2024-12-11 17:04:25,630 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating non-file component: id=#readme.txt
+2024-12-11 17:04:25,651 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:25,667 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Resource component with default metadata: 
+2024-12-11 17:04:25,683 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Adding annotations for the resource-level
+2024-12-11 17:04:25,691 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating resource-level metadata: 
+2024-12-11 17:04:25,728 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:25,743 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:25,755 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:04:25,787 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:04:25,816 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:04:25,824 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSph20160701.m
+2024-12-11 17:04:25,836 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:04:25,844 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:04:25,851 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Creating new DataFile: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:04:25,894 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:25,919 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:25,935 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1.json
+2024-12-11 17:04:25,939 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:25,956 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial2.json
+2024-12-11 17:04:25,960 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:25,976 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial3/trial3a.json
+2024-12-11 17:04:25,979 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:25,985 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial3
+2024-12-11 17:04:26,049 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Created bag with name, testbag
+2024-12-11 17:04:26,055 /dev/oar-pdr-py/_test152/testbag.bldr INFO: Adding POD data and converting to NERDm
+2024-12-11 17:04:26,072 /dev/oar-pdr-py/_test152/testbag.bldr WARNING: ARK identifier not set for resource
+2024-12-11 17:04:26,076 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:04:26,096 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial1.json
+2024-12-11 17:04:26,100 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:26,112 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial2.json
+2024-12-11 17:04:26,115 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:26,130 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Added data file at trial3/trial3a.json
+2024-12-11 17:04:26,133 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: ...and updated its metadata.
+2024-12-11 17:04:26,139 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Initializing new Subcollection component with default metadata: trial3
+2024-12-11 17:04:26,529 bagit INFO: Creating bag for directory /dev/oar-pdr-py/_test152/preserv/dataset-0
+2024-12-11 17:04:26,537 bagit INFO: Creating data directory
+2024-12-11 17:04:26,540 bagit INFO: Moving 000_1000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpl67t_89m/000_1000
+2024-12-11 17:04:26,542 bagit INFO: Moving 017_1400 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpl67t_89m/017_1400
+2024-12-11 17:04:26,543 bagit INFO: Moving 019_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpl67t_89m/019_d
+2024-12-11 17:04:26,545 bagit INFO: Moving 029_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpl67t_89m/029_35000
+2024-12-11 17:04:26,546 bagit INFO: Moving 02c_0 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpl67t_89m/02c_0
+2024-12-11 17:04:26,548 bagit INFO: Moving 049_159800 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpl67t_89m/049_159800
+2024-12-11 17:04:26,550 bagit INFO: Moving 093_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpl67t_89m/093_d
+2024-12-11 17:04:26,552 bagit INFO: Moving 0b4_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpl67t_89m/0b4_35000
+2024-12-11 17:04:26,554 bagit INFO: Moving /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpl67t_89m to data
+2024-12-11 17:04:26,557 bagit INFO: Using 1 processes to generate manifests: sha256, sha512
+2024-12-11 17:04:26,559 bagit INFO: Generating manifest lines for file data/000_1000
+2024-12-11 17:04:26,561 bagit INFO: Generating manifest lines for file data/017_1400
+2024-12-11 17:04:26,563 bagit INFO: Generating manifest lines for file data/029_35000
+2024-12-11 17:04:26,566 bagit INFO: Generating manifest lines for file data/02c_0
+2024-12-11 17:04:26,568 bagit INFO: Generating manifest lines for file data/049_159800
+2024-12-11 17:04:26,572 bagit INFO: Generating manifest lines for file data/0b4_35000
+2024-12-11 17:04:26,577 bagit INFO: Generating manifest lines for file data/019_d/077_86000
+2024-12-11 17:04:26,580 bagit INFO: Generating manifest lines for file data/019_d/08b_86000
+2024-12-11 17:04:26,582 bagit INFO: Generating manifest lines for file data/019_d/0d0_86000
+2024-12-11 17:04:26,585 bagit INFO: Generating manifest lines for file data/019_d/020_d/03a_5800
+2024-12-11 17:04:26,587 bagit INFO: Generating manifest lines for file data/019_d/020_d/049_5800
+2024-12-11 17:04:26,589 bagit INFO: Generating manifest lines for file data/019_d/020_d/077_5800
+2024-12-11 17:04:26,591 bagit INFO: Generating manifest lines for file data/019_d/020_d/0ba_110000
+2024-12-11 17:04:26,595 bagit INFO: Generating manifest lines for file data/019_d/020_d/0c1_5800
+2024-12-11 17:04:26,599 bagit INFO: Generating manifest lines for file data/093_d/04f_86000
+2024-12-11 17:04:26,602 bagit INFO: Generating manifest lines for file data/093_d/0b9_86000
+2024-12-11 17:04:26,605 bagit INFO: Generating manifest lines for file data/093_d/0c1_86000
+2024-12-11 17:04:26,608 bagit INFO: Generating manifest lines for file data/093_d/0d0_d/00f_5800
+2024-12-11 17:04:26,611 bagit INFO: Generating manifest lines for file data/093_d/0d0_d/019_5800
+2024-12-11 17:04:26,613 bagit INFO: Generating manifest lines for file data/093_d/0d0_d/055_5800
+2024-12-11 17:04:26,615 bagit INFO: Generating manifest lines for file data/093_d/0d0_d/0b1_110000
+2024-12-11 17:04:26,617 bagit INFO: Generating manifest lines for file data/093_d/0d0_d/0b8_5800
+2024-12-11 17:04:26,623 bagit INFO: Creating bagit.txt
+2024-12-11 17:04:26,626 bagit INFO: Creating bag-info.txt
+2024-12-11 17:04:26,629 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:26,638 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:27,122 bagit INFO: Creating bag for directory /dev/oar-pdr-py/_test152/preserv/dataset-0
+2024-12-11 17:04:27,130 bagit INFO: Creating data directory
+2024-12-11 17:04:27,133 bagit INFO: Moving 024_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpuh040qrd/024_35000
+2024-12-11 17:04:27,135 bagit INFO: Moving 047_159800 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpuh040qrd/047_159800
+2024-12-11 17:04:27,137 bagit INFO: Moving 050_1000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpuh040qrd/050_1000
+2024-12-11 17:04:27,139 bagit INFO: Moving 06e_1400 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpuh040qrd/06e_1400
+2024-12-11 17:04:27,141 bagit INFO: Moving 08d_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpuh040qrd/08d_35000
+2024-12-11 17:04:27,143 bagit INFO: Moving 08e_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpuh040qrd/08e_d
+2024-12-11 17:04:27,144 bagit INFO: Moving 095_0 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpuh040qrd/095_0
+2024-12-11 17:04:27,146 bagit INFO: Moving 0d3_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpuh040qrd/0d3_d
+2024-12-11 17:04:27,148 bagit INFO: Moving /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpuh040qrd to data
+2024-12-11 17:04:27,151 bagit INFO: Using 1 processes to generate manifests: sha256, sha512
+2024-12-11 17:04:27,153 bagit INFO: Generating manifest lines for file data/024_35000
+2024-12-11 17:04:27,155 bagit INFO: Generating manifest lines for file data/047_159800
+2024-12-11 17:04:27,161 bagit INFO: Generating manifest lines for file data/050_1000
+2024-12-11 17:04:27,164 bagit INFO: Generating manifest lines for file data/06e_1400
+2024-12-11 17:04:27,166 bagit INFO: Generating manifest lines for file data/08d_35000
+2024-12-11 17:04:27,169 bagit INFO: Generating manifest lines for file data/095_0
+2024-12-11 17:04:27,175 bagit INFO: Generating manifest lines for file data/08e_d/01d_86000
+2024-12-11 17:04:27,180 bagit INFO: Generating manifest lines for file data/08e_d/08e_86000
+2024-12-11 17:04:27,183 bagit INFO: Generating manifest lines for file data/08e_d/0d5_86000
+2024-12-11 17:04:27,186 bagit INFO: Generating manifest lines for file data/08e_d/096_d/034_5800
+2024-12-11 17:04:27,188 bagit INFO: Generating manifest lines for file data/08e_d/096_d/04a_5800
+2024-12-11 17:04:27,191 bagit INFO: Generating manifest lines for file data/08e_d/096_d/07e_5800
+2024-12-11 17:04:27,193 bagit INFO: Generating manifest lines for file data/08e_d/096_d/083_110000
+2024-12-11 17:04:27,195 bagit INFO: Generating manifest lines for file data/08e_d/096_d/086_5800
+2024-12-11 17:04:27,198 bagit INFO: Generating manifest lines for file data/0d3_d/025_86000
+2024-12-11 17:04:27,201 bagit INFO: Generating manifest lines for file data/0d3_d/065_86000
+2024-12-11 17:04:27,204 bagit INFO: Generating manifest lines for file data/0d3_d/095_86000
+2024-12-11 17:04:27,207 bagit INFO: Generating manifest lines for file data/0d3_d/0c9_d/042_5800
+2024-12-11 17:04:27,209 bagit INFO: Generating manifest lines for file data/0d3_d/0c9_d/086_5800
+2024-12-11 17:04:27,212 bagit INFO: Generating manifest lines for file data/0d3_d/0c9_d/088_5800
+2024-12-11 17:04:27,215 bagit INFO: Generating manifest lines for file data/0d3_d/0c9_d/096_110000
+2024-12-11 17:04:27,219 bagit INFO: Generating manifest lines for file data/0d3_d/0c9_d/0b1_5800
+2024-12-11 17:04:27,225 bagit INFO: Creating bagit.txt
+2024-12-11 17:04:27,227 bagit INFO: Creating bag-info.txt
+2024-12-11 17:04:27,229 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:27,238 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:28,313 bagit INFO: Creating bag for directory /dev/oar-pdr-py/_test152/preserv/dataset-0
+2024-12-11 17:04:28,321 bagit INFO: Creating data directory
+2024-12-11 17:04:28,324 bagit INFO: Moving 017_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpksmf5r8t/017_35000
+2024-12-11 17:04:28,326 bagit INFO: Moving 040_1400 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpksmf5r8t/040_1400
+2024-12-11 17:04:28,327 bagit INFO: Moving 050_159800 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpksmf5r8t/050_159800
+2024-12-11 17:04:28,329 bagit INFO: Moving 06b_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpksmf5r8t/06b_d
+2024-12-11 17:04:28,331 bagit INFO: Moving 075_1000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpksmf5r8t/075_1000
+2024-12-11 17:04:28,333 bagit INFO: Moving 097_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpksmf5r8t/097_35000
+2024-12-11 17:04:28,335 bagit INFO: Moving 0c2_0 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpksmf5r8t/0c2_0
+2024-12-11 17:04:28,336 bagit INFO: Moving 0c2_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpksmf5r8t/0c2_d
+2024-12-11 17:04:28,338 bagit INFO: Moving /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpksmf5r8t to data
+2024-12-11 17:04:28,341 bagit INFO: Using 1 processes to generate manifests: sha256, sha512
+2024-12-11 17:04:28,343 bagit INFO: Generating manifest lines for file data/017_35000
+2024-12-11 17:04:28,346 bagit INFO: Generating manifest lines for file data/040_1400
+2024-12-11 17:04:28,349 bagit INFO: Generating manifest lines for file data/050_159800
+2024-12-11 17:04:28,352 bagit INFO: Generating manifest lines for file data/075_1000
+2024-12-11 17:04:28,355 bagit INFO: Generating manifest lines for file data/097_35000
+2024-12-11 17:04:28,418 bagit INFO: Generating manifest lines for file data/0c2_0
+2024-12-11 17:04:28,563 bagit INFO: Generating manifest lines for file data/06b_d/076_86000
+2024-12-11 17:04:28,568 bagit INFO: Generating manifest lines for file data/06b_d/089_86000
+2024-12-11 17:04:28,571 bagit INFO: Generating manifest lines for file data/06b_d/0d7_86000
+2024-12-11 17:04:28,575 bagit INFO: Generating manifest lines for file data/06b_d/013_d/028_5800
+2024-12-11 17:04:28,579 bagit INFO: Generating manifest lines for file data/06b_d/013_d/02d_5800
+2024-12-11 17:04:28,582 bagit INFO: Generating manifest lines for file data/06b_d/013_d/06e_5800
+2024-12-11 17:04:28,586 bagit INFO: Generating manifest lines for file data/06b_d/013_d/0a5_110000
+2024-12-11 17:04:28,592 bagit INFO: Generating manifest lines for file data/06b_d/013_d/0b1_5800
+2024-12-11 17:04:28,597 bagit INFO: Generating manifest lines for file data/0c2_d/025_86000
+2024-12-11 17:04:28,626 bagit INFO: Generating manifest lines for file data/0c2_d/037_86000
+2024-12-11 17:04:28,633 bagit INFO: Generating manifest lines for file data/0c2_d/04f_86000
+2024-12-11 17:04:28,636 bagit INFO: Generating manifest lines for file data/0c2_d/029_d/091_5800
+2024-12-11 17:04:28,638 bagit INFO: Generating manifest lines for file data/0c2_d/029_d/09f_5800
+2024-12-11 17:04:28,640 bagit INFO: Generating manifest lines for file data/0c2_d/029_d/0a5_110000
+2024-12-11 17:04:28,645 bagit INFO: Generating manifest lines for file data/0c2_d/029_d/0a8_5800
+2024-12-11 17:04:28,647 bagit INFO: Generating manifest lines for file data/0c2_d/029_d/0cc_5800
+2024-12-11 17:04:28,655 bagit INFO: Creating bagit.txt
+2024-12-11 17:04:28,658 bagit INFO: Creating bag-info.txt
+2024-12-11 17:04:28,661 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:28,670 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:28,854 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:28,871 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:28,916 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:28,940 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:28,998 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:29,022 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:29,067 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:29,098 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:29,359 bagit INFO: Creating bag for directory /dev/oar-pdr-py/_test152/preserv/dataset-0
+2024-12-11 17:04:29,367 bagit INFO: Creating data directory
+2024-12-11 17:04:29,370 bagit INFO: Moving 00f_1000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkpgaymps/00f_1000
+2024-12-11 17:04:29,372 bagit INFO: Moving 030_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkpgaymps/030_d
+2024-12-11 17:04:29,374 bagit INFO: Moving 045_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkpgaymps/045_35000
+2024-12-11 17:04:29,376 bagit INFO: Moving 056_159800 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkpgaymps/056_159800
+2024-12-11 17:04:29,377 bagit INFO: Moving 05e_0 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkpgaymps/05e_0
+2024-12-11 17:04:29,379 bagit INFO: Moving 083_1400 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkpgaymps/083_1400
+2024-12-11 17:04:29,380 bagit INFO: Moving 084_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkpgaymps/084_d
+2024-12-11 17:04:29,382 bagit INFO: Moving 0da_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkpgaymps/0da_35000
+2024-12-11 17:04:29,384 bagit INFO: Moving /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkpgaymps to data
+2024-12-11 17:04:29,387 bagit INFO: Using 1 processes to generate manifests: sha256, sha512
+2024-12-11 17:04:29,389 bagit INFO: Generating manifest lines for file data/00f_1000
+2024-12-11 17:04:29,391 bagit INFO: Generating manifest lines for file data/045_35000
+2024-12-11 17:04:29,394 bagit INFO: Generating manifest lines for file data/056_159800
+2024-12-11 17:04:29,398 bagit INFO: Generating manifest lines for file data/05e_0
+2024-12-11 17:04:29,401 bagit INFO: Generating manifest lines for file data/083_1400
+2024-12-11 17:04:29,403 bagit INFO: Generating manifest lines for file data/0da_35000
+2024-12-11 17:04:29,406 bagit INFO: Generating manifest lines for file data/030_d/01d_86000
+2024-12-11 17:04:29,408 bagit INFO: Generating manifest lines for file data/030_d/0a6_86000
+2024-12-11 17:04:29,410 bagit INFO: Generating manifest lines for file data/030_d/0c2_86000
+2024-12-11 17:04:29,413 bagit INFO: Generating manifest lines for file data/030_d/0a9_d/00d_5800
+2024-12-11 17:04:29,414 bagit INFO: Generating manifest lines for file data/030_d/0a9_d/01a_5800
+2024-12-11 17:04:29,416 bagit INFO: Generating manifest lines for file data/030_d/0a9_d/090_5800
+2024-12-11 17:04:29,418 bagit INFO: Generating manifest lines for file data/030_d/0a9_d/0a9_5800
+2024-12-11 17:04:29,420 bagit INFO: Generating manifest lines for file data/030_d/0a9_d/0b8_110000
+2024-12-11 17:04:29,423 bagit INFO: Generating manifest lines for file data/084_d/01b_86000
+2024-12-11 17:04:29,426 bagit INFO: Generating manifest lines for file data/084_d/074_86000
+2024-12-11 17:04:29,428 bagit INFO: Generating manifest lines for file data/084_d/0a9_86000
+2024-12-11 17:04:29,430 bagit INFO: Generating manifest lines for file data/084_d/059_d/05f_5800
+2024-12-11 17:04:29,432 bagit INFO: Generating manifest lines for file data/084_d/059_d/072_110000
+2024-12-11 17:04:29,435 bagit INFO: Generating manifest lines for file data/084_d/059_d/078_5800
+2024-12-11 17:04:29,437 bagit INFO: Generating manifest lines for file data/084_d/059_d/091_5800
+2024-12-11 17:04:29,438 bagit INFO: Generating manifest lines for file data/084_d/059_d/0a8_5800
+2024-12-11 17:04:29,445 bagit INFO: Creating bagit.txt
+2024-12-11 17:04:29,447 bagit INFO: Creating bag-info.txt
+2024-12-11 17:04:29,452 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:29,462 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:29,928 bagit INFO: Creating bag for directory /dev/oar-pdr-py/_test152/preserv/dataset-0
+2024-12-11 17:04:29,937 bagit INFO: Creating data directory
+2024-12-11 17:04:29,941 bagit INFO: Moving 001_1400 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpjdy1jm4a/001_1400
+2024-12-11 17:04:29,943 bagit INFO: Moving 006_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpjdy1jm4a/006_35000
+2024-12-11 17:04:29,945 bagit INFO: Moving 008_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpjdy1jm4a/008_35000
+2024-12-11 17:04:29,948 bagit INFO: Moving 07a_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpjdy1jm4a/07a_d
+2024-12-11 17:04:29,950 bagit INFO: Moving 0ad_0 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpjdy1jm4a/0ad_0
+2024-12-11 17:04:29,952 bagit INFO: Moving 0c5_159800 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpjdy1jm4a/0c5_159800
+2024-12-11 17:04:29,954 bagit INFO: Moving 0c6_1000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpjdy1jm4a/0c6_1000
+2024-12-11 17:04:29,956 bagit INFO: Moving 0d0_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpjdy1jm4a/0d0_d
+2024-12-11 17:04:29,957 bagit INFO: Moving /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpjdy1jm4a to data
+2024-12-11 17:04:29,960 bagit INFO: Using 1 processes to generate manifests: sha256, sha512
+2024-12-11 17:04:29,962 bagit INFO: Generating manifest lines for file data/001_1400
+2024-12-11 17:04:29,965 bagit INFO: Generating manifest lines for file data/006_35000
+2024-12-11 17:04:29,968 bagit INFO: Generating manifest lines for file data/008_35000
+2024-12-11 17:04:29,970 bagit INFO: Generating manifest lines for file data/0ad_0
+2024-12-11 17:04:29,973 bagit INFO: Generating manifest lines for file data/0c5_159800
+2024-12-11 17:04:29,978 bagit INFO: Generating manifest lines for file data/0c6_1000
+2024-12-11 17:04:29,980 bagit INFO: Generating manifest lines for file data/07a_d/033_86000
+2024-12-11 17:04:29,983 bagit INFO: Generating manifest lines for file data/07a_d/0c1_86000
+2024-12-11 17:04:29,986 bagit INFO: Generating manifest lines for file data/07a_d/0d8_86000
+2024-12-11 17:04:29,988 bagit INFO: Generating manifest lines for file data/07a_d/01b_d/02b_5800
+2024-12-11 17:04:29,991 bagit INFO: Generating manifest lines for file data/07a_d/01b_d/032_5800
+2024-12-11 17:04:29,993 bagit INFO: Generating manifest lines for file data/07a_d/01b_d/035_110000
+2024-12-11 17:04:29,996 bagit INFO: Generating manifest lines for file data/07a_d/01b_d/08b_5800
+2024-12-11 17:04:29,998 bagit INFO: Generating manifest lines for file data/07a_d/01b_d/0b1_5800
+2024-12-11 17:04:30,007 bagit INFO: Generating manifest lines for file data/0d0_d/035_86000
+2024-12-11 17:04:30,012 bagit INFO: Generating manifest lines for file data/0d0_d/072_86000
+2024-12-11 17:04:30,014 bagit INFO: Generating manifest lines for file data/0d0_d/075_86000
+2024-12-11 17:04:30,017 bagit INFO: Generating manifest lines for file data/0d0_d/08e_d/05f_5800
+2024-12-11 17:04:30,019 bagit INFO: Generating manifest lines for file data/0d0_d/08e_d/097_110000
+2024-12-11 17:04:30,022 bagit INFO: Generating manifest lines for file data/0d0_d/08e_d/097_5800
+2024-12-11 17:04:30,025 bagit INFO: Generating manifest lines for file data/0d0_d/08e_d/0a5_5800
+2024-12-11 17:04:30,027 bagit INFO: Generating manifest lines for file data/0d0_d/08e_d/0ae_5800
+2024-12-11 17:04:30,046 bagit INFO: Creating bagit.txt
+2024-12-11 17:04:30,050 bagit INFO: Creating bag-info.txt
+2024-12-11 17:04:30,055 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:30,067 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:31,140 bagit INFO: Creating bag for directory /dev/oar-pdr-py/_test152/preserv/dataset-0
+2024-12-11 17:04:31,150 bagit INFO: Creating data directory
+2024-12-11 17:04:31,164 bagit INFO: Moving 002_159800 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpa7dhd06m/002_159800
+2024-12-11 17:04:31,168 bagit INFO: Moving 02a_1000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpa7dhd06m/02a_1000
+2024-12-11 17:04:31,172 bagit INFO: Moving 042_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpa7dhd06m/042_35000
+2024-12-11 17:04:31,174 bagit INFO: Moving 04e_0 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpa7dhd06m/04e_0
+2024-12-11 17:04:31,176 bagit INFO: Moving 05b_1400 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpa7dhd06m/05b_1400
+2024-12-11 17:04:31,178 bagit INFO: Moving 061_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpa7dhd06m/061_d
+2024-12-11 17:04:31,180 bagit INFO: Moving 064_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpa7dhd06m/064_d
+2024-12-11 17:04:31,182 bagit INFO: Moving 0db_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpa7dhd06m/0db_35000
+2024-12-11 17:04:31,184 bagit INFO: Moving /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpa7dhd06m to data
+2024-12-11 17:04:31,187 bagit INFO: Using 1 processes to generate manifests: sha256, sha512
+2024-12-11 17:04:31,189 bagit INFO: Generating manifest lines for file data/002_159800
+2024-12-11 17:04:31,193 bagit INFO: Generating manifest lines for file data/02a_1000
+2024-12-11 17:04:31,195 bagit INFO: Generating manifest lines for file data/042_35000
+2024-12-11 17:04:31,198 bagit INFO: Generating manifest lines for file data/04e_0
+2024-12-11 17:04:31,200 bagit INFO: Generating manifest lines for file data/05b_1400
+2024-12-11 17:04:31,202 bagit INFO: Generating manifest lines for file data/0db_35000
+2024-12-11 17:04:31,205 bagit INFO: Generating manifest lines for file data/061_d/01a_86000
+2024-12-11 17:04:31,208 bagit INFO: Generating manifest lines for file data/061_d/0b5_86000
+2024-12-11 17:04:31,210 bagit INFO: Generating manifest lines for file data/061_d/0ce_86000
+2024-12-11 17:04:31,213 bagit INFO: Generating manifest lines for file data/061_d/05f_d/016_5800
+2024-12-11 17:04:31,214 bagit INFO: Generating manifest lines for file data/061_d/05f_d/060_5800
+2024-12-11 17:04:31,217 bagit INFO: Generating manifest lines for file data/061_d/05f_d/08e_110000
+2024-12-11 17:04:31,220 bagit INFO: Generating manifest lines for file data/061_d/05f_d/0a8_5800
+2024-12-11 17:04:31,222 bagit INFO: Generating manifest lines for file data/061_d/05f_d/0c2_5800
+2024-12-11 17:04:31,224 bagit INFO: Generating manifest lines for file data/064_d/023_86000
+2024-12-11 17:04:31,226 bagit INFO: Generating manifest lines for file data/064_d/077_86000
+2024-12-11 17:04:31,229 bagit INFO: Generating manifest lines for file data/064_d/0d2_86000
+2024-12-11 17:04:31,231 bagit INFO: Generating manifest lines for file data/064_d/099_d/02d_110000
+2024-12-11 17:04:31,234 bagit INFO: Generating manifest lines for file data/064_d/099_d/035_5800
+2024-12-11 17:04:31,236 bagit INFO: Generating manifest lines for file data/064_d/099_d/075_5800
+2024-12-11 17:04:31,237 bagit INFO: Generating manifest lines for file data/064_d/099_d/0d0_5800
+2024-12-11 17:04:31,239 bagit INFO: Generating manifest lines for file data/064_d/099_d/0d7_5800
+2024-12-11 17:04:31,245 bagit INFO: Creating bagit.txt
+2024-12-11 17:04:31,247 bagit INFO: Creating bag-info.txt
+2024-12-11 17:04:31,250 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:31,264 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:31,647 bagit INFO: Creating bag for directory /dev/oar-pdr-py/_test152/preserv/dataset-0
+2024-12-11 17:04:31,655 bagit INFO: Creating data directory
+2024-12-11 17:04:31,658 bagit INFO: Moving 00a_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmprbwih6_h/00a_d
+2024-12-11 17:04:31,659 bagit INFO: Moving 011_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmprbwih6_h/011_d
+2024-12-11 17:04:31,661 bagit INFO: Moving 012_1000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmprbwih6_h/012_1000
+2024-12-11 17:04:31,662 bagit INFO: Moving 062_1400 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmprbwih6_h/062_1400
+2024-12-11 17:04:31,665 bagit INFO: Moving 0ba_0 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmprbwih6_h/0ba_0
+2024-12-11 17:04:31,666 bagit INFO: Moving 0ce_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmprbwih6_h/0ce_35000
+2024-12-11 17:04:31,668 bagit INFO: Moving 0d0_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmprbwih6_h/0d0_35000
+2024-12-11 17:04:31,670 bagit INFO: Moving 0d6_159800 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmprbwih6_h/0d6_159800
+2024-12-11 17:04:31,671 bagit INFO: Moving /dev/oar-pdr-py/_test152/preserv/dataset-0/tmprbwih6_h to data
+2024-12-11 17:04:31,674 bagit INFO: Using 1 processes to generate manifests: sha256, sha512
+2024-12-11 17:04:31,677 bagit INFO: Generating manifest lines for file data/012_1000
+2024-12-11 17:04:31,679 bagit INFO: Generating manifest lines for file data/062_1400
+2024-12-11 17:04:31,681 bagit INFO: Generating manifest lines for file data/0ba_0
+2024-12-11 17:04:31,683 bagit INFO: Generating manifest lines for file data/0ce_35000
+2024-12-11 17:04:31,685 bagit INFO: Generating manifest lines for file data/0d0_35000
+2024-12-11 17:04:31,688 bagit INFO: Generating manifest lines for file data/0d6_159800
+2024-12-11 17:04:31,692 bagit INFO: Generating manifest lines for file data/00a_d/002_86000
+2024-12-11 17:04:31,695 bagit INFO: Generating manifest lines for file data/00a_d/08f_86000
+2024-12-11 17:04:31,697 bagit INFO: Generating manifest lines for file data/00a_d/091_86000
+2024-12-11 17:04:31,700 bagit INFO: Generating manifest lines for file data/00a_d/027_d/012_5800
+2024-12-11 17:04:31,702 bagit INFO: Generating manifest lines for file data/00a_d/027_d/075_5800
+2024-12-11 17:04:31,703 bagit INFO: Generating manifest lines for file data/00a_d/027_d/096_110000
+2024-12-11 17:04:31,706 bagit INFO: Generating manifest lines for file data/00a_d/027_d/098_5800
+2024-12-11 17:04:31,708 bagit INFO: Generating manifest lines for file data/00a_d/027_d/0c4_5800
+2024-12-11 17:04:31,711 bagit INFO: Generating manifest lines for file data/011_d/062_86000
+2024-12-11 17:04:31,713 bagit INFO: Generating manifest lines for file data/011_d/091_86000
+2024-12-11 17:04:31,717 bagit INFO: Generating manifest lines for file data/011_d/0c7_86000
+2024-12-11 17:04:31,719 bagit INFO: Generating manifest lines for file data/011_d/0a8_d/004_5800
+2024-12-11 17:04:31,721 bagit INFO: Generating manifest lines for file data/011_d/0a8_d/05f_5800
+2024-12-11 17:04:31,725 bagit INFO: Generating manifest lines for file data/011_d/0a8_d/078_110000
+2024-12-11 17:04:31,729 bagit INFO: Generating manifest lines for file data/011_d/0a8_d/098_5800
+2024-12-11 17:04:31,731 bagit INFO: Generating manifest lines for file data/011_d/0a8_d/0a3_5800
+2024-12-11 17:04:31,736 bagit INFO: Creating bagit.txt
+2024-12-11 17:04:31,738 bagit INFO: Creating bag-info.txt
+2024-12-11 17:04:31,741 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:31,749 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:32,442 bagit INFO: Verifying checksum for file bag:dataset-1/data/0d6_159800
+2024-12-11 17:04:32,450 bagit INFO: Verifying checksum for file bag:dataset-1/data/0ce_35000
+2024-12-11 17:04:32,455 bagit INFO: Verifying checksum for file bag:dataset-1/data/0d0_35000
+2024-12-11 17:04:32,489 bagit INFO: Verifying checksum for file bag:dataset-1/data/062_1400
+2024-12-11 17:04:32,492 bagit INFO: Verifying checksum for file bag:dataset-1/data/012_1000
+2024-12-11 17:04:32,495 bagit INFO: Verifying checksum for file bag:dataset-1/data/0ba_0
+2024-12-11 17:04:32,498 bagit INFO: Verifying checksum for file bag:dataset-1/data/00a_d/002_86000
+2024-12-11 17:04:32,501 bagit INFO: Verifying checksum for file bag:dataset-1/data/00a_d/027_d/012_5800
+2024-12-11 17:04:32,504 bagit INFO: Verifying checksum for file bag:dataset-1/data/00a_d/027_d/075_5800
+2024-12-11 17:04:32,506 bagit INFO: Verifying checksum for file bag:dataset-1/data/00a_d/027_d/098_5800
+2024-12-11 17:04:32,508 bagit INFO: Verifying checksum for file bag:dataset-1/data/00a_d/027_d/0c4_5800
+2024-12-11 17:04:32,510 bagit INFO: Verifying checksum for file bag:dataset-1/data/011_d/0a8_d/004_5800
+2024-12-11 17:04:32,513 bagit INFO: Verifying checksum for file bag:dataset-1/data/011_d/0a8_d/05f_5800
+2024-12-11 17:04:32,515 bagit INFO: Verifying checksum for file bag:dataset-1/data/011_d/0a8_d/098_5800
+2024-12-11 17:04:32,517 bagit INFO: Verifying checksum for file bag:dataset-1/data/011_d/0a8_d/0a3_5800
+2024-12-11 17:04:32,684 bagit INFO: Verifying checksum for file bag:dataset-2/data/00a_d/027_d/096_110000
+2024-12-11 17:04:32,688 bagit INFO: Verifying checksum for file bag:dataset-2/data/011_d/062_86000
+2024-12-11 17:04:32,692 bagit INFO: Verifying checksum for file bag:dataset-2/data/011_d/091_86000
+2024-12-11 17:04:32,695 bagit INFO: Verifying checksum for file bag:dataset-2/data/011_d/0c7_86000
+2024-12-11 17:04:32,941 bagit INFO: Verifying checksum for file bag:dataset-3/data/011_d/0a8_d/078_110000
+2024-12-11 17:04:32,944 bagit INFO: Verifying checksum for file bag:dataset-3/data/00a_d/08f_86000
+2024-12-11 17:04:32,948 bagit INFO: Verifying checksum for file bag:dataset-3/data/00a_d/091_86000
+2024-12-11 17:04:32,980 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/012_1000
+2024-12-11 17:04:32,982 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/062_1400
+2024-12-11 17:04:32,984 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/0ba_0
+2024-12-11 17:04:32,986 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/0ce_35000
+2024-12-11 17:04:32,988 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/0d0_35000
+2024-12-11 17:04:32,990 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/0d6_159800
+2024-12-11 17:04:32,992 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/002_86000
+2024-12-11 17:04:32,994 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/08f_86000
+2024-12-11 17:04:32,996 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/091_86000
+2024-12-11 17:04:32,998 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/062_86000
+2024-12-11 17:04:32,999 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/091_86000
+2024-12-11 17:04:33,002 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0c7_86000
+2024-12-11 17:04:33,004 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/027_d/012_5800
+2024-12-11 17:04:33,006 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/027_d/075_5800
+2024-12-11 17:04:33,008 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/027_d/096_110000
+2024-12-11 17:04:33,009 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/027_d/098_5800
+2024-12-11 17:04:33,011 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/027_d/0c4_5800
+2024-12-11 17:04:33,013 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0a8_d/004_5800
+2024-12-11 17:04:33,015 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0a8_d/05f_5800
+2024-12-11 17:04:33,017 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0a8_d/078_110000
+2024-12-11 17:04:33,018 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0a8_d/098_5800
+2024-12-11 17:04:33,021 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0a8_d/0a3_5800
+2024-12-11 17:04:33,075 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/012_1000
+2024-12-11 17:04:33,076 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/062_1400
+2024-12-11 17:04:33,078 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/0ba_0
+2024-12-11 17:04:33,079 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/0ce_35000
+2024-12-11 17:04:33,081 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/0d0_35000
+2024-12-11 17:04:33,083 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/0d6_159800
+2024-12-11 17:04:33,084 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/002_86000
+2024-12-11 17:04:33,086 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/08f_86000
+2024-12-11 17:04:33,088 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/091_86000
+2024-12-11 17:04:33,089 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/062_86000
+2024-12-11 17:04:33,090 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/091_86000
+2024-12-11 17:04:33,092 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0c7_86000
+2024-12-11 17:04:33,094 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/027_d/012_5800
+2024-12-11 17:04:33,098 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/027_d/075_5800
+2024-12-11 17:04:33,100 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/027_d/096_110000
+2024-12-11 17:04:33,101 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/027_d/098_5800
+2024-12-11 17:04:33,103 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/00a_d/027_d/0c4_5800
+2024-12-11 17:04:33,104 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0a8_d/004_5800
+2024-12-11 17:04:33,106 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0a8_d/05f_5800
+2024-12-11 17:04:33,107 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0a8_d/078_110000
+2024-12-11 17:04:33,109 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0a8_d/098_5800
+2024-12-11 17:04:33,110 bagit INFO: Verifying checksum for file bag:dataset-4/metadata/011_d/0a8_d/0a3_5800
+2024-12-11 17:04:33,406 bagit INFO: Creating bag for directory /dev/oar-pdr-py/_test152/preserv/dataset-0
+2024-12-11 17:04:33,414 bagit INFO: Creating data directory
+2024-12-11 17:04:33,417 bagit INFO: Moving 02e_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpvuniw5oo/02e_35000
+2024-12-11 17:04:33,419 bagit INFO: Moving 064_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpvuniw5oo/064_d
+2024-12-11 17:04:33,421 bagit INFO: Moving 08d_1000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpvuniw5oo/08d_1000
+2024-12-11 17:04:33,422 bagit INFO: Moving 0a1_159800 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpvuniw5oo/0a1_159800
+2024-12-11 17:04:33,424 bagit INFO: Moving 0a5_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpvuniw5oo/0a5_35000
+2024-12-11 17:04:33,425 bagit INFO: Moving 0a6_1400 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpvuniw5oo/0a6_1400
+2024-12-11 17:04:33,427 bagit INFO: Moving 0ad_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpvuniw5oo/0ad_d
+2024-12-11 17:04:33,429 bagit INFO: Moving 0b0_0 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpvuniw5oo/0b0_0
+2024-12-11 17:04:33,430 bagit INFO: Moving /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpvuniw5oo to data
+2024-12-11 17:04:33,433 bagit INFO: Using 1 processes to generate manifests: sha256, sha512
+2024-12-11 17:04:33,435 bagit INFO: Generating manifest lines for file data/02e_35000
+2024-12-11 17:04:33,438 bagit INFO: Generating manifest lines for file data/08d_1000
+2024-12-11 17:04:33,440 bagit INFO: Generating manifest lines for file data/0a1_159800
+2024-12-11 17:04:33,444 bagit INFO: Generating manifest lines for file data/0a5_35000
+2024-12-11 17:04:33,447 bagit INFO: Generating manifest lines for file data/0a6_1400
+2024-12-11 17:04:33,449 bagit INFO: Generating manifest lines for file data/0b0_0
+2024-12-11 17:04:33,451 bagit INFO: Generating manifest lines for file data/064_d/01c_86000
+2024-12-11 17:04:33,453 bagit INFO: Generating manifest lines for file data/064_d/034_86000
+2024-12-11 17:04:33,456 bagit INFO: Generating manifest lines for file data/064_d/04e_86000
+2024-12-11 17:04:33,459 bagit INFO: Generating manifest lines for file data/064_d/044_d/05a_5800
+2024-12-11 17:04:33,461 bagit INFO: Generating manifest lines for file data/064_d/044_d/06f_5800
+2024-12-11 17:04:33,463 bagit INFO: Generating manifest lines for file data/064_d/044_d/070_5800
+2024-12-11 17:04:33,464 bagit INFO: Generating manifest lines for file data/064_d/044_d/0a7_5800
+2024-12-11 17:04:33,466 bagit INFO: Generating manifest lines for file data/064_d/044_d/0db_110000
+2024-12-11 17:04:33,469 bagit INFO: Generating manifest lines for file data/0ad_d/07b_86000
+2024-12-11 17:04:33,472 bagit INFO: Generating manifest lines for file data/0ad_d/07d_86000
+2024-12-11 17:04:33,475 bagit INFO: Generating manifest lines for file data/0ad_d/0c4_86000
+2024-12-11 17:04:33,478 bagit INFO: Generating manifest lines for file data/0ad_d/038_d/00b_5800
+2024-12-11 17:04:33,479 bagit INFO: Generating manifest lines for file data/0ad_d/038_d/077_5800
+2024-12-11 17:04:33,481 bagit INFO: Generating manifest lines for file data/0ad_d/038_d/094_110000
+2024-12-11 17:04:33,485 bagit INFO: Generating manifest lines for file data/0ad_d/038_d/0a0_5800
+2024-12-11 17:04:33,487 bagit INFO: Generating manifest lines for file data/0ad_d/038_d/0a9_5800
+2024-12-11 17:04:33,493 bagit INFO: Creating bagit.txt
+2024-12-11 17:04:33,495 bagit INFO: Creating bag-info.txt
+2024-12-11 17:04:33,498 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:33,506 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:35,202 bagit INFO: Creating bag for directory /dev/oar-pdr-py/_test152/preserv/dataset-0
+2024-12-11 17:04:35,212 bagit INFO: Creating data directory
+2024-12-11 17:04:35,216 bagit INFO: Moving 014_0 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkolk09l1/014_0
+2024-12-11 17:04:35,218 bagit INFO: Moving 017_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkolk09l1/017_d
+2024-12-11 17:04:35,220 bagit INFO: Moving 052_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkolk09l1/052_35000
+2024-12-11 17:04:35,221 bagit INFO: Moving 06b_1400 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkolk09l1/06b_1400
+2024-12-11 17:04:35,223 bagit INFO: Moving 076_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkolk09l1/076_35000
+2024-12-11 17:04:35,225 bagit INFO: Moving 0a4_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkolk09l1/0a4_d
+2024-12-11 17:04:35,227 bagit INFO: Moving 0b0_159800 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkolk09l1/0b0_159800
+2024-12-11 17:04:35,228 bagit INFO: Moving 0b5_1000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkolk09l1/0b5_1000
+2024-12-11 17:04:35,230 bagit INFO: Moving /dev/oar-pdr-py/_test152/preserv/dataset-0/tmpkolk09l1 to data
+2024-12-11 17:04:35,234 bagit INFO: Using 1 processes to generate manifests: sha256, sha512
+2024-12-11 17:04:35,237 bagit INFO: Generating manifest lines for file data/014_0
+2024-12-11 17:04:35,239 bagit INFO: Generating manifest lines for file data/052_35000
+2024-12-11 17:04:35,243 bagit INFO: Generating manifest lines for file data/06b_1400
+2024-12-11 17:04:35,245 bagit INFO: Generating manifest lines for file data/076_35000
+2024-12-11 17:04:35,247 bagit INFO: Generating manifest lines for file data/0b0_159800
+2024-12-11 17:04:35,252 bagit INFO: Generating manifest lines for file data/0b5_1000
+2024-12-11 17:04:35,255 bagit INFO: Generating manifest lines for file data/017_d/02e_86000
+2024-12-11 17:04:35,257 bagit INFO: Generating manifest lines for file data/017_d/089_86000
+2024-12-11 17:04:35,260 bagit INFO: Generating manifest lines for file data/017_d/0a3_86000
+2024-12-11 17:04:35,263 bagit INFO: Generating manifest lines for file data/017_d/002_d/00f_5800
+2024-12-11 17:04:35,265 bagit INFO: Generating manifest lines for file data/017_d/002_d/023_110000
+2024-12-11 17:04:35,268 bagit INFO: Generating manifest lines for file data/017_d/002_d/066_5800
+2024-12-11 17:04:35,270 bagit INFO: Generating manifest lines for file data/017_d/002_d/067_5800
+2024-12-11 17:04:35,272 bagit INFO: Generating manifest lines for file data/017_d/002_d/074_5800
+2024-12-11 17:04:35,274 bagit INFO: Generating manifest lines for file data/0a4_d/082_86000
+2024-12-11 17:04:35,277 bagit INFO: Generating manifest lines for file data/0a4_d/0bb_86000
+2024-12-11 17:04:35,280 bagit INFO: Generating manifest lines for file data/0a4_d/0c0_86000
+2024-12-11 17:04:35,282 bagit INFO: Generating manifest lines for file data/0a4_d/070_d/018_110000
+2024-12-11 17:04:35,285 bagit INFO: Generating manifest lines for file data/0a4_d/070_d/025_5800
+2024-12-11 17:04:35,287 bagit INFO: Generating manifest lines for file data/0a4_d/070_d/03a_5800
+2024-12-11 17:04:35,289 bagit INFO: Generating manifest lines for file data/0a4_d/070_d/06b_5800
+2024-12-11 17:04:35,291 bagit INFO: Generating manifest lines for file data/0a4_d/070_d/0c7_5800
+2024-12-11 17:04:35,297 bagit INFO: Creating bagit.txt
+2024-12-11 17:04:35,299 bagit INFO: Creating bag-info.txt
+2024-12-11 17:04:35,302 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:35,316 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:36,423 bagit INFO: Creating bag for directory /dev/oar-pdr-py/_test152/preserv/dataset-0
+2024-12-11 17:04:36,458 bagit INFO: Creating data directory
+2024-12-11 17:04:36,469 bagit INFO: Moving 005_0 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmp3955s2kp/005_0
+2024-12-11 17:04:36,474 bagit INFO: Moving 005_1400 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmp3955s2kp/005_1400
+2024-12-11 17:04:36,477 bagit INFO: Moving 03f_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmp3955s2kp/03f_35000
+2024-12-11 17:04:36,479 bagit INFO: Moving 053_159800 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmp3955s2kp/053_159800
+2024-12-11 17:04:36,481 bagit INFO: Moving 08d_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmp3955s2kp/08d_d
+2024-12-11 17:04:36,511 bagit INFO: Moving 094_35000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmp3955s2kp/094_35000
+2024-12-11 17:04:36,551 bagit INFO: Moving 0a5_1000 to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmp3955s2kp/0a5_1000
+2024-12-11 17:04:36,558 bagit INFO: Moving 0d8_d to /dev/oar-pdr-py/_test152/preserv/dataset-0/tmp3955s2kp/0d8_d
+2024-12-11 17:04:36,560 bagit INFO: Moving /dev/oar-pdr-py/_test152/preserv/dataset-0/tmp3955s2kp to data
+2024-12-11 17:04:36,563 bagit INFO: Using 1 processes to generate manifests: sha256, sha512
+2024-12-11 17:04:36,566 bagit INFO: Generating manifest lines for file data/005_0
+2024-12-11 17:04:36,569 bagit INFO: Generating manifest lines for file data/005_1400
+2024-12-11 17:04:36,572 bagit INFO: Generating manifest lines for file data/03f_35000
+2024-12-11 17:04:36,574 bagit INFO: Generating manifest lines for file data/053_159800
+2024-12-11 17:04:36,578 bagit INFO: Generating manifest lines for file data/094_35000
+2024-12-11 17:04:36,581 bagit INFO: Generating manifest lines for file data/0a5_1000
+2024-12-11 17:04:36,586 bagit INFO: Generating manifest lines for file data/08d_d/07c_86000
+2024-12-11 17:04:36,589 bagit INFO: Generating manifest lines for file data/08d_d/0a7_86000
+2024-12-11 17:04:36,592 bagit INFO: Generating manifest lines for file data/08d_d/0b4_86000
+2024-12-11 17:04:36,595 bagit INFO: Generating manifest lines for file data/08d_d/092_d/03e_5800
+2024-12-11 17:04:36,597 bagit INFO: Generating manifest lines for file data/08d_d/092_d/065_5800
+2024-12-11 17:04:36,599 bagit INFO: Generating manifest lines for file data/08d_d/092_d/07b_5800
+2024-12-11 17:04:36,601 bagit INFO: Generating manifest lines for file data/08d_d/092_d/0d2_110000
+2024-12-11 17:04:36,604 bagit INFO: Generating manifest lines for file data/08d_d/092_d/0d6_5800
+2024-12-11 17:04:36,606 bagit INFO: Generating manifest lines for file data/0d8_d/092_86000
+2024-12-11 17:04:36,632 bagit INFO: Generating manifest lines for file data/0d8_d/09a_86000
+2024-12-11 17:04:36,635 bagit INFO: Generating manifest lines for file data/0d8_d/0bd_86000
+2024-12-11 17:04:36,638 bagit INFO: Generating manifest lines for file data/0d8_d/006_d/041_5800
+2024-12-11 17:04:36,640 bagit INFO: Generating manifest lines for file data/0d8_d/006_d/05c_5800
+2024-12-11 17:04:36,642 bagit INFO: Generating manifest lines for file data/0d8_d/006_d/067_5800
+2024-12-11 17:04:36,644 bagit INFO: Generating manifest lines for file data/0d8_d/006_d/0b0_110000
+2024-12-11 17:04:36,647 bagit INFO: Generating manifest lines for file data/0d8_d/006_d/0b3_5800
+2024-12-11 17:04:36,656 bagit INFO: Creating bagit.txt
+2024-12-11 17:04:36,676 bagit INFO: Creating bag-info.txt
+2024-12-11 17:04:36,687 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha256.txt
+2024-12-11 17:04:36,696 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset-0/tagmanifest-sha512.txt
+2024-12-11 17:04:37,929 bagit INFO: Creating bag for directory /dev/oar-pdr-py/_test152/preserv/dataset
+2024-12-11 17:04:37,940 bagit INFO: Creating data directory
+2024-12-11 17:04:37,945 bagit INFO: Moving 005_35000 to /dev/oar-pdr-py/_test152/preserv/dataset/tmpm79i3v_e/005_35000
+2024-12-11 17:04:37,969 bagit INFO: Moving 03d_d to /dev/oar-pdr-py/_test152/preserv/dataset/tmpm79i3v_e/03d_d
+2024-12-11 17:04:37,972 bagit INFO: Moving 067_0 to /dev/oar-pdr-py/_test152/preserv/dataset/tmpm79i3v_e/067_0
+2024-12-11 17:04:37,977 bagit INFO: Moving 076_1000 to /dev/oar-pdr-py/_test152/preserv/dataset/tmpm79i3v_e/076_1000
+2024-12-11 17:04:37,979 bagit INFO: Moving 07d_159800 to /dev/oar-pdr-py/_test152/preserv/dataset/tmpm79i3v_e/07d_159800
+2024-12-11 17:04:37,982 bagit INFO: Moving 08b_1400 to /dev/oar-pdr-py/_test152/preserv/dataset/tmpm79i3v_e/08b_1400
+2024-12-11 17:04:37,983 bagit INFO: Moving 08f_35000 to /dev/oar-pdr-py/_test152/preserv/dataset/tmpm79i3v_e/08f_35000
+2024-12-11 17:04:37,986 bagit INFO: Moving 0db_d to /dev/oar-pdr-py/_test152/preserv/dataset/tmpm79i3v_e/0db_d
+2024-12-11 17:04:37,988 bagit INFO: Moving /dev/oar-pdr-py/_test152/preserv/dataset/tmpm79i3v_e to data
+2024-12-11 17:04:37,991 bagit INFO: Using 1 processes to generate manifests: sha256, sha512
+2024-12-11 17:04:37,994 bagit INFO: Generating manifest lines for file data/005_35000
+2024-12-11 17:04:37,997 bagit INFO: Generating manifest lines for file data/067_0
+2024-12-11 17:04:37,999 bagit INFO: Generating manifest lines for file data/076_1000
+2024-12-11 17:04:38,006 bagit INFO: Generating manifest lines for file data/07d_159800
+2024-12-11 17:04:38,020 bagit INFO: Generating manifest lines for file data/08b_1400
+2024-12-11 17:04:38,023 bagit INFO: Generating manifest lines for file data/08f_35000
+2024-12-11 17:04:38,027 bagit INFO: Generating manifest lines for file data/03d_d/001_86000
+2024-12-11 17:04:38,030 bagit INFO: Generating manifest lines for file data/03d_d/035_86000
+2024-12-11 17:04:38,033 bagit INFO: Generating manifest lines for file data/03d_d/08b_86000
+2024-12-11 17:04:38,037 bagit INFO: Generating manifest lines for file data/03d_d/096_d/034_110000
+2024-12-11 17:04:38,042 bagit INFO: Generating manifest lines for file data/03d_d/096_d/054_5800
+2024-12-11 17:04:38,046 bagit INFO: Generating manifest lines for file data/03d_d/096_d/055_5800
+2024-12-11 17:04:38,048 bagit INFO: Generating manifest lines for file data/03d_d/096_d/085_5800
+2024-12-11 17:04:38,050 bagit INFO: Generating manifest lines for file data/03d_d/096_d/0c7_5800
+2024-12-11 17:04:38,052 bagit INFO: Generating manifest lines for file data/0db_d/03d_86000
+2024-12-11 17:04:38,054 bagit INFO: Generating manifest lines for file data/0db_d/090_86000
+2024-12-11 17:04:38,056 bagit INFO: Generating manifest lines for file data/0db_d/0ad_86000
+2024-12-11 17:04:38,060 bagit INFO: Generating manifest lines for file data/0db_d/0ca_d/036_5800
+2024-12-11 17:04:38,064 bagit INFO: Generating manifest lines for file data/0db_d/0ca_d/063_110000
+2024-12-11 17:04:38,072 bagit INFO: Generating manifest lines for file data/0db_d/0ca_d/0bc_5800
+2024-12-11 17:04:38,076 bagit INFO: Generating manifest lines for file data/0db_d/0ca_d/0cd_5800
+2024-12-11 17:04:38,083 bagit INFO: Generating manifest lines for file data/0db_d/0ca_d/0da_5800
+2024-12-11 17:04:38,088 bagit INFO: Creating bagit.txt
+2024-12-11 17:04:38,091 bagit INFO: Creating bag-info.txt
+2024-12-11 17:04:38,094 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset/tagmanifest-sha256.txt
+2024-12-11 17:04:38,105 bagit INFO: Creating /dev/oar-pdr-py/_test152/preserv/dataset/tagmanifest-sha512.txt
+2024-12-11 17:04:38,336 root INFO: serializing bag: 7z a -t7z -bsp0 /dev/oar-pdr-py/_test152/ser/badsip.7z badsip
+2024-12-11 17:04:38,462 root INFO: serializing bag: zip -qr /dev/oar-pdr-py/_test152/ser/metadatabag.zip metadatabag
+2024-12-11 17:04:38,748 root ERROR: cat exited with error (1): b'cat: goober.txt: No such file or directory'
+2024-12-11 17:04:38,759 root INFO: serializing bag: 7z a -t7z -bsp0 /dev/oar-pdr-py/_test152/ser/metadatabag.zip metadatabag
+2024-12-11 17:04:39,034 root INFO: serializing bag: 7z a -t7z -bsp0 /dev/oar-pdr-py/_test152/ser/badsip.7z badsip
+2024-12-11 17:04:39,059 root INFO: serializing bag: 7z a -t7z -bsp0 /dev/oar-pdr-py/_test152/ser/badsip.7z badsip
+2024-12-11 17:04:39,079 root INFO: serializing bag: 7z a -t7z -bsp0 /dev/oar-pdr-py/_test152/badsip.7z goob
+2024-12-11 17:04:39,088 root ERROR: 7z exited with error (1): b'WARNING: No more files\ngoob'
+2024-12-11 17:04:39,094 root INFO: serializing bag: zip -qr /dev/oar-pdr-py/_test152/ser/metadatabag.zip badsip
+2024-12-11 17:04:39,113 root INFO: serializing bag: zip -qr /dev/oar-pdr-py/_test152/ser/metadatabag.zip metadatabag
+2024-12-11 17:04:39,298 root INFO: serializing bag: zip -qr /dev/oar-pdr-py/_test152/ser/metadatabag.zip metadatabag
+2024-12-11 17:04:39,331 root INFO: serializing bag: zip -qr /dev/oar-pdr-py/_test152/ser/badsip.zip badsip
+2024-12-11 17:04:39,346 root INFO: serializing bag: zip -qr /dev/oar-pdr-py/_test152/ser/badsip.zip badsip
+2024-12-11 17:04:39,368 root INFO: configured logging for test
+2024-12-11 17:04:39,535 /dev/oar-pdr-py/_test152/testbag.bldr NORMAL: Updating resource-level metadata: 
+2024-12-11 17:04:55,767 datachecker WARNING: Trouble accessing download URL: HTTPConnectionPool(host='localhost', port=9091): Max retries exceeded with url: /od/ds/pdr2210/goob.json (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0xffff8c75a170>: Failed to establish a new connection: [Errno 111] Connection refused'))
+  (goob.json)
+2024-12-11 17:04:55,782 datachecker WARNING: Trouble accessing download URL: HTTPConnectionPool(host='localhost', port=9091): Max retries exceeded with url: /od/ds/pdr2210/goob.json (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0xffff8c758820>: Failed to establish a new connection: [Errno 111] Connection refused'))
+  (goob.json)
+2024-12-11 17:04:59,350 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:04:59,365 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:04:59,380 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:04:59,392 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Created bag with name, pdp1:goob
+2024-12-11 17:04:59,404 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: setting resource ID: ark:/88888/pdp1-0017sm
+2024-12-11 17:04:59,428 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:04:59,439 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:04:59,454 PDR.Pub.pdp0.pdp1:goob INFO: Deleting SIP bag by request
+2024-12-11 17:04:59,477 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:04:59,487 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Created bag with name, pdp1:goob
+2024-12-11 17:04:59,495 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: setting resource ID: ark:/88888/pdp1-0017sm
+2024-12-11 17:04:59,511 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:04:59,522 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:04:59,544 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:04:59,564 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:04:59,572 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:04:59,578 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:04:59,592 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:04:59,599 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:04:59,605 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:04:59,619 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:04:59,629 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:04:59,637 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:04:59,660 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:04:59,671 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:04:59,679 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:04:59,694 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:04:59,703 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:04:59,712 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:04:59,728 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:04:59,735 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:04:59,744 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:04:59,832 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:04:59,837 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Created bag with name, pdp1:goob
+2024-12-11 17:04:59,844 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: setting resource ID: ark:/88888/goober
+2024-12-11 17:04:59,858 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:04:59,864 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:04:59,890 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:04:59,899 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Created bag with name, pdp1:goob
+2024-12-11 17:04:59,906 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: setting resource ID: ark:/88888/pdp1-0017sm
+2024-12-11 17:04:59,919 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:04:59,925 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:04:59,939 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Setting DOI to doi:10.22222/pdp1-0017sm
+2024-12-11 17:04:59,966 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:04:59,976 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Created bag with name, pdp1:goob
+2024-12-11 17:04:59,983 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: setting resource ID: ark:/88888/pdp1-0017sm
+2024-12-11 17:05:00,002 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:00,009 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:00,015 PDR.Pub.pdp0.pdp1:goob INFO: Refreshing previously established working bag
+2024-12-11 17:05:00,024 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Setting DOI to doi:10.22222/pdp1-0017sm
+2024-12-11 17:05:00,062 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:00,066 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Created bag with name, pdp1:goob
+2024-12-11 17:05:00,073 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: setting resource ID: ark:/88888/pdp1-0017sm
+2024-12-11 17:05:00,088 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:00,096 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:00,200 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:00,212 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Created bag with name, pdp1:goob
+2024-12-11 17:05:00,220 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: setting resource ID: ark:/88888/pdp1-0017sm
+2024-12-11 17:05:00,240 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:00,250 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:00,270 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:00,289 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Creating new non-file component: id=components/201706
+2024-12-11 17:05:00,305 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Creating new non-file component: id=components/201803
+2024-12-11 17:05:00,342 PDR.Pub.pdp0.pdp1:goob INFO: finalized version already set as v1.0.0
+2024-12-11 17:05:00,346 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Setting version to 1.0.0
+2024-12-11 17:05:00,357 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: finalize: remove SIP submission types
+2024-12-11 17:05:00,364 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Setting DOI to doi:10.22222/pdp1-0017sm
+2024-12-11 17:05:00,367 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Merging in annotations into all metdata
+2024-12-11 17:05:00,410 PDR.Pub.pdp0.pdp1:goob.bldr ERROR: Implementation of Bag finalization is not complete!
+2024-12-11 17:05:00,411 PDR.Pub.pdp0.pdp1:goob.bldr INFO: Bag does not include PREMIS and ORE files
+2024-12-11 17:05:00,471 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:00,480 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Created bag with name, pdp1:goob
+2024-12-11 17:05:00,490 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: setting resource ID: ark:/88888/pdp1-0017sm
+2024-12-11 17:05:00,506 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:00,515 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:00,533 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:00,556 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:00,566 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:00,575 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:00,595 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:00,605 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:00,612 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:00,628 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:00,637 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:00,646 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:00,662 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:00,672 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:00,679 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:00,696 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:00,703 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:00,710 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:00,727 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:00,736 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:00,743 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:00,760 PDR.Pub.pdp0.pdp1:goob INFO: finalized version already set as v1.0.0
+2024-12-11 17:05:00,764 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Setting version to 1.0.0
+2024-12-11 17:05:00,792 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:00,809 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:00,814 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:00,819 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:00,825 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:00,831 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSph20160701.m
+2024-12-11 17:05:00,839 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:00,847 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:00,857 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:00,867 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:00,882 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:00,888 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:00,894 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:00,907 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:00,914 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:00,920 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:00,932 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:00,939 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:00,945 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:00,959 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:00,967 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:00,979 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:00,998 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,008 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,018 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,042 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Setting version to 1.0.3
+2024-12-11 17:05:01,070 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:01,086 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,091 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,096 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,102 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,109 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSph20160701.m
+2024-12-11 17:05:01,115 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,126 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,138 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,148 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,168 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,179 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,185 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,198 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,204 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,210 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,223 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:01,229 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:01,235 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:01,248 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,255 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,261 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,278 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,289 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,296 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,317 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Setting version to 1.1.0
+2024-12-11 17:05:01,347 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:01,362 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,367 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,370 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,374 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,379 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSph20160701.m
+2024-12-11 17:05:01,384 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,392 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,403 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,410 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,423 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,430 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,437 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,455 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,462 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,468 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,482 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:01,490 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:01,498 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:01,516 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,523 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,533 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,552 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,562 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,571 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,588 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Setting version to 2.0.0
+2024-12-11 17:05:01,621 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:01,637 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,642 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,650 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,656 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,662 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSph20160701.m
+2024-12-11 17:05:01,674 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,682 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,690 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,698 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,716 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,728 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,745 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,760 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,768 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,774 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,788 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:01,795 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:01,801 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:01,815 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,821 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,828 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,841 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,848 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,854 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,873 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Setting version to 1.0.2.1
+2024-12-11 17:05:01,902 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:01,921 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:01,927 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:01,934 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,940 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:01,946 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSph20160701.m
+2024-12-11 17:05:01,951 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:01,960 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,968 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,976 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:01,996 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:02,007 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:02,015 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:02,031 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:02,037 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:02,044 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:02,057 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:02,066 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:02,074 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:02,089 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:02,095 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:02,102 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:02,114 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:02,121 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:02,127 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:02,145 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Setting version to 1.0.3
+2024-12-11 17:05:02,218 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:02,284 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:02,296 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Created bag with name, pdp1:goob
+2024-12-11 17:05:02,303 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: setting resource ID: ark:/88888/pdp1-0017sm
+2024-12-11 17:05:02,319 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:02,326 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:02,337 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:02,355 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:02,363 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:02,372 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:02,386 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:02,392 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:02,400 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:02,412 PDR.Pub.pdp0.pdp1:goob WARNING: Bag left in possible incomplete state due to error: ("Does not include a supported component type: ['nrd:Hidden', 'dcat:Distribution']", None, <nistoar.pdr.publish.PublishSystem object at 0xffff8d9ebbe0>)
+2024-12-11 17:05:02,426 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:02,443 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:02,448 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:02,457 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:02,465 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:02,473 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:02,493 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:02,505 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:02,514 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:02,532 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:02,549 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:02,559 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:02,573 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:02,580 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:02,587 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:02,600 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:02,607 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:02,613 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:02,626 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:02,633 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:02,639 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:02,676 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:02,695 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_README.txt
+2024-12-11 17:05:02,703 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_README.txt
+2024-12-11 17:05:02,710 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_README.txt
+2024-12-11 17:05:02,773 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:02,782 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Created bag with name, pdp1:goob
+2024-12-11 17:05:02,789 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: setting resource ID: ark:/88888/pdp1-0017sm
+2024-12-11 17:05:02,803 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:02,811 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:02,820 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_README.txt
+2024-12-11 17:05:02,827 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: adding file metadata for 1491_README.txt
+2024-12-11 17:05:02,833 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Updating DataFile metadata: 1491_README.txt
+2024-12-11 17:05:02,872 PDR.Pub.pdp0.pdp1:goob WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:02,882 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Created bag with name, pdp1:goob
+2024-12-11 17:05:02,889 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: setting resource ID: ark:/88888/pdp1-0017sm
+2024-12-11 17:05:02,901 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:02,908 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:02,916 PDR.Pub.pdp0.pdp1:goob.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:03,973 PDR.Pub.pdp0.mds2:8888.prepper INFO: ID not published previously; will start afresh
+2024-12-11 17:05:03,980 PDR.Pub.pdp0.mds2:8888.bldr NORMAL: Created bag with name, mds2:8888
+2024-12-11 17:05:03,989 PDR.Pub.pdp0.mds2:8888.bldr NORMAL: setting resource ID: ark:/88434/mds2-8888
+2024-12-11 17:05:04,012 PDR.Pub.pdp0.mds2:8888.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:04,022 PDR.Pub.pdp0.mds2:8888.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:04,342 PDR.Pub.pdp0.mds2:7223.prepper INFO: Preparing update based on previous head preservation bag (mds2-7223.1_1_0.mbag0_4-1.zip)
+2024-12-11 17:05:04,469 PDR.Pub.pdp0.mds2:7223.prepper.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:04,472 PDR.Pub.pdp0.mds2:7223.prepper.bldr NORMAL: Updating ChecksumFile metadata: res-md.xsd.sha256
+2024-12-11 17:05:04,479 PDR.Pub.pdp0.mds2:7223.prepper.bldr NORMAL: Updating DataFile metadata: res-md.xsd
+2024-12-11 17:05:04,484 PDR.Pub.pdp0.mds2:7223.prepper.bldr NORMAL: Updating ChecksumFile metadata: RegistryFederationFigure.pptx.sha256
+2024-12-11 17:05:04,491 PDR.Pub.pdp0.mds2:7223.prepper.bldr NORMAL: Updating DataFile metadata: RegistryFederationFigure.pptx
+2024-12-11 17:05:04,508 PDR.Pub.pdp0.mds2:7223.prepper.bldr NORMAL: updating version while prepping for publication update
+2024-12-11 17:05:04,512 PDR.Pub.pdp0.mds2:7223 INFO: Working bag initialized with metadata from previous publication.
+2024-12-11 17:05:04,519 PDR.Pub.pdp0.mds2:7223.bldr NORMAL: locking convention metadata as annotations
+2024-12-11 17:05:04,601 PDR.Pub.pdp0.mds2:2106.prepper INFO: No previous bag available; preparing based on existing published NERDm record
+2024-12-11 17:05:04,615 PDR.Pub.pdp0.mds2:2106.prepper.bldr NORMAL: Created bag with name, mds2:2106
+2024-12-11 17:05:04,623 PDR.Pub.pdp0.mds2:2106.prepper.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:04,629 PDR.Pub.pdp0.mds2:2106.prepper.bldr NORMAL: Creating new DataFile: NIST_NPL_InterlabData2019.csv
+2024-12-11 17:05:04,643 PDR.Pub.pdp0.mds2:2106.prepper.bldr NORMAL: Creating new ChecksumFile: Readme.txt.sha256
+2024-12-11 17:05:04,657 PDR.Pub.pdp0.mds2:2106.prepper.bldr NORMAL: Creating new DataFile: Readme.txt
+2024-12-11 17:05:04,670 PDR.Pub.pdp0.mds2:2106.prepper.bldr NORMAL: Creating new ChecksumFile: NIST_NPL_InterlabData2019.csv.sha256
+2024-12-11 17:05:04,695 PDR.Pub.pdp0.mds2:2106.prepper.bldr NORMAL: updating version while prepping for publication update
+2024-12-11 17:05:04,698 PDR.Pub.pdp0.mds2:2106 INFO: Working bag initialized with metadata from previous publication.
+2024-12-11 17:05:04,705 PDR.Pub.pdp0.mds2:2106.bldr NORMAL: locking convention metadata as annotations
+2024-12-11 17:05:06,588 PDR.Pub.ABCDEFG.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:06,592 PDR.Pub.ABCDEFG.bldr NORMAL: Updating DataFile metadata: trial3/trial3a.json
+2024-12-11 17:05:06,598 PDR.Pub.ABCDEFG.bldr NORMAL: Updating Subcollection metadata: trial3
+2024-12-11 17:05:06,636 PDR.Pub.ABCDEFG.bldr NORMAL: Updating DataFile metadata: trial2.json
+2024-12-11 17:05:06,642 PDR.Pub.ABCDEFG.bldr NORMAL: Updating DataFile metadata: trial1.json
+2024-12-11 17:05:06,657 PDR.Pub.ABCDEFG.bldr NORMAL: updating version while prepping for publication update
+2024-12-11 17:05:06,826 PDR.Pub.ABCDEFG.bldr NORMAL: Created bag with name, goober
+2024-12-11 17:05:06,836 PDR.Pub.ABCDEFG.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:06,846 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: cryolite/srd13_Al-055.json
+2024-12-11 17:05:06,855 PDR.Pub.ABCDEFG.bldr NORMAL: Initializing new Subcollection component with default metadata: cryolite
+2024-12-11 17:05:06,865 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: cryolite/srd13_Al-054.json
+2024-12-11 17:05:06,877 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: cryolite/srd13_Al-053.json
+2024-12-11 17:05:06,887 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: cryolite/srd13_Al-052.json
+2024-12-11 17:05:06,897 PDR.Pub.ABCDEFG.bldr NORMAL: Updating Subcollection metadata: cryolite
+2024-12-11 17:05:06,904 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: srd13_janaf.species.json
+2024-12-11 17:05:06,912 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: srd13_B-113.json
+2024-12-11 17:05:06,926 PDR.Pub.ABCDEFG.bldr NORMAL: updating version while prepping for publication update
+2024-12-11 17:05:07,044 PDR.Pub.ABCDEFG INFO: Preparing update based on previous head preservation bag (ABCDEFG.2.mbag0_4-4.zip)
+2024-12-11 17:05:07,150 PDR.Pub.ABCDEFG.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:07,152 PDR.Pub.ABCDEFG.bldr NORMAL: Updating DataFile metadata: trial3/trial3a.json
+2024-12-11 17:05:07,158 PDR.Pub.ABCDEFG.bldr NORMAL: Updating Subcollection metadata: trial3
+2024-12-11 17:05:07,163 PDR.Pub.ABCDEFG.bldr NORMAL: Updating DataFile metadata: trial2.json
+2024-12-11 17:05:07,167 PDR.Pub.ABCDEFG.bldr NORMAL: Updating DataFile metadata: trial1.json
+2024-12-11 17:05:07,178 PDR.Pub.ABCDEFG.bldr NORMAL: updating version while prepping for publication update
+2024-12-11 17:05:07,197 PDR.Pub.ABCDEFG INFO: No previous bag available; preparing based on existing published NERDm record
+2024-12-11 17:05:07,205 PDR.Pub.ABCDEFG.bldr NORMAL: Created bag with name, ABCDEFG
+2024-12-11 17:05:07,212 PDR.Pub.ABCDEFG.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:07,219 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: cryolite/srd13_Al-055.json
+2024-12-11 17:05:07,229 PDR.Pub.ABCDEFG.bldr NORMAL: Initializing new Subcollection component with default metadata: cryolite
+2024-12-11 17:05:07,247 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: cryolite/srd13_Al-054.json
+2024-12-11 17:05:07,260 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: cryolite/srd13_Al-053.json
+2024-12-11 17:05:07,273 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: cryolite/srd13_Al-052.json
+2024-12-11 17:05:07,284 PDR.Pub.ABCDEFG.bldr NORMAL: Updating Subcollection metadata: cryolite
+2024-12-11 17:05:07,293 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: srd13_janaf.species.json
+2024-12-11 17:05:07,303 PDR.Pub.ABCDEFG.bldr NORMAL: Creating new DataFile: srd13_B-113.json
+2024-12-11 17:05:07,324 PDR.Pub.ABCDEFG.bldr NORMAL: updating version while prepping for publication update
+2024-12-11 17:05:07,493 PDR.Pub.pdr2210 INFO: Preparing update based on previous head preservation bag (pdr2210.3_1_3.mbag0_3-5.zip)
+2024-12-11 17:05:07,605 PDR.Pub.pdr2210.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:07,609 PDR.Pub.pdr2210.bldr NORMAL: Updating DataFile metadata: trial3/trial3a.json
+2024-12-11 17:05:07,614 PDR.Pub.pdr2210.bldr NORMAL: Updating Subcollection metadata: trial3
+2024-12-11 17:05:07,620 PDR.Pub.pdr2210.bldr NORMAL: Updating DataFile metadata: trial2.json
+2024-12-11 17:05:07,626 PDR.Pub.pdr2210.bldr NORMAL: Updating DataFile metadata: trial1.json
+2024-12-11 17:05:07,643 PDR.Pub.pdr2210.bldr NORMAL: updating version while prepping for publication update
+2024-12-11 17:05:08,538 PDR.Pub.goober INFO: ID not published previously; will start afresh
+2024-12-11 17:05:08,655 PDR.Pub.ABCDEFG INFO: Preparing update based on previous head preservation bag (ABCDEFG.2.mbag0_4-4.zip)
+2024-12-11 17:05:08,797 PDR.Pub.ABCDEFG.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:08,800 PDR.Pub.ABCDEFG.bldr NORMAL: Updating DataFile metadata: trial3/trial3a.json
+2024-12-11 17:05:08,806 PDR.Pub.ABCDEFG.bldr NORMAL: Updating Subcollection metadata: trial3
+2024-12-11 17:05:08,812 PDR.Pub.ABCDEFG.bldr NORMAL: Updating DataFile metadata: trial2.json
+2024-12-11 17:05:08,818 PDR.Pub.ABCDEFG.bldr NORMAL: Updating DataFile metadata: trial1.json
+2024-12-11 17:05:08,836 PDR.Pub.ABCDEFG.bldr NORMAL: updating version while prepping for publication update
+2024-12-11 17:05:08,851 PDR.Pub.ABCDEFG INFO: Updating multibag info from previous head preservation bag (ABCDEFG.2.mbag0_4-4.zip)
+2024-12-11 17:05:14,144 PDR.Pub.ncnr0.ncnr0:hello WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:14,145 PDR.Pub.ncnr0.ncnr0:hello INFO: Deleting SIP bag by request
+2024-12-11 17:05:14,171 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Created bag with name, ncnr0:hello
+2024-12-11 17:05:14,180 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: setting resource ID: ark:/88434/ncnr0-hellopk
+2024-12-11 17:05:14,199 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:14,206 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:14,211 PDR.Pub.ncnr0.ncnr0:hello INFO: Refreshing previously established working bag
+2024-12-11 17:05:14,220 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Setting DOI to doi:10.18434/ncnr0-hellopk
+2024-12-11 17:05:14,231 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:14,250 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Creating new non-file component: id=components/201706
+2024-12-11 17:05:14,267 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Creating new non-file component: id=components/201803
+2024-12-11 17:05:14,319 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:14,346 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Creating new non-file component: id=components/201706
+2024-12-11 17:05:14,366 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Creating new non-file component: id=components/201803
+2024-12-11 17:05:14,389 Pub.pdp0 WARNING: No handler configured for SIP shoulder=ark
+2024-12-11 17:05:14,396 PDR.Pub.ncnr0.ncnr0-0021 WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:14,397 PDR.Pub.ncnr0.ncnr0-0021 INFO: Deleting SIP bag by request
+2024-12-11 17:05:14,412 PDR.Pub.ncnr0.ncnr0-0021.bldr NORMAL: Created bag with name, ncnr0-0021
+2024-12-11 17:05:14,422 PDR.Pub.ncnr0.ncnr0-0021.bldr NORMAL: setting resource ID: ark:/88434/ncnr0-0021sh
+2024-12-11 17:05:14,438 PDR.Pub.ncnr0.ncnr0-0021.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:14,446 PDR.Pub.ncnr0.ncnr0-0021.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:14,452 PDR.Pub.ncnr0.ncnr0-0021 INFO: Refreshing previously established working bag
+2024-12-11 17:05:14,461 PDR.Pub.ncnr0.ncnr0-0021.bldr NORMAL: Setting DOI to doi:10.18434/ncnr0-0021sh
+2024-12-11 17:05:14,473 PDR.Pub.ncnr0.ncnr0-0021.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:14,495 PDR.Pub.ncnr0.ncnr0-0021.bldr NORMAL: Creating new non-file component: id=components/201706
+2024-12-11 17:05:14,515 PDR.Pub.ncnr0.ncnr0-0021.bldr NORMAL: Creating new non-file component: id=components/201803
+2024-12-11 17:05:14,570 PDR.Pub.pdp0.pdp0-0017 WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:14,570 PDR.Pub.pdp0.pdp0-0017 INFO: Deleting SIP bag by request
+2024-12-11 17:05:14,588 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Created bag with name, pdp0-0017
+2024-12-11 17:05:14,599 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: setting resource ID: ark:/88434/pdp0-0017sg
+2024-12-11 17:05:14,615 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:14,622 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:14,627 PDR.Pub.pdp0.pdp0-0017 INFO: Refreshing previously established working bag
+2024-12-11 17:05:14,636 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Setting DOI to doi:10.18434/pdp0-0017sg
+2024-12-11 17:05:14,648 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:14,668 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:14,678 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:14,688 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:14,811 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:14,820 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:14,828 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:14,852 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:14,876 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:14,885 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:14,893 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:14,909 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:14,918 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:14,930 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:14,949 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:14,968 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:14,981 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:15,001 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:15,009 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:15,017 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:15,075 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:15,090 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:15,095 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Removed component: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:15,100 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:15,105 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:15,111 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Removed component: 1491_optSortSph20160701.m
+2024-12-11 17:05:15,116 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:15,126 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:15,135 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:15,144 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:15,162 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:15,172 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:15,181 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:15,194 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:15,210 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:15,219 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:15,227 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:15,243 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:15,250 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:15,261 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:15,277 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:15,285 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:15,291 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:15,305 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:15,313 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:15,322 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:15,368 PDR.Pub.pdp0.pdp0-0018 WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:15,369 PDR.Pub.pdp0.pdp0-0018 INFO: Deleting SIP bag by request
+2024-12-11 17:05:15,385 PDR.Pub.pdp0.pdp0-0018.bldr NORMAL: Created bag with name, pdp0-0018
+2024-12-11 17:05:15,392 PDR.Pub.pdp0.pdp0-0018.bldr NORMAL: setting resource ID: ark:/88434/pdp0-0018s0
+2024-12-11 17:05:15,411 PDR.Pub.pdp0.pdp0-0018.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:15,417 PDR.Pub.pdp0.pdp0-0018.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:15,422 PDR.Pub.pdp0.pdp0-0018 INFO: Refreshing previously established working bag
+2024-12-11 17:05:15,430 PDR.Pub.pdp0.pdp0-0018.bldr NORMAL: Setting DOI to doi:10.18434/pdp0-0018s0
+2024-12-11 17:05:15,441 PDR.Pub.pdp0.pdp0-0018.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:15,586 PDR.Pub.ncnr0.ncnr0:hello WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:15,587 PDR.Pub.ncnr0.ncnr0:hello INFO: Deleting SIP bag by request
+2024-12-11 17:05:15,601 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Created bag with name, ncnr0:hello
+2024-12-11 17:05:15,608 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: setting resource ID: ark:/88434/ncnr0-hellopk
+2024-12-11 17:05:15,627 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:15,634 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:15,638 PDR.Pub.ncnr0.ncnr0:hello INFO: Refreshing previously established working bag
+2024-12-11 17:05:15,646 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Setting DOI to doi:10.18434/ncnr0-hellopk
+2024-12-11 17:05:15,657 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:15,696 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:15,706 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:15,712 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:15,728 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:15,736 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:15,742 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:15,758 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:15,775 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:15,782 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:15,789 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:15,805 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:15,835 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:15,845 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:15,864 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:15,872 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:15,878 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:15,892 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:15,904 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:15,917 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:15,968 PDR.Pub.ncnr0.ncnr0:hello INFO: Deleting SIP bag by request by ncnr_client/tester
+2024-12-11 17:05:16,033 PDR.Pub.ncnr0.ncnr0:hello WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:16,034 PDR.Pub.ncnr0.ncnr0:hello INFO: Deleting SIP bag by request
+2024-12-11 17:05:16,052 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Created bag with name, ncnr0:hello
+2024-12-11 17:05:16,061 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: setting resource ID: ark:/88434/ncnr0-hellopk
+2024-12-11 17:05:16,078 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:16,084 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:16,089 PDR.Pub.ncnr0.ncnr0:hello INFO: Refreshing previously established working bag
+2024-12-11 17:05:16,098 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Setting DOI to doi:10.18434/ncnr0-hellopk
+2024-12-11 17:05:16,110 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:16,128 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:16,136 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:16,143 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:16,159 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:16,166 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:16,172 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:16,186 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:16,206 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:16,215 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:16,223 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:16,238 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:16,245 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:16,251 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:16,268 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:16,277 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:16,284 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:16,301 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:16,313 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:16,319 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:16,482 PDR.Pub.ncnr0.ncnr0:hello WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:16,483 PDR.Pub.ncnr0.ncnr0:hello INFO: Deleting SIP bag by request
+2024-12-11 17:05:16,496 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Created bag with name, ncnr0:hello
+2024-12-11 17:05:16,505 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: setting resource ID: ark:/88434/ncnr0-hellopk
+2024-12-11 17:05:16,523 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:16,532 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:16,539 PDR.Pub.ncnr0.ncnr0:hello INFO: Refreshing previously established working bag
+2024-12-11 17:05:16,551 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Setting DOI to doi:10.18434/ncnr0-hellopk
+2024-12-11 17:05:16,565 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:16,584 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:16,592 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:16,598 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:16,611 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:16,622 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:16,632 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:16,652 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:16,674 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:16,682 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:16,690 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:16,704 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:16,711 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:16,717 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:16,742 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:16,749 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:16,756 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:16,771 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:16,778 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:16,784 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:16,951 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Setting version to 1.0.0
+2024-12-11 17:05:16,962 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: finalize: remove SIP submission types
+2024-12-11 17:05:16,967 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Merging in annotations into all metdata
+2024-12-11 17:05:17,028 PDR.Pub.ncnr0.ncnr0:hello.bldr ERROR: Implementation of Bag finalization is not complete!
+2024-12-11 17:05:17,030 PDR.Pub.ncnr0.ncnr0:hello.bldr INFO: Bag does not include PREMIS and ORE files
+2024-12-11 17:05:17,071 Pub.pdp0 INFO: SIP ncnr0:hello is already finalized (skipping)
+2024-12-11 17:05:17,124 PDR.Pub.pdp0.pdp0-0017sg WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:17,128 PDR.Pub.ncnr0.ncnr0:hello WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:17,154 Pub.pdp0 WARNING: No handler configured for SIP shoulder=mds2
+2024-12-11 17:05:17,232 PDR.Pub.ncnr0.ncnr0:hello WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:17,233 PDR.Pub.ncnr0.ncnr0:hello INFO: Deleting SIP bag by request
+2024-12-11 17:05:17,251 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Created bag with name, ncnr0:hello
+2024-12-11 17:05:17,260 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: setting resource ID: ark:/88434/ncnr0-hellopk
+2024-12-11 17:05:17,277 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:17,284 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:17,289 PDR.Pub.ncnr0.ncnr0:hello INFO: Refreshing previously established working bag
+2024-12-11 17:05:17,298 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Setting DOI to doi:10.18434/ncnr0-hellopk
+2024-12-11 17:05:17,309 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:17,328 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:17,335 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:17,342 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:17,358 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:17,366 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:17,372 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:17,387 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:17,403 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:17,411 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:17,418 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:17,433 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:17,442 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:17,451 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:17,472 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:17,479 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:17,487 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:17,502 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:17,510 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:17,520 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:17,569 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Setting version to 1.0.0
+2024-12-11 17:05:17,580 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: finalize: remove SIP submission types
+2024-12-11 17:05:17,584 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Merging in annotations into all metdata
+2024-12-11 17:05:17,640 PDR.Pub.ncnr0.ncnr0:hello.bldr ERROR: Implementation of Bag finalization is not complete!
+2024-12-11 17:05:17,641 PDR.Pub.ncnr0.ncnr0:hello.bldr INFO: Bag does not include PREMIS and ORE files
+2024-12-11 17:05:17,668 PDR.Pub.ncnr0.ncnr0:hello INFO: Deleting SIP bag by request by ncnr_client/tester
+2024-12-11 17:05:17,741 PDR.Pub.ncnr0.ncnr0:hello WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:17,742 PDR.Pub.ncnr0.ncnr0:hello INFO: Deleting SIP bag by request
+2024-12-11 17:05:17,763 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Created bag with name, ncnr0:hello
+2024-12-11 17:05:17,771 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: setting resource ID: ark:/88434/ncnr0-hellopk
+2024-12-11 17:05:17,788 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:17,796 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:17,801 PDR.Pub.ncnr0.ncnr0:hello INFO: Refreshing previously established working bag
+2024-12-11 17:05:17,815 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Setting DOI to doi:10.18434/ncnr0-hellopk
+2024-12-11 17:05:17,829 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:17,852 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:17,863 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:17,873 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:17,894 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:17,902 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:17,909 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:17,930 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:17,956 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:17,968 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:17,973 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:17,986 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:17,994 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:18,002 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:18,016 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:18,023 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:18,033 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:18,052 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:18,061 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:18,070 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:18,121 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:18,143 PDR.Pub.ncnr0.ncnr0:hello.bldr NORMAL: Removing non-file component, id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:18,267 PDR.Pub.pdp0.pdp0-0017 WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:18,268 PDR.Pub.pdp0.pdp0-0017 INFO: Deleting SIP bag by request
+2024-12-11 17:05:18,280 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Created bag with name, pdp0-0017
+2024-12-11 17:05:18,288 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: setting resource ID: ark:/88434/pdp0-0017sg
+2024-12-11 17:05:18,317 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:18,330 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:18,335 PDR.Pub.pdp0.pdp0-0017 INFO: Refreshing previously established working bag
+2024-12-11 17:05:18,344 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Setting DOI to doi:10.18434/pdp0-0017sg
+2024-12-11 17:05:18,356 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:18,393 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:18,401 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:18,407 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:18,437 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:18,473 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:18,483 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:18,490 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:18,557 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:18,600 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:18,996 PDR.Pub.pdp0.pdp0-0017 WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:18,998 PDR.Pub.pdp0.pdp0-0017 INFO: Deleting SIP bag by request
+2024-12-11 17:05:19,013 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Created bag with name, pdp0-0017
+2024-12-11 17:05:19,021 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: setting resource ID: ark:/88434/pdp0-0017sg
+2024-12-11 17:05:19,037 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:19,045 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:19,059 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:19,079 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:19,089 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:19,096 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:19,110 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:19,117 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:19,123 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:19,137 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:19,153 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:19,162 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:19,170 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:19,185 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:19,193 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:19,200 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:19,214 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:19,221 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:19,229 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:19,243 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:19,251 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:19,263 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:19,298 PDR.Pub.pdp0.pdp0-0017 INFO: finalized version already set as v1.0.0
+2024-12-11 17:05:19,302 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Setting version to 1.0.0
+2024-12-11 17:05:19,316 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: finalize: remove SIP submission types
+2024-12-11 17:05:19,324 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Merging in annotations into all metdata
+2024-12-11 17:05:19,391 PDR.Pub.pdp0.pdp0-0017.bldr ERROR: Implementation of Bag finalization is not complete!
+2024-12-11 17:05:19,394 PDR.Pub.pdp0.pdp0-0017.bldr INFO: Bag does not include PREMIS and ORE files
+2024-12-11 17:05:19,533 PDR.Pub.pdp0.pdp0-0017 WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:19,534 PDR.Pub.pdp0.pdp0-0017 INFO: Deleting SIP bag by request
+2024-12-11 17:05:19,550 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Created bag with name, pdp0-0017
+2024-12-11 17:05:19,558 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: setting resource ID: ark:/88434/pdp0-0017sg
+2024-12-11 17:05:19,572 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:19,579 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:19,592 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:19,612 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:19,622 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:19,628 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:19,642 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:19,651 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:19,659 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:19,676 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:19,692 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:19,700 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:19,709 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:19,726 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:19,735 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:19,742 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:19,756 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:19,763 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:19,770 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:19,787 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:19,795 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:19,804 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:19,833 PDR.Pub.pdp0.pdp0-0017 INFO: finalized version already set as v1.0.0
+2024-12-11 17:05:19,836 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Setting version to 1.0.0
+2024-12-11 17:05:19,847 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: finalize: remove SIP submission types
+2024-12-11 17:05:19,854 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Merging in annotations into all metdata
+2024-12-11 17:05:19,907 PDR.Pub.pdp0.pdp0-0017.bldr ERROR: Implementation of Bag finalization is not complete!
+2024-12-11 17:05:19,909 PDR.Pub.pdp0.pdp0-0017.bldr INFO: Bag does not include PREMIS and ORE files
+2024-12-11 17:05:19,944 Pub.pdp0 INFO: SIP pdp0-0017 is already finalized (skipping)
+2024-12-11 17:05:19,949 PDR.Pub.pdp0.pdp0-0017 INFO: Deleting SIP bag by request by test/tester
+2024-12-11 17:05:20,018 PDR.Pub.pdp0.pdp0-0017 WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:20,019 PDR.Pub.pdp0.pdp0-0017 INFO: Deleting SIP bag by request
+2024-12-11 17:05:20,035 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Created bag with name, pdp0-0017
+2024-12-11 17:05:20,044 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: setting resource ID: ark:/88434/pdp0-0017sg
+2024-12-11 17:05:20,065 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:20,078 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:20,096 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:20,116 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:20,124 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:20,131 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:20,145 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:20,153 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:20,161 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:20,178 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:20,194 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:20,201 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:20,208 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:20,230 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:20,241 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:20,249 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:20,266 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:20,275 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:20,286 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:20,303 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:20,312 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:20,320 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:20,387 PDR.Pub.pdp0.pdp0-0017 INFO: finalized version already set as v1.0.0
+2024-12-11 17:05:20,392 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Setting version to 1.0.0
+2024-12-11 17:05:20,406 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: finalize: remove SIP submission types
+2024-12-11 17:05:20,414 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Merging in annotations into all metdata
+2024-12-11 17:05:20,459 PDR.Pub.pdp0.pdp0-0017.bldr ERROR: Implementation of Bag finalization is not complete!
+2024-12-11 17:05:20,460 PDR.Pub.pdp0.pdp0-0017.bldr INFO: Bag does not include PREMIS and ORE files
+2024-12-11 17:05:20,492 Pub.pdp0 INFO: SIP pdp0-0017 is already finalized (skipping)
+2024-12-11 17:05:20,495 PDR.Pub.pdp0.pdp0-0017 INFO: Deleting SIP bag by request by test/tester
+2024-12-11 17:05:20,718 PDR.Pub.ncnr0.ncnr0:33411 WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:20,718 PDR.Pub.ncnr0.ncnr0:33411 INFO: Deleting SIP bag by request
+2024-12-11 17:05:20,735 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Created bag with name, ncnr0:33411
+2024-12-11 17:05:20,745 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: setting resource ID: ark:/88434/ncnr0-33411pv
+2024-12-11 17:05:20,764 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:20,774 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:20,790 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:20,812 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:20,821 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:20,828 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:20,844 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:20,853 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:20,867 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:20,888 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:20,917 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:20,927 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:20,937 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:20,960 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:20,975 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:20,987 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:21,080 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:21,090 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:21,097 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:21,111 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:21,118 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:21,124 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:21,196 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:21,218 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:21,225 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Removed component: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:21,233 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:21,239 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:21,245 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Removed component: 1491_optSortSph20160701.m
+2024-12-11 17:05:21,249 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Removed component: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:21,258 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:21,267 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:21,275 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:21,292 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:21,304 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:21,314 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:21,336 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:21,359 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:21,369 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:21,375 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:21,389 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:21,397 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:21,406 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:21,428 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:21,439 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:21,448 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:21,469 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:21,479 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:21,487 PDR.Pub.ncnr0.ncnr0:33411.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:21,576 PDR.Pub.wsgi WARNING: Client (unknown) did not provide a Bearer authentication token
+2024-12-11 17:05:21,577 PDR.Pub.wsgi WARNING: Client (unknown) did not provide a Bearer authentication token
+2024-12-11 17:05:21,624 PDR.Pub.pdp0.pdp0-0017 WARNING: Bagger operating without an UpdatePrepService!
+2024-12-11 17:05:21,626 PDR.Pub.pdp0.pdp0-0017 INFO: Deleting SIP bag by request
+2024-12-11 17:05:21,644 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Created bag with name, pdp0-0017
+2024-12-11 17:05:21,653 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: setting resource ID: ark:/88434/pdp0-0017sg
+2024-12-11 17:05:21,677 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: initial minimal metadata established
+2024-12-11 17:05:21,689 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: locking convention metadata as annoations
+2024-12-11 17:05:21,709 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Adding resource-level metadata
+2024-12-11 17:05:22,485 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:22,519 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:22,527 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf
+2024-12-11 17:05:22,549 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:22,557 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:22,565 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.cdf.sha256
+2024-12-11 17:05:22,584 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Creating new non-file component: id=pdr:see/doi:/10.18434/T4SW26
+2024-12-11 17:05:22,614 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:22,628 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:22,639 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb
+2024-12-11 17:05:22,656 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:22,664 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m
+2024-12-11 17:05:22,671 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m
+2024-12-11 17:05:22,701 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:22,726 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:22,766 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSphEvaluated20160701.nb.sha256
+2024-12-11 17:05:22,788 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Initializing new DataFile component with default metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:22,798 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: adding file metadata for 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:22,809 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Updating DataFile metadata: 1491_optSortSph20160701.m.sha256
+2024-12-11 17:05:22,877 PDR.Pub.pdp0.pdp0-0017 INFO: finalized version already set as v1.0.0
+2024-12-11 17:05:22,882 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Setting version to 1.0.0
+2024-12-11 17:05:22,894 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: finalize: remove SIP submission types
+2024-12-11 17:05:22,918 PDR.Pub.pdp0.pdp0-0017.bldr NORMAL: Merging in annotations into all metdata
+2024-12-11 17:05:22,970 PDR.Pub.pdp0.pdp0-0017.bldr ERROR: Implementation of Bag finalization is not complete!
+2024-12-11 17:05:22,972 PDR.Pub.pdp0.pdp0-0017.bldr INFO: Bag does not include PREMIS and ORE files
+2024-12-11 17:05:23,025 Pub.pdp0 INFO: SIP pdp0-0017 is already finalized (skipping)
+2024-12-11 17:05:23,029 PDR.Pub.pdp0.pdp0-0017 INFO: Deleting SIP bag by request by pdp/draft
+2024-12-11 17:05:23,085 PDR.Pub.wsgi WARNING: Client (unknown) did not provide a Bearer authentication token
+2024-12-11 17:05:23,179 PDR.Pub.wsgi WARNING: Client (unknown) did not provide a Bearer authentication token
+2024-12-11 17:05:27,180 goober ERROR: hey!
+2024-12-11 17:05:27,379 goober ERROR: hey!
+2024-12-11 17:05:27,434 root WARNING: Client dmptool did not provide a Bearer authentication token
+2024-12-11 17:05:27,435 root WARNING: Client dmptool did not provide a Bearer authentication token
+2024-12-11 17:05:27,435 root WARNING: Unrecognized token from client dmptool
+2024-12-11 17:05:27,436 root WARNING: Unrecognized token from client dmptool
+2024-12-11 17:05:27,436 root WARNING: Client dmptool did not provide a Bearer authentication token
+2024-12-11 17:05:27,437 root WARNING: Client dmptool did not provide an authentication token
+2024-12-11 17:05:27,437 root WARNING: Client dmptool did not provide an authentication token
+2024-12-11 17:05:27,438 root WARNING: Invalid token can not be decoded: Not enough segments
+2024-12-11 17:05:27,438 root WARNING: Invalid token can not be decoded: Not enough segments
+2024-12-11 17:05:27,439 root WARNING: User token is missing subject identifier; defaulting to anonymous

@@ -1,0 +1,606 @@
+##################################
+#
+# Running tests via docker
+#
+##################################
+(Assuming docker containers have been built)
+run.sh: Running docker commands [test] on [python]
++ docker run --rm -v /Users/alexloembe/NIST/usnistgov/oar-pdr-py:/dev/oar-pdr-py oar-pdr-py/pdrpytest testall
+Installing into /app/pdr...
+
+Installing python libraries into /app/pdr/lib/python...
+running install
+running install
+running build
+running build_py
+looking in nistoar
+setting version for nistoar.base
+setting version for nistoar.doi
+setting version for nistoar.id
+setting version for nistoar.jq
+setting version for nistoar.nerdm
+setting version for nistoar.rmm
+setting version for nistoar.testing
+copying nistoar/base/version.py -> build/lib/nistoar/base
+copying nistoar/doi/version.py -> build/lib/nistoar/doi
+copying nistoar/id/version.py -> build/lib/nistoar/id
+copying nistoar/jq/version.py -> build/lib/nistoar/jq
+copying nistoar/nerdm/version.py -> build/lib/nistoar/nerdm
+copying nistoar/rmm/version.py -> build/lib/nistoar/rmm
+copying nistoar/testing/version.py -> build/lib/nistoar/testing
+running build_scripts
+running install_lib
+creating /app/pdr/lib/python/nistoar
+creating /app/pdr/lib/python/nistoar/base
+copying build/lib/nistoar/base/__init__.py -> /app/pdr/lib/python/nistoar/base
+copying build/lib/nistoar/base/config.py -> /app/pdr/lib/python/nistoar/base
+copying build/lib/nistoar/base/version.py -> /app/pdr/lib/python/nistoar/base
+creating /app/pdr/lib/python/nistoar/doi
+copying build/lib/nistoar/doi/__init__.py -> /app/pdr/lib/python/nistoar/doi
+copying build/lib/nistoar/doi/datacite.py -> /app/pdr/lib/python/nistoar/doi
+creating /app/pdr/lib/python/nistoar/doi/resolving
+copying build/lib/nistoar/doi/resolving/__init__.py -> /app/pdr/lib/python/nistoar/doi/resolving
+copying build/lib/nistoar/doi/resolving/common.py -> /app/pdr/lib/python/nistoar/doi/resolving
+copying build/lib/nistoar/doi/resolving/crosscite.py -> /app/pdr/lib/python/nistoar/doi/resolving
+copying build/lib/nistoar/doi/resolving/crossref.py -> /app/pdr/lib/python/nistoar/doi/resolving
+copying build/lib/nistoar/doi/resolving/datacite.py -> /app/pdr/lib/python/nistoar/doi/resolving
+copying build/lib/nistoar/doi/utils.py -> /app/pdr/lib/python/nistoar/doi
+copying build/lib/nistoar/doi/version.py -> /app/pdr/lib/python/nistoar/doi
+creating /app/pdr/lib/python/nistoar/id
+copying build/lib/nistoar/id/__init__.py -> /app/pdr/lib/python/nistoar/id
+copying build/lib/nistoar/id/minter.py -> /app/pdr/lib/python/nistoar/id
+copying build/lib/nistoar/id/noid.py -> /app/pdr/lib/python/nistoar/id
+copying build/lib/nistoar/id/persist.py -> /app/pdr/lib/python/nistoar/id
+copying build/lib/nistoar/id/version.py -> /app/pdr/lib/python/nistoar/id
+copying build/lib/nistoar/id/versions.py -> /app/pdr/lib/python/nistoar/id
+creating /app/pdr/lib/python/nistoar/jq
+copying build/lib/nistoar/jq/__init__.py -> /app/pdr/lib/python/nistoar/jq
+copying build/lib/nistoar/jq/version.py -> /app/pdr/lib/python/nistoar/jq
+creating /app/pdr/lib/python/nistoar/nerdm
+copying build/lib/nistoar/nerdm/__init__.py -> /app/pdr/lib/python/nistoar/nerdm
+copying build/lib/nistoar/nerdm/constants.py -> /app/pdr/lib/python/nistoar/nerdm
+creating /app/pdr/lib/python/nistoar/nerdm/convert
+copying build/lib/nistoar/nerdm/convert/__init__.py -> /app/pdr/lib/python/nistoar/nerdm/convert
+copying build/lib/nistoar/nerdm/convert/latest.py -> /app/pdr/lib/python/nistoar/nerdm/convert
+copying build/lib/nistoar/nerdm/convert/pod.py -> /app/pdr/lib/python/nistoar/nerdm/convert
+copying build/lib/nistoar/nerdm/convert/rmm.py -> /app/pdr/lib/python/nistoar/nerdm/convert
+copying build/lib/nistoar/nerdm/exceptions.py -> /app/pdr/lib/python/nistoar/nerdm
+copying build/lib/nistoar/nerdm/merge.py -> /app/pdr/lib/python/nistoar/nerdm
+copying build/lib/nistoar/nerdm/taxonomy.py -> /app/pdr/lib/python/nistoar/nerdm
+copying build/lib/nistoar/nerdm/utils.py -> /app/pdr/lib/python/nistoar/nerdm
+copying build/lib/nistoar/nerdm/validate.py -> /app/pdr/lib/python/nistoar/nerdm
+copying build/lib/nistoar/nerdm/version.py -> /app/pdr/lib/python/nistoar/nerdm
+creating /app/pdr/lib/python/nistoar/rmm
+copying build/lib/nistoar/rmm/__init__.py -> /app/pdr/lib/python/nistoar/rmm
+copying build/lib/nistoar/rmm/exceptions.py -> /app/pdr/lib/python/nistoar/rmm
+creating /app/pdr/lib/python/nistoar/rmm/ingest
+copying build/lib/nistoar/rmm/ingest/__init__.py -> /app/pdr/lib/python/nistoar/rmm/ingest
+copying build/lib/nistoar/rmm/ingest/wsgi.py -> /app/pdr/lib/python/nistoar/rmm/ingest
+creating /app/pdr/lib/python/nistoar/rmm/mongo
+copying build/lib/nistoar/rmm/mongo/__init__.py -> /app/pdr/lib/python/nistoar/rmm/mongo
+copying build/lib/nistoar/rmm/mongo/fields.py -> /app/pdr/lib/python/nistoar/rmm/mongo
+copying build/lib/nistoar/rmm/mongo/loader.py -> /app/pdr/lib/python/nistoar/rmm/mongo
+copying build/lib/nistoar/rmm/mongo/nerdm.py -> /app/pdr/lib/python/nistoar/rmm/mongo
+copying build/lib/nistoar/rmm/mongo/taxon.py -> /app/pdr/lib/python/nistoar/rmm/mongo
+copying build/lib/nistoar/rmm/version.py -> /app/pdr/lib/python/nistoar/rmm
+creating /app/pdr/lib/python/nistoar/testing
+copying build/lib/nistoar/testing/__init__.py -> /app/pdr/lib/python/nistoar/testing
+copying build/lib/nistoar/testing/uwsgi.py -> /app/pdr/lib/python/nistoar/testing
+copying build/lib/nistoar/testing/version.py -> /app/pdr/lib/python/nistoar/testing
+byte-compiling /app/pdr/lib/python/nistoar/base/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/base/config.py to config.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/base/version.py to version.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/doi/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/doi/datacite.py to datacite.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/doi/resolving/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/doi/resolving/common.py to common.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/doi/resolving/crosscite.py to crosscite.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/doi/resolving/crossref.py to crossref.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/doi/resolving/datacite.py to datacite.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/doi/utils.py to utils.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/doi/version.py to version.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/id/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/id/minter.py to minter.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/id/noid.py to noid.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/id/persist.py to persist.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/id/version.py to version.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/id/versions.py to versions.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/jq/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/jq/version.py to version.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/constants.py to constants.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/convert/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/convert/latest.py to latest.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/convert/pod.py to pod.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/convert/rmm.py to rmm.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/exceptions.py to exceptions.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/merge.py to merge.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/taxonomy.py to taxonomy.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/utils.py to utils.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/validate.py to validate.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nerdm/version.py to version.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/rmm/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/rmm/exceptions.py to exceptions.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/rmm/ingest/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/rmm/ingest/wsgi.py to wsgi.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/rmm/mongo/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/rmm/mongo/fields.py to fields.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/rmm/mongo/loader.py to loader.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/rmm/mongo/nerdm.py to nerdm.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/rmm/mongo/taxon.py to taxon.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/rmm/version.py to version.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/testing/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/testing/uwsgi.py to uwsgi.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/testing/version.py to version.cpython-310.pyc
+running install_egg_info
+running egg_info
+writing nistoar.egg-info/PKG-INFO
+writing dependency_links to nistoar.egg-info/dependency_links.txt
+writing top-level names to nistoar.egg-info/top_level.txt
+reading manifest file 'nistoar.egg-info/SOURCES.txt'
+writing manifest file 'nistoar.egg-info/SOURCES.txt'
+Copying nistoar.egg-info to /app/pdr/lib/python/nistoar-1.0.0rc1_415_gd96af33.egg-info
+running install_scripts
+creating /app/pdr/bin
+copying build/scripts-3.10/ingest-field-info.py -> /app/pdr/bin
+copying build/scripts-3.10/ingest-nerdm-res.py -> /app/pdr/bin
+copying build/scripts-3.10/ingest-taxonomy.py -> /app/pdr/bin
+copying build/scripts-3.10/ingest-uwsgi.py -> /app/pdr/bin
+copying build/scripts-3.10/pdl2resources.py -> /app/pdr/bin
+changing mode of /app/pdr/bin/ingest-field-info.py to 755
+changing mode of /app/pdr/bin/ingest-nerdm-res.py to 755
+changing mode of /app/pdr/bin/ingest-taxonomy.py to 755
+changing mode of /app/pdr/bin/ingest-uwsgi.py to 755
+changing mode of /app/pdr/bin/pdl2resources.py to 755
+running build
+running build_py
+looking in nistoar
+setting version for nistoar.midas
+setting version for nistoar.nsd
+setting version for nistoar.pdr
+setting version for nistoar.web
+copying nistoar/midas/version.py -> build/lib/nistoar/midas
+copying nistoar/nsd/version.py -> build/lib/nistoar/nsd
+copying nistoar/pdr/version.py -> build/lib/nistoar/pdr
+copying nistoar/web/version.py -> build/lib/nistoar/web
+running build_scripts
+running install_lib
+creating /app/pdr/lib/python/nistoar/midas
+copying build/lib/nistoar/midas/__init__.py -> /app/pdr/lib/python/nistoar/midas
+creating /app/pdr/lib/python/nistoar/midas/__pycache__
+copying build/lib/nistoar/midas/__pycache__/__init__.cpython-311.pyc -> /app/pdr/lib/python/nistoar/midas/__pycache__
+copying build/lib/nistoar/midas/__pycache__/__init__.cpython-39.pyc -> /app/pdr/lib/python/nistoar/midas/__pycache__
+copying build/lib/nistoar/midas/__pycache__/version.cpython-39.pyc -> /app/pdr/lib/python/nistoar/midas/__pycache__
+creating /app/pdr/lib/python/nistoar/midas/dap
+copying build/lib/nistoar/midas/dap/__init__.py -> /app/pdr/lib/python/nistoar/midas/dap
+creating /app/pdr/lib/python/nistoar/midas/dap/fm
+copying build/lib/nistoar/midas/dap/fm/__init__.py -> /app/pdr/lib/python/nistoar/midas/dap/fm
+copying build/lib/nistoar/midas/dap/fm/apiclient.py -> /app/pdr/lib/python/nistoar/midas/dap/fm
+copying build/lib/nistoar/midas/dap/fm/webdav.py -> /app/pdr/lib/python/nistoar/midas/dap/fm
+creating /app/pdr/lib/python/nistoar/midas/dap/nerdstore
+copying build/lib/nistoar/midas/dap/nerdstore/__init__.py -> /app/pdr/lib/python/nistoar/midas/dap/nerdstore
+copying build/lib/nistoar/midas/dap/nerdstore/base.py -> /app/pdr/lib/python/nistoar/midas/dap/nerdstore
+copying build/lib/nistoar/midas/dap/nerdstore/fmfs.py -> /app/pdr/lib/python/nistoar/midas/dap/nerdstore
+copying build/lib/nistoar/midas/dap/nerdstore/fsbased.py -> /app/pdr/lib/python/nistoar/midas/dap/nerdstore
+copying build/lib/nistoar/midas/dap/nerdstore/inmem.py -> /app/pdr/lib/python/nistoar/midas/dap/nerdstore
+creating /app/pdr/lib/python/nistoar/midas/dap/service
+copying build/lib/nistoar/midas/dap/service/__init__.py -> /app/pdr/lib/python/nistoar/midas/dap/service
+copying build/lib/nistoar/midas/dap/service/mds3.py -> /app/pdr/lib/python/nistoar/midas/dap/service
+copying build/lib/nistoar/midas/dap/service/mdsx.py -> /app/pdr/lib/python/nistoar/midas/dap/service
+copying build/lib/nistoar/midas/dap/service/validate.py -> /app/pdr/lib/python/nistoar/midas/dap/service
+creating /app/pdr/lib/python/nistoar/midas/dbio
+copying build/lib/nistoar/midas/dbio/__init__.py -> /app/pdr/lib/python/nistoar/midas/dbio
+creating /app/pdr/lib/python/nistoar/midas/dbio/__pycache__
+copying build/lib/nistoar/midas/dbio/__pycache__/__init__.cpython-39.pyc -> /app/pdr/lib/python/nistoar/midas/dbio/__pycache__
+copying build/lib/nistoar/midas/dbio/__pycache__/base.cpython-39.pyc -> /app/pdr/lib/python/nistoar/midas/dbio/__pycache__
+copying build/lib/nistoar/midas/dbio/__pycache__/fsbased.cpython-39.pyc -> /app/pdr/lib/python/nistoar/midas/dbio/__pycache__
+copying build/lib/nistoar/midas/dbio/__pycache__/inmem.cpython-39.pyc -> /app/pdr/lib/python/nistoar/midas/dbio/__pycache__
+copying build/lib/nistoar/midas/dbio/__pycache__/mongo.cpython-39.pyc -> /app/pdr/lib/python/nistoar/midas/dbio/__pycache__
+copying build/lib/nistoar/midas/dbio/__pycache__/notifier.cpython-39.pyc -> /app/pdr/lib/python/nistoar/midas/dbio/__pycache__
+copying build/lib/nistoar/midas/dbio/__pycache__/project.cpython-39.pyc -> /app/pdr/lib/python/nistoar/midas/dbio/__pycache__
+copying build/lib/nistoar/midas/dbio/__pycache__/status.cpython-39.pyc -> /app/pdr/lib/python/nistoar/midas/dbio/__pycache__
+copying build/lib/nistoar/midas/dbio/__pycache__/websocket.cpython-39.pyc -> /app/pdr/lib/python/nistoar/midas/dbio/__pycache__
+copying build/lib/nistoar/midas/dbio/base.py -> /app/pdr/lib/python/nistoar/midas/dbio
+copying build/lib/nistoar/midas/dbio/fsbased.py -> /app/pdr/lib/python/nistoar/midas/dbio
+copying build/lib/nistoar/midas/dbio/index.py -> /app/pdr/lib/python/nistoar/midas/dbio
+copying build/lib/nistoar/midas/dbio/inmem.py -> /app/pdr/lib/python/nistoar/midas/dbio
+copying build/lib/nistoar/midas/dbio/mongo.py -> /app/pdr/lib/python/nistoar/midas/dbio
+copying build/lib/nistoar/midas/dbio/notifier.py -> /app/pdr/lib/python/nistoar/midas/dbio
+copying build/lib/nistoar/midas/dbio/project.py -> /app/pdr/lib/python/nistoar/midas/dbio
+copying build/lib/nistoar/midas/dbio/status.py -> /app/pdr/lib/python/nistoar/midas/dbio
+copying build/lib/nistoar/midas/dbio/websocket.py -> /app/pdr/lib/python/nistoar/midas/dbio
+creating /app/pdr/lib/python/nistoar/midas/dbio/wsgi
+copying build/lib/nistoar/midas/dbio/wsgi/__init__.py -> /app/pdr/lib/python/nistoar/midas/dbio/wsgi
+copying build/lib/nistoar/midas/dbio/wsgi/base.py -> /app/pdr/lib/python/nistoar/midas/dbio/wsgi
+copying build/lib/nistoar/midas/dbio/wsgi/project.py -> /app/pdr/lib/python/nistoar/midas/dbio/wsgi
+copying build/lib/nistoar/midas/dbio/wsgi/search_sorter.py -> /app/pdr/lib/python/nistoar/midas/dbio/wsgi
+creating /app/pdr/lib/python/nistoar/midas/nsdi
+copying build/lib/nistoar/midas/nsdi/__init__.py -> /app/pdr/lib/python/nistoar/midas/nsdi
+creating /app/pdr/lib/python/nistoar/midas/nsdi/wsgi
+copying build/lib/nistoar/midas/nsdi/wsgi/__init__.py -> /app/pdr/lib/python/nistoar/midas/nsdi/wsgi
+copying build/lib/nistoar/midas/nsdi/wsgi/v1.py -> /app/pdr/lib/python/nistoar/midas/nsdi/wsgi
+copying build/lib/nistoar/midas/version.py -> /app/pdr/lib/python/nistoar/midas
+copying build/lib/nistoar/midas/wsgi.py -> /app/pdr/lib/python/nistoar/midas
+creating /app/pdr/lib/python/nistoar/nsd
+copying build/lib/nistoar/nsd/__init__.py -> /app/pdr/lib/python/nistoar/nsd
+copying build/lib/nistoar/nsd/client.py -> /app/pdr/lib/python/nistoar/nsd
+copying build/lib/nistoar/nsd/service.py -> /app/pdr/lib/python/nistoar/nsd
+copying build/lib/nistoar/nsd/version.py -> /app/pdr/lib/python/nistoar/nsd
+creating /app/pdr/lib/python/nistoar/nsd/wsgi
+copying build/lib/nistoar/nsd/wsgi/__init__.py -> /app/pdr/lib/python/nistoar/nsd/wsgi
+copying build/lib/nistoar/nsd/wsgi/nsd1.py -> /app/pdr/lib/python/nistoar/nsd/wsgi
+copying build/lib/nistoar/nsd/wsgi/oar1.py -> /app/pdr/lib/python/nistoar/nsd/wsgi
+copying build/lib/nistoar/nsd/wsgi.py -> /app/pdr/lib/python/nistoar/nsd
+creating /app/pdr/lib/python/nistoar/pdr
+copying build/lib/nistoar/pdr/__init__.py -> /app/pdr/lib/python/nistoar/pdr
+creating /app/pdr/lib/python/nistoar/pdr/__pycache__
+copying build/lib/nistoar/pdr/__pycache__/__init__.cpython-39.pyc -> /app/pdr/lib/python/nistoar/pdr/__pycache__
+copying build/lib/nistoar/pdr/__pycache__/constants.cpython-39.pyc -> /app/pdr/lib/python/nistoar/pdr/__pycache__
+copying build/lib/nistoar/pdr/__pycache__/exceptions.cpython-39.pyc -> /app/pdr/lib/python/nistoar/pdr/__pycache__
+copying build/lib/nistoar/pdr/__pycache__/version.cpython-39.pyc -> /app/pdr/lib/python/nistoar/pdr/__pycache__
+creating /app/pdr/lib/python/nistoar/pdr/cli
+copying build/lib/nistoar/pdr/cli/__init__.py -> /app/pdr/lib/python/nistoar/pdr/cli
+creating /app/pdr/lib/python/nistoar/pdr/cli/md
+copying build/lib/nistoar/pdr/cli/md/__init__.py -> /app/pdr/lib/python/nistoar/pdr/cli/md
+copying build/lib/nistoar/pdr/cli/md/_args.py -> /app/pdr/lib/python/nistoar/pdr/cli/md
+creating /app/pdr/lib/python/nistoar/pdr/cli/md/fix
+copying build/lib/nistoar/pdr/cli/md/fix/__init__.py -> /app/pdr/lib/python/nistoar/pdr/cli/md/fix
+copying build/lib/nistoar/pdr/cli/md/fix/dates.py -> /app/pdr/lib/python/nistoar/pdr/cli/md/fix
+copying build/lib/nistoar/pdr/cli/md/get.py -> /app/pdr/lib/python/nistoar/pdr/cli/md
+copying build/lib/nistoar/pdr/cli/md/recover.py -> /app/pdr/lib/python/nistoar/pdr/cli/md
+creating /app/pdr/lib/python/nistoar/pdr/cli/md/trans
+copying build/lib/nistoar/pdr/cli/md/trans/__init__.py -> /app/pdr/lib/python/nistoar/pdr/cli/md/trans
+copying build/lib/nistoar/pdr/cli/md/trans/_comm.py -> /app/pdr/lib/python/nistoar/pdr/cli/md/trans
+copying build/lib/nistoar/pdr/cli/md/trans/latest.py -> /app/pdr/lib/python/nistoar/pdr/cli/md/trans
+copying build/lib/nistoar/pdr/cli/md/trans/rmm.py -> /app/pdr/lib/python/nistoar/pdr/cli/md/trans
+copying build/lib/nistoar/pdr/cli/pdr.py -> /app/pdr/lib/python/nistoar/pdr/cli
+copying build/lib/nistoar/pdr/constants.py -> /app/pdr/lib/python/nistoar/pdr
+creating /app/pdr/lib/python/nistoar/pdr/data
+copying build/lib/nistoar/pdr/data/fext2format.json -> /app/pdr/lib/python/nistoar/pdr/data
+copying build/lib/nistoar/pdr/data/mime.types -> /app/pdr/lib/python/nistoar/pdr/data
+creating /app/pdr/lib/python/nistoar/pdr/describe
+copying build/lib/nistoar/pdr/describe/__init__.py -> /app/pdr/lib/python/nistoar/pdr/describe
+copying build/lib/nistoar/pdr/describe/altbig.py -> /app/pdr/lib/python/nistoar/pdr/describe
+copying build/lib/nistoar/pdr/describe/hybrid.py -> /app/pdr/lib/python/nistoar/pdr/describe
+copying build/lib/nistoar/pdr/describe/rmm.py -> /app/pdr/lib/python/nistoar/pdr/describe
+creating /app/pdr/lib/python/nistoar/pdr/distrib
+copying build/lib/nistoar/pdr/distrib/__init__.py -> /app/pdr/lib/python/nistoar/pdr/distrib
+copying build/lib/nistoar/pdr/distrib/bagclient.py -> /app/pdr/lib/python/nistoar/pdr/distrib
+copying build/lib/nistoar/pdr/distrib/client.py -> /app/pdr/lib/python/nistoar/pdr/distrib
+copying build/lib/nistoar/pdr/exceptions.py -> /app/pdr/lib/python/nistoar/pdr
+creating /app/pdr/lib/python/nistoar/pdr/health
+copying build/lib/nistoar/pdr/health/__init__.py -> /app/pdr/lib/python/nistoar/pdr/health
+copying build/lib/nistoar/pdr/health/cache.py -> /app/pdr/lib/python/nistoar/pdr/health
+creating /app/pdr/lib/python/nistoar/pdr/health/servicechecker
+copying build/lib/nistoar/pdr/health/servicechecker/__init__.py -> /app/pdr/lib/python/nistoar/pdr/health/servicechecker
+copying build/lib/nistoar/pdr/health/servicechecker/cli.py -> /app/pdr/lib/python/nistoar/pdr/health/servicechecker
+creating /app/pdr/lib/python/nistoar/pdr/notify
+copying build/lib/nistoar/pdr/notify/__init__.py -> /app/pdr/lib/python/nistoar/pdr/notify
+copying build/lib/nistoar/pdr/notify/archive.py -> /app/pdr/lib/python/nistoar/pdr/notify
+copying build/lib/nistoar/pdr/notify/base.py -> /app/pdr/lib/python/nistoar/pdr/notify
+copying build/lib/nistoar/pdr/notify/cli.py -> /app/pdr/lib/python/nistoar/pdr/notify
+copying build/lib/nistoar/pdr/notify/email.py -> /app/pdr/lib/python/nistoar/pdr/notify
+copying build/lib/nistoar/pdr/notify/service.py -> /app/pdr/lib/python/nistoar/pdr/notify
+creating /app/pdr/lib/python/nistoar/pdr/preserve
+copying build/lib/nistoar/pdr/preserve/__init__.py -> /app/pdr/lib/python/nistoar/pdr/preserve
+creating /app/pdr/lib/python/nistoar/pdr/preserve/bagit
+copying build/lib/nistoar/pdr/preserve/bagit/__init__.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit
+copying build/lib/nistoar/pdr/preserve/bagit/bag.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit
+copying build/lib/nistoar/pdr/preserve/bagit/builder.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit
+copying build/lib/nistoar/pdr/preserve/bagit/exceptions.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit
+copying build/lib/nistoar/pdr/preserve/bagit/multibag.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit
+copying build/lib/nistoar/pdr/preserve/bagit/serialize.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit
+creating /app/pdr/lib/python/nistoar/pdr/preserve/bagit/tools
+copying build/lib/nistoar/pdr/preserve/bagit/tools/__init__.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit/tools
+copying build/lib/nistoar/pdr/preserve/bagit/tools/enhance.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit/tools
+creating /app/pdr/lib/python/nistoar/pdr/preserve/bagit/validate
+copying build/lib/nistoar/pdr/preserve/bagit/validate/__init__.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit/validate
+copying build/lib/nistoar/pdr/preserve/bagit/validate/bagit.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit/validate
+copying build/lib/nistoar/pdr/preserve/bagit/validate/base.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit/validate
+copying build/lib/nistoar/pdr/preserve/bagit/validate/multibag.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit/validate
+copying build/lib/nistoar/pdr/preserve/bagit/validate/nist.py -> /app/pdr/lib/python/nistoar/pdr/preserve/bagit/validate
+creating /app/pdr/lib/python/nistoar/pdr/public
+copying build/lib/nistoar/pdr/public/__init__.py -> /app/pdr/lib/python/nistoar/pdr/public
+creating /app/pdr/lib/python/nistoar/pdr/public/resolve
+copying build/lib/nistoar/pdr/public/resolve/__init__.py -> /app/pdr/lib/python/nistoar/pdr/public/resolve
+creating /app/pdr/lib/python/nistoar/pdr/public/resolve/handlers
+copying build/lib/nistoar/pdr/public/resolve/handlers/__init__.py -> /app/pdr/lib/python/nistoar/pdr/public/resolve/handlers
+copying build/lib/nistoar/pdr/public/resolve/handlers/aip.py -> /app/pdr/lib/python/nistoar/pdr/public/resolve/handlers
+copying build/lib/nistoar/pdr/public/resolve/handlers/base.py -> /app/pdr/lib/python/nistoar/pdr/public/resolve/handlers
+copying build/lib/nistoar/pdr/public/resolve/handlers/pdrid.py -> /app/pdr/lib/python/nistoar/pdr/public/resolve/handlers
+copying build/lib/nistoar/pdr/public/resolve/handlers/ready.py -> /app/pdr/lib/python/nistoar/pdr/public/resolve/handlers
+copying build/lib/nistoar/pdr/public/resolve/wsgi.py -> /app/pdr/lib/python/nistoar/pdr/public/resolve
+creating /app/pdr/lib/python/nistoar/pdr/publish
+copying build/lib/nistoar/pdr/publish/__init__.py -> /app/pdr/lib/python/nistoar/pdr/publish
+creating /app/pdr/lib/python/nistoar/pdr/publish/bagger
+copying build/lib/nistoar/pdr/publish/bagger/__init__.py -> /app/pdr/lib/python/nistoar/pdr/publish/bagger
+copying build/lib/nistoar/pdr/publish/bagger/base.py -> /app/pdr/lib/python/nistoar/pdr/publish/bagger
+copying build/lib/nistoar/pdr/publish/bagger/datachecker.py -> /app/pdr/lib/python/nistoar/pdr/publish/bagger
+copying build/lib/nistoar/pdr/publish/bagger/pdp.py -> /app/pdr/lib/python/nistoar/pdr/publish/bagger
+copying build/lib/nistoar/pdr/publish/bagger/prepupd.py -> /app/pdr/lib/python/nistoar/pdr/publish/bagger
+copying build/lib/nistoar/pdr/publish/bagger/utils.py -> /app/pdr/lib/python/nistoar/pdr/publish/bagger
+creating /app/pdr/lib/python/nistoar/pdr/publish/idmint
+copying build/lib/nistoar/pdr/publish/idmint/__init__.py -> /app/pdr/lib/python/nistoar/pdr/publish/idmint
+copying build/lib/nistoar/pdr/publish/idmint/minter.py -> /app/pdr/lib/python/nistoar/pdr/publish/idmint
+copying build/lib/nistoar/pdr/publish/idmint/registry.py -> /app/pdr/lib/python/nistoar/pdr/publish/idmint
+copying build/lib/nistoar/pdr/publish/prov.py -> /app/pdr/lib/python/nistoar/pdr/publish
+copying build/lib/nistoar/pdr/publish/readme.py -> /app/pdr/lib/python/nistoar/pdr/publish
+creating /app/pdr/lib/python/nistoar/pdr/publish/service
+copying build/lib/nistoar/pdr/publish/service/__init__.py -> /app/pdr/lib/python/nistoar/pdr/publish/service
+copying build/lib/nistoar/pdr/publish/service/base.py -> /app/pdr/lib/python/nistoar/pdr/publish/service
+copying build/lib/nistoar/pdr/publish/service/pdp.py -> /app/pdr/lib/python/nistoar/pdr/publish/service
+copying build/lib/nistoar/pdr/publish/service/status.py -> /app/pdr/lib/python/nistoar/pdr/publish/service
+creating /app/pdr/lib/python/nistoar/pdr/publish/service/wsgi
+copying build/lib/nistoar/pdr/publish/service/wsgi/__init__.py -> /app/pdr/lib/python/nistoar/pdr/publish/service/wsgi
+copying build/lib/nistoar/pdr/publish/service/wsgi/base.py -> /app/pdr/lib/python/nistoar/pdr/publish/service/wsgi
+copying build/lib/nistoar/pdr/publish/service/wsgi/pdp0.py -> /app/pdr/lib/python/nistoar/pdr/publish/service/wsgi
+creating /app/pdr/lib/python/nistoar/pdr/utils
+copying build/lib/nistoar/pdr/utils/__init__.py -> /app/pdr/lib/python/nistoar/pdr/utils
+creating /app/pdr/lib/python/nistoar/pdr/utils/__pycache__
+copying build/lib/nistoar/pdr/utils/__pycache__/__init__.cpython-39.pyc -> /app/pdr/lib/python/nistoar/pdr/utils/__pycache__
+copying build/lib/nistoar/pdr/utils/__pycache__/datamgmt.cpython-39.pyc -> /app/pdr/lib/python/nistoar/pdr/utils/__pycache__
+copying build/lib/nistoar/pdr/utils/__pycache__/io.cpython-39.pyc -> /app/pdr/lib/python/nistoar/pdr/utils/__pycache__
+copying build/lib/nistoar/pdr/utils/__pycache__/logging.cpython-39.pyc -> /app/pdr/lib/python/nistoar/pdr/utils/__pycache__
+copying build/lib/nistoar/pdr/utils/__pycache__/prov.cpython-39.pyc -> /app/pdr/lib/python/nistoar/pdr/utils/__pycache__
+copying build/lib/nistoar/pdr/utils/datamgmt.py -> /app/pdr/lib/python/nistoar/pdr/utils
+copying build/lib/nistoar/pdr/utils/io.py -> /app/pdr/lib/python/nistoar/pdr/utils
+copying build/lib/nistoar/pdr/utils/logging.py -> /app/pdr/lib/python/nistoar/pdr/utils
+copying build/lib/nistoar/pdr/utils/prov.py -> /app/pdr/lib/python/nistoar/pdr/utils
+copying build/lib/nistoar/pdr/utils/web.py -> /app/pdr/lib/python/nistoar/pdr/utils
+copying build/lib/nistoar/pdr/utils/webrecord.py -> /app/pdr/lib/python/nistoar/pdr/utils
+copying build/lib/nistoar/pdr/version.py -> /app/pdr/lib/python/nistoar/pdr
+creating /app/pdr/lib/python/nistoar/web
+copying build/lib/nistoar/web/__init__.py -> /app/pdr/lib/python/nistoar/web
+copying build/lib/nistoar/web/formats.py -> /app/pdr/lib/python/nistoar/web
+creating /app/pdr/lib/python/nistoar/web/rest
+copying build/lib/nistoar/web/rest/__init__.py -> /app/pdr/lib/python/nistoar/web/rest
+copying build/lib/nistoar/web/rest/base.py -> /app/pdr/lib/python/nistoar/web/rest
+copying build/lib/nistoar/web/rest/jsonerr.py -> /app/pdr/lib/python/nistoar/web/rest
+copying build/lib/nistoar/web/rest/ready.py -> /app/pdr/lib/python/nistoar/web/rest
+copying build/lib/nistoar/web/utils.py -> /app/pdr/lib/python/nistoar/web
+copying build/lib/nistoar/web/version.py -> /app/pdr/lib/python/nistoar/web
+copying build/lib/nistoar/web/webrecord.py -> /app/pdr/lib/python/nistoar/web
+byte-compiling /app/pdr/lib/python/nistoar/midas/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/fm/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/fm/apiclient.py to apiclient.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/fm/webdav.py to webdav.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/nerdstore/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/nerdstore/base.py to base.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/nerdstore/fmfs.py to fmfs.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/nerdstore/fsbased.py to fsbased.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/nerdstore/inmem.py to inmem.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/service/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/service/mds3.py to mds3.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/service/mdsx.py to mdsx.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dap/service/validate.py to validate.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/base.py to base.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/fsbased.py to fsbased.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/index.py to index.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/inmem.py to inmem.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/mongo.py to mongo.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/notifier.py to notifier.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/project.py to project.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/status.py to status.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/websocket.py to websocket.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/wsgi/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/wsgi/base.py to base.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/wsgi/project.py to project.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/dbio/wsgi/search_sorter.py to search_sorter.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/nsdi/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/nsdi/wsgi/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/nsdi/wsgi/v1.py to v1.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/version.py to version.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/midas/wsgi.py to wsgi.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nsd/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nsd/client.py to client.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nsd/service.py to service.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nsd/version.py to version.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nsd/wsgi/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nsd/wsgi/nsd1.py to nsd1.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nsd/wsgi/oar1.py to oar1.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/nsd/wsgi.py to wsgi.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/md/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/md/_args.py to _args.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/md/fix/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/md/fix/dates.py to dates.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/md/get.py to get.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/md/recover.py to recover.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/md/trans/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/md/trans/_comm.py to _comm.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/md/trans/latest.py to latest.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/md/trans/rmm.py to rmm.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/cli/pdr.py to pdr.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/constants.py to constants.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/describe/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/describe/altbig.py to altbig.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/describe/hybrid.py to hybrid.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/describe/rmm.py to rmm.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/distrib/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/distrib/bagclient.py to bagclient.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/distrib/client.py to client.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/exceptions.py to exceptions.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/health/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/health/cache.py to cache.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/health/servicechecker/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/health/servicechecker/cli.py to cli.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/notify/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/notify/archive.py to archive.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/notify/base.py to base.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/notify/cli.py to cli.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/notify/email.py to email.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/notify/service.py to service.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/bag.py to bag.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/builder.py to builder.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/exceptions.py to exceptions.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/multibag.py to multibag.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/serialize.py to serialize.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/tools/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/tools/enhance.py to enhance.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/validate/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/validate/bagit.py to bagit.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/validate/base.py to base.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/validate/multibag.py to multibag.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/preserve/bagit/validate/nist.py to nist.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/public/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/public/resolve/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/public/resolve/handlers/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/public/resolve/handlers/aip.py to aip.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/public/resolve/handlers/base.py to base.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/public/resolve/handlers/pdrid.py to pdrid.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/public/resolve/handlers/ready.py to ready.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/public/resolve/wsgi.py to wsgi.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/bagger/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/bagger/base.py to base.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/bagger/datachecker.py to datachecker.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/bagger/pdp.py to pdp.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/bagger/prepupd.py to prepupd.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/bagger/utils.py to utils.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/idmint/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/idmint/minter.py to minter.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/idmint/registry.py to registry.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/prov.py to prov.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/readme.py to readme.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/service/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/service/base.py to base.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/service/pdp.py to pdp.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/service/status.py to status.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/service/wsgi/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/service/wsgi/base.py to base.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/publish/service/wsgi/pdp0.py to pdp0.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/utils/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/utils/datamgmt.py to datamgmt.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/utils/io.py to io.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/utils/logging.py to logging.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/utils/prov.py to prov.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/utils/web.py to web.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/utils/webrecord.py to webrecord.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/pdr/version.py to version.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/web/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/web/formats.py to formats.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/web/rest/__init__.py to __init__.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/web/rest/base.py to base.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/web/rest/jsonerr.py to jsonerr.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/web/rest/ready.py to ready.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/web/utils.py to utils.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/web/version.py to version.cpython-310.pyc
+byte-compiling /app/pdr/lib/python/nistoar/web/webrecord.py to webrecord.cpython-310.pyc
+running install_egg_info
+running egg_info
+writing nistoar.pdr.egg-info/PKG-INFO
+writing dependency_links to nistoar.pdr.egg-info/dependency_links.txt
+writing top-level names to nistoar.pdr.egg-info/top_level.txt
+reading manifest file 'nistoar.pdr.egg-info/SOURCES.txt'
+writing manifest file 'nistoar.pdr.egg-info/SOURCES.txt'
+Copying nistoar.pdr.egg-info to /app/pdr/lib/python/nistoar.pdr-py.egg-info
+running install_scripts
+copying build/scripts-3.10/midas-uwsgi.py -> /app/pdr/bin
+copying build/scripts-3.10/pdp-uwsgi.py -> /app/pdr/bin
+copying build/scripts-3.10/pdr.py -> /app/pdr/bin
+copying build/scripts-3.10/pdrhealthcheck.py -> /app/pdr/bin
+copying build/scripts-3.10/resolver-uwsgi.py -> /app/pdr/bin
+copying build/scripts-3.10/test_loosen_nerdm.py -> /app/pdr/bin
+copying build/scripts-3.10/test_pdrdownload.py -> /app/pdr/bin
+copying build/scripts-3.10/test_resolver.sh -> /app/pdr/bin
+changing mode of /app/pdr/bin/midas-uwsgi.py to 755
+changing mode of /app/pdr/bin/pdp-uwsgi.py to 755
+changing mode of /app/pdr/bin/pdr.py to 755
+changing mode of /app/pdr/bin/pdrhealthcheck.py to 755
+changing mode of /app/pdr/bin/resolver-uwsgi.py to 755
+changing mode of /app/pdr/bin/test_loosen_nerdm.py to 755
+changing mode of /app/pdr/bin/test_pdrdownload.py to 755
+changing mode of /app/pdr/bin/test_resolver.sh to 755
+Installing into /app/pdr...
+
+cp /dev/oar-pdr-py/metadata/model/field-help-schema.json /dev/oar-pdr-py/metadata/model/forensics-taxonomy.json /dev/oar-pdr-py/metadata/model/nerdm-agg-schema-0.1.json /dev/oar-pdr-py/metadata/model/nerdm-agg-schema.json /dev/oar-pdr-py/metadata/model/nerdm-bib-schema-0.4.json /dev/oar-pdr-py/metadata/model/nerdm-bib-schema-0.5.json /dev/oar-pdr-py/metadata/model/nerdm-bib-schema-0.6.json /dev/oar-pdr-py/metadata/model/nerdm-bib-schema.json /dev/oar-pdr-py/metadata/model/nerdm-context.jsonld /dev/oar-pdr-py/metadata/model/nerdm-exp-schema.json /dev/oar-pdr-py/metadata/model/nerdm-pub-context.jsonld /dev/oar-pdr-py/metadata/model/nerdm-pub-schema-0.1.json /dev/oar-pdr-py/metadata/model/nerdm-pub-schema-0.2.json /dev/oar-pdr-py/metadata/model/nerdm-pub-schema-0.3.json /dev/oar-pdr-py/metadata/model/nerdm-pub-schema-0.4.json /dev/oar-pdr-py/metadata/model/nerdm-pub-schema-0.5.json /dev/oar-pdr-py/metadata/model/nerdm-pub-schema-0.6.json /dev/oar-pdr-py/metadata/model/nerdm-pub-schema.json /dev/oar-pdr-py/metadata/model/nerdm-rls-schema-0.1.json /dev/oar-pdr-py/metadata/model/nerdm-rls-schema-0.2.json /dev/oar-pdr-py/metadata/model/nerdm-rls-schema.json /dev/oar-pdr-py/metadata/model/nerdm-schema-0.1.json /dev/oar-pdr-py/metadata/model/nerdm-schema-0.2.json /dev/oar-pdr-py/metadata/model/nerdm-schema-0.3.json /dev/oar-pdr-py/metadata/model/nerdm-schema-0.4.json /dev/oar-pdr-py/metadata/model/nerdm-schema-0.5.json /dev/oar-pdr-py/metadata/model/nerdm-schema-0.6.json /dev/oar-pdr-py/metadata/model/nerdm-schema-context.jsonld /dev/oar-pdr-py/metadata/model/nerdm-schema.json /dev/oar-pdr-py/metadata/model/nerdm-sip-schema.json /dev/oar-pdr-py/metadata/model/pod-psch-onto.json /dev/oar-pdr-py/metadata/model/pod-relaxed-schema.json /dev/oar-pdr-py/metadata/model/pod-schema.json /dev/oar-pdr-py/metadata/model/profile-schema-onto.json /dev/oar-pdr-py/metadata/model/scrap-schema.json /dev/oar-pdr-py/metadata/model/simple-taxonomy-schema.json /dev/oar-pdr-py/metadata/model/theme-taxonomy.json /dev/oar-pdr-py/metadata/model/theme-taxonomy-pre1.0.json /app/pdr/etc/schemas
+
+cp /dev/oar-pdr-py/metadata/jq/*.jq /app/pdr/lib/jq
+
+tar cf - merge | (cd /app/pdr/etc/merge/.. && tar xf -)
+
+cp /dev/oar-pdr-py/metadata/jq/tests/data/nist-pdl-oct2016.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/nerdm-fields-help.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/ceramicsportal-0.1.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/ceramicsportal-0.2.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/ceramicsportal.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/hitsc-0.1.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/hitsc-0.2.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/hitsc.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/janaf-0.1.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/janaf-0.2.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/janaf-hier-0.1.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/janaf-hier-0.2.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/janaf-hier2.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/janaf-hier.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/janaf.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/mds2-2106.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/ncnrexp0.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/pod.json /app/pdr/etc/samples
+cp /dev/oar-pdr-py/metadata/model/examples/schemaLocation.json /app/pdr/etc/samples
+cp -r /dev/oar-pdr-py/etc /app/pdr
+Running pyunit tests...
++ scripts/testall.pyunit
+Warning: running describe-uwsgi in simulate mode
+Warning: running ingest-uwsgi in simulate mode
+.......................................................................................................................................................................................................................................ss.sss.....................................................................................................sssssss........................................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+......................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+.........open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+......................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+....open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+.......open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+.....open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+............................................................................................................................................................................ssss.ssss.s.sss.............................................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+..........open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+..........open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+..............................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+......................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+..........................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+.......................................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+........................................................................................................................................................
+----------------------------------------------------------------------
+Ran 975 tests in 93.054s
+
+OK (skipped=24)
+['mine2', 'mine3', 'mine3', 'test1', 'test1', 'test1', 'test1', 'test2', 'test2', 'test2', 'test2']
+Failed to connect to WebSocket server: received 1001 (going away); then sent 1001 (going away)
+Running services tests...
++ scripts/testall.services
+Testing all services...
++ /dev/oar-pdr-py/scripts/tests/test_resolver.sh
+starting uwsgi for resolver on port 9090...
+open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+stopping uwsgi for resolver...
+OK: All resolver tests passed.
++ /dev/oar-pdr-py/scripts/tests/test_pdrdownload.py
+.ss.ssss..
+----------------------------------------------------------------------
+Ran 10 tests in 0.197s
+
+OK (skipped=6)
+  checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...                                      checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                    All services OK
+All OK
