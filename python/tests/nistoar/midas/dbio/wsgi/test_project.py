@@ -1050,6 +1050,20 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         self.assertEqual(self.body2dict(body), ["nstr1"])
         
+        self.resp = []
+        path = "mdm1:0003/acls/write/:user"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectACLsHandler))
+        self.assertEqual(hdlr._path, "write/:user")
+        self.assertEqual(hdlr._id, "mdm1:0003")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), True)
+
     def test_get_info(self):
         path = "mdm1:0003/id"
         req = {
@@ -1263,5 +1277,5 @@ class TestMIDASProjectApp(test.TestCase):
                          
 if __name__ == '__main__':
     test.main()
-        
-        
+
+

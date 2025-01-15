@@ -707,7 +707,12 @@ class ProjectACLsHandler(ProjectRecordHandler):
         if len(parts) < 2:
             return self.send_json(acl, ashead=ashead)
 
-        return self.send_json(parts[1] in acl, ashead=ashead)
+        # parts[1] is a particular user the client is interested in
+        if parts[1] in [":user", "midas:user"]:
+            # this indicates the currently authenticated user
+            parts[1] = self.who.actor
+
+        return self.send_json(parts[1] in acl, ashead=ashead)  # returns true or false
 
     def do_POST(self, path):
         """
