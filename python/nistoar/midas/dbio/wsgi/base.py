@@ -74,7 +74,7 @@ class DBIOHandler(Handler):
             self.id = id
 
     def send_fatal_error(self, fatalex: FatalError, ashead=False):
-        self.send_error_resp(fatalex.code, fatalex.reason, fatalex.explain, fatalex.id, ashead)
+        return self.send_error_resp(fatalex.code, fatalex.reason, fatalex.explain, fatalex.id, ashead)
 
     def send_error_resp(self, code, reason, explain, id=None, ashead=False):
         """

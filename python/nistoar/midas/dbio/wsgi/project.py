@@ -398,6 +398,9 @@ class ProjectDataHandler(ProjectRecordHandler):
                                             "No data found at requested property", self._id, ashead=ashead)
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id, ashead=ashead)
+        except dbio.PartNotAccessible as ex:
+            return self.send_error_resp(405, "Data property not retrieveable",
+                                  "Requested data property cannot be retrieved independently of its ancestor")
         return self.send_json(out, ashead=ashead)
 
     def do_DELETE(self, path):
