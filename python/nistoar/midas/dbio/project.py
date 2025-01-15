@@ -185,7 +185,7 @@ class ProjectService(MIDASSystem):
         elif not prec.meta:
             prec.meta = self._new_metadata_for(shoulder)
         prec.data = self._new_data_for(prec.id, prec.meta)
-        prec.status.act(self.STATUS_ACTION_CREATE, "draft created")
+        prec.status.act(self.STATUS_ACTION_CREATE, "draft created", self.who.actor)
         if data:
             self.update_data(prec.id, data, message=None, _prec=prec)  # this will call prec.save()
         else:
@@ -612,7 +612,7 @@ class ProjectService(MIDASSystem):
 
         # update the record status according to the inputs
         if action:
-            prec.status.act(action, message)
+            prec.status.act(action, message, self.who.actor)
         elif message is not None:
             prec.message = message
         prec.status.set_state(status.EDIT)
@@ -655,7 +655,7 @@ class ProjectService(MIDASSystem):
             prec.data = initdata
             if message is None:
                 message = "reset draft to initial defaults"
-            prec.status.act(self.STATUS_ACTION_CLEAR, message)
+            prec.status.act(self.STATUS_ACTION_CLEAR, message, self.who.actor)
 
         else:
             # clearing only part of the data
@@ -678,7 +678,7 @@ class ProjectService(MIDASSystem):
 
             if message is None:
                 message = "reset %s to initial defaults" % part
-            prec.status.act(self.STATUS_ACTION_UPDATE, message)
+            prec.status.act(self.STATUS_ACTION_UPDATE, message, self.who.actor)
 
         # prep the provenance record
         tgt = prec.id
@@ -757,7 +757,7 @@ class ProjectService(MIDASSystem):
             raise NotEditable(id)
 
         stat.set_state(status.PROCESSING)
-        stat.act(self.STATUS_ACTION_FINALIZE, "in progress")
+        stat.act(self.STATUS_ACTION_FINALIZE, "in progress", self.who.actor)
         _prec.save()
         
         try:
@@ -768,7 +768,7 @@ class ProjectService(MIDASSystem):
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "finalize", "errors": ex.errors}))
             stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_FINALIZE, ex.format_errors())
+            stat.act(self.STATUS_ACTION_FINALIZE, ex.format_errors(), self.who.actor)
             self._try_save(_prec)
             raise
 
@@ -778,7 +778,7 @@ class ProjectService(MIDASSystem):
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "finalize", "errors": [emsg]}))
             stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_FINALIZE, emsg)
+            stat.act(self.STATUS_ACTION_FINALIZE, emsg, self.who.actor)
             self._try_save(_prec)
             raise
 
@@ -788,7 +788,7 @@ class ProjectService(MIDASSystem):
 
             if reset_state:
                 stat.set_state(status.READY)
-            stat.act(self.STATUS_ACTION_FINALIZE, message or defmsg)
+            stat.act(self.STATUS_ACTION_FINALIZE, message or defmsg, self.who.actor)
             _prec.save()
 
         self.log.info("Finalized %s record %s (%s) for %s",
@@ -906,7 +906,7 @@ class ProjectService(MIDASSystem):
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": ex.errors}))
             stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_SUBMIT, ex.format_errors())
+            stat.act(self.STATUS_ACTION_SUBMIT, ex.format_errors(), self.who.actor)
             self._try_save(_prec)
             raise
 
@@ -915,7 +915,7 @@ class ProjectService(MIDASSystem):
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": [emsg]}))
             stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_SUBMIT, emsg)
+            stat.act(self.STATUS_ACTION_SUBMIT, emsg, self.who.actor)
             self._try_save(_prec)
             raise
 
@@ -924,7 +924,7 @@ class ProjectService(MIDASSystem):
             self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, defmsg, {"name": "submit"}))
 
             stat.set_state(status.SUBMITTED)
-            stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg)
+            stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg, self.who.actor)
             _prec.save()
 
         self.log.info("Submitted %s record %s (%s) for %s",

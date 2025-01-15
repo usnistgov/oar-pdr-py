@@ -721,7 +721,7 @@ class DAPService(ProjectService):
                 part = ("/"+part) if part.startswith("pdr:") else ("."+part)
                 provact.add_subaction(Action(Action.DELETE, _prec.id+"#data"+part, self.who,
                                              message))
-                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared "+what)
+                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared "+what, self.who.actor)
 
             else:
                 nerd.authors.empty()
@@ -733,7 +733,7 @@ class DAPService(ProjectService):
                 if not message:
                     message = "clearing all NERDm data"
                 provact = Action(Action.PATCH, _prec.id, self.who, message)
-                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared all NERDm data")
+                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared all NERDm data", self.who.actor)
 
         except PartNotAccessible:
             # client request error; don't record action
@@ -746,7 +746,7 @@ class DAPService(ProjectService):
                 provact.message = "Failed to clear requested NERDm data"
                 self._record_action(provact)
             
-            _prec.status.act(self.STATUS_ACTION_CLEAR, "Failed to clear NERDm data")
+            _prec.status.act(self.STATUS_ACTION_CLEAR, "Failed to clear NERDm data", self.who.actor)
             _prec.set_state(status.EDIT)
             _prec.data = self._summarize(nerd)
             self._try_save(_prec)
