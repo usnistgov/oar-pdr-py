@@ -153,7 +153,7 @@ if dbtype == "fsbased":
     factory = FSBasedDBClientFactory(cfg.get("dbio", {}), dbdir)
 
 elif dbtype == "mongo":
-    factory = MongoDBClientFactory(cfg.get("dbio", {}), dburl)
+    factory = MongoDBClientFactory(cfg.get("dbio", {}), dburl,notification_server=notification_server)
 
 elif dbtype == "inmem":
     factory = InMemoryDBClientFactory(cfg.get("dbio", {}),notification_server=notification_server)

@@ -6,6 +6,7 @@ from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
+from .notifier import Notifier
 
 from pymongo import MongoClient, ASCENDING
 
@@ -20,7 +21,7 @@ class MongoDBClient(base.DBClient):
     ACTION_LOG_COLL = base.PROV_ACT_LOG
     HISTORY_COLL = 'history'
 
-    def __init__(self, dburl: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS):
+    def __init__(self, dburl: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS, notification_server: Notifier = None):
         """
         create the client with its connector to the MongoDB database
 
@@ -34,7 +35,7 @@ class MongoDBClient(base.DBClient):
                              dburl)
         self._dburl = dburl
         self._mngocli = None
-        super(MongoDBClient, self).__init__(config, projcoll, None, foruser)
+        super(MongoDBClient, self).__init__(config, projcoll, None, foruser,notification_server)
 
     def connect(self):
         """
@@ -287,7 +288,7 @@ class MongoDBClientFactory(base.DBClientFactory):
         ``mongodb://``*[USER*``:``*PASS*``@``*]HOST[*``:``*PORT]*``/``*DBNAME*
     """
 
-    def __init__(self, config: Mapping, dburl: str = None):
+    def __init__(self, config: Mapping, dburl: str = None, notification_server: Notifier = None):
         """
         Create the factory with the given configuration.
 
@@ -300,7 +301,8 @@ class MongoDBClientFactory(base.DBClientFactory):
                              argument nor a configuration parameter.
         :raise ValueError:  if the specified database URL is of an incorrect form
         """
-        super(MongoDBClientFactory, self).__init__(config)
+        super(MongoDBClientFactory, self).__init__(config, notification_server)
+        self.notification_server = notification_server
         if not dburl:
             dburl = self._cfg.get("db_url")
             if not dburl:
@@ -313,4 +315,4 @@ class MongoDBClientFactory(base.DBClientFactory):
 
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
         cfg = merge_config(config, deepcopy(self._cfg))
-        return MongoDBClient(self._dburl, cfg, servicetype, foruser)
+        return MongoDBClient(self._dburl, cfg, servicetype, foruser,self.notification_server)
