@@ -749,6 +749,7 @@ class TestMongoDBGroups(test.TestCase):
         self.assertIn(base.PUBLIC_GROUP, matches)
         self.assertEqual(len(matches), 4)
 
+    
 
 if __name__ == '__main__':
     test.main()
