@@ -1,0 +1,80 @@
+
+Running pyunit tests...
+
++ scripts/testall.pyunit
+Warning: running describe-uwsgi in simulate mode
+Warning: running ingest-uwsgi in simulate mode
+.................................................................................................................................................................................................F.....................................ss.sss..................................................................................................................F.........sssssss........................................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+......................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+.........open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+......................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+....open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+.......open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+.....open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+............................................................................................................................................................................ssss.ssss.s.sss.............................................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+..........open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+..........open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+..............................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+......................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+..........................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+.......................................open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+........................................................................................................................................................
+======================================================================
+FAIL: test_select_records (tests.nistoar.midas.dbio.test_client.TestDBClient)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/dev/oar-pdr-py/python/tests/nistoar/midas/dbio/test_client.py", line 194, in test_select_records
+    self.assertEqual(len(names), 4)
+AssertionError: 11 != 4
+
+======================================================================
+FAIL: test_search (tests.nistoar.midas.dbio.wsgi.test_project.TestMIDASProjectApp)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/dev/oar-pdr-py/python/tests/nistoar/midas/dbio/wsgi/test_project.py", line 579, in test_search
+    self.assertEqual(len(matches), 2)
+AssertionError: 7 != 2
+
+----------------------------------------------------------------------
+Ran 998 tests in 73.195s
+
+FAILED (failures=2, skipped=24)
+['mine2', 'mine3', 'mine3', 'test1', 'test1', 'test1', 'test1', 'test2', 'test2', 'test2', 'test2']
+Failed to connect to WebSocket server: received 1001 (going away); then sent 1001 (going away)
+Failed to connect to WebSocket server: received 1001 (going away); then sent 1001 (going away)
+Running services tests...
+
++ scripts/testall.services
+Testing all services...
++ /dev/oar-pdr-py/scripts/tests/test_resolver.sh
+starting uwsgi for resolver on port 9090...
+open("./python3_plugin.so"): No such file or directory [core/utils.c line 3709]
+!!! UNABLE to load uWSGI plugin: ./python3_plugin.so: cannot open shared object file: No such file or directory !!!
+stopping uwsgi for resolver...
+OK: All resolver tests passed.
++ /dev/oar-pdr-py/scripts/tests/test_pdrdownload.py
+.ss.ssss..
+----------------------------------------------------------------------
+Ran 10 tests in 0.040s
+
+OK (skipped=6)
+  checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...                                      checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                      checking sub/f1.txt (47 Bytes)...  checking sub/f3.txt (31 Bytes)...  checking sub/f2.txt (31 Bytes)...                                    All services OK
+Some test(s) failed
