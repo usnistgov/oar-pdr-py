@@ -87,7 +87,6 @@ paths:
     summary: access to a specific DMP record
     parameters:
       - "$ref": "#/components/parameters/projid"
-        summary:  the identifier assigned to the desired DMP record
     get:
       summary: Return the DMP record with the specified identifier.  
       description:
@@ -118,7 +117,6 @@ paths:
     summary:  the data describing the contents of a Data Management Plan (DMP)
     parameters:
       - "$ref": "#/components/parameters/projid"
-        summary:  the identifier assigned to the desired DMP record
     get:
       summary: return the DMP record contents
       description:
@@ -244,7 +242,6 @@ paths:
     summary:  the mnemonic name for the DMP record with the given identifier
     parameters:
       - "$ref": "#/components/parameters/projid"
-        summary:  the identifier assigned to the desired DMP record
     get:
       summary: "return the DMP record's mnemonic name"
       description:
@@ -316,7 +313,6 @@ paths:
       applied to the record.
     parameters:
       - "$ref": "#/components/parameters/projid"
-        summary:  the identifier assigned to the desired DMP record
     get:
       summary: "the current status data"
       description:
@@ -448,7 +444,6 @@ paths:
     summary:  the access control lists (ACLs) that control who can access this DMP
     parameters:
       - "$ref": "#/components/parameters/projid"
-        summary:  the identifier assigned to the desired DMP record
     get:
       summary: return the ACLs currently set for this DMP
       description:
@@ -497,9 +492,7 @@ paths:
     summary:  the access control lists (ACLs) that control who can access this DMP
     parameters:
       - "$ref": "#/components/parameters/projid"
-        summary:  the identifier assigned to the desired DMP record
-      - type: string
-        summary: the name of the permission (e.g. "read", "write", "admin", or "delete").
+      - "$ref": "#/components/parameters/perm"
     get:
       summary: return the list of users and groups that have permission to access this record
       description:
@@ -709,11 +702,9 @@ paths:
     summary:  the status of a user or group with respect to a permission on this record
     parameters:
       - "$ref": "#/components/parameters/projid"
-        summary:  the identifier assigned to the desired DMP record
-      - type: string
-        summary: the name of the permission (e.g. "read", "write", "admin", or "delete").
-      - type: string
-        summary: the identifier of a user or group of interest
+      - "$ref": "#/components/parameters/perm"
+      - "$ref": "#/components/parameters/userorgroup"
+
     get:
       summary: return whether the specified user or group has the given permission
       description:
@@ -755,7 +746,7 @@ paths:
       description:
         This method removes the group or user ID from an ACL permission list.  A successful
         response is still returned if the specified user or group did not previously have
-        have the permission.
+        the permission.
       responses:
         "200":
           description:  the user or group was removed
@@ -795,6 +786,23 @@ components:
       required: true
       schema:
         type: string
+    perm:
+      name: perm
+      in: "path"
+      description:
+        the name of the permission (e.g. "read", "write", "admin", or "delete").
+      required: true
+      schema:
+        type: string
+    userorgroup:
+      name: userorgroup
+      in: "path"
+      description:
+        the identifier of a user or group of interest
+      required: true
+      schema:
+        type: string
+        required: true
 
   schemas:
     ErrorResponse:
