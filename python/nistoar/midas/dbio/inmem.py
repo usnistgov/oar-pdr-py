@@ -80,6 +80,7 @@ class InMemoryDBClient(base.DBClient):
             for p in perm:
                 if rec.authorized(p):
                     yield deepcopy(rec)
+                    break
     
     def adv_select_records(self, filter:dict,
                            perm: base.Permissions=base.ACLs.OWN,) -> Iterator[base.ProjectRecord]:
