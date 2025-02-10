@@ -540,7 +540,8 @@ class TestNotifier(test.IsolatedAsyncioTestCase):
                         #print(f"Messages: {messages}")
                         # Break the loop after receiving the first message for this test
             except Exception as e:
-                print(f"Failed to connect to WebSocket server: {e}")
+                #print(f"Failed to connect to WebSocket server: {e}")
+                pass
 
         # Start the WebSocket client to receive messages
         uri = 'ws://localhost:8765'
