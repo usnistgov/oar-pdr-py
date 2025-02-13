@@ -737,6 +737,61 @@ paths:
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
 
+    put:
+      summary: replace the list of users and groups assigned a permission
+      description:
+        This will completely replace the list of user and group IDs attached to the specified
+        permission.  This is helpful when the client wants to take complete control over editing
+        the list client-side, pushing it all when all changes are completed.  
+      requestBody:
+        summary:  the list of user and group identifiers to grant this permission to.
+        content:
+          "application/json":
+            schema:
+              type: array
+              items: { type: string }
+      responses:
+        "200":
+          description:  the updated list of user and group identifiers with this permission
+          content: 
+            "application/json":
+              schema:
+                type: array
+                items: { type: string }
+              examples:
+                "read":
+                   value:
+                     '[ "usr1", "usr2" ]'
+        "400":
+          description:
+            The given input is not an array of user or group (string) IDs
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to update this record's permissions.
+            The user must have "admin" permission assigned to update its ACLs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            Either the given project ID does not exist, or the requested permission
+            does not exist on the record.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "405":
+          description:
+            The specified permission is not a standard, editable permission.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
 
     patch:
       summary: grant a single user or group or a list of them a permission
@@ -970,9 +1025,9 @@ components:
             a boolean set to True if this record has been deactivated, preventing any further editing or
             listing
           type: boolean
-        "acl":
+        "acls":
           description:  the access control lists associated with this record
-          type: { $ref: ACLs }
+          type: { $ref: "#/components/schemas/ACLs" }
         "data":
           description:  a digest of the draft publication document, featuring selected and summary properties 
           type:  object
