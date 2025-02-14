@@ -688,8 +688,12 @@ paths:
         ("read", "write", "admin", and "delete") may be updated.  The authenticated user must 
         have "admin" permission to add other identifiers to the list.  Note that only one identifier
         can be added with this method; use PATCH to add multiple users or groups.
+
+        The input request body is a single string providing the ID of the user or group that the
+        permission should be granted to. (Be sure to enclose your ID in quotes.)
       requestBody:
         summary:  the identifier of the user or group to grant this permission to.
+        required: true
         content:
           "application/json":
             schema:
@@ -743,8 +747,12 @@ paths:
         This will completely replace the list of user and group IDs attached to the specified
         permission.  This is helpful when the client wants to take complete control over editing
         the list client-side, pushing it all when all changes are completed.  
+        
+        The input request body is an array of strings providing the IDs of the users and/or groups
+        that the permission should be granted to. 
       requestBody:
         summary:  the list of user and group identifiers to grant this permission to.
+        required: true
         content:
           "application/json":
             schema:
@@ -799,8 +807,13 @@ paths:
         A single user or group ID can be assigned a permission by passing a string as the input.
         Alternatively, multiple users and/or groups can be granted permission by providing an
         array of identifiers as input. 
+        
+        The input request body is a single string or an array of strings providing the IDs of
+        the users and/or groups that the permission should be granted to. (Be sure to enclose
+        a single ID in quotes.)
       requestBody:
         summary:  the list of user and group identifiers to grant this permission to.
+        required: true
         content:
           "application/json":
             schema:
