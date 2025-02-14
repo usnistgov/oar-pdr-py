@@ -17,9 +17,16 @@ class PeopleService(ABC):
     """
     An implementation of the NSD
     """
-    OU_ORG_TYPE = "ou"
+    OU_ORG_TYPE  = "ou"
     DIV_ORG_TYPE = "div"
     GRP_ORG_TYPE = "group"
+
+    # these are overridden by the implementation
+    ORG_ID_PROP    = "id"
+    PERSON_ID_PROP = "id"
+    EMAIL_PROP     = "email"
+    ORCID_PROP     = "orcid"
+    EID_PROP       = "username"
 
     @abstractmethod
     def OUs(self) -> List[Mapping]:
@@ -80,6 +87,51 @@ class PeopleService(ABC):
         resolve a native person identifier into the description of the person
         """
         raise NotImplemented()
+
+    @abstractmethod
+    def get_org(self, id: int) -> Mapping:
+        """
+        resolve a native group identifier into the description of the group
+        """
+        raise NotImplemented()
+
+    def _get_person_by(self, prop: str, val) -> Mapping:
+        # return a single person description matching a property value.  The implementation
+        # assumes that the each person has a unique value for the property.
+        hits = self.select_people({ prop: val })
+        if not hits:
+            return None
+        return hits[0]
+
+    def _get_org_by(self, prop: str, val) -> Mapping:
+        # return a single organization description matching a property value.  The implementation
+        # assumes that the each org has a unique value for the property.
+        hits = self.select_orgs({ prop: val })
+        if not hits:
+            return None
+        return hits[0]
+
+    def get_person_by_email(self, email: str) -> Mapping:
+        """
+        resolve a person's email into a full description of the person, or None if the email
+        is not recognized.
+        """
+        return self._get_person_by(self.EMAIL_PROP, email)
+
+    def get_person_by_orcid(self, orcid: str) -> Mapping:
+        """
+        resolve a person's ORCID into a full description of the person, or None if the ORCID
+        is not recognized.
+        """
+        return self._get_person_by(self.ORCID_PROP, email)
+        
+    def get_person_by_eid(self, eid: str) -> Mapping:
+        """
+        resolve a person's enterprise ID (login name) into a full description of the person, or 
+        None if the ID is not recognized.
+        """
+        return self._get_person_by(self.EID_PROP, eid)
+        
     
 class MongoPeopleService(PeopleService):
     """
@@ -91,6 +143,15 @@ class MongoPeopleService(PeopleService):
     org_lvl = { PeopleService.OU_ORG_TYPE:   OU_LVL_ID,
                 PeopleService.DIV_ORG_TYPE: DIV_LVL_ID,
                 PeopleService.GRP_ORG_TYPE: GRP_LVL_ID }
+
+    ORG_ID_PROP    = "orG_ID"
+    PERSON_ID_PROP = "peopleID"
+    EMAIL_PROP     = "emailAddress"
+    ORCID_PROP     = "orcid"
+    EID_PROP       = "nistUsername"
+
+    ORGS_COLL = "Orgs"
+    PEOPLE_COLL = "People"
 
     def __init__(self, mongourl, exactmatch=False):
         """
@@ -111,7 +172,7 @@ class MongoPeopleService(PeopleService):
     def groups(self) -> List[Mapping]:
         return list(self._db['Orgs'].find({"orG_LVL_ID": self.GRP_LVL_ID}, {"_id": False}))
 
-    def _get_rec(self, id: int, coll: str, idprop: str='orG_ID') -> Mapping:
+    def _get_rec(self, id: int, coll: str, idprop: str) -> Mapping:
         try:
             hits = list(self._db[coll].find({idprop: id}, {"_id": False}))
         except PyMongoError as ex:
@@ -121,8 +182,14 @@ class MongoPeopleService(PeopleService):
             return None
         return hits[0]
 
+    def _get_org_by(self, prop: str, val) -> Mapping:
+        return self._get_rec(val, self.ORGS_COLL, prop)
+
+    def _get_person_by(self, prop: str, val) -> Mapping:
+        return self._get_rec(val, self.PEOPLE_COLL, prop)
+
     def get_org(self, id: int) -> Mapping:
-        return self._get_rec(id, "Orgs")
+        return self._get_rec(id, self.ORGS_COLL, self.ORG_ID_PROP)
 
     def get_OU(self, id: int) -> Mapping:
         out = self.get_org(id)
@@ -143,7 +210,7 @@ class MongoPeopleService(PeopleService):
         return out
 
     def get_person(self, id: int) -> Mapping:
-        return self._get_rec(id, "People", "peopleID")
+        return self._get_rec(id, self.PEOPLE_COLL, self.PERSON_ID_PROP)
 
     def _to_mongo_filter(self, filter: Mapping) -> Mapping:
         # The input filter is assumed to be an NSD-compatible filter where properties
@@ -364,5 +431,18 @@ class MongoPeopleService(PeopleService):
             "org_count": oc
         }
             
+def create_people_service(config):
+    """
+    instantiate a :py:class:`PeopleService` instance based on the given configuration
+    """
+    if config.get("factory") == "mongo":
+        dburl = config.get("db_url")
+        if not dburl:
+            raise ConfigurationException("Missing required config param: people_service.db_url")
+        return MongoPeopleService(dburl)
 
+    elif config.get("factory"):
+        raise ConfigurationException("people_service.factory type not supported: "+config["factory"])
+
+    return None
 

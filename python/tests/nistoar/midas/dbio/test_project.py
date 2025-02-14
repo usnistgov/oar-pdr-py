@@ -117,6 +117,7 @@ class TestProjectService(test.TestCase):
         self.assertEqual(prec.status.action, "create")
         self.assertEqual(prec.status.message, "draft created")
         self.assertEqual(prec.status.state, "edit")
+        self.assertEqual(prec.status.created_by, "midas/nstr1")
 
         self.assertEqual(prec.acls._perms.get("read"), [ self.project.who.actor, "grp0:public"])
         self.assertEqual(prec.acls._perms.get("write"), [ self.project.who.actor ])
@@ -147,6 +148,18 @@ class TestProjectService(test.TestCase):
         self.assertEqual(prec.id, "mdm1:0003")
         self.assertEqual(prec.data, {"color": "red"})
         self.assertEqual(prec.meta, {"temper": "dark", "agent_vehicle": 'midas'})
+
+    def test_create_record_reassign(self):
+        self.create_service()
+        self.assertTrue(not self.project.dbcli.name_exists("gurn"))
+        
+        prec = self.project.create_record("gurn", {"color": "red"}, {"foruser": "harry"})
+        self.assertEqual(prec.name, "gurn")
+        self.assertEqual(prec.id, "mdm1:0003")
+        self.assertEqual(prec.data, {"color": "red"})
+        self.assertEqual(prec.owner, "harry")
+        self.assertEqual(prec.meta, {"foruser": "harry", "agent_vehicle": 'midas'})
+        self.assertEqual(prec.status.created_by, "midas/nstr1")
 
     def test_get_data(self):
         self.create_service()

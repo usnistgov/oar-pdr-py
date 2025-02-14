@@ -38,7 +38,7 @@ from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
 from nistoar.pdr.utils import build_mime_type_map, read_json
 from nistoar.pdr.utils.prov import Agent, Action
-from nistoar.nsd.client import NSDClient
+from nistoar.nsd import NSDServerError
 
 from . import validate
 from .. import nerdstore
@@ -238,7 +238,7 @@ class DAPService(ProjectService):
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: Agent=None,
                  log: Logger=None, nerdstore: NERDResourceStorage=None, project_type=DAP_PROJECTS,
-                 minnerdmver=(0, 6), fmcli=None, nsdcli=None):
+                 minnerdmver=(0, 6), fmcli=None, nsdsvc=None):
         """
         create the service
         :param DBClientFactory dbclient_factory:  the factory to create the DBIO service client from
@@ -253,8 +253,6 @@ class DAPService(ProjectService):
                                    subclass constructors.
         :param FileManager fmcli:  The FileManager client to use; if None, one will be constructed 
                                    from the configuration.
-        :param NSDClient  nsdcli:  The NSD client to use to look up people and organizations; if None, 
-                                   one will be constructed from the configuration.
         """
         super(DAPService, self).__init__(project_type, dbclient_factory, config, who, log,
                                          _subsys="Digital Asset Publication Authoring System",
@@ -269,13 +267,6 @@ class DAPService(ProjectService):
         if not nerdstore:
             nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), log)
         self._store = nerdstore
-
-        self._nsdcli = nsdcli
-        if not self._nsdcli:
-            if not self.cfg.get('nsd', {}).get('service_endpoint'):
-                self.log.warning("NSD service is not configured; name lookups are not possible")
-            else:
-                self._nsdcli = self._make_nsd_client(config['nsd'])
 
         self.cfg.setdefault('assign_doi', ASSIGN_DOI_REQUEST)
         if not self.cfg.get('doi_naan') and self.cfg.get('assign_doi') != ASSIGN_DOI_NEVER:
@@ -295,11 +286,6 @@ class DAPService(ProjectService):
 
     def _make_fm_client(self, fmcfg):
         return FileManager(fmcfg)
-
-    def _make_nsd_client(self, nsdcfg):
-        if not nsdcfg.get('service_endpoint'):
-            raise ConfigurationException("nsd config missing 'service_endpoint' parameter")
-        return NSDClient(nsdcfg['service_endpoint'])
 
     def _choose_mediatype(self, fext):
         defmt = 'application/octet-stream'
@@ -473,17 +459,16 @@ class DAPService(ProjectService):
             elif meta.get("contactName"):
                 out['contactPoint'] = self._moderate_contactPoint({"fn": meta["contactName"]}, doval=False)
 
-            ro = self.cfg.get('default_responsible_org', {})
-            if self._nsdcli and out.get('contactPoint', {}).get('hasEmail'):
+            ro = deepcopy(self.cfg.get('default_responsible_org', {}))
+            if self.dbcli.people_service and out.get('contactPoint', {}).get('hasEmail'):
+                ps = self.dbcli.people_service
                 try:
-                    conrec = self._nsdcli.select_people(email=out.get['contactPoint']['hasEmail'])
+                    conrec = ps.get_person_by_email(email=out['contactPoint']['hasEmail'])
                 except NSDServerError as ex:
                     self.log.warning("Unable to get org info on contact from NSD service: %s", str(ex))
                 except Exception as ex:
                     self.log.exception("Unexpected error while accessing NSD service: %s", str(ex))
                 else:
-                    if len(conrec) > 0:
-                        conrec = conrec[0]
                     if conrec:
                         ro['subunits'] = []
                         if not ro.get('title'):
@@ -614,7 +599,7 @@ class DAPService(ProjectService):
                 out = nerd.get_res_data()
                 if part in out:
                     out = out[part]
-                elif part in "description @type contactPoint title rights disclaimer".split():
+                elif part in "description @type contactPoint title rights disclaimer landingPage".split():
                     raise ObjectNotFound(prec.id, part, "%s property not set yet" % part)
                 else:
                     raise PartNotAccessible(prec.id, part, "Accessing %s not supported" % part)

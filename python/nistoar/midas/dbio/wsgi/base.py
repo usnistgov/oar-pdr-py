@@ -96,6 +96,41 @@ class DBIOHandler(Handler):
 
         return self.send_json(resp, reason, code, ashead)
 
+    def get_text_body(self, limit=100000000):
+        """
+        read in the request body assuming that it is in JSON format
+
+        :param int limit:  a limit on the number of bytes to read.  If input exceeds this limit, 
+                           it will be truncated.  The default limit is 100 MB.
+        """
+        try:
+            bodyin = self._env.get('wsgi.input')
+            if bodyin is None:
+                if self._reqrec:
+                    self._reqrec.record()
+                raise self.FatalError(400, "Missing input", "Missing expected input text data")
+
+            out = bodyin.read(limit)
+            if isinstance(out, bytes):
+                out = out.decode('utf-8')
+            if self._reqrec:
+                self._reqrec.add_body_text(out).record()
+            return out
+
+        except UnicodeError as ex:
+            if self._reqrec:
+                self._reqrec.add_body_text("<<not convertable to text>>")
+            raise self.FatalError(400, "Unconvertable Text",
+                                  "Input text is not UTF-8 convertable: "+str(ex)) from ex
+
+        except Exception as ex:
+            if self._reqrec:
+                if out:
+                    self._reqrec.add_body_text(out).record()
+                else:
+                    self._reqrec.add_body_text("<<empty body>>")
+            raise
+
     def get_json_body(self):
         """
         read in the request body assuming that it is in JSON format

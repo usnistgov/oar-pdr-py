@@ -9,15 +9,17 @@ from typing import Iterator, List
 from . import base
 
 from nistoar.base.config import merge_config
+from nistoar.nsd.service import PeopleService, MongoPeopleService, create_people_service
 
 class InMemoryDBClient(base.DBClient):
     """
     an in-memory DBClient implementation 
     """
 
-    def __init__(self, dbdata: Mapping, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS):
+    def __init__(self, dbdata: Mapping, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS,
+                 peopsvc: PeopleService = None):
         self._db = dbdata
-        super(InMemoryDBClient, self).__init__(config, projcoll, self._db, foruser)
+        super(InMemoryDBClient, self).__init__(config, projcoll, self._db, foruser, peopsvc)
 
     def _next_recnum(self, shoulder):
         if shoulder not in self._db['nextnum']:
@@ -164,5 +166,10 @@ class InMemoryDBClientFactory(base.DBClientFactory):
         cfg = merge_config(config, deepcopy(self._cfg))
         if servicetype not in self._db:
             self._db[servicetype] = {}
-        return InMemoryDBClient(self._db, cfg, servicetype, foruser)
+
+        peopsvc = self._peopsvc
+        if not peopsvc:
+            peopsvc = self.create_people_service(cfg.get("people_service", {}))
+
+        return InMemoryDBClient(self._db, cfg, servicetype, foruser, peopsvc)
         
