@@ -630,7 +630,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
         self.assertEqual(resp['data']['@type'], [ "nrdp:PublicDataResource", "dcat:Resource" ])
         self.assertEqual(resp['data']['title'], 'My way')
-        self.assertEqual(resp['data']['author_count'], 0)
+        self.assertEqual(len(resp['data']['authors']), 0)
         
         
 
