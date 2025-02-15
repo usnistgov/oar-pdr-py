@@ -118,6 +118,7 @@ while [ "$1" != "" ]; do
             ;;
         -B|--bg|--detach)
             DETACH="--detach"
+            ;;
         -l)
             shift
             LOGFILE=$1
