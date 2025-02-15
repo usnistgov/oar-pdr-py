@@ -412,7 +412,7 @@ class AggregatedValidator(Validator):
             out = ValidationResults(self._target_name(target), want, **kw)
 
         for v in self._vals:
-            v.validate(bag, want, out)
+            v.validate(target, want, out)
         return out
 
     def _target_name(self, target):
