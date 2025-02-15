@@ -6,6 +6,7 @@ from functools import reduce
 from collections import namedtuple
 from wsgiref.headers import Headers
 from urllib.parse import parse_qs
+from typing import List
 
 from .utils import is_content_type, match_accept, acceptable, order_accepts
 
@@ -227,7 +228,29 @@ class TextSupport(FormatSupport):
     @classmethod
     def add_support(cls, fmtsup: FormatSupport, asdefault: bool=False):
         """
-        Add support for HTML content types to the given FormatSupport instance
+        Add support for plain text content types to the given FormatSupport instance
         """
         fmtsup.support(Format(TextSupport.FMT_TEXT, "text/plain"), ["text/plain"], asdefault, True)
+  
+
+class JSONSupport(FormatSupport):
+    """
+    Support a plain text output format
+    """
+    FMT_JSON = "json"
+    DEF_CONTENT_TYPE = "application/json"
+
+    def __init__(self, ctypes=[]):
+        super(JSONSupport, self).__init__()
+        JSONSupport.add_support(self, ctypes)
+
+    @classmethod
+    def add_support(cls, fmtsup: FormatSupport, ctypes: List[str]=[], asdefault: bool=False):
+        """
+        Add support for JSON content types to the given FormatSupport instance
+        """
+        if not ctypes:
+            ctypes = [ JSONSupport.DEF_CONTENT_TYPE ]
+        fmtsup.support(Format(JSONSupport.FMT_JSON, JSONSupport.DEF_CONTENT_TYPE),
+                       ctypes, asdefault, True)
   

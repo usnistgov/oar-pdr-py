@@ -46,6 +46,11 @@ ARGUMENTS
   -c FILE, --config-file FILE   Use a custom service configuration given in FILE.
                                 This file must be in YAML or JSON format.
                                 Defaut: docker/peopleserver/people_config.yml
+  -d DIR, --data-dir DIR        local directory where staff directory data files 
+                                can be initially loaded into the database from.  
+                                Be default, the people data will be loaded from 
+                                a file called "person.json" and organizations, 
+                                from "orgs.json".  
   -B, --bg                      Run the server in the background (returning the 
                                 command prompt after successful launch)
   -N, --no-mongo                Do not start a mongo server; use this if you want
@@ -147,6 +152,11 @@ while [ "$1" != "" ]; do
     esac
     shift
 done
+if [ -z "$DATADIR" ]; then
+    DATADIR=$repodir/python/tests/nistoar/nsd/data
+else
+    DATADIR=`(cd $DATADIR > /dev/null 2>&1; pwd)`
+fi
 [ -n "$ACTION" ] || ACTION=start
 
 ([ -z "$DOPYBUILD" ] && [ -e "$repodir/dist/pdr" ]) || {

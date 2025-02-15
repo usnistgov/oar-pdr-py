@@ -14,6 +14,8 @@ the following endpoints:
     Repository (PDR)
   * ``/groups/`` -- the API for creating and managing access permission groups for collaborative 
     authoring.
+  * ``/nsdi/v1/`` -- an API for retrieving fast indexes matching entries in the NIST Staff Directory
+    (see :py:mod:`nistoar.midas.nsdi` for details).
 
 These endpoint send and receive data stored in the backend database through the common 
 :py:mod:` DBIO layer <nistoar.midas.dbio>`.  
@@ -151,7 +153,10 @@ from .dap.service import mdsx, mds3
 from .dbio.inmem import InMemoryDBClientFactory
 from .dbio.fsbased import FSBasedDBClientFactory
 from .dbio.mongo import MongoDBClientFactory
+from .nsdi.wsgi import v1 as nsdiv1
 from nistoar.base.config import ConfigurationException, merge_config
+
+from nistoar.nsd.wsgi import nsd1, oar1
 
 log = logging.getLogger(system.system_abbrev)   \
              .getChild(system.subsystem_abbrev) \
@@ -273,6 +278,10 @@ class ServiceAppFactory:
         """
         out = OrderedDict()
         about = About(log, self.cfg.get("about", {}))
+        if hasattr(dbio_client_factory, 'reset'):
+            # use only in development/unit-test mode!
+            log.warning("using dev-only, resetable DBClient")
+            about = DevAbout(log, dbio_client_factory, self.cfg.get("about", {}))
 
         for appname, appcfg in self.cfg['services'].items():
             if not isinstance(appcfg, Mapping):
@@ -445,7 +454,7 @@ class About(ServiceApp):
                 # only the root path is supported
                 return self.send_error(404, "Not found")
 
-            return self.send_json(self.app.data, ashead=ashead)
+            return self.send_json(self._app.data, ashead=ashead)
     
     def create_handler(self, env: dict, start_resp: Callable, path: str, who: Agent) -> Handler:
         """
@@ -459,12 +468,71 @@ class About(ServiceApp):
         return self._Handler(self, path, env, start_resp, who, log=self.log)
     
 
+def PeopleServiceFactory(servicemodule):
+    if not hasattr(servicemodule, "PeopleServiceApp"):
+        raise ValueError(f"service module {servicemodule.__name__} is missing a PeopleServiceApp symbol")
+    def factory(dbiofact, log, config, name):
+        return servicemodule.PeopleServiceApp(config, log, name)
+    return factory
+
+
+class DevAbout(About):
+    """
+    an alternative About SubApp intended for use in unit tests.  It exposes a DELETE method that 
+    can be used for reseting the database to its original status
+    """
+    def __init__(self, log: Logger, dbclient_factory: DBClientFactory , base_data: Mapping=None):
+        super(DevAbout, self).__init__(log, base_data)
+        self._dbfact = dbclient_factory
+        if self._dbfact and not hasattr(self._dbfact, "reset"):
+            log.error("DevAbout(): DBClientFactory not resetable")
+
+    def reset(self):
+        if not hasattr(self._dbfact, 'reset'):
+            raise RuntimeException("DevAbout instance not resettable")
+        self._dbfact.reset()
+
+    class _DevHandler(About._Handler):
+
+        def do_OPTIONS(self, path):
+            origin = self._env.get("HTTP_ORIGIN")
+            return self.send_options(["GET", "DELETE"], origin)
+
+        def do_DELETE(self, path):
+            path = path.strip('/')
+            if '/' in path or not self._app._dbfact:
+                return self.send_error(405, "Method Not Allowed")
+            if not hasattr(self._app._dbfact, 'reset'):
+                self.log.error("DELETE handler: DBClientFactory not resetable")
+                return self.send_error(500, "Server Error")
+
+            try:
+                self._app._dbfact.reset()
+                log.info("database reset to initial state by "+self.who.actor)
+            except Exception as ex:
+                self.log.exception(log)
+                return self.send_error(500, "Server Error")
+
+            origin = self._env.get("HTTP_ORIGIN")
+            if origin:
+                self.add_header('Access-Control-Allow-Origin', origin)
+            self.add_header('Access-Control-Allow-Headers', "Content-Type")
+            self.add_header('Access-Control-Allow-Headers', "Authorization")
+
+            data = deepcopy(self._app.data)
+            data['message'] = "Database reset"
+            return self.send_json(data)
+
+    _Handler = _DevHandler
 
 _MIDASServiceApps = {
 #    "dmp/mdm1":  mdm1.DMPApp,
     "dmp/mdm1":  prj.MIDASProjectApp.factory_for("dmp"),
     "dap/mdsx":  mdsx.DAPApp,
-    "dap/mds3":  mds3.DAPApp
+    "dap/mds3":  mds3.DAPApp,
+#    "nsdi/v1":   nsdiv1.NSDIndexerAppFactory
+    "nsd/oar1":  PeopleServiceFactory(oar1),
+    "nsd/nsd1":  PeopleServiceFactory(nsd1)
 }
 
 class MIDASApp(AuthenticatedWSGIApp):
@@ -539,8 +607,10 @@ class MIDASApp(AuthenticatedWSGIApp):
         """
         determine the authenticated user
         """
-        authcfg = self.cfg.get('authentication', {})
-        return authenticate_via_jwt("midas", env, authcfg, self.log, agents, client_id)
+        authcfg = self.cfg.get('authentication')
+        if authcfg:
+            return authenticate_via_jwt("midas", env, authcfg, self.log, agents, client_id)
+        return None
 
     def handle_path_request(self, path: str, env: Mapping, start_resp: Callable, who = None):
         path = path.split('/')
@@ -561,6 +631,11 @@ class MIDASApp(AuthenticatedWSGIApp):
             subapp = self.subapps.get('')
 
         return subapp.handle_path_request(env, start_resp, "/".join(path), who)
+
+    def load_people_from(self, datadir=None):
+        if any(k.startswith("nsd/") for k in self.subapps.keys()):
+            nsdapp = [v for k,v in self.subapps.items() if k.startswith("nsd/")][0]
+            nsdapp.load_from(datadir)
 
 
 app = MIDASApp

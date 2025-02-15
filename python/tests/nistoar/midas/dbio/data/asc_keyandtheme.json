@@ -1,0 +1,10 @@
+{
+    "$and": [
+        {
+            "data.keywords": { "$in": ["Ray"] }
+          },
+        {
+            "data.theme": { "$in": ["Gretchen"] }
+        }
+    ]
+}

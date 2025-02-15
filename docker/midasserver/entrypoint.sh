@@ -20,6 +20,7 @@ echo
 opts=
 oar_midas_db_type=$1
 [ -z "$oar_midas_db_type" ] || opts="--set-ph oar_midas_db_type=$oar_midas_db_type"
+[ -z "$OAR_LOG_FILE" ] || opts="$opts --set-ph oar_log_file=$OAR_LOG_FILE"
 
 echo '++' uwsgi --plugin python3 --http-socket :$port --wsgi-file $script --static-map /docs=/docs \
                 --set-ph oar_config_file=$OAR_MIDASSERVER_CONFIG \

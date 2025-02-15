@@ -34,11 +34,60 @@ serviceurl = None
 if os.environ.get('PEOPLE_TEST_URL'):
     serviceurl = os.environ.get('PEOPLE_TEST_URL')
 
-@test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
+@test.skipIf(not os.environ.get('PEOPLE_TEST_URL'), "test people service not available")
 class TestNSDClient(test.TestCase):
 
     def setUp(self):
         self.cli = client.NSDClient(serviceurl)
+
+    def test_ctor(self):
+        self.assertEqual(self.cli._authkw, {})
+        self.assertEqual(self.cli._authhdr, {})
+
+        self.cli = client.NSDClient(serviceurl, { 'token': "pass1234" })
+        self.assertEqual(self.cli._authkw, {})
+        self.assertEqual(self.cli._authhdr, { 'Authorization': "Bearer pass1234" })
+
+    def test_setup_auth(self):
+        self.assertEqual(self.cli._authkw, {})
+        self.assertEqual(self.cli._authhdr, {})
+
+        self.cli._setup_auth({})
+        self.assertEqual(self.cli._authkw, {})
+        self.assertEqual(self.cli._authhdr, {})
+
+        self.cli._setup_auth({ 'type': 'userpass', 'user': "gurn", 'pass': "pass1234" })
+        self.assertEqual(self.cli._authkw, { 'user': ("gurn", "pass1234") })
+        self.assertEqual(self.cli._authhdr, {})
+
+        self.cli._setup_auth({ 'type': 'cert', 'client_cert_path': __file__,
+                               'client_key_path': __file__ })
+        self.assertEqual(self.cli._authkw, { 'cert': (__file__, __file__) })
+        self.assertEqual(self.cli._authhdr, {})
+
+        self.cli._setup_auth({ 'type': 'bearer', 'token': "pass1234" })
+        self.assertEqual(self.cli._authkw, {})
+        self.assertEqual(self.cli._authhdr, { 'Authorization': "Bearer pass1234" })
+
+        self.cli._setup_auth({ 'type': 'noNe' })
+        self.assertEqual(self.cli._authkw, {})
+        self.assertEqual(self.cli._authhdr, {})
+
+        self.cli._setup_auth({ 'type': None })
+        self.assertEqual(self.cli._authkw, {})
+        self.assertEqual(self.cli._authhdr, {})
+
+        with self.assertRaises(ConfigurationException):
+            self.cli._setup_auth({ 'goob': 'gurn' })
+        with self.assertRaises(ConfigurationException):
+            self.cli._setup_auth({ 'type': 'userpass', 'user': 'gurn' })
+        with self.assertRaises(ConfigurationException):
+            self.cli._setup_auth({ 'type': 'bearer', 'user': 'gurn', 'pass': 'password' })
+        with self.assertRaises(ConfigurationException):
+            self.cli._setup_auth({ 'type': 'cert', 'user': 'gurn', 'pass': 'password' })
+        with self.assertRaises(ConfigurationException):
+            self.cli._setup_auth({ 'type': 'cert', 'client_cert_path': "gurn",
+                                   'client_key_path': "pass1234" })
 
     def test_OUs(self):
         ous = self.cli.OUs()

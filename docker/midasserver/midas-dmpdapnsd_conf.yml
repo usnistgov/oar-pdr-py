@@ -1,0 +1,114 @@
+logfile: midas.log
+loglevel: DEBUG
+loglevelsfor :
+   pymongo: INFO 
+dbio:
+   factory:  fsbased
+   people_service:
+     factory:  mongo
+     db_url: "mongodb://oarop:oarop@mongodb:27017/midas"
+about: 
+   title: "MIDAS Authoring Services"
+   describedBy: "http://localhost:9091/midas/docs"
+   href: "http://localhost:9091/midas/"
+services: 
+   dap:
+      about: 
+         message:     "DMP Service is available"
+         title:       "Digital Asset Publication (DAP) Authoring API"
+         describedBy: "http://localhost:9091/docs/dapsvc-elements.html"
+         href:        "http://localhost:9091/midas/dap"
+
+      clients: 
+         midas: 
+            default_shoulder: mds3
+         default: 
+            default_shoulder: mds3
+
+      dbio: 
+         superusers:                [ "rlp3" ]
+         allowed_project_shoulders: ["mdsx", "mds3", "mds0", "pdr0"]
+         default_shoulder:          mdsx
+
+      include_headers:
+         "Access-Control-Allow-Origin": "*"
+
+      default_convention: mds3
+      conventions: 
+         mdsx: 
+            about: 
+                title:       "Digital Asset Publication (DAP) Authoring API (experimental)"
+                describedBy: "http://localhost:9091/docs/dapsvc-elements.html"
+                href:        "http://localhost:9091/midas/dap/mdsx"
+                version:     mdsx
+            assign_doi: always
+            doi_naan:   "10.18434"
+         mds3: 
+            about: 
+                title:       "Digital Asset Publication (DAP) Authoring API (mds3 convention)"
+                describedBy: "http://localhost:9091/docs/dapsvc-elements.html"
+                href:        "http://localhost:9091/midas/dap/mds3"
+                version:     mds3
+            assign_doi: always
+            doi_naan:   "10.18434"
+            nerdstorage:
+              type: fsbased
+              store_dir: /data/midas/nerdm
+
+   dmp: 
+      about: 
+         message:     "DMP Service is available"
+         title:       "Data Management Plan (DMP) Authoring API"
+         describedBy: "http://localhost:9091/docs/dmpsvc-elements.html"
+         href:        "http://localhost:9091/midas/dmp"
+
+      clients: 
+          midas: 
+             default_shoulder: mdm1
+          default: 
+             default_shoulder: mdm1
+
+      dbio: 
+         superusers:                [ "rlp3" ]
+         allowed_project_shoulders: ["mdm0", "mdm1"]
+         default_shoulder:          mdm1
+
+      include_headers:
+         "Access-Control-Allow-Origin": "*"
+
+      default_convention: mdm1
+      conventions: 
+         mdm1: 
+            about: 
+                title:       "Data Management Plan (DMP) Authoring API (mdm1 convention)"
+                describedBy: "http://localhost:9091/docs/dmpsvc-elements.html"
+                href:        "http://localhost:9091/midas/dmp/mdm1"
+                version:     mdm1
+
+   nsd:
+      about:
+         message:     "NSD Service"
+         title:       "NIST Staff Directory Service API"
+         describedBy: "http://localhost:9091/docs/nsdsvc-elements.html"
+         href:        "http://localhost:9091/midas/nsd"
+      include_headers:
+         "Access-Control-Allow-Origin": "*"
+      default_convention: nsd1
+      db_url: "mongodb://oarop:oarop@mongodb:27017/midas"
+      data:
+        dir: /data/nsd
+        person_file: person.json
+        org_file: orgs.json
+      conventions: 
+         nsd1:
+            about: 
+                title:       "NIST Staff Directory Service API (NSD version 1)"
+                describedBy: "http://localhost:9091/docs/nsdsvc-elements.html"
+                href:        "http://localhost:9091/midas/nsd/nsd1"
+                version:     nsd1
+         oar1:
+            about: 
+                title:       "NIST Staff Directory Service API (OAR version 1)"
+                describedBy: "http://localhost:9091/docs/nsdsvc-elements.html"
+                href:        "http://localhost:9091/midas/nsd/oar1"
+                version:     oar1

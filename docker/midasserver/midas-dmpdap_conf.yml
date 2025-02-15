@@ -83,3 +83,20 @@ services:
                 describedBy: "http://localhost:9091/docs/dmpsvc-elements.html"
                 href:        "http://localhost:9091/midas/dmp/mdm1"
                 version:     mdm1
+
+   nsdi:
+      about:
+         message:     "NSD Indexing Service"
+         title:       "NIST Staff Directory Indexing API"
+         describedBy: "http://localhost:9091/docs/nsdisvc-elements.html"
+         href:        "http://localhost:9091/midas/nsdi"
+      default_convention: v1
+      conventions: 
+         v1:
+            nsd:
+                service_endpoint: http://peopleserver:9092/
+            about: 
+                title:       "NIST Staff Directory Indexing API (version 1)"
+                describedBy: "http://localhost:9091/docs/nsdisvc-elements.html"
+                href:        "http://localhost:9091/midas/nsdi/v1"
+                version:     v1
