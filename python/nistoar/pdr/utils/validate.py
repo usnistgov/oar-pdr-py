@@ -339,7 +339,8 @@ class ValidationResults(object):
                                         passed or failed
         :param str|list(str) comments:  one or more comments to add to the issue instance.
                                         The first (or only) comment string should provide a 
-                                        general description of the condition that should exist;
+                                        general instruction or description of the condition that 
+                                        should exist which can stand-alone;
                                         subsequent values in the list can provide more detailed
                                         (and perhaps target-specific) statements of what is wrong. 
         """

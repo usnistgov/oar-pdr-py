@@ -5,7 +5,7 @@ This module reuses the testing infrastructure from :py:mod:`nistoar.pdr.preserve
 """
 from nistoar.pdr.utils.validate import (
     Validator, ValidatorBase, ValidationResults, ValidationIssue, AggregatedValidator,
-    ERROR, WARN, REC, ALL, PROB
+    REQ, WARN, REC, ALL, PROB
 )
 
 __all__ = [ "Validator", "ValidatorBase", "ValidationResults", "ValidationIssue", "AggregatedValidator",
