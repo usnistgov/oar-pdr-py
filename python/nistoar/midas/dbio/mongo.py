@@ -35,7 +35,7 @@ class MongoDBClient(base.DBClient):
                              dburl)
         self._dburl = dburl
         self._mngocli = None
-        super(MongoDBClient, self).__init__(config, projcoll, None, foruser,notification_server)
+        super(MongoDBClient, self).__init__(config, projcoll, None, foruser, notification_server)
 
     def connect(self):
         """

@@ -88,7 +88,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
 
     def setUp(self):
         self.cfg = {"goob": "gurn"}
-        self.fact = mongo.MongoDBClientFactory(self.cfg, dburl,notification_server=self.notification_server)
+        self.fact = mongo.MongoDBClientFactory(self.cfg, dburl, notification_server=self.notification_server)
 
     def tearDown(self):
         client = MongoClient(dburl)
@@ -162,7 +162,7 @@ class TestMongoDBClient(test.TestCase):
     def setUp(self):
         self.cfg = {}
         self.user = "nist0:ava1"
-        self.cli = mongo.MongoDBClient(dburl, self.cfg, base.DMP_PROJECTS, self.user,notification_server=self.notification_server)
+        self.cli = mongo.MongoDBClient(dburl, self.cfg, base.DMP_PROJECTS, self.user, notification_server=self.notification_server)
 
     def tearDown(self):
         client = MongoClient(dburl)
@@ -832,7 +832,7 @@ class TestNotifier(test.IsolatedAsyncioTestCase):
 
         self.cfg = {"default_shoulder": "mds3"}
         self.user = "nist0:ava1"
-        self.cli = mongo.MongoDBClient(dburl, self.cfg, base.DMP_PROJECTS, self.user,notification_server=self.notification_server)
+        self.cli = mongo.MongoDBClient(dburl, self.cfg, base.DMP_PROJECTS, self.user, notification_server=self.notification_server)
 
     async def asyncTearDown(self):
         await self.notification_server.stop()

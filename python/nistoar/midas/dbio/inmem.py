@@ -18,7 +18,7 @@ class InMemoryDBClient(base.DBClient):
 
     def __init__(self, dbdata: Mapping, config: Mapping, projcoll: str ,foruser: str = base.ANONYMOUS, notification_server: Notifier = None):
         self._db = dbdata
-        super(InMemoryDBClient, self).__init__(config, projcoll, self._db, foruser,notification_server)
+        super(InMemoryDBClient, self).__init__(config, projcoll, self._db, foruser, notification_server)
 
     def _next_recnum(self, shoulder):
         if shoulder not in self._db['nextnum']:
