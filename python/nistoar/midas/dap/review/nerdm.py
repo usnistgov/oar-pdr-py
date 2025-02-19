@@ -14,7 +14,7 @@ NIST_GITLAB_BASE_URL = "https://gitlab.nist.gov/doesnotexist/"
 NIST_DOWNLOAD_BASE_URL = "https://data.nist.gov/od/ds/"
 NIST_LANDING_BASE_URL = "https://data.nist.gov/od/id/"
 
-class DAPNERDmValidator(ValidatorBase):
+class DAPNERDmReviewValidator(ValidatorBase):
     """
     a validator that examines the content of the NERDm data for completeness and syntactic correctness.
 
@@ -39,10 +39,10 @@ class DAPNERDmValidator(ValidatorBase):
        4. References
        5. Advanced
     """
-    profile = ("NERDm-DAP", "0.7")
+    profile = ("NERDm-DAP-Review", "0.7")
 
     def __init__(self, config=None):
-        super(DAPNERDmValidator, self).__init__(config)
+        super(DAPNERDmReviewValidator, self).__init__(config)
 
     def _target_name(self, nerd):
         return nerd.get("@id", "mds:unkn")

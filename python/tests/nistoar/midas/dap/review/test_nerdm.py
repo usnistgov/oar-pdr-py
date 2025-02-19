@@ -12,11 +12,11 @@ testdir = Path(__file__).parent
 datadir = testdir.parent / "data"
 sipdir = datadir / "mdssip"/"mdst:1491"
 
-class TestDAPNERDmValidator(test.TestCase):
+class TestDAPNERDmReviewValidator(test.TestCase):
 
     def setUp(self):
         self.nerd = read_nerd(sipdir/"nerdm.json")
-        self.val = rev.DAPNERDmValidator()
+        self.val = rev.DAPNERDmReviewValidator()
 
     def test_test_title(self):
         res = self.val.test_title(self.nerd)

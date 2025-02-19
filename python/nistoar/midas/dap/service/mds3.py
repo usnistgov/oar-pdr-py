@@ -30,15 +30,17 @@ from functools import reduce
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
                      InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
+from ...dbio.project import _VAL_MINIMAL, _VAL_SYNTAX, _VAL_REVIEW, _VAL_FINAL
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
                                   ProjectSelectionHandler, ServiceApp)
 from ...dbio import status
+from ..review import DAPReviewer, DAPNERDmReviewValidator
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
 from nistoar.pdr.utils import build_mime_type_map, read_json
 from nistoar.pdr.utils.prov import Agent, Action
-from nistoar.pdr.utils.validate import ValidationResults, ALL
+from nistoar.pdr.utils.validate import ValidationResults, ALL, REQ
 from nistoar.nsd import NSDServerError
 
 from . import validate
@@ -1735,18 +1737,24 @@ class DAPService(ProjectService):
 
 
 
-    def review(self, id, want=ALL) -> ValidationResults:
+    def review(self, id, want=ALL, _prec=None) -> ValidationResults:
         """
         Review the record with the given identifier for completeness and correctness, and return lists of 
-        suggestions for completing the record.  If None is returned, review is not supported for this type
-        of project.  
-        :raises ObjectNotFound:  if a record with that ID does not exist
-        :raises NotAuthorized:   if the record exists but the current user is not authorized to read it.
-        :return: the review results
-                 :rtype: ValidationResults
+        suggestions for completing the record.  The recommendations come as a set of validation issues.
+        The issues of type ``REQ`` _must_ be corrected before finalization or the finalization 
+        will fail.  ``WARN`` issues technically do not have to be addressed, but they indicate
+        possible inconsistancies that are unintended by the client/author.  This method should
+        not update the record in any way and, thus, only requires read permission.
+        :param str      id:  the identifier of the record to finalize
+        :param int    want:  the categories of tests to apply and return (default: ALL)
+        :returns:  a set of required and recommended changes to make
+                   :rtype: ValidationResults
+        :raises ObjectNotFound:  if no record with the given ID exists
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the 
+                                 record given by `id`.  
         """
         prec = self.get_record(id)   # may raise exceptions
-        reviewer = DAPReviewer.create_reviewer(self._store)
+        reviewer = DAPReviewer.create_reviewer(self._store, self.cfg.get("review",{}))
         return reviewer.validate(prec, want)
 
     def validate_json(self, json, schemauri=None):
@@ -2243,7 +2251,7 @@ class DAPService(ProjectService):
             self.validate_json(resmd)
         return resmd
 
-                
+
 class DAPServiceFactory(ProjectServiceFactory):
     """
     Factory for creating DAPService instances attached to a backend DB implementation and which act 
@@ -2459,6 +2467,7 @@ class DAPProjectInfoHandler(ProjectInfoHandler):
                                         "Trouble communicating with file manager")
 
         return self.send_json(fssumm)
+        
 
 class DAPProjectSelectionHandler(ProjectSelectionHandler):
     """

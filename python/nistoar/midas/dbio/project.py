@@ -24,7 +24,7 @@ from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus,
 from . import status
 from .. import MIDASException, MIDASSystem
 from nistoar.pdr.utils.prov import Agent, Action
-from nistoar.pdr.utils.validate import ValidationResults, ALL
+from nistoar.pdr.utils.validate import ValidationResults, ALL, REQ, WARN
 from nistoar.id.versions import OARVersion
 from nistoar.pdr import ARK_NAAN
 from nistoar.base.config import ConfigurationException
@@ -34,6 +34,11 @@ _STATUS_ACTION_UPDATE   = RecordStatus.UPDATE_ACTION
 _STATUS_ACTION_CLEAR    = "clear"
 _STATUS_ACTION_FINALIZE = "finalize"
 _STATUS_ACTION_SUBMIT   = "submit"
+
+_VAL_MINIMAL = "minimal"   # fastest, most minimal validation (before commiting to database)
+_VAL_SYNTAX  = "syntax"    # check the JSON schema (usually against a JSON Schema)
+_VAL_REVIEW  = "review"    # author-oriented checks for improving a draft DAP
+_VAL_FINAL   = "final"     # most rigorous checks before submitting for review/publication
 
 DEF_PUBLISHED_SUFFIX = "_published"
 
@@ -306,11 +311,13 @@ class ProjectService(MIDASSystem):
         """
         return self.get_record(id).status
 
-    def review(self, id, want=ALL) -> ValidationResults:
+    def review(self, id, want=ALL, _prec=None) -> ValidationResults:
         """
         Review the record with the given identifier for completeness and correctness, and return lists of 
         suggestions for completing the record.  If None is returned, review is not supported for this type
         of project.  
+        :param str   id:  the identifier for the project record to review
+        :param int want:  a flag (default: ALL) indicating the types of tests to apply and return
         :raises ObjectNotFound:  if a record with that ID does not exist
         :raises NotAuthorized:   if the record exists but the current user is not authorized to read it.
         :return: the review results
@@ -608,7 +615,7 @@ class ProjectService(MIDASSystem):
         (stored in its `meta` property).
 
         :param dict indata:  the user-provided input merged into the previously saved data.  After 
-                             final transformations and validation, this will be saved the the 
+                             final transformations and validation, this will be saved to the 
                              record's `data` property.
         :param ProjectRecord prec:  the project record object to save the data to.  
         :param str message:  a message to save as the status action message; if None, no message 
@@ -620,7 +627,10 @@ class ProjectService(MIDASSystem):
                              would otherwise result in invalid data content
         """
         # this implementation does not transform the data
-        self._validate_data(indata)  # may raise InvalidUpdate
+        res = self._minimally_validate_data(indata, prec.id)
+        if res and res.count_failed() > 0:
+            raise InvalidUpdate("data property is not minimally compliant", prec.id,
+                                errors=[t.specification for t in res.failed()])
 
         prec.data = indata
 
@@ -634,8 +644,9 @@ class ProjectService(MIDASSystem):
         prec.save();
         return indata
 
-    def _validate_data(self, data):
-        pass
+    def _minimally_validate_data(self, data, id, **kw) -> ValidationResults:
+        # default does nothing; caller may assume either no problems found or no tests were applied
+        return None
 
     def clear_data(self, id: str, part: str=None, message: str=None, prec=None) -> bool:
         """
@@ -754,10 +765,9 @@ class ProjectService(MIDASSystem):
         :param str message:  a message summarizing the updates to the record
         :returns:  a Project status instance providing the post-finalization status
                    :rtype: RecordStatus
-        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
-                             an undefined or unrecognized part of the data
-        :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
-                             given by `id`.  
+        :raises ObjectNotFound:  if no record with the given ID exists
+        :raises NotAuthorized:   if the authenticated user does not have permission to update the 
+                                 record given by `id`.  
         :raises NotEditable:  the requested record in not in the edit state 
         :raises InvalidUpdate:  if the finalization produces an invalid record
         """
@@ -823,8 +833,17 @@ class ProjectService(MIDASSystem):
         # ensure a finalized data identifier
         id = self._finalize_id(prec)
 
-        self._validate_data(prec)
-        return "draft is ready for submission as %s, %s" % (id, ver)
+        note = ""
+        res = self._finally_validate(prec)
+        if not res:
+            self.log.warning(f"{prec.id}: No final validations applied!")
+        elif res.count_failed(REQ) > 0:
+            raise InvalidUpdate("Final validation checks failed", prec.id,
+                                errors=[t.specification for t in res.failed()])
+        elif res.count_failed(WARN) > 0:
+            note = " (some warnings detected)"
+
+        return "draft is ready for submission as %s, %s%s" % (id, ver, note)
 
     def _finalize_version(self, prec: ProjectRecord, vers_inc_lev: int=None):
         """
@@ -883,6 +902,10 @@ class ProjectService(MIDASSystem):
         update the data content for the record in preparation for submission.
         """
         pass
+
+    def _finally_validate(self, prec: ProjectRecord) -> ValidationResults:
+        # Note: we'll need to expand the checks applied; just do a review for now
+        return self.review(prec.id, REQ&WARN, prec)
 
     def submit(self, id: str, message: str=None, _prec=None) -> status.RecordStatus:
         """

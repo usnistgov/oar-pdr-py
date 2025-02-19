@@ -12,9 +12,10 @@ are implemented in :py:class:`~nistoar.pdr.utils.validate.ValidationIssue` insta
     do. (In contrast, the ``specification`` value is expected to be a more pendantic statement.)
 """
 from typing import List
+from collections.abc import Mapping
 
 from nistoar.pdr.utils.validate import Validator, ValidationResults, ALL
-from .nerdm import DAPNERDmValidator
+from .nerdm import DAPNERDmReviewValidator
 from ..nerdstore import NERDResourceStorage
 
 class DAPReviewer(Validator):
@@ -50,7 +51,7 @@ class DAPReviewer(Validator):
         if self.store:
             nerd = self.store.open(prec.id).get_data()
             for val in self.nrdvals:
-                val.validate(nerd, want, out)
+                val.validate(nerd, want, out, **prec.meta)
 
         for val in self.dapvals:
             val.validate(prec, want, out)
@@ -58,10 +59,13 @@ class DAPReviewer(Validator):
         return out
 
     @classmethod
-    def create_reviewer(cls, nrdstore: NERDResourceStorage=None):
+    def create_reviewer(cls, nrdstore: NERDResourceStorage=None, config: Mapping={}):
+        """
+        create a reviewer with the standard DAP validators built in.
+        """
         nrdvals = []
         if nrdstore:
-            nrdvals = [ DAPNERDmValidator() ]
+            nrdvals = [ DAPNERDmReviewValidator(config) ]
 
         dapvals = []
 
