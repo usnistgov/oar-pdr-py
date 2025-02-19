@@ -883,7 +883,7 @@ class ProjectStatusHandler(ProjectRecordHandler):
     """
     handle status requests and actions
     """
-    _requestable_actions = [ ProjectService.STATUS_ACTION_FINALIZE, ProjectService.STATUS_ACTION_SUBMIT ] 
+    _requestable_actions = [ ProjectService.STATUS_ACTION_FINALIZE, ProjectService.STATUS_ACTION_SUBMIT ]
 
     def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
                  who: Agent, id: str, datapath: str="", config: dict=None, log: Logger=None):
@@ -942,11 +942,8 @@ class ProjectStatusHandler(ProjectRecordHandler):
         elif path == "message":
             out = out.message
         elif path == "todo":
-            out = self.review()
-            if out is None:
-                return self.send_error_resp(404, "todo property not accessible",
-                                            "Status property, todo, is not accessible",
-                                            self._id, ashead=ashead)                
+            return self.review()
+                
         elif path:
             return self.send_error_resp(404, "Status property not accessible",
                                         "Requested status property is not accessible", self._id, ashead=ashead)
@@ -987,7 +984,7 @@ class ProjectStatusHandler(ProjectRecordHandler):
             return self.send_fatal_error(ex)
 
         # if action is not set, the message will just get updated.
-        return self._apply_action(req.get('action'), req.get('message'))
+        return self._apply_action(req.get('action').lower(), req.get('message'))
         
     def _apply_action(self, action, message=None):
         try:
@@ -1021,6 +1018,10 @@ class ProjectStatusHandler(ProjectRecordHandler):
         try:
 
             res = self.svc.review(self._id)
+            if res is None:
+                return self.send_error_resp(404, "todo property not accessible",
+                                            "Status property, todo, is not accessible",
+                                            self._id, ashead=ashead)
 
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
@@ -1039,15 +1040,15 @@ class ProjectStatusHandler(ProjectRecordHandler):
         """
         return JSON-encodable version of review results appropriate for sending back to web clients
         """
-        subjre = re.compile("#(\w\S*)$")
+        # subjre = re.compile("#(\w\S*)$")
         
         # convert ValidationResults to todo export JSON
         todo = { "req": [], "warn": [], "rec": [] }
         for issue in res.failed():
-            jissue = { "id": issue.label, "subject": "" }
-            m = subjre.search(issue.label)
-            if m:
-                jissue["subject"] = m.group(1)
+            label = issue.label.split(maxsplit=1)
+            jissue = { "id": f"{issue.profile}@{issue.profile_version} {label[0]}", "subject": "" }
+            if len(label) > 1:
+                jissue["subject"] = label[1]
             if len(issue.comments) > 0:
                 jissue["summary"] = issue.comments[0]
                 jissue["details"] = [ issue.specification ] + list(issue.comments[1:])

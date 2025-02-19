@@ -30,7 +30,6 @@ from functools import reduce
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
                      InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
-from ...dbio.project import _VAL_MINIMAL, _VAL_SYNTAX, _VAL_REVIEW, _VAL_FINAL
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
                                   ProjectSelectionHandler, ServiceApp)
 from ...dbio import status

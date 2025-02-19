@@ -32,13 +32,9 @@ from nistoar.base.config import ConfigurationException
 _STATUS_ACTION_CREATE   = RecordStatus.CREATE_ACTION
 _STATUS_ACTION_UPDATE   = RecordStatus.UPDATE_ACTION
 _STATUS_ACTION_CLEAR    = "clear"
+_STATUS_ACTION_REVIEW   = "review"
 _STATUS_ACTION_FINALIZE = "finalize"
 _STATUS_ACTION_SUBMIT   = "submit"
-
-_VAL_MINIMAL = "minimal"   # fastest, most minimal validation (before commiting to database)
-_VAL_SYNTAX  = "syntax"    # check the JSON schema (usually against a JSON Schema)
-_VAL_REVIEW  = "review"    # author-oriented checks for improving a draft DAP
-_VAL_FINAL   = "final"     # most rigorous checks before submitting for review/publication
 
 DEF_PUBLISHED_SUFFIX = "_published"
 
