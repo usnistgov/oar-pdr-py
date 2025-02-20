@@ -984,9 +984,11 @@ class ProjectStatusHandler(ProjectRecordHandler):
             return self.send_fatal_error(ex)
 
         # if action is not set, the message will just get updated.
-        return self._apply_action(req.get('action').lower(), req.get('message'))
+        return self._apply_action(req.get('action'), req.get('message'))
         
     def _apply_action(self, action, message=None):
+        if action:
+            action = action.lower()
         try:
             if message and action is None:
                 stat = self.svc.update_status_message(self._id, message)
@@ -1062,6 +1064,10 @@ class ProjectStatusHandler(ProjectRecordHandler):
                 todo["warn"].append(jissue)
             elif issue._type & issue.REC:
                 todo["rec"].append(jissue)
+
+        todo['req'].sort(key=lambda e: e.get("id"))
+        todo['warn'].sort(key=lambda e: e.get("id"))
+        todo['rec'].sort(key=lambda e: e.get("id"))
 
         return todo
 

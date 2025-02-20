@@ -35,6 +35,7 @@ from abc import ABC, ABCMeta, abstractmethod, abstractproperty
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from typing import Union, List
+import logging
 
 REQ   = 1
 ERROR = REQ  # synonym for REQ
@@ -480,6 +481,7 @@ class ValidatorBase(Validator):
             try:
                 getattr(self, test)(target, want, out, **kw) 
             except Exception as ex:
+                logging.getLogger("Validator").exception(str(ex))
                 out._add_applied( ValidationTest(self.profile[0], self.profile[1],
                                                  f"{test} execution failure", REQ), 
                                   False, f"test method, {test}, raised an exception: {str(ex)}" )

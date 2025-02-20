@@ -232,7 +232,7 @@ class DAPNERDmReviewValidator(ValidatorBase):
         ok = not nerd.get("landingPage", NIST_LANDING_BASE_URL).startswith(NIST_LANDING_BASE_URL)
         if not ok:
             ok = any(nrdutils.is_type(c, "DataFile") or nrdutils.is_type(c, "AccessPage")
-                     for c in nerd.get("components"))
+                     for c in nerd.get("components", []))
 
         t = out._add_applied(t, ok, "Add Files, Links, or an external Home Page")
         return out
