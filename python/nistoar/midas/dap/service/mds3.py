@@ -2342,8 +2342,8 @@ class DAPProjectDataHandler(ProjectDataHandler):
 
         try:
             if not self.svc.dbcli.exists(self._id):
-                return self.end_error_resp(404, "ID not found"
-                                           "Record with requested identifier not found", self._id)
+                return self.send_error_resp(404, "ID not found"
+                                            "Record with requested identifier not found", self._id)
 
             if path == "authors":
                 out = self.svc.add_author(self._id, newdata)
