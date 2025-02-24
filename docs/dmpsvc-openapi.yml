@@ -312,6 +312,76 @@ paths:
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
 
+  /mdm1/{projid}/owner:
+    summary:  the owner of the DMP record with the given identifier
+    parameters:
+      - "$ref": "#/components/parameters/projid"
+    get:
+      summary: "return the DMP owner ID"
+      description:
+        this returns the value of the "owner" property of the object returned by the "/mdm1/{projid}"
+        endpoint.
+      responses:
+        "200":
+          description:  The DMP record was found and the ID of its owner was returned.
+          content:
+            "application/json":
+              schema:
+                "type": string
+        "404":
+          description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    put:
+      summary: Reassign the DMP record to a new owner with the given identifier
+      description: This endpoint method is used to change the owner assigned to the record.
+      requestBody:
+        summary:  the ID of the new owner to assign to the DMP
+        description:  the ID of the new owner to assign to the DMP
+        required: true
+        content:
+          "application/json":
+            schema:
+              type: string
+      responses:
+        "200":
+          description:  the record was found, the name was successfully changed and the new owner returned
+          content:
+            "application":
+              "type": string
+        "400":
+          description: |-
+            The client sent bad or unusabe input of one of the following forms:
+              * The input request body is not parsable as a JSON string, or
+              * The string represents an ID that is not a recognized user.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:  The DMP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to change its owner.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
   /mdm1/{projid}/status:
     summary:
       information about the status of the record, including its current state and the last action
