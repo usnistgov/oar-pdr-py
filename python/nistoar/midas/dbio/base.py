@@ -104,7 +104,7 @@ class ACLs:
             if id not in self._perms[perm_name]:
                 self._perms[perm_name].append(id)
 
-    def revoke_perm_from_all(self, perm_name):
+    def revoke_perm_from_all(self, perm_name, protect_owner: bool=True):
         """
         remove the given identities from the list having the given permission.  For each given identity 
         that does not currently have the permission, nothing is done.  
@@ -115,15 +115,24 @@ class ACLs:
         """
         if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
-        if perm_name in self._perms:
-            self._perms[perm_name] = []
 
-    def revoke_perm_from(self, perm_name, *ids):
+        empty = []
+        if protect_owner and self._rec and perm_name in [ACLs.READ, ACLs.ADMIN] and \
+           self._rec.owner in self._perms.get(perm_name,[]):
+            # don't take away the owner's READ or ADMIN permissions
+            empty = [self._rec.owner]
+
+        if perm_name in self._perms:
+            self._perms[perm_name] = empty
+
+    def revoke_perm_from(self, perm_name, *ids, protect_owner: bool=True):
         """
         remove the given identities from the list having the given permission.  For each given identity 
         that does not currently have the permission, nothing is done.  
         :param str perm_name:  the permission to be revoked
         :param str ids:        the identities of the users the permission should be revoked from
+        :param bool protect_owner:  if True (default), do not revoke the owner's read and admin 
+                               permissions even when the owner is one of the provided IDs.
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to grant this permission
         """
@@ -133,6 +142,10 @@ class ACLs:
         if perm_name not in self._perms:
             return
         for id in ids:
+            if protect_owner and self._rec and self._rec.owner == id and \
+               perm_name in [ACLs.READ, ACLs.ADMIN]:
+                # don't take away the owner's READ or ADMIN permissions
+                continue
             if id in self._perms[perm_name]:
                 self._perms[perm_name].remove(id)
 
