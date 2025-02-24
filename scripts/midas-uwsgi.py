@@ -84,6 +84,9 @@ if workdir:
     cfg['working_dir'] = workdir
 nsdcfg = cfg.get('services',{}).get("nsd")
 
+if uwsgi.opt.get("oar_log_file"):
+    cfg["logfile"] = _dec(uwsgi.opt.get("oar_log_file"))
+
 config.configure_log(config=cfg)
 
 # setup the MIDAS database backend
@@ -140,7 +143,10 @@ elif dbtype == "mongo":
 
 elif dbtype == "inmem":
     factory = InMemoryDBClientFactory(cfg.get("dbio", {}))
-
+    nscfg = cfg.get("services", {}).get("dap",{}).get("conventions",{}). \
+                get("mds3",{}).get("nerdstorage",{})
+    if nscfg:
+        nscfg['type'] = "inmem"
 else:
     raise RuntimeError("Unsupported database type: "+dbtype)
 

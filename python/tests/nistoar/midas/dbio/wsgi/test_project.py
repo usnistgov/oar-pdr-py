@@ -98,7 +98,7 @@ class TestMIDASProjectApp(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectNameHandler))
         self.assertNotEqual(hdlr.cfg, {})
-        self.assertEqual(hdlr._path, "")
+        self.assertEqual(hdlr._path, "name")
         self.assertEqual(hdlr._id, "mdm1:0001")
 
         # throw in tests for acceptable
@@ -106,6 +106,8 @@ class TestMIDASProjectApp(test.TestCase):
         hdlr._env['HTTP_ACCEPT'] = "application/json"
         self.assertTrue(hdlr.acceptable())
         hdlr._env['HTTP_ACCEPT'] = "text/json"
+        self.assertTrue(hdlr.acceptable())
+        hdlr._env['HTTP_ACCEPT'] = "text/plain"
         self.assertTrue(hdlr.acceptable())
         hdlr._env['HTTP_ACCEPT'] = "*/json"
         self.assertTrue(hdlr.acceptable())
@@ -279,8 +281,34 @@ class TestMIDASProjectApp(test.TestCase):
 
         body = hdlr.handle()
         self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: application/json", ct)
         resp = self.body2dict(body)
         self.assertEqual(resp, "goob")
+
+        self.resp = []
+        req['HTTP_ACCEPT'] = "text/plain"
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: text/plain", ct)
+        self.assertEqual(body, [b"goob"])
+
+        self.resp = []
+        req['HTTP_ACCEPT'] = "application/json"
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: application/json", ct)
+        self.assertEqual(body, [b'"goob"'])
 
         self.resp = []
         path = "mdm1:0001/name"
@@ -322,8 +350,79 @@ class TestMIDASProjectApp(test.TestCase):
         resp = self.body2dict(body)
         self.assertEqual(resp, "gary")
 
+        # test sending content-type
         self.resp = []
-        path = "mdm1:0001/name"
+        path = "mdm1:0003/name"
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path,
+            'CONTENT_TYPE': 'text/json',
+            'HTTP_ACCEPT':  'text/plain'
+        }
+        req['wsgi.input'] = StringIO(json.dumps("hank"))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: text/plain", ct)
+        self.assertEqual(body[0].decode('utf-8'), "hank")
+
+        # check for error when text is not encoded into JSON
+        self.resp = []
+        path = "mdm1:0003/name"
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path,
+            'CONTENT_TYPE': 'application/json'
+        }
+        req['wsgi.input'] = StringIO("harry")   # not JSON
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+
+        # check for unsupported content-type
+        self.resp = []
+        path = "mdm1:0003/name"
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path,
+            'CONTENT_TYPE': 'text/csv'
+        }
+        req['wsgi.input'] = StringIO(json.dumps("harry"))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("415 ", self.resp[0])
+
+        # check that the value is unchanged after failed attempts
+        self.resp = []
+        path = "mdm1:0003/name"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "hank")
+
+        # check requesting plain text input
+        self.resp = []
+        path = "mdm1:0003/name"
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path,
+            'CONTENT_TYPE': 'text/plain'
+        }
+        req['wsgi.input'] = StringIO("harry")
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), "harry")
+
+        self.resp = []
+        path = "mdm1:0001/name"   # does not exist
         req = {
             'REQUEST_METHOD': 'PUT',
             'PATH_INFO': self.rootpath + path
@@ -354,6 +453,63 @@ class TestMIDASProjectApp(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
         self.assertIn("405 ", self.resp[0])
+
+    def test_get_owner(self):
+        path = "mdm1:0003/owner"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        prec = self.create_record("goob")
+        prec = self.create_record("goob1")
+        prec = self.create_record("goob2")
+
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: application/json", ct)
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "nstr1")
+
+        self.resp = []
+        req['HTTP_ACCEPT'] = "text/plain"
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        ct = [h for h in self.resp if "Content-Type" in h]
+        if ct:
+            ct = ct[0]
+        self.assertIn("Content-Type: text/plain", ct)
+        self.assertEqual(body, [b"nstr1"])
+
+    def test_put_owner(self):
+        path = "mdm1:0003/owner"
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps("gary"))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        prec = self.create_record("goob")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "gary")
+
+        self.resp = []
+        path = "mdm1:0003/owner"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "gary")
 
     def test_create_handler_full(self):
         path = "mdm1:0001/"
@@ -464,6 +620,58 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertEqual(resp['id'], "mdm1:0003")
         self.assertEqual(resp['data'], {"color": "red"})
         self.assertEqual(resp['meta'], {})
+        self.assertEqual(resp['status']['created_by'], "dbio/nstr1")
+
+        # test reassign on creation: via meta
+        self.resp = []
+        req['wsgi.input'] = StringIO(json.dumps({"name": "else", "owner": "nobody",
+                                                 "meta": {"foruser": "harry"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "else")
+        self.assertEqual(resp['owner'], "harry")
+        self.assertEqual(resp['id'], "mdm1:0004")
+        self.assertEqual(resp['meta'], {"foruser": "harry", "agent_vehicle": "dbio"})
+        self.assertEqual(resp['status']['created_by'], "dbio/nstr1")
+
+        # test reassign on creation: via query parameter
+        self.resp = []
+        req['QUERY_STRING'] = "foruser=True"
+        req['wsgi.input'] = StringIO(json.dumps({"name": "else", "owner": "nobody"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "else")
+        self.assertEqual(resp['owner'], "nobody")
+        self.assertEqual(resp['id'], "mdm1:0005")
+        self.assertEqual(resp['meta'], {"foruser": "nobody", "agent_vehicle": "dbio"})
+        self.assertEqual(resp['status']['created_by'], "dbio/nstr1")
+
+        # test reassign on creation: via query parameter
+        self.resp = []
+        req['QUERY_STRING'] = "foruser=sally"
+        req['wsgi.input'] = StringIO(json.dumps({"name": "else", "owner": "nobody"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "else")
+        self.assertEqual(resp['owner'], "sally")
+        self.assertEqual(resp['id'], "mdm1:0006")
+        self.assertEqual(resp['meta'], {"foruser": "sally", "agent_vehicle": "dbio"})
+        self.assertEqual(resp['status']['created_by'], "dbio/nstr1")
 
     def test_delete(self):
         path = ""
@@ -842,6 +1050,20 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         self.assertEqual(self.body2dict(body), ["nstr1"])
         
+        self.resp = []
+        path = "mdm1:0003/acls/write/:user"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectACLsHandler))
+        self.assertEqual(hdlr._path, "write/:user")
+        self.assertEqual(hdlr._id, "mdm1:0003")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), True)
+
     def test_get_info(self):
         path = "mdm1:0003/id"
         req = {
@@ -1055,5 +1277,5 @@ class TestMIDASProjectApp(test.TestCase):
                          
 if __name__ == '__main__':
     test.main()
-        
-        
+
+

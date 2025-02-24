@@ -278,6 +278,10 @@ class ServiceAppFactory:
         """
         out = OrderedDict()
         about = About(log, self.cfg.get("about", {}))
+        if hasattr(dbio_client_factory, 'reset'):
+            # use only in development/unit-test mode!
+            log.warning("using dev-only, resetable DBClient")
+            about = DevAbout(log, dbio_client_factory, self.cfg.get("about", {}))
 
         for appname, appcfg in self.cfg['services'].items():
             if not isinstance(appcfg, Mapping):
@@ -450,7 +454,7 @@ class About(ServiceApp):
                 # only the root path is supported
                 return self.send_error(404, "Not found")
 
-            return self.send_json(self.app.data, ashead=ashead)
+            return self.send_json(self._app.data, ashead=ashead)
     
     def create_handler(self, env: dict, start_resp: Callable, path: str, who: Agent) -> Handler:
         """
@@ -463,12 +467,63 @@ class About(ServiceApp):
         """
         return self._Handler(self, path, env, start_resp, who, log=self.log)
     
+
 def PeopleServiceFactory(servicemodule):
     if not hasattr(servicemodule, "PeopleServiceApp"):
         raise ValueError(f"service module {servicemodule.__name__} is missing a PeopleServiceApp symbol")
     def factory(dbiofact, log, config, name):
         return servicemodule.PeopleServiceApp(config, log, name)
     return factory
+
+
+class DevAbout(About):
+    """
+    an alternative About SubApp intended for use in unit tests.  It exposes a DELETE method that 
+    can be used for reseting the database to its original status
+    """
+    def __init__(self, log: Logger, dbclient_factory: DBClientFactory , base_data: Mapping=None):
+        super(DevAbout, self).__init__(log, base_data)
+        self._dbfact = dbclient_factory
+        if self._dbfact and not hasattr(self._dbfact, "reset"):
+            log.error("DevAbout(): DBClientFactory not resetable")
+
+    def reset(self):
+        if not hasattr(self._dbfact, 'reset'):
+            raise RuntimeException("DevAbout instance not resettable")
+        self._dbfact.reset()
+
+    class _DevHandler(About._Handler):
+
+        def do_OPTIONS(self, path):
+            origin = self._env.get("HTTP_ORIGIN")
+            return self.send_options(["GET", "DELETE"], origin)
+
+        def do_DELETE(self, path):
+            path = path.strip('/')
+            if '/' in path or not self._app._dbfact:
+                return self.send_error(405, "Method Not Allowed")
+            if not hasattr(self._app._dbfact, 'reset'):
+                self.log.error("DELETE handler: DBClientFactory not resetable")
+                return self.send_error(500, "Server Error")
+
+            try:
+                self._app._dbfact.reset()
+                log.info("database reset to initial state by "+self.who.actor)
+            except Exception as ex:
+                self.log.exception(log)
+                return self.send_error(500, "Server Error")
+
+            origin = self._env.get("HTTP_ORIGIN")
+            if origin:
+                self.add_header('Access-Control-Allow-Origin', origin)
+            self.add_header('Access-Control-Allow-Headers', "Content-Type")
+            self.add_header('Access-Control-Allow-Headers', "Authorization")
+
+            data = deepcopy(self._app.data)
+            data['message'] = "Database reset"
+            return self.send_json(data)
+
+    _Handler = _DevHandler
 
 _MIDASServiceApps = {
 #    "dmp/mdm1":  mdm1.DMPApp,
