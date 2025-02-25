@@ -129,7 +129,9 @@ class ACLs:
     def revoke_perm_from(self, perm_name, *ids, protect_owner: bool=True):
         """
         remove the given identities from the list having the given permission.  For each given identity 
-        that does not currently have the permission, nothing is done.  
+        that does not currently have the permission, nothing is done.  Note that by default, read and 
+        admin permissions cannot be revoked from the owner of the record unless ``protect_owner`` 
+        is set to ``False``.  
         :param str perm_name:  the permission to be revoked
         :param str ids:        the identities of the users the permission should be revoked from
         :param bool protect_owner:  if True (default), do not revoke the owner's read and admin 
