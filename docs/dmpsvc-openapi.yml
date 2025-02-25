@@ -561,6 +561,127 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+    put:
+      summary: replace the lists of users and groups assigned to multiple permissions
+      description: |-
+        This will completely replace the list of user and group IDs attached to the specified
+        permissions.  This action is equivalent to PUTing a list to `/mdm1/{projid}/acls/{perm}`
+        for each permission, `{perm}`, included in the input.  
+        
+        The input request body is an object where each property is the permission names ("read",
+        "write", "admin", or "delete") to update and each value is the corresponding array of
+        strings user/group IDs.  If a previously existing permission is not included in the input 
+        object, it will not be changed
+      requestBody:
+        description:  the ACLs to set.  
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/ACLs"
+      responses:
+        "200":
+          description:  the updated ACLs (inluding the ones that were not updated)
+          content: 
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ACLs"
+                type: array
+                items: { type: string }
+              examples:
+                "read":
+                   value:
+                     '[ "usr1", "usr2" ]'
+        "400":
+          description:
+            The given input is not a compliant ACL object
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to update this record's permissions.
+            The user must have "admin" and "write" permission assigned to update its ACLs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            The given project ID does not exist.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "405":
+          description:
+            One or more of the specified permissions is not a standard, editable permission.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    patch:
+      summary: grant multiple permissions to various users and groups
+      description: |-
+        This endpoint allows one to add users and groups to multiple ACLs in one call.  This
+        action is equivalent to PATCHTing a list to `/mdm1/{projid}/acls/{perm}`
+        for each permission, `{perm}`, included in the input.
+        
+        The input request body is an object where each property is the permission names ("read",
+        "write", "admin", or "delete") to update, and each value is the corresponding array of
+        strings user/group IDs.  If a previously existing permission is not included in the input 
+        object, it will not be changed
+      requestBody:
+        description:  the ACLs to set.  
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/ACLs"
+      responses:
+        "200":
+          description:  the updated ACLs (inluding the ones that were not updated)
+          content: 
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ACLs"
+                type: array
+                items: { type: string }
+              examples:
+                "read":
+                   value:
+                     '[ "usr1", "usr2" ]'
+        "400":
+          description:
+            The given input is not a compliant ACL object
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to update this record's permissions.
+            The user must have "admin" and "write" permission assigned to update its ACLs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            The given project ID does not exist.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "405":
+          description:
+            One or more of the specified permissions is not a standard, editable permission.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
 
 
   /mdm1/{projid}/acls/{perm}:
@@ -604,7 +725,7 @@ paths:
 
     post:
       summary: add the specified user or group to the list of those that are assigned this permission
-      description:
+      description: |-
         If the user or group is not already assigned this permission, it will be added to the
         list.  (It is not an error if the ID is already in the list.)  Only standard permissions
         ("read", "write", "admin", and "delete") may be updated.  The authenticated user must 
@@ -665,7 +786,7 @@ paths:
 
     put:
       summary: replace the list of users and groups assigned a permission
-      description:
+      description: |-
         This will completely replace the list of user and group IDs attached to the specified
         permission.  This is helpful when the client wants to take complete control over editing
         the list client-side, pushing it all when all changes are completed.  
@@ -725,7 +846,7 @@ paths:
 
     patch:
       summary: grant a single user or group or a list of them a permission
-      description:
+      description: |-
         A single user or group ID can be assigned a permission by passing a string as the input.
         Alternatively, multiple users and/or groups can be granted permission by providing an
         array of identifiers as input. 
