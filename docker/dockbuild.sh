@@ -23,7 +23,7 @@ PACKAGE_NAME=oar-pdr-py
 ## containers to be built.  List them in dependency order (where a latter one
 ## depends the former ones).  
 #
-DEP_DOCKER_IMAGE_DIRS="pymongo jq ejsonschema pyenv"
+DEP_DOCKER_IMAGE_DIRS="pymongo jq mdenv pyenv"
 EXEC_DOCKER_IMAGE_DIRS="pdrpytest pdpserver midasserver peopleserver"
 
 [ -d "$codedir/metadata/docker" ] || {
