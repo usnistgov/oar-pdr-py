@@ -1,4 +1,3 @@
-# notifier.py
 import asyncio
 import websockets
 from concurrent.futures import ThreadPoolExecutor
@@ -17,26 +16,30 @@ class Notifier:
     async def start(self):
         try:
             self.server = await websockets.serve(self.websocket_handler, self.host, self.port)
-            #logger.info(f"WebSocket server started on ws://{self.host}:{self.port}")
+            logger.info(f"WebSocket server started on ws://{self.host}:{self.port}")
         except Exception as e:
             logger.error(f"Failed to start WebSocket server: {e}")
-        
 
-    async def websocket_handler(self, websocket):
+    async def websocket_handler(self, websocket, path):
         self.clients.add(websocket)
         try:
             async for message in websocket:
                 await self.send_message_to_clients(message)
+        except websockets.ConnectionClosed as e:
+            logger.info(f"Client disconnected: {e}")
         except Exception as e:
             logger.error(f"Error in websocket_handler: {e}")
         finally:
             self.clients.remove(websocket)
+            logger.info("Client removed")
 
     async def send_message_to_clients(self, message):
         if self.clients:
             for client in self.clients:
                 try:
-                    asyncio.create_task(client.send(message))
+                    await client.send(message)
+                except websockets.ConnectionClosed as e:
+                    logger.info(f"Failed to send message to client (disconnected): {e}")
                 except Exception as e:
                     logger.error(f"Failed to send message to client: {e}")
 
@@ -45,7 +48,7 @@ class Notifier:
             self.server.close()
             await self.server.wait_closed()
             self.server = None
-            #logger.info("WebSocket server stopped")
+            logger.info("WebSocket server stopped")
 
     async def wait_closed(self):
         if self.server:
@@ -61,4 +64,3 @@ class Notifier:
         # Do not copy the problematic attribute
         new_copy.server = self.server
         return new_copy
-
