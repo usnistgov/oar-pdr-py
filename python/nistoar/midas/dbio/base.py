@@ -33,6 +33,7 @@ GROUPS_COLL = "groups"
 PEOPLE_COLL = "people"     # this does not refer to the staff directory database
 DRAFT_PROJECTS = "draft"   # this name is deprecated
 PROV_ACT_LOG = "prov_action_log"
+_AUTHDEL = "_authdel"
 
 DEF_PEOPLE_SHOULDER = "ppl0"
 DEF_GROUPS_SHOULDER = "grp0"
@@ -104,7 +105,7 @@ class ACLs:
             if id not in self._perms[perm_name]:
                 self._perms[perm_name].append(id)
 
-    def revoke_perm_from_all(self, perm_name):
+    def revoke_perm_from_all(self, perm_name, protect_owner: bool=True):
         """
         remove the given identities from the list having the given permission.  For each given identity 
         that does not currently have the permission, nothing is done.  
@@ -115,15 +116,26 @@ class ACLs:
         """
         if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
-        if perm_name in self._perms:
-            self._perms[perm_name] = []
 
-    def revoke_perm_from(self, perm_name, *ids):
+        empty = []
+        if protect_owner and self._rec and perm_name in [ACLs.READ, ACLs.ADMIN] and \
+           self._rec.owner in self._perms.get(perm_name,[]):
+            # don't take away the owner's READ or ADMIN permissions
+            empty = [self._rec.owner]
+
+        if perm_name in self._perms:
+            self._perms[perm_name] = empty
+
+    def revoke_perm_from(self, perm_name, *ids, protect_owner: bool=True):
         """
         remove the given identities from the list having the given permission.  For each given identity 
-        that does not currently have the permission, nothing is done.  
+        that does not currently have the permission, nothing is done.  Note that by default, read and 
+        admin permissions cannot be revoked from the owner of the record unless ``protect_owner`` 
+        is set to ``False``.  
         :param str perm_name:  the permission to be revoked
         :param str ids:        the identities of the users the permission should be revoked from
+        :param bool protect_owner:  if True (default), do not revoke the owner's read and admin 
+                               permissions even when the owner is one of the provided IDs.
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to grant this permission
         """
@@ -133,6 +145,10 @@ class ACLs:
         if perm_name not in self._perms:
             return
         for id in ids:
+            if protect_owner and self._rec and self._rec.owner == id and \
+               perm_name in [ACLs.READ, ACLs.ADMIN]:
+                # don't take away the owner's READ or ADMIN permissions
+                continue
             if id in self._perms[perm_name]:
                 self._perms[perm_name].remove(id)
 
@@ -175,6 +191,7 @@ class ProtectedRecord(ABC):
         self._data = self._initialize(recdata)
         self._acls = ACLs(self, self._data.get("acls", {}))
         self._status = RecordStatus(self.id, self._data['status'])
+        self._authdel = _AuthDelegate(self) if self._coll != _AUTHDEL else None
 
     def _initialize(self, recdata: MutableMapping) -> MutableMapping:
         """
@@ -358,6 +375,8 @@ class ProtectedRecord(ABC):
              self._data['since']) = olddates
             raise
 
+        self._authdel = _AuthDelegate(self) if self._coll != _AUTHDEL else None
+
     def authorized(self, perm: Permissions, who: str = None):
         """
         return True if the given user has the specified permission to commit an action on this record.
@@ -365,10 +384,9 @@ class ProtectedRecord(ABC):
         also be a custom permission suppported by this type of record.  This implementation will take 
         into account all of the groups the user is a member of.
 
-        Note that in this implementation, the owner of the record is automatically granted all permissions
-        regardless whether the user is explicitly added to the specified access control list.  Further,
-        the underlying configuration can contain a `superusers` property; if set, this implementation will 
-        authorize the user if the user's id matches any of those given in this property list.  
+        Note this implementation supports the notion of _superusers_ which implicitly hold all 
+        premissions.  It will authorize the user if the user's id matches any of those in a list given 
+        by the ``superusers`` configuration property.
 
         :param str|Sequence[str]|Set[str] perm:  a single permission or a list or set of permissions that 
                          the user must have to complete the requested action.  If a list of permissions 
@@ -386,9 +404,11 @@ class ProtectedRecord(ABC):
         if isinstance(perm, list):
             perm = set(perm)
 
+        authdel = self._authdel if self._authdel else self
+
         idents = [who] + list(self._cli.user_groups)
         for p in perm:
-            if not self.acls._granted(p, idents):
+            if not authdel.acls._granted(p, idents):
                 return False
         return True
 
@@ -487,6 +507,18 @@ class ProtectedRecord(ABC):
         out['status']['sinceDate'] = self.status.since_date
         return out
 
+class _AuthDelegate(ProtectedRecord):
+    # for internal use only; used to store original permissions
+    def __init__(self, forrec: ProtectedRecord):
+        usedata = {
+            "id": forrec.id,
+            "ownder": forrec.owner,
+            "acls": deepcopy(forrec._data["acls"])
+        }
+        super(_AuthDelegate, self).__init__(_AUTHDEL, usedata, forrec._cli)
+
+    def save(self):
+        raise RuntimeException("Programming error: _AuthDelegate records should not be saved")
 
 class Group(ProtectedRecord):
     """
