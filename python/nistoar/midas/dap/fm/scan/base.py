@@ -1,5 +1,6 @@
 """
-/scans endpoint manages record space files scanning operations
+provides a base implementation of the scanning capabilties that should be extended to 
+provide the specific logic for extracting metadata from files in a user's space.
 """
 import asyncio
 import datetime
