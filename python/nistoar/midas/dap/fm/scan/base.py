@@ -18,10 +18,8 @@ from flask import current_app, copy_current_request_context
 from flask_jwt_extended import jwt_required
 from flask_restful import Resource
 
-import helpers
-from app.clients.nextcloud.api import NextcloudApi
-from app.clients.webdav.api import WebDAVApi
-from config import Config
+from ..clients import helpers, NextcloudApi, WebDAVApi
+from nistoar.midas.dbio import ObjectNotFound
 
 logging.basicConfig(level=logging.INFO)
 
@@ -174,7 +172,7 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
     base class for full implementations.
     """
 
-    def __init__(self, space_id: str, user_dir: str, sys_dir: str):
+    def __init__(self, space: FMSpace, scan_id: str):
         """
         initialize the scanner.
 
@@ -185,21 +183,77 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
                                the scanner can read and write files that are not visible
                                to the end user.
         """
-        self._id = space_id
-        self._userdir = user_dir
-        self._sysdir = sys_dir
+        self.sp = space
+        self.scanid = scan_id
 
     @property
     def space_id(self):
-        return self._id
+        """
+        the identifier for the space.  This, in practice, matches the DAP record the space is 
+        attached to.
+        """
+        return self.sp.id
 
     @property
     def user_dir(self):
-        return self._userdir
+        """
+        the path on local disk where the user's uploads directory is located
+        """
+        return self.sp.root_dir
 
     @property
     def system_dir(self):
+        """
+        the path on local disk where the system directory for the space is located.  This is 
+        used as the output for the scan metadata file as well as other files the scanner desires 
+        to write out.  
+        """
         return self._sysdir
+
+    def update_scan_metadata(self, scan_id, md):
+        """
+        write updated scan metadata to disk where it can be retrieved.  This method can be 
+        used by the :py:meth:`fast_scan` and  :py:meth:`slow_scan` implementations to update 
+        the scan metadata cached to disk.  
+        :param str scan_id:  the ID for the scan request
+        :param dict     md:  the scan metadata to write out.  This should have the same structure
+                             as what is provided and returned by :py:meth:`fast_scan`.  
+        :raises FileManagerException:  if there is an error encountered while interacting with 
+                             the file manager system, including if the target output folder is 
+                             not found.
+        """
+        fm_system_path = content_md['fm_system_path']
+        webdav_client = self.sp.svc.wdcli
+
+        # Upload initial report
+        filename = f"report-{scan_id}.json"
+
+        try:
+            file_content = json.dumps(content_md, indent=4)
+            temp_file = tempfile.NamedTemporaryFile(delete=False)
+
+            # Write content as bytes
+            temp_file.write(file_content.encode('utf-8'))
+            # Go back to the beginning of the file
+            temp_file.seek(0)
+            response = webdav_client.upload_file(str(fm_system_path), temp_file.name, filename)
+
+            if response['status'] not in [200, 201, 204]:
+                msg = f"Failed to upload scan report '{filename}': {response.reason}"
+                logging.error(msg)
+                raise FileManagerException(msg)
+
+            logging.info('Uploaded scan file:' + filename)
+
+        except json.JSONDecodeError as e:
+            logging.exception(f"Failed to JSON-encode scan metadata: {e}")
+            raise ValueError("Non-JSON-encodable content metadata provided")
+
+        finally:
+            # Close and delete the file
+            temp_file.close()
+            os.unlink(temp_file.name)
+        
 
 
 class FileManagerDirectoryScanner(UserSpaceScannerBase):
@@ -208,48 +262,12 @@ class FileManagerDirectoryScanner(UserSpaceScannerBase):
     for the file manager scanning operations.
     """
 
-    def __init__(self, space_id: str, user_dir: str, sys_dir: str):
-        super().__init__(space_id, user_dir, sys_dir)
-
     def fast_scan(self, content_md: Mapping) -> Mapping:
         logging.info("Starting fast scan")
-        scan_id = content_md['scan_id']
-        fm_system_path = content_md['fm_system_path']
 
-        # Upload initial report
-        filename = f"report-{scan_id}.json"
-        file_content = json.dumps(content_md, indent=4)
-        temp_file = tempfile.NamedTemporaryFile(delete=False)
-        try:
-            # Write content as bytes
-            temp_file.write(file_content.encode('utf-8'))
-            # Go back to the beginning of the file
-            temp_file.seek(0)
-            webdav_client = WebDAVApi(Config)
-            webdav_client = WebDAVApi(Config)
-            response = webdav_client.upload_file(str(fm_system_path), temp_file.name, filename)
-
-            if response['status'] not in [200, 201, 204]:
-                logging.error(f"Failed to upload scan report '{filename}'")
-                raise Exception("Failed to upload scan report")
-
-            logging.info('Upload file:' + filename)
-
-        except KeyError as e:
-            logging.exception(f"Key error: {e}")
-            raise KeyError(f"Key not found: {e}")
-        except json.JSONDecodeError as e:
-            logging.exception(f"JSON encoding error: {e}")
-            raise ValueError("Invalid JSON format")
-        except Exception as e:
-            logging.exception("An unexpected error occurred")
-            raise RuntimeError("An unexpected error occurred: " + str(e))
-
-        finally:
-            # Close and delete the file
-            temp_file.close()
-            os.unlink(temp_file.name)
-
+        # write out the initial data
+        self.update_scan_metadata(self.scanid, content_md)
+        
         logging.info("Fast scan completed successfully")
         return content_md
 
@@ -348,6 +366,157 @@ class FileManagerDirectoryScanner(UserSpaceScannerBase):
             data = json.load(file)
 
         return data
+
+
+class UserSpaceScanDriver:
+    """
+    A class that launches and manages a given :py:class:UserSpaceScanner to scan a given file
+    space.  It is responsible for calling the scanner's ``fast_scan()`` and ``slow_scan()`` methods.
+    """
+    def __init__(self, scanner: UserSpaceScanner, space: FMSpace):
+        """
+        Create a driver that will execute a given scanner.  
+        :param UserSpaceScanner scanner:  the scanner implementation to execute
+        :param FMSpace            space:  the file-manager space to scan
+        """
+        self.space = space
+        self.scanner = scanner
+
+    def get_contents(self, folder=None):
+        """
+        return an list of contents in the uploads folder to be provided to the scanner.
+        Each item in the returned list is a dictionary that describes a file or subfolder.  
+        The list complies with the ``contents`` property described in the 
+        :py:class:`UserSpaceScanner` class.  
+        :param str folder:  the folder to get contents of relative to the space's root folder.
+                            If None, the root folder is assumed.
+        """
+        root_dir_from_disk = self.space.root_dir
+        if not folder:
+            folder = self.space.uploads_folder
+        fm_file_path = folder
+        nextcloud_client = self.space.svc.nccli
+        webdav_client = self.space.svc.wdcli
+
+        adminuser = self.space.svc._adminuser
+
+        nextcloud_xml = nextcloud_client.scan_directory_files(fm_file_path)
+        nextcloud_md = helpers.parse_nextcloud_scan_xml(fm_file_path, nextcloud_xml)
+
+        contents = []
+        for resource in nextcloud_md:
+            resource_path = re.split(adminuser, resource['path'], flags=re.IGNORECASE)[-1].lstrip('/')
+            resource_type = 'file' if 'getcontenttype' in resource else 'folder'
+            file_type = resource.get('getcontenttype', '')
+            size = resource.get('getcontentlength', resource.get('quota-used-bytes', '0'))
+            path = os.path.join(root_dir_from_disk, resource_path)
+
+            resource_md = {
+                'name': path.rstrip('/').split("/")[-1],
+                'fileid': resource['getetag'].strip('"'),
+                'path': path,
+                'size': size,
+                'last_modified': resource['getlastmodified'],
+                'resource_type': resource_type,
+                'file_type': file_type,
+                'scan_errors': [],
+                'contents': [],
+            }
+
+            if resource_md['resource_type'] == 'folder':
+                subdirectory_path = resource_path
+                sub_contents = self.scan_directory_contents(subdirectory_path, root_dir_from_disk)
+                resource_md['contents'].extend(sub_contents)
+                contents.append(resource_md)
+            else:
+                contents.append(resource_md)
+
+        return contents
+
+    def launch_scan(self, folder=None):
+        """
+        start the file scanning process of the user's upload space.  This executes the fast scan,
+        saves the results, and then launches the asynchronous slow scan.  
+        :param str folder:  the folder in the file manager space to scan.  If None, the user's 
+                            uploads folder will be scanned
+        :raises FileManagerException: if an error occurs while prepping scan or during the fast
+                            scan phase.  
+        """
+        if not folder:
+            folder = self.space.uploads_folder
+        fm_file_path = folder
+        record_name = self.space.id
+
+        nextcloud_client = self.space.svc.nccli
+        webdav_client = self.space.svc.wdcli
+        logging.info(f"Starting file scanning process for record: {record_name}")
+
+        # Instantiate dirs
+        space_id = record_name
+        fm_system_path = self.space.system_folder
+        fm_space_path = self.space.uploads_folder
+        root_dir_from_disk = self.space.root_dir
+        user_dir = os.path.join(root_dir_from_disk, fm_space_path)
+        sys_dir = os.path.join(root_dir_from_disk, fm_system_path)
+
+        # Create task for this scanning task
+        scan_id = str(uuid.uuid4())
+
+        # Find current time
+        current_epoch_time = time.time()
+
+        try:
+            if not webdav_client.is_directory(fm_space_path):
+                msg = f"Record name '{record_name}' does not exist or missing information"
+                logging.error(msg)
+                raise FileManagerResourceNotFound(record_name, message=msg)
+
+            # Find user space last modified file date
+            dir_info = webdav_client.get_directory_info(fm_space_path)
+
+            last_modified_date = dir_info['last_modified']
+
+            # Convert epoch time to an ISO-formatted string
+            current_datetime = datetime.datetime.fromtimestamp(current_epoch_time)
+            display_time = current_datetime.isoformat()
+
+            # Scan the initial directory and get content metadata
+            contents = self.scan_directory_contents(fm_space_path, root_dir_from_disk)
+
+            content_md = {
+                'space_id': space_id,
+                'scan_id': scan_id,
+                'scan_time': current_epoch_time,
+                'scan_datetime': display_time,
+                'user_dir': str(user_dir),
+                'fm_system_path': str(fm_system_path),
+                'last_modified': last_modified_date,
+                'size': total_scan_contents_size(contents),
+                'is_complete': True,
+                'contents': contents
+            }
+
+            # Run fast scanning and update metadata
+            content_md = self.scanner.fast_scan(content_md)
+
+            # Run the slowScan asynchronously using a thread
+            def run_slow_scan():
+                with current_app.app_context():
+                    # Read files from disk for performance
+                    asyncio.run(self.scanner.slow_scan(content_md))
+
+            # TODO: track threads, avoid simultaneous scanning of same DAP
+            thread = threading.Thread(target=run_slow_scan)
+            thread.start()
+            logging.info(f"Scanning started successfully for record: {record_name}")
+
+        except FileManagerException as ex:
+            raise
+
+        except Exception as ex:
+            raise FileManagerException(f"Unexpected error while scanning {folder}: {str(ex)}") from ex
+        
+        
 
 
 class ScanFiles(Resource):
@@ -454,7 +623,7 @@ class ScanFiles(Resource):
                 'user_dir': str(user_dir),
                 'fm_system_path': str(fm_system_path),
                 'last_modified': last_modified_date,
-                'size': helpers.calculate_size(contents),
+                'size': total_scan_contents_size(contents),
                 'is_complete': True,
                 'contents': contents
             }
@@ -580,3 +749,11 @@ class ScanFiles(Resource):
         except Exception as error:
             logging.exception("An unexpected error occurred: " + str(error))
             return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
+
+
+def total_scan_contents_size(contents):
+    total_size = 0
+    for item in contents:
+        if item.get('resource_type') == 'file':
+            total_size += int(item['size'])
+    return total_size

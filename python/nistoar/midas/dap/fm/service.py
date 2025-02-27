@@ -220,8 +220,8 @@ class FMSpace:
     """
     an encapsulation of a file space in the file manager.  
     """
-    trash_subfolder = "TRASH"
-    exclude_subfolder = "EXCLUDE"
+    trash_folder = "TRASH"
+    exclude_folder = "EXCLUDE"
 
     PERM_NONE   = PERM_NONE
     PERM_READ   = PERM_READ
@@ -236,6 +236,7 @@ class FMSpace:
         """
         self.svc = fmsvc
         self._id = id
+        self._root = self.svc._root_dir / id
         self._uploads_info = None
         if not log:
             log = self.svc.log.getChild(id)
@@ -249,7 +250,16 @@ class FMSpace:
         return self._id
 
     @property
-    def root_folder(self):
+    def root_dir(self):
+        """
+        the file path to the user's space's directory on a local filesystem.  This directory contains
+        the user's system directory and uploads directory.  
+        :rtype: Path
+        """
+        return self._root
+
+    @property
+    def root_davpath(self):
         """
         the resource path to the root folder for the space.  This path is used to access the 
         folder via the WebDAV API.
@@ -257,48 +267,48 @@ class FMSpace:
         return self.id
 
     @property
-    def uploads_folder(self):
+    def uploads_davpath(self):
         """
         the resource path to the uploads folder.  This path is used to access the folder via 
         the WebDAV API.
         """
-        return "/".join([self.root_folder, self.uploads_subfolder])
+        return "/".join([self.root_davpath, self.uploads_folder])
 
     @property
-    def uploads_subfolder(self):
+    def uploads_folder(self):
         """
-        the resource path to the system folder for the space relative to the :py:prop:`root_folder`.
+        the resource path to the system folder for the space relative to the :py:prop:`root_davpath`.
         """
         return f"{self.id}"
 
     @property
-    def exclude_folder(self):
+    def exclude_davpath(self):
         """
         the resource path to the uploads folder.  This path is used to access the folder via 
         the WebDAV API.
         """
-        return "/".join([self.uploads_folder, self.exclude_subfolder])
+        return "/".join([self.uploads_davpath, self.exclude_folder])
 
     @property
-    def trash_folder(self):
+    def trash_davpath(self):
         """
         the resource path to the uploads folder.  This path is used to access the folder via 
         the WebDAV API.
         """
-        return "/".join([self.uploads_folder, self.trash_subfolder])
+        return "/".join([self.uploads_davpath, self.trash_folder])
 
     @property
-    def system_folder(self):
+    def system_davpath(self):
         """
         the resource path to the system folder for the space.  This path is used to access the 
         folder via the WebDAV API.
         """
-        return "/".join([self.root_folder, self.system_subfolder])
+        return "/".join([self.root_davpath, self.system_folder])
 
     @property
-    def system_subfolder(self):
+    def system_folder(self):
         """
-        the resource path to the system folder for the space relative to the :py:prop:`root_folder`.
+        the resource path to the system folder for the space relative to the :py:prop:`root_davpath`.
         """
         return f"{self.id}-sys"
 
@@ -307,7 +317,7 @@ class FMSpace:
         use the WebDAV API to fetch and update the internally cached metadata about the uploads
         folder (including its Nextcloud file id).
         """
-        self._uploads_info = self.get_resource_info(self.uploads_subfolder)
+        self._uploads_info = self.get_resource_info(self.uploads_folder)
 
     def get_resource_info(self, resource: str):
         """
@@ -315,7 +325,7 @@ class FMSpace:
 
         :param str resource:  the path to the resource relative to the space's root folder
         """
-        out = self.svc.wdcli.get_resource_info('/'.join([self.root_folder, resource]))
+        out = self.svc.wdcli.get_resource_info('/'.join([self.root_davpath, resource]))
         if out.get('fileid'):
             out['gui_url'] = self._make_gui_url(out['fileid'])
         return out
@@ -332,7 +342,7 @@ class FMSpace:
             return (self.svc._rootdir / path).exists()
 
     def _make_gui_url(self, ncresid):
-        return f"{self.svc._ncfilesurl}/{ncresid}?dir={self.uploads_folder}"
+        return f"{self.svc._ncfilesurl}/{ncresid}?dir={self.uploads_davpath}"
 
     def get_permissions_for(self, resource: str, userid: str):
         """

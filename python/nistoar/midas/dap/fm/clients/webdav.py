@@ -410,7 +410,7 @@ def propfind_resp_to_dict(respel):
 
 def parse_propfind(content, reqpath, davbase):
     """
-    Extract the properties in a PROPFIND XML response into a dicitonary
+    Extract the properties in a PROPFIND XML response into a dictionary
     :param str content:  the XML response message to parse
     :param str reqpath:  the path that properties were requested 
     :param str davbase:  the base WebDAV endpoint URL
