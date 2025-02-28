@@ -856,6 +856,11 @@ class ProjectACLsHandler(ProjectRecordHandler):
                                         "Record with requested identifier not found", self._id)
 
         if parts[0] in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
+            if parts[1] == prec.owner and parts[0] in [dbio.ACLs.READ, dbio.ACLs.ADMIN]:
+                # don't allow revoking READ or ADMIN from owner
+                return self.send_error_resp(405, f"DELETE not allowed on {parts[0]}/{parts[1]}",
+                                            f"{parts[0]} permission cannot be revoked from record owner")
+
             # remove the identity from the ACL
             try:
                 prec.acls.revoke_perm_from(parts[0], parts[1])

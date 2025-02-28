@@ -1140,6 +1140,31 @@ class TestMIDASProjectApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("200 ", self.resp[0])
         self.assertEqual(self.body2dict(body), True)
+        
+        self.resp = []
+        path = "mdm1:0003/acls/read/nstr1"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectACLsHandler))
+        self.assertEqual(hdlr._path, "read/nstr1")
+        self.assertEqual(hdlr._id, "mdm1:0003")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), True)
+
+        # test unable to revoke owner's read permission
+        self.resp = []
+        req['REQUEST_METHOD'] = 'DELETE'
+        path = "mdm1:0003/acls/read/nstr1"
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectACLsHandler))
+        body = hdlr.handle()
+        self.assertIn("405 ", self.resp[0])
+
+        
 
     def test_get_info(self):
         path = "mdm1:0003/id"
