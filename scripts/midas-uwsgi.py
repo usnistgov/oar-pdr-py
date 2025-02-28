@@ -78,6 +78,11 @@ def initialize_notification_server():
 
 notification_server = initialize_notification_server()
 
+if notification_server.server:
+    logging.info("Notification server is up and running on ws://%s:%s", notification_server.host, notification_server.port)
+else:
+    logging.error("Failed to start the notification server")
+
 if confsrc:
     cfg = config.resolve_configuration(confsrc)
 

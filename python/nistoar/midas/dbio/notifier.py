@@ -1,9 +1,11 @@
-# notifier.py
 import asyncio
 import websockets
 from concurrent.futures import ThreadPoolExecutor
 import copy
 import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +19,9 @@ class Notifier:
     async def start(self):
         try:
             self.server = await websockets.serve(self.websocket_handler, self.host, self.port)
-            #logger.info(f"WebSocket server started on ws://{self.host}:{self.port}")
+            logger.info(f"WebSocket server started on ws://{self.host}:{self.port}")
         except Exception as e:
             logger.error(f"Failed to start WebSocket server: {e}")
-        
 
     async def websocket_handler(self, websocket):
         self.clients.add(websocket)
@@ -31,6 +32,7 @@ class Notifier:
             logger.error(f"Error in websocket_handler: {e}")
         finally:
             self.clients.remove(websocket)
+            logger.info("Client removed")
 
     async def send_message_to_clients(self, message):
         if self.clients:
@@ -45,7 +47,7 @@ class Notifier:
             self.server.close()
             await self.server.wait_closed()
             self.server = None
-            #logger.info("WebSocket server stopped")
+            logger.info("WebSocket server stopped")
 
     async def wait_closed(self):
         if self.server:
