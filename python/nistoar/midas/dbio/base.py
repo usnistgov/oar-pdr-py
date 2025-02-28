@@ -356,14 +356,18 @@ class ProtectedRecord(ABC):
         """
         return self._acls
 
-    def save(self):
+    def save(self, _skipAuth=False):
         """
-        save any updates to this record.  This implementation checks to make sure that the user 
-        attached to the underlying client is authorized to make updates.
+        save any updates to this record.  By default, this implementation checks to make sure 
+        that the user attached to the underlying client is authorized to make updates.
 
+        :param bool _skipAuth:  if True, the authorization check is skipped (making the caller 
+                                fully responsible for ensuring authorization).  This is intended 
+                                for internal use only (to allow a user with ADMIN permission to 
+                                restore their write permission).  
         :raises NotAuthorized:  if the user given by who is not authorized update the record
         """
-        if not self.authorized(ACLs.WRITE):
+        if not _skipAuth and not self.authorized(ACLs.WRITE):
             raise NotAuthorized(self._cli.user_id, "update record")
         olddates = (self.status.modified,
                     self.status.created, self.status.since)

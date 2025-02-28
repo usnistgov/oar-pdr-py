@@ -747,7 +747,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
         if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
             prec.acls.grant_perm_to(path, identity)
-            prec.save()
+            prec.save(True)
             return self.send_json(prec.to_dict().get('acls', {}).get(path,[]))
 
         return self.send_error_resp(405, "POST not allowed on this permission type",
@@ -802,19 +802,20 @@ class ProjectACLsHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
 
-        for perm in input:
-            if perm not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
-                return self.send_error_resp(405, "PATCH not allowed on provided permission type",
-                                            "Updating non-standard permission is not allowed")
-            identities = input[perm]
-            try:
+        try:
+            for perm in input:
+                if perm not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
+                    return self.send_error_resp(405, "PATCH not allowed on provided permission type",
+                                                "Updating non-standard permission is not allowed")
+                identities = input[perm]
                 if meth == "PUT":
                     prec.acls.revoke_perm_from_all(perm)
                 prec.acls.grant_perm_to(perm, *identities)
-            except dbio.NotAuthorized as ex:
-                return self.send_unauthorized()
 
-        prec.save()
+            prec.save(True)
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+
         acls = prec.to_dict().get('acls', {})
         if path:
             return self.send_json(acls.get(path, []))
@@ -858,7 +859,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
             # remove the identity from the ACL
             try:
                 prec.acls.revoke_perm_from(parts[0], parts[1])
-                prec.save()
+                prec.save(True)
                 return self.send_ok(message="ID removed")
             except dbio.NotAuthorized as ex:
                 return self.send_unauthorized()

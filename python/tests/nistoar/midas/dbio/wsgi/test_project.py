@@ -975,6 +975,18 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertEqual(acls.get("admin"), ["nstr1"])
         self.assertEqual(acls.get("delete"), ["nstr1"])
 
+        self.resp = []
+        req['REQUEST_METHOD'] = 'PUT'
+        req['wsgi.input'] = StringIO(json.dumps({"read": ["alice"], "write": ['nstr1'], "admin": []}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        acls = self.body2dict(body)
+        self.assertEqual(acls.get("read"), ["nstr1", "alice"])
+        self.assertEqual(acls.get("write"), ["nstr1"])
+        self.assertEqual(acls.get("admin"), ["nstr1"])
+        self.assertEqual(acls.get("delete"), ["nstr1"])
+
 
 
     def test_getupd_aclsperm(self):
