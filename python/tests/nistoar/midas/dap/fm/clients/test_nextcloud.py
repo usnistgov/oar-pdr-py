@@ -67,14 +67,14 @@ class NextcloudApiTest(test.TestCase):
 
     def test_ctor(self):
         self.assertTrue(isinstance(self.cli.log, Logger))
-        self.assertEqual(self.cli.base_url, self.config['service_endpoint'])
+        self.assertEqual(self.cli.base_url, self.config['service_endpoint']+'/')
         self.assertTrue(isinstance(self.cli.authkw, dict))
         self.assertEqual(self.cli.authkw['cert'], (certpath, keypath))
         self.assertNotIn('verify', self.cli.authkw)
 
         self.config['ca_bundle'] = capath
         self.cli = NextcloudApi(self.config)
-        self.assertEqual(self.cli.base_url, self.config['service_endpoint'])
+        self.assertEqual(self.cli.base_url, self.config['service_endpoint']+'/')
         self.assertTrue(isinstance(self.cli.authkw, dict))
         self.assertEqual(self.cli.authkw['cert'], (certpath, keypath))
         self.assertEqual(self.cli.authkw['verify'], capath)

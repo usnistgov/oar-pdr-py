@@ -50,4 +50,4 @@ as well (see the :py:mod:`scan` module for cases where this is leveraged).  This
 implies that the Application Layer service runs on the same platform (or close to it) that 
 is running the Nextcloud instance.  
 """
-from .apiclient import *
+# from .apiclient import *

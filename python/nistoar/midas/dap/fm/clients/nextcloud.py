@@ -122,7 +122,7 @@ class NextcloudApi:
     def _handle_request(self, method, url, **kwargs):
         """ Generic request handler. """
 
-        full_url = f"{self.base_url}/{url}"
+        full_url = f"{self.base_url}{url}"
         kw = dict(kwargs)
         kw.update(self.authkw)
 

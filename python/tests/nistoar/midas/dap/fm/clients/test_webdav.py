@@ -20,7 +20,7 @@ class FMWebDAVClientTest(test.TestCase):
 
     def setUp(self):
         self.config = {
-            'service_endpoint': 'https://goober.net/remote.php/dav/files/oar_api',
+            'service_endpoint': 'https://goober/remote.php/dav/files/oar_api',
             'authentication': {
                 'user': 'oar_api',
                 'pass': 'goober'
@@ -31,7 +31,7 @@ class FMWebDAVClientTest(test.TestCase):
 
     def test_ctor(self):
         # test from ctor
-        self.assertEqual(self.cli._wdcopts['webdav_hostname'], "https://goober.net")
+        self.assertEqual(self.cli._wdcopts['webdav_hostname'], "https://goober")
         self.assertEqual(self.cli._wdcopts['webdav_root'], "/remote.php/dav/files/oar_api")
         self.assertEqual(self.cli._wdcopts['webdav_login'], "oar_api")
         self.assertEqual(self.cli._wdcopts['webdav_password'], "goober")
@@ -124,7 +124,7 @@ class FMWebDAVClientTest(test.TestCase):
         with open(pfrespfile) as fd:
             xmlstr = fd.read()
         path = "mds3-0012/mds3-0012"
-        baseurl = "https://goober.net/remote.php/dav/files/oar_api"
+        baseurl = "https://goober/remote.php/dav/files/oar_api"
 
         props = fmwd.parse_propfind(xmlstr, path, baseurl)
         self.assertEqual(props.get('type'), "folder")
