@@ -967,17 +967,17 @@ class DBClient(ABC):
         """
         if not self.people_service:
             return []
-        person = self.people_service.get_person(user_id)
+        person = self.people_service.get_person_by_eid(user_id)
         if not person:
             return []
         out = []
 
-        if 'ou' in person and person['ouNumber']:
-            out.append(f"nisto:{person['ouNumber']}")
-        if 'division' in person and person['divisionNumber']:
-            out.append(f"nisto:{person['divisionNumber']}")
-        if 'group' in person and person['groupNumber']:
-            out.append(f"nisto:{person['groupNumber']}")
+        if 'ouNumber' in person and person['ouNumber']:
+            out.append(f"ouNumber:{person['ouNumber']}")
+        if 'divisionNumber' in person and person['divisionNumber']:
+            out.append(f"divisionNumber:{person['divisionNumber']}")
+        if 'groupNumber' in person and person['groupNumber']:
+            out.append(f"groupNumber:{person['groupNumber']}")
         return out
 
     def create_record(self, name: str, shoulder: str = None, foruser: str = None) -> ProjectRecord:
