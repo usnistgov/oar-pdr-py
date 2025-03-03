@@ -955,7 +955,30 @@ class DBClient(ABC):
         a member of.  This function will recache this list (resulting in queries to the backend 
         database).  
         """
-        self._whogrps = frozenset(self.groups.select_ids_for_user(self._who))
+        adhoc_groups = self.groups.select_ids_for_user(self._who)
+        virtual_groups = self._get_virtual_groups_for(self._who)
+        self._whogrps = frozenset(adhoc_groups.union(virtual_groups))
+
+    def _get_virtual_groups_for(self, user_id: str) -> List[str]:
+        """
+        Return the list of 'virtual groups' ids a user is part of, based on the staff directory
+        (PeopleService). Returns an empty list if the PeopleService is not available or the
+        user is not found.
+        """
+        if not self.people_service:
+            return []
+        person = self.people_service.get_person(user_id)
+        if not person:
+            return []
+        out = []
+
+        if 'ou' in person and person['ouNumber']:
+            out.append(f"nisto:{person['ouNumber']}")
+        if 'division' in person and person['divisionNumber']:
+            out.append(f"nisto:{person['divisionNumber']}")
+        if 'group' in person and person['groupNumber']:
+            out.append(f"nisto:{person['groupNumber']}")
+        return out
 
     def create_record(self, name: str, shoulder: str = None, foruser: str = None) -> ProjectRecord:
         """
