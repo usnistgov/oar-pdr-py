@@ -707,12 +707,31 @@ class ProjectACLsHandler(ProjectRecordHandler):
         if len(parts) < 2:
             return self.send_json(acl, ashead=ashead)
 
-        # parts[1] is a particular user the client is interested in
+        # parts[1] is a particular user or group the client is interested in
         if parts[1] in [":user", "midas:user"]:
             # this indicates the currently authenticated user
             parts[1] = self.who.actor
 
-        return self.send_json(parts[1] in acl, ashead=ashead)  # returns true or false
+        if parts[1] in acl:
+            return self.send_json(True, ashead=ashead)
+
+        dbcli = prec._cli
+        if not dbcli:
+            return self.send_json(False, ashead=ashead)
+
+        # Permissions for a user
+        user_dbcli_class = type(dbcli)
+        ephemeral_user_dbcli = user_dbcli_class(dbcli._cfg,
+                                               dbcli._projcoll,
+                                               nativeclient=dbcli._native,
+                                               foruser=parts[1],
+                                               peopsvc=dbcli.people_service)
+        ephemeral_user_dbcli.recache_user_groups()
+
+        if set(acl).intersection(ephemeral_user_dbcli.user_groups):
+            return self.send_json(True, ashead=ashead)
+        else:
+            return self.send_json(False, ashead=ashead)
 
     def do_POST(self, path):
         """
