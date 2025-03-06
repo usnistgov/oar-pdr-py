@@ -719,7 +719,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
         if not dbcli:
             return self.send_json(False, ashead=ashead)
 
-        # Permissions for a user
+        # User group expansions
         user_dbcli_class = type(dbcli)
         ephemeral_user_dbcli = user_dbcli_class(dbcli._cfg,
                                                dbcli._projcoll,
@@ -728,7 +728,13 @@ class ProjectACLsHandler(ProjectRecordHandler):
                                                peopsvc=dbcli.people_service)
         ephemeral_user_dbcli.recache_user_groups()
 
-        if set(acl).intersection(ephemeral_user_dbcli.user_groups):
+        # group of group expansions
+        group_parents = dbcli.groups.select_ids_for_user(parts[1])
+
+        # Unify everything
+        expansions = {parts[1]} | ephemeral_user_dbcli.user_groups | group_parents
+
+        if expansions.intersection(acl):
             return self.send_json(True, ashead=ashead)
         else:
             return self.send_json(False, ashead=ashead)
