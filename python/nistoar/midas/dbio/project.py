@@ -18,7 +18,7 @@ from copy import deepcopy
 
 import jsonpatch
 
-from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, PUBLIC_GROUP, ANONYMOUS,
+from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, PUBLIC_GROUP, ANONYMOUS, AUTOADMIN,
                    RecordStatus, AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException,
                    InvalidUpdate, InvalidRecord)
 from . import status
@@ -1099,10 +1099,10 @@ class ProjectService(MIDASSystem):
                 # no one can delete, write, or admin (except superusers)
                 pubrec.acls.revoke_perm_from_all(ACLs.DELETE)
                 pubrec.acls.revoke_perm_from_all(ACLs.WRITE)
-                pubrec.acls.revoke_perm_from_all(ACLs.ADMIN)
+                pubrec.acls.revoke_perm_from_all(ACLs.ADMIN, protect_owner=False)
 
                 # everyone can read
-                pubrec.acls.revoke_perm_from_all(ACLs.READ)
+                pubrec.acls.revoke_perm_from_all(ACLs.READ, protect_owner=False)
                 pubrec.acls.grant_perm_to(ACLs.READ, PUBLIC_GROUP)
 
             version.save()
@@ -1111,7 +1111,7 @@ class ProjectService(MIDASSystem):
         except Exception as ex:
             # TODO: back out version?
             self.log.error("%s: Problem with default publication submission: %s", prec.id, str(ex))
-            raise SubmissionFailed() from ex
+            raise SubmissionFailed(prec.id) from ex
 
         return endstate
 

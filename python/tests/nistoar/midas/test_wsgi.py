@@ -813,14 +813,13 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(who.get_prop("email"), "fed@nist.gov")
         self.assertEqual(who.get_prop("OU"), "61")
 
-        # don't allow authentication as a blacklist ID
         token = jwt.encode({"sub": "dbio:admin", "userEmail": "fed@nist.gov", "OU": "61"},
-                           self.config['jwt_auth']['key'], algorithm="HS256")
+                           self.config['authentication']['key'], algorithm="HS256")
         req['HTTP_AUTHORIZATION'] = "Bearer "+token
         who = self.app.authenticate(req)
-        self.assertEqual(who.group, "public")
-        self.assertEqual(who.actor, "anonymous")
-        self.assertEqual(who.agents, ["Unit testing agent"])
+        self.assertEqual(who.agent_class, "nist")
+        self.assertEqual(who.actor, "dbio:admin")
+        self.assertEqual(who.delegated, ("Unit testing agent",))
         self.assertEqual(who.get_prop("email"), "fed@nist.gov")
         self.assertEqual(who.get_prop("OU"), "61")
 

@@ -146,7 +146,7 @@ import jwt
 
 from . import system
 from .dbio.base import DBClientFactory, AUTOADMIN
-from .dbio.wsgi import project as prj, SubApp, Handler, DBIOHandler
+from .dbio.wsgi import project as prj, DBIOHandler
 from nistoar.web.rest import (ServiceApp, Handler, Agent, AuthenticatedWSGIApp,
                               authenticate_via_jwt)
 from .dap.service import mdsx, mds3
