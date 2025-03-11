@@ -378,6 +378,7 @@ class ProtectedRecord(ABC):
         """
         if not who:
             who = self._cli.user_id
+
         if who in self._cli._cfg.get("superusers", []):
             return True
 
@@ -386,7 +387,8 @@ class ProtectedRecord(ABC):
         if isinstance(perm, list):
             perm = set(perm)
 
-        idents = [who] + list(self._cli.user_groups)
+        idents = [who] + list(self._cli.all_groups_for(who))
+
         for p in perm:
             if not self.acls._granted(p, idents):
                 return False
@@ -396,7 +398,7 @@ class ProtectedRecord(ABC):
     def searched(self, cst: CST):
         """
         return True if the given records respect all the constraints in cst.
-        :param is a dict of constraints for the records 
+        :param is a dict of constraints for the records
         """
         # parse the query
         or_conditions = {}
@@ -495,7 +497,7 @@ class Group(ProtectedRecord):
 
     def __init__(self, recdata: MutableMapping, dbclient: DBClient = None):
         """
-        initialize the group record with a dictionary retrieved from the underlying group database 
+        initialize the group record with a dictionary retrieved from the underlying group database
         collection.  The dictionary must include an `id` property with a valid ID value.
         """
         super(Group, self).__init__(GROUPS_COLL, recdata, dbclient)
@@ -520,15 +522,15 @@ class Group(ProtectedRecord):
 
     def rename(self, newname):
         """
-        assign the given name as the groups's mnemonic name.  If this record was pulled from 
-        the backend storage, then a check will be done to ensure that the name does not match 
-        that of any other group owned by the current user.  
+        assign the given name as the groups's mnemonic name.  If this record was pulled from
+        the backend storage, then a check will be done to ensure that the name does not match
+        that of any other group owned by the current user.
 
         :param str newname:  the new name to assign to the record
-        :raises NotAuthorized:  if the calling user is not authorized to changed the name; for 
+        :raises NotAuthorized:  if the calling user is not authorized to changed the name; for
                                 non-superusers, ADMIN permission is required to rename a record.
-        :raises AlreadyExists:  if the name has already been given to a record owned by the 
-                                current user.  
+        :raises AlreadyExists:  if the name has already been given to a record owned by the
+                                current user.
         """
         if not self.authorized(ACLs.ADMIN):
             raise NotAuthorized(self._cli.user_id, "change name")
@@ -577,7 +579,7 @@ class Group(ProtectedRecord):
         """
         add members to this group (if they aren't already members)
         :param str memids:  the identities of the users to be added to the group
-        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
+        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not
                                authorized to add members
         """
         if not self.authorized(ACLs.WRITE):
@@ -593,7 +595,7 @@ class Group(ProtectedRecord):
         """
         remove members from this group; any given ids that are not currently members are ignored.
         :param str memids:  the identities of the users to be removed from the group
-        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
+        :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not
                                authorized to remove members
         """
         if not self.authorized(ACLs.WRITE):
@@ -614,8 +616,8 @@ class DBGroups(object):
     """
     an interface for creating and using user groups.  Each group has a unique identifier assigned to it
     and holds a list of user (and/or group) identities indicating the members of the groups.  In addition
-    to its unique identifier, a group also has a mnemonic name given to it by the group's owner; the 
-    group name need not be globally unique, but it should be unique within the owner's namespace.  
+    to its unique identifier, a group also has a mnemonic name given to it by the group's owner; the
+    group name need not be globally unique, but it should be unique within the owner's namespace.
     """
 
     def __init__(self, dbclient: DBClient, idshoulder: str = DEF_GROUPS_SHOULDER):
@@ -633,12 +635,12 @@ class DBGroups(object):
 
     def create_group(self, name: str, foruser: str = None):
         """
-        create a new group for the given user.  
+        create a new group for the given user.
         :param str name:     the name of the group to create
-        :param str foruser:  the identifier of the user to create the group for.  This user will be set as 
-                             the group's owner/administrator.  If not given, the user attached to the 
+        :param str foruser:  the identifier of the user to create the group for.  This user will be set as
+                             the group's owner/administrator.  If not given, the user attached to the
                              underlying :py:class:`DBClient` will be used.  Only a superuser (an identity
-                             listed in the `superuser` config parameter) can create a group for another 
+                             listed in the `superuser` config parameter) can create a group for another
                              user.
         :raises AlreadyExists:  if the user has already defined a group with this name
         :raises NotAuthorized:  if the user is not authorized to create this group
@@ -672,23 +674,23 @@ class DBGroups(object):
         """
         create and register a new identifier that can be assigned to a new group
         :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
-                               how the identifier is formed.  
+                               how the identifier is formed.
         """
         return "{}:{}:{}".format(shoulder, owner, name)
 
     def exists(self, gid: str) -> bool:
         """
-        return True if a group with the given ID exists.  READ permission on the identified 
-        record is not required to use this method. 
+        return True if a group with the given ID exists.  READ permission on the identified
+        record is not required to use this method.
         """
         return bool(self._cli._get_from_coll(GROUPS_COLL, gid))
 
     def name_exists(self, name: str, owner: str = None) -> bool:
         """
-        return True if a group with the given name exists.  READ permission on the identified 
+        return True if a group with the given name exists.  READ permission on the identified
         record is not required to use this method.
         :param str name:  the mnemonic name of the group given to it by its owner
-        :param str owner: the ID of the user owning the group of interest; if not given, the 
+        :param str owner: the ID of the user owning the group of interest; if not given, the
                           user ID attached to the `DBClient` is assumed.
         """
         if not owner:
@@ -719,8 +721,8 @@ class DBGroups(object):
 
     def get_by_name(self, name: str, owner: str = None) -> Group:
         """
-        return the group assigned the given name by its owner.  This assumes that the given owner 
-        has created only one group with the given name.  
+        return the group assigned the given name by its owner.  This assumes that the given owner
+        has created only one group with the given name.
         """
         if not owner:
             owner = self._cli.user_id
@@ -733,8 +735,8 @@ class DBGroups(object):
 
     def select_ids_for_user(self, id: str) -> MutableSet:
         """
-        return all the groups that a user (or a group) is a member of.  This implementation will 
-        resolve the groups that the user is indirectly a member of--i.e. a user's group itself is a 
+        return all the groups that a user (or a group) is a member of.  This implementation will
+        resolve the groups that the user is indirectly a member of--i.e. a user's group itself is a
         member of another group.  Deactivated groups are not included.
         """
         checked = set()
@@ -755,9 +757,9 @@ class DBGroups(object):
 
     def delete_group(self, gid: str) -> bool:
         """
-        delete the specified group from the database.  The user attached to the underlying 
+        delete the specified group from the database.  The user attached to the underlying
         :py:class:`DBClient` must either be the owner of the record or have `DELETE` permission
-        to carry out this option. 
+        to carry out this option.
         :return:  True if the group was found and successfully deleted; False, otherwise
                   :rtype: bool
         """
@@ -775,14 +777,14 @@ class ProjectRecord(ProtectedRecord):
     """
     a single record from the project collection representing one project created by the user
 
-    This record represents a local copy of the record that exists in the "remote" database.  The 
-    client can make changes to this record; however, those changes are not persisted in the 
+    This record represents a local copy of the record that exists in the "remote" database.  The
+    client can make changes to this record; however, those changes are not persisted in the
     database until the :py:meth:`save` method is called.
     """
 
     def __init__(self, projcoll: str, recdata: Mapping, dbclient: DBClient = None):
         """
-        initialize the record with a dictionary retrieved from the underlying project collection.  
+        initialize the record with a dictionary retrieved from the underlying project collection.
         The dictionary must include an `id` property with a valid ID value.
         """
         super(ProjectRecord, self).__init__(projcoll, recdata, dbclient)
@@ -803,7 +805,7 @@ class ProjectRecord(ProtectedRecord):
 
     def _initialize_data(self, recdata: MutableMapping):
         """
-        add default data to the given dictionary of application-specific project data.  
+        add default data to the given dictionary of application-specific project data.
         """
         return recdata["data"]
 
@@ -826,15 +828,15 @@ class ProjectRecord(ProtectedRecord):
 
     def rename(self, newname):
         """
-        assign the given name as the record's mnemonic name.  If this record was pulled from 
-        the backend storage, then a check will be done to ensure that the name does not match 
-        that of any other record owned by the current user.  
+        assign the given name as the record's mnemonic name.  If this record was pulled from
+        the backend storage, then a check will be done to ensure that the name does not match
+        that of any other record owned by the current user.
 
         :param str newname:  the new name to assign to the record
-        :raises NotAuthorized:  if the calling user is not authorized to changed the name; for 
+        :raises NotAuthorized:  if the calling user is not authorized to changed the name; for
                                 non-superusers, ADMIN permission is required to rename a record.
-        :raises AlreadyExists:  if the name has already been given to a record owned by the 
-                                current user.  
+        :raises AlreadyExists:  if the name has already been given to a record owned by the
+                                current user.
         """
         if not self.authorized(ACLs.ADMIN):
             raise NotAuthorized(self._cli.user_id, "change name")
@@ -846,7 +848,7 @@ class ProjectRecord(ProtectedRecord):
     @property
     def data(self) -> MutableMapping:
         """
-        the application-specific data for this record.  This dictionary contains data that is generally 
+        the application-specific data for this record.  This dictionary contains data that is generally
         updateable directly by the user (e.g. via the GUI interface).  The expected properties for
         are determined by the application.
         """
@@ -878,23 +880,23 @@ class DBClient(ABC):
     """
     a client connected to the database for a particular service (e.g. drafting, DMPs, etc.)
 
-    As this class is abstract, implementations provide support for specific storage backends.  
+    As this class is abstract, implementations provide support for specific storage backends.
     All implementations support the following common set of configuration parameters:
 
     ``superusers``
-         (List[str]) _optional_.  a list of strings giving the identifiers of users that 
+         (List[str]) _optional_.  a list of strings giving the identifiers of users that
          should be considered superusers who will be afforded authorization for all operations
     ``allowed_project_shoulders``
-         (List[str]) _optional_.  a list of strings representing the identifier prefixes--i.e. 
+         (List[str]) _optional_.  a list of strings representing the identifier prefixes--i.e.
          the _shoulders_--that can be used to create new project identifiers.  If not provided,
          the only allowed shoulder will be that given by ``default_shoulder``.
     ``default_shoulder``
-         (str) _required_.  the identifier prefix--i.e. the _shoulder_--that should be used 
+         (str) _required_.  the identifier prefix--i.e. the _shoulder_--that should be used
          by default when not otherwise requested by the user when creating new project records.
     ``allowed_group_shoulders``
-         (List[str]) _optional_.  a list of strings representing the identifier prefixes--i.e. 
+         (List[str]) _optional_.  a list of strings representing the identifier prefixes--i.e.
          the _shoulders_--that can be used to create new group identifiers.  If not provided,
-         the only allowed shoulder will be the default, ``grp0``. 
+         the only allowed shoulder will be the default, ``grp0``.
     """
 
     def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS,
@@ -905,7 +907,7 @@ class DBClient(ABC):
         :param str projcoll:  the type of project to connect with (i.e. the project collection name)
         :param nativeclient:  where applicable, the native client object to use to connect the back
                               end database.  The type and use of this client is implementation-specific
-        :param str  foruser:  the user identity to connect as.  This will control what records are 
+        :param str  foruser:  the user identity to connect as.  This will control what records are
                               accessible via this instance's methods.
         :param PeopleService peopsvc:  a PeopleService to incorporate into this client
         """
@@ -941,19 +943,29 @@ class DBClient(ABC):
             self.recache_user_groups()
         return self._whogrps
 
+    def all_groups_for(self, who) -> frozenset:
+        """
+        Return the frozen set of all groups a user or group belongs to.
+        """
+        adhoc = self.groups.select_ids_for_user(who)
+        virtual_groups = self._get_virtual_groups_for(who)
+        all_groups = frozenset(adhoc.union(virtual_groups))
+
+        return all_groups
+
     @property
     def people_service(self) -> PeopleService:
         """
-        an attached PeopleService instance or None if such a service is not available.  This service 
+        an attached PeopleService instance or None if such a service is not available.  This service
         encapsulates access to the organization's staff directory service.
         """
         return self._peopsvc
 
     def recache_user_groups(self):
         """
-        the :py:property:`user_groups` contains a cached list of all the groups the user is 
-        a member of.  This function will recache this list (resulting in queries to the backend 
-        database).  
+        the :py:property:`user_groups` contains a cached list of all the groups the user is
+        a member of.  This function will recache this list (resulting in queries to the backend
+        database).
         """
         adhoc_groups = self.groups.select_ids_for_user(self._who)
         virtual_groups = self._get_virtual_groups_for(self._who)
@@ -966,17 +978,19 @@ class DBClient(ABC):
         user is not found.
         """
         if not self.people_service:
+            print("[DEBUG] no people_service")
             return []
         person = self.people_service.get_person_by_eid(user_id)
+        print(f"[DEBUG] get_person_by_eid({user_id}) => {person}")
         if not person:
             return []
         out = []
-
         if 'ouNumber' in person and person['ouNumber']:
             out.append(f"ouNumber:{person['ouNumber']}")
         if 'divisionNumber' in person and person['divisionNumber']:
             out.append(f"divisionNumber:{person['divisionNumber']}")
         if 'groupNumber' in person and person['groupNumber']:
+            print(f"[DEBUG] adding groupNumber:{person['groupNumber']}")
             out.append(f"groupNumber:{person['groupNumber']}")
         return out
 
