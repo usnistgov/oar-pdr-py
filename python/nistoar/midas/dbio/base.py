@@ -978,10 +978,8 @@ class DBClient(ABC):
         user is not found.
         """
         if not self.people_service:
-            print("[DEBUG] no people_service")
             return []
         person = self.people_service.get_person_by_eid(user_id)
-        print(f"[DEBUG] get_person_by_eid({user_id}) => {person}")
         if not person:
             return []
         out = []
@@ -990,7 +988,6 @@ class DBClient(ABC):
         if 'divisionNumber' in person and person['divisionNumber']:
             out.append(f"divisionNumber:{person['divisionNumber']}")
         if 'groupNumber' in person and person['groupNumber']:
-            print(f"[DEBUG] adding groupNumber:{person['groupNumber']}")
             out.append(f"groupNumber:{person['groupNumber']}")
         return out
 
