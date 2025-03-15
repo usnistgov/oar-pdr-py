@@ -1,5 +1,5 @@
 """
-A semi-mock implementation of a person directory look-up service
+A staff directory look-up service
 """
 import json, os
 from collections import OrderedDict
@@ -15,7 +15,7 @@ from pymongo.errors import PyMongoError, OperationFailure
 
 class PeopleService(ABC):
     """
-    An implementation of the NSD
+    An abstract interface to a staff directory.  
     """
     OU_ORG_TYPE  = "ou"
     DIV_ORG_TYPE = "div"
