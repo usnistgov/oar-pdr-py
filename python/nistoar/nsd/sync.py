@@ -67,13 +67,14 @@ class NSDSyncer:
         """
         return get_nsd_auth_token(self.cfg.get("source", {}).get("tokenService", {}))
 
-    def cache_data(self, dir: Union[str,Path]=None):
+    def cache_data(self, dir: Union[str,Path]=None, forous=None):
         """
         fetch the data needed by the OAR staff directory from the NIST Staff directory service
         and cache it to files on disk.  Configuration controls the names of the output files 
         (see :py:class:`class documentation <NSDSyncer>` for details).
         :param str|Path dir:  the directory to store the data into; if None, the value set in
                               the configuration is used.  
+        :param list[str] forous:  a list of abbreviations for OUs to restrict the people data to
         """
         baseep = self.cfg["source"]["service_endpoint"]
         if not dir:
@@ -93,11 +94,12 @@ class NSDSyncer:
             with open(filepath, 'w') as fd:
                 json.dump(orgs, fd, indent=2)
 
-            ous = [ou['orG_ID'] for ou in orgs if ou['orG_LVL_ID'] == OU_LEV]
+            if forous is None:
+                forous = [ou['orG_ID'] for ou in orgs if ou['orG_LVL_ID'] == OU_LEV]
             filepath = dir / self.cfg.get("person_file", "people.json")
             with open(filepath, 'w') as fd:
                 out = _JSONListWriter(fd)
-                _write_nsd_people(out, baseep, ous, token)
+                _write_nsd_people(out, baseep, forous, token)
                 out.done()
 
         except NSDException:
