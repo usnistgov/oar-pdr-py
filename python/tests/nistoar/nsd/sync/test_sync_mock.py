@@ -5,10 +5,10 @@ from unittest import mock
 from io import StringIO
 import yaml
 
-from nistoar.nsd import sync
+from nistoar.nsd.sync import syncer as sync
 from nistoar.base.config import ConfigurationException
 
-datadir = Path(__file__).parents[0] / "data"
+datadir = Path(__file__).parents[1] / "data"
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_nsd.")
 outdir = os.path.join(tmpdir.name, "data")
 
@@ -97,13 +97,13 @@ class TestNSDSyncer(test.TestCase):
         self.assertIn("source", self.syncer.cfg)
         self.assertIn("tokenService", self.syncer.cfg.get('source',{}))
 
-    @mock.patch('nistoar.nsd.sync.requests.post', side_effect=mocked_requests_post)
+    @mock.patch('nistoar.nsd.sync.syncer.requests.post', side_effect=mocked_requests_post)
     def test_get_token(self, post):
         token = self.syncer.get_token()
         self.assertTrue(token)
         self.assertGreater(len(token), 10)
 
-    @mock.patch('nistoar.nsd.sync.requests.get', side_effect=mocked_requests_get)
+    @mock.patch('nistoar.nsd.sync.syncer.requests.get', side_effect=mocked_requests_get)
     def test_nsd_orgs(self, get):
         scfg = self.syncer.cfg['source']
         data = sync.get_nsd_orgs(scfg['service_endpoint'], self.syncer.token)
@@ -112,7 +112,7 @@ class TestNSDSyncer(test.TestCase):
         self.assertIn("orG_CD", data[0])
         self.assertIn("orG_Name", data[0])
 
-    @mock.patch('nistoar.nsd.sync.requests.post', side_effect=mocked_requests_post)
+    @mock.patch('nistoar.nsd.sync.syncer.requests.post', side_effect=mocked_requests_post)
     def test_get_people_page(self, post):
         scfg = self.syncer.cfg['source']
         url = scfg['service_endpoint']
@@ -130,7 +130,7 @@ class TestNSDSyncer(test.TestCase):
         self.assertIn("lastName", data[0])
         self.assertIn("firstName", data[0])
 
-    @mock.patch('nistoar.nsd.sync.requests.post', side_effect=mocked_requests_post)
+    @mock.patch('nistoar.nsd.sync.syncer.requests.post', side_effect=mocked_requests_post)
     def test_write_nsd_ou_people(self, post):
         scfg = self.syncer.cfg['source']
         url = scfg['service_endpoint']
@@ -151,7 +151,7 @@ class TestNSDSyncer(test.TestCase):
         self.assertTrue(isinstance(data, list))
         self.assertEqual(len(data), 0)
 
-    @mock.patch('nistoar.nsd.sync.requests.post', side_effect=mocked_requests_post)
+    @mock.patch('nistoar.nsd.sync.syncer.requests.post', side_effect=mocked_requests_post)
     def test_get_nsd_people(self, post):
         scfg = self.syncer.cfg['source']
         data = sync.get_nsd_people(scfg['service_endpoint'], [3], self.syncer.token)
@@ -166,9 +166,9 @@ class TestNSDSyncer(test.TestCase):
         pfile = os.path.join(outdir, "people.json")
         self.assertFalse(os.path.exists(pfile))
 
-        with mock.patch('nistoar.nsd.sync.requests.post') as pmock:
+        with mock.patch('nistoar.nsd.sync.syncer.requests.post') as pmock:
             pmock.side_effect = mocked_requests_post
-            with mock.patch('nistoar.nsd.sync.requests.get') as gmock:
+            with mock.patch('nistoar.nsd.sync.syncer.requests.get') as gmock:
                 gmock.side_effect = mocked_requests_get
 
                 self.syncer.cache_data()

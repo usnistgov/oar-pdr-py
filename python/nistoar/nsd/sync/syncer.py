@@ -1,5 +1,5 @@
 """
-Utilities for syncing our local staff directory database with the agency-wide service
+Implementation of the sync capabilities
 """
 import json
 from collections.abc import Mapping
@@ -8,7 +8,7 @@ from typing import Union
 from io import TextIOBase
 
 from nistoar.base.config import ConfigurationException
-from . import NSDException, NSDServiceException
+from .. import NSDException, NSDServiceException
 
 import requests
 
