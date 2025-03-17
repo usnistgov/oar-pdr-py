@@ -4,7 +4,7 @@ a command-line interface to health checks.  The :py:func:`main` function provide
 import argparse, sys, os, re, logging, textwrap, traceback as tb
 from argparse import ArgumentParser
 
-import yaml
+import yaml, requests
 
 from nistoar.base import config
 from nistoar.base.config import ConfigurationException
@@ -36,9 +36,12 @@ def define_options(progname):
                         help="a URL that the configuration should be retrieved from.  If not "+
                              "provided, the OAR_CONFIG_URL environment variable will be "+
                              "consulted.  This option is ignored if -c/--config-file is provided.")
-    parser.add_argument('-D', '--dbio-nsd-url', type=str, dest='dbionsd', metavar='URL',
-                        help="the endpoint URL for the DBIO's staff directory service; if not "+
-                             "provided, the service will not be triggered")
+    parser.add_argument('-t', '--trigger-url', type=str, dest='trigrurl', metavar='URL',
+                        help="the endpoint URL for the DBIO's staff directory service; this overrides "+
+                             "the 'trigger' config property")
+    parser.add_argument('-T', '--no-trigger', action='store_false', dest='trigrurl',
+                        help="After fetch the NSD data, do not trigger a reload of the DBIO database "+
+                             "(over-rides -t).")
     parser.add_argument('-l', '--logfile', action='store', dest='logfile', type=str, metavar='FILE',
                         help="write messages that normally go to standard error to FILE as well.  "+
                              "If -q is also specified, the messages will only go to the logfile")
@@ -51,11 +54,23 @@ def define_options(progname):
                              "all OUs will be included")
     return parser
 
-def request_reload(dbionsdep):
+def request_reload(dbionsdep, authtoken=None):
     """
     trigger a reload
     """
-    pass
+    hdrs = {}
+    if authtoken:
+        hdrs['Authorization'] = f"Bearer {authtoken}"
+    try: 
+        resp = requests.request("LOAD", dbionsdep, headers=hdrs)
+        if resp.status_code == 401:
+            raise Failure("Valid trigger auth token not provided")
+        if resp.status_code == 405:
+            raise Failure("Trigger API appears not to be supported (check trigger URL)")
+        if resp.status_code >= 300 or resp.status_code < 200:
+            raise Failure(f"Unexpected DBIO server response: {resp.reason} ({resp.status_code})", 2)
+    except Exception as ex:
+        raise Failure(f"Failed to trigger reload on mirror: {str(ex)}", 2)
 
 def main(progname, args):
     """
@@ -108,8 +123,10 @@ def main(progname, args):
         syncer = NSDSyncer(cfg)
         syncer.cache_data(opts.datadir)
 
-        if opts.dbionsd:
-            request_reload(opts.dbionsd)
+        if opts.trigrurl is None and cfg.get("trigger", {}).get("service_endpoint"):
+            opts.trigrurl = cfg.get("trigger", {}).get("service_endpoint")
+        if opts.trigrurl:
+            request_reload(opts.trigrurl, cfg.get("trigger", {}).get("auth_token"))
 
     except ConfigurationException as ex:
         raise Failure(str(ex)) from ex
