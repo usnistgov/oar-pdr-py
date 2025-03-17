@@ -3,7 +3,7 @@ from pathlib import Path
 import unittest as test
 import yaml
 
-from nistoar.nsd import sync
+from nistoar.nsd.sync import syncer as sync
 from nistoar.base.config import ConfigurationException
 
 configfile = None
@@ -117,7 +117,7 @@ class TestNSDSyncer(test.TestCase):
             nsdtoken = self.syncer.get_token()
         
         scfg = self.syncer.cfg['source']
-        data = sync.get_nsd_people(scfg['service_endpoint'], [13210, 13212], nsdtoken)
+        data = sync.get_nsd_people(scfg['service_endpoint'], [13210, 13212, 13213], nsdtoken)
         self.assertTrue(isinstance(data, list))
         self.assertGreater(len(data), 50)
         self.assertIn("lastName", data[0])

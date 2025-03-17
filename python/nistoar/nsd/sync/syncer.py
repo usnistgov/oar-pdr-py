@@ -206,9 +206,12 @@ def _get_nsd_people_page(fullurl: str, ouid: int, page=1, token: str=None) -> Ma
 
     try:
         resp = requests.post(fullurl, data=json.dumps(payload).encode('utf-8'), headers=hdrs)
-        if resp.status_code >= 300 or resp.status_code == 204:
+        if resp.status_code >= 300:
             raise NSDServiceException(fullurl, resp.status_code, resp.reason,
                   f"Failed to obtain people from {PEOPLE}: {resp.reason} ({resp.status_code})")
+        elif resp.status_code == 204:
+            # No Content
+            return {'totalCount': 0, 'userInfo': []}
             
         return resp.json()
     except NSDServiceException:
