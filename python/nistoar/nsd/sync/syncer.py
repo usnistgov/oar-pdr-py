@@ -83,6 +83,8 @@ class NSDSyncer:
             raise ConfigurationException("Missing required configuration: dir")
         if isinstance(dir, str):
             dir = Path(dir)
+        if not dir.is_dir():
+            raise ConfigurationException(f"{dir}: does not exist as a directory")
 
         token = self.token
         if not token:
