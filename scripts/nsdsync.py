@@ -1,10 +1,12 @@
-#! /usr/bin/python3
+#! /usr/bin/env python3
 """
-Fetch NSD data and load it into our OAR mirror
-"""
-# nsdsync -d odir -c CONFFILE -C CFGURL -D DBIONSDURL  [OU ...]
+Fetch NSD data and load it into our OAR mirror.  
 
-from nistoar.pdr.nsd.sync import cli
+Execute this script with the -h option to display the list of options.
+"""
+# nsdsync [-h] [-d odir] [-c CONFFILE] [-D DBIONSDURL]  [OU ...]
+import sys, os, logging, traceback as tb
+from nistoar.nsd.sync import cli
 
 prog = os.path.basename(sys.argv[0])
 if prog.endswith('.py'):
