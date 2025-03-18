@@ -83,7 +83,7 @@ def main(progname, args):
     level = (opts.verbose and logging.DEBUG) or logging.INFO
     if opts.logfile:
         # write messages to a log file
-        fmt = "%(asctime)s " + (opts.origin or prog) + ".%(name)s %(levelname)s: %(message)s"
+        fmt = "%(asctime)s " + (progname) + ".%(name)s %(levelname)s: %(message)s"
         hdlr = logging.FileHandler(opts.logfile)
         hdlr.setFormatter(logging.Formatter(fmt))
         hdlr.setLevel(logging.DEBUG)
