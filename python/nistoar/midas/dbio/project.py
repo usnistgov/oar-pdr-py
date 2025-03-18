@@ -166,7 +166,8 @@ class ProjectService(MIDASSystem):
             prec.save()
 
         self._record_action(Action(Action.CREATE, prec.id, self.who, prec.status.message))
-        self.log.info("Created %s record %s (%s) for %s", self.dbcli.project, prec.id, prec.name, self.who)
+        self.log.info("Created %s recordd %s (%s) for %s", self.dbcli.project, prec.id, prec.name, self.who)
+        self.log.info("Test test")
         return prec
 
     def _set_default_perms(self, acls: ACLs):

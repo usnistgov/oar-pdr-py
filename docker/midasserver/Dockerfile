@@ -14,6 +14,11 @@ VOLUME /dev/oar-pdr-py
 VOLUME /app/dist
 
 RUN mkdir -p /dev/oar-pdr-py /app && chmod a+rwx /app
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+RUN apt-get update
+RUN apt-get install -y nodejs
+RUN apt-get install -y lsof
+RUN npm install -g wscat
 WORKDIR /dev/oar-pdr-py
 
 ENV PYTHONPATH /dev/oar-pdr-py/python/dist/pdr/lib/python:/app/dist/pdr/lib/python
@@ -21,4 +26,6 @@ ENV PYTHONPATH /dev/oar-pdr-py/python/dist/pdr/lib/python:/app/dist/pdr/lib/pyth
 ARG devuser=developer
 USER $devuser
 EXPOSE 9091
+EXPOSE 8765
+EXPOSE 8766
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
