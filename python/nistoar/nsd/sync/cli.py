@@ -110,7 +110,7 @@ def main(progname, args):
             raise Failure("problem reading config file, {0}: {1}"
                           .format(opts.cfgfile, ex.strerror)) from ex
     elif config.service:
-        cfg = config.service.get("midas-dbio")
+        cfg = config.service.get("midas-nsdsync")
     else:
         raise Failure("Unable to locate configuration; set OAR_CONFIG_SERVICE or use -c")
 
