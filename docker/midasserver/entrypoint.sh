@@ -17,7 +17,7 @@ echo Working Dir: $OAR_WORKING_DIR
 echo Access the MIDAS web services at http://localhost:$port/
 echo
 
-opts=
+opts="--enable-threads"
 oar_midas_db_type=$1
 [ -z "$oar_midas_db_type" ] || opts="--set-ph oar_midas_db_type=$oar_midas_db_type"
 [ -z "$OAR_LOG_FILE" ] || opts="$opts --set-ph oar_log_file=$OAR_LOG_FILE"
