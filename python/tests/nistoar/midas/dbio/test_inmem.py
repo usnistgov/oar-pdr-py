@@ -61,7 +61,7 @@ class TestInMemoryDBClient(test.TestCase):
         self.user = "nist0:ava1"
         self.cli = inmem.InMemoryDBClientFactory({}).create_client(
             base.DMP_PROJECTS, self.cfg, self.user)
-        self.received_messages = []  # To store messages received by the mock WebSocket server
+        self.received_messages = []
 
     async def mock_websocket_server(self, websocket):
         """
@@ -346,26 +346,17 @@ class TestInMemoryDBClient(test.TestCase):
         Test that a WebSocket message is sent when a record is created.
         """
         async def run_test():
-            # Start the mock WebSocket server
             server = await websockets.serve(self.mock_websocket_server, "localhost", 8765)
 
             try:
-                # Trigger the code that sends the WebSocket message
                 self.cli.create_record("test_record")
-
-                # Allow some time for the WebSocket message to be sent
                 await asyncio.sleep(1)
-
-                # Verify that the WebSocket message was sent
                 self.assertEqual(len(self.received_messages), 1)
                 self.assertIn("New dmp record created: test_record", self.received_messages[0])
 
             finally:
-                # Stop the mock WebSocket server
                 server.close()
                 await server.wait_closed()
-
-        # Run the asynchronous test
         asyncio.run(run_test())
 
 

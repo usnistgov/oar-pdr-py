@@ -1,6 +1,7 @@
-import os, json, pdb, logging, tempfile
+import os, json, pdb, logging, tempfile,asyncio
 from pathlib import Path
 import unittest as test
+import websockets
 
 from pymongo import MongoClient
 
@@ -95,6 +96,14 @@ class TestMongoDBClient(test.TestCase):
         self.cfg = {}
         self.user = "nist0:ava1"
         self.cli = mongo.MongoDBClient(dburl, self.cfg, base.DMP_PROJECTS, self.user)
+        self.received_messages = [] 
+    
+    async def mock_websocket_server(self, websocket):
+        """
+        Mock WebSocket server to capture messages sent by the client.
+        """
+        async for message in websocket:
+            self.received_messages.append(message)
 
     def tearDown(self):
         client = MongoClient(dburl)
@@ -167,6 +176,7 @@ class TestMongoDBClient(test.TestCase):
 #        self.assertIsNone(self.cli._get_from_coll("nextnum", "goob"))
 #        self.cli.native["nextnum"].insert_one({"slot": "goob", "next": 0})
 #        self.assertEqual(self.cli._get_from_coll("nextnum", "goob"), 0)
+
 
     def test_select_from_coll(self):
         # test query on unrecognized collection
@@ -303,6 +313,24 @@ class TestMongoDBClient(test.TestCase):
         rec2 = self.cli._get_from_coll(base.GROUPS_COLL, "p:bob")
         self.assertEqual(rec2, {"id": "p:bob", "members": ["p:bob", "alice"]})
 
+    def test_notify(self):
+        """
+        Test that a WebSocket message is sent when a record is created.
+        """
+        async def run_test():
+            server = await websockets.serve(self.mock_websocket_server, "localhost", 8765)
+
+            try:
+                self.cli.create_record("test_record")
+                await asyncio.sleep(1)
+                self.assertEqual(len(self.received_messages), 1)
+                self.assertIn("New dmp record created: test_record", self.received_messages[0])
+
+            finally:
+                server.close()
+                await server.wait_closed()
+        asyncio.run(run_test())
+
     def test_select_records(self):
         # test query on a recognized but empty collection
         it = self.cli.select_records()
@@ -327,6 +355,7 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(len(recs), 2)
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
         self.assertEqual(recs[1].id, id)
+
 
     def test_adv_select_records(self):
 
