@@ -1025,7 +1025,7 @@ class DBClient(ABC):
         rec['name'] = name
         rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
-        message = f"New {self._projcoll} record created: {name})"
+        message = f"New {self._projcoll} record created: {name}"
         self._notify(message)
         return rec
     
