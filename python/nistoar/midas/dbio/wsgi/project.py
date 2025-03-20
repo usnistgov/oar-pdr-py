@@ -684,21 +684,6 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
     def do_GET(self, path, ashead=False):
         path = path.strip('/')
-        if not path:
-            # "GET /<id>/acls" with no sub-path => return entire dictionary
-            try:
-                prec = self.svc.get_record(self._id)
-            except dbio.NotAuthorized:
-                return self.send_unauthorized()
-            except dbio.ObjectNotFound:
-                return self.send_error_resp(404, "ID not found",
-                                            "Record with requested identifier not found",
-                                            self._id, ashead=ashead)
-            return self.send_json(prec.to_dict().get('acls', {}), ashead=ashead)
-
-        parts = path.split('/', 1)
-        perm_name = parts[0] if parts else None
-        userorgroup = parts[1] if len(parts) > 1 else None
 
         try:
             prec = self.svc.get_record(self._id)
@@ -708,6 +693,13 @@ class ProjectACLsHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found",
                                         self._id, ashead=ashead)
+        if not path:
+            # "GET /<id>/acls" with no sub-path => return entire dictionary
+            return self.send_json(prec.to_dict().get('acls', {}), ashead=ashead)
+
+        parts = path.split('/', 1)
+        perm_name = parts[0] if parts else None
+        userorgroup = parts[1] if len(parts) > 1 else None
 
         if not userorgroup:
             all_ids_with_perm = prec.to_dict().get('acls', {}).get(perm_name, [])
