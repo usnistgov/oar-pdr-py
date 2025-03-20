@@ -8,7 +8,7 @@ description="""download data from the NIST PDR dataset, %s""" % def_pdrid
 epilog="Note that no data will actually get downloaded unless --download (or -D) is provided."
 
 def_filelist_url_pat = "https://data.nist.gov/od/ds/%s/filelisting.csv"
-def_metadata_url_pat = "https://data.nist.gov/rmm/records?@id=%s"
+def_metadata_url_pat = "https://data.nist.gov/od/id/%s"
 def_progname = "pdrdownload"
 
 import os, sys, shutil, csv, hashlib, argparse, json, re, traceback, math
