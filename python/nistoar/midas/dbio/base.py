@@ -983,12 +983,12 @@ class DBClient(ABC):
         if not person:
             return []
         out = []
-        if 'ouNumber' in person and person['ouNumber']:
-            out.append(f"ouNumber:{person['ouNumber']}")
-        if 'divisionNumber' in person and person['divisionNumber']:
-            out.append(f"divisionNumber:{person['divisionNumber']}")
-        if 'groupNumber' in person and person['groupNumber']:
-            out.append(f"groupNumber:{person['groupNumber']}")
+        if 'nistou' in person and person['nistou']:
+            out.append(f"nistou:{person['nistou']}")
+        if 'nistdiv' in person and person['nistdiv']:
+            out.append(f"nistdiv:{person['nistdiv']}")
+        if 'nistgrp' in person and person['nistgrp']:
+            out.append(f"nistgrp:{person['nistgrp']}")
         return out
 
     def create_record(self, name: str, shoulder: str = None, foruser: str = None) -> ProjectRecord:

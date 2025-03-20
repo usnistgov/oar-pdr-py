@@ -369,8 +369,8 @@ class TestVirtualGroups(test.TestCase):
 
     def test_all_groups_for_withMockPeopleService(self):
         staffdata = {
-            "nist0:ava1": { "ouNumber": "728", "divisionNumber": "730" },
-            "nist0:alice": { "groupNumber": "999" }
+            "nist0:ava1": { "nistou": "728", "nistdiv": "730" },
+            "nist0:alice": { "nistgrp": "999" }
         }
         pplsvc = MockPeopleService(staffdata)
         cfg = {}
@@ -379,13 +379,13 @@ class TestVirtualGroups(test.TestCase):
 
         matches = newcli.all_groups_for("nist0:ava1")
         self.assertIn(base.PUBLIC_GROUP, matches)
-        self.assertIn("ouNumber:728", matches)
-        self.assertIn("divisionNumber:730", matches)
+        self.assertIn("nistou:728", matches)
+        self.assertIn("nistdiv:730", matches)
         self.assertEqual(len(matches), 3)
 
         matches = newcli.all_groups_for("nist0:alice")
         self.assertIn(base.PUBLIC_GROUP, matches)
-        self.assertIn("groupNumber:999", matches)
+        self.assertIn("nistgrp:999", matches)
         self.assertEqual(len(matches), 2)
 
         matches = newcli.all_groups_for("nist0:bob")
@@ -394,8 +394,8 @@ class TestVirtualGroups(test.TestCase):
 
     def test_recache_user_groups_withMockPeopleService(self):
         staffdata = {
-            "nist0:ava1": { "ouNumber": "728", "divisionNumber": "730" },
-            "nist0:alice": { "groupNumber": "999" }
+            "nist0:ava1": { "nistou": "728", "nistdiv": "730" },
+            "nist0:alice": { "nistgrp": "999" }
         }
         pplsvc = MockPeopleService(staffdata)
         cfg = {}
@@ -404,8 +404,8 @@ class TestVirtualGroups(test.TestCase):
 
         newcli.recache_user_groups()
         self.assertIn(base.PUBLIC_GROUP, newcli.user_groups)
-        self.assertIn("ouNumber:728", newcli.user_groups)
-        self.assertIn("divisionNumber:730", newcli.user_groups)
+        self.assertIn("nistou:728", newcli.user_groups)
+        self.assertIn("nistdiv:730", newcli.user_groups)
         self.assertEqual(len(newcli.user_groups), 3)
 
         g = newcli.groups.create_group("mygrp")
@@ -414,8 +414,8 @@ class TestVirtualGroups(test.TestCase):
 
         newcli.recache_user_groups()
         self.assertIn(g.id, newcli.user_groups)
-        self.assertIn("ouNumber:728", newcli.user_groups)
-        self.assertIn("divisionNumber:730", newcli.user_groups)
+        self.assertIn("nistou:728", newcli.user_groups)
+        self.assertIn("nistdiv:730", newcli.user_groups)
         self.assertIn(base.PUBLIC_GROUP, newcli.user_groups)
         self.assertEqual(len(newcli.user_groups), 4)
 
