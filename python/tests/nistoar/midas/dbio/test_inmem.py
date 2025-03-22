@@ -1,6 +1,7 @@
-import os, json, pdb, logging
+import os, json, pdb, logging,asyncio 
 from pathlib import Path
 import unittest as test
+import websockets
 
 from nistoar.midas.dbio import inmem, base
 from nistoar.pdr.utils.prov import Action, Agent
@@ -60,6 +61,15 @@ class TestInMemoryDBClient(test.TestCase):
         self.user = "nist0:ava1"
         self.cli = inmem.InMemoryDBClientFactory({}).create_client(
             base.DMP_PROJECTS, self.cfg, self.user)
+        self.received_messages = []
+
+    async def mock_websocket_server(self, websocket):
+        """
+        Mock WebSocket server to capture messages sent by the client.
+        """
+        async for message in websocket:
+            self.received_messages.append(message)
+        
 
     def test_next_recnum(self):
         self.assertEqual(self.cli._next_recnum("goob"), 1)
@@ -269,8 +279,6 @@ class TestInMemoryDBClient(test.TestCase):
             }}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
-        
-        
 
         id = "pdr0:0006"
         rec = base.ProjectRecord(
@@ -332,6 +340,25 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")
+    
+    def test_notify(self):
+        """
+        Test that a WebSocket message is sent when a record is created.
+        """
+        async def run_test():
+            server = await websockets.serve(self.mock_websocket_server, "localhost", 8765)
+
+            try:
+                self.cli.create_record("test_record")
+                await asyncio.sleep(1)
+                self.assertEqual(len(self.received_messages), 1)
+                self.assertIn("New dmp record created: test_record", self.received_messages[0])
+
+            finally:
+                server.close()
+                await server.wait_closed()
+        asyncio.run(run_test())
+
 
     def test_select_records(self):
         # test query on existing but empty collection
