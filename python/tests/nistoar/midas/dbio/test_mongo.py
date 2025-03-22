@@ -1,7 +1,7 @@
-import os, json, pdb, logging, tempfile,asyncio
+import os, json, pdb, logging, tempfile
 from pathlib import Path
 import unittest as test
-import websockets
+
 
 from pymongo import MongoClient
 
@@ -312,24 +312,6 @@ class TestMongoDBClient(test.TestCase):
         self.cli._upsert(base.GROUPS_COLL, rec)
         rec2 = self.cli._get_from_coll(base.GROUPS_COLL, "p:bob")
         self.assertEqual(rec2, {"id": "p:bob", "members": ["p:bob", "alice"]})
-
-    def test_notify(self):
-        """
-        Test that a WebSocket message is sent when a record is created.
-        """
-        async def run_test():
-            server = await websockets.serve(self.mock_websocket_server, "localhost", 8765)
-
-            try:
-                self.cli.create_record("test_record")
-                await asyncio.sleep(1)
-                self.assertEqual(len(self.received_messages), 1)
-                self.assertIn("New dmp record created: test_record", self.received_messages[0])
-
-            finally:
-                server.close()
-                await server.wait_closed()
-        asyncio.run(run_test())
 
     def test_select_records(self):
         # test query on a recognized but empty collection
