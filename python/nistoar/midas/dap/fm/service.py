@@ -27,7 +27,46 @@ from nistoar.base.config import merge_config, ConfigurationException
 class MIDASFileManagerService:
     """
     a service for managing file manager spaces on behalf of an end-user.  This class provides the 
-    functionality of the MIDAS-specific application layer of the file manager.
+    functionality of the MIDAS-specific application layer of the file manager.  
+
+    This class supports the following configuration parameters:
+
+    ``admin_user``
+        (str) _required_.  the Nextcloud user name that is used to manage all the file spaces.
+    ``nextcloud_base_url``
+        (str) _optional_.  the base URL for the file manager application.  If not provided, the 
+        ``webdav`` and ``generic_api`` must each include a ``service_endpoint`` sub-parameter 
+        specified, and 
+    ``local_storage_root_dir``
+        (str) _optional_.  a local file system path that points to the file manager's root 
+        directory for project spaces.  When provided, the directory's base name is typically the
+        value of ``admin_user``.  Its contents are the root directories for each project, each 
+        named after its ID.  If this parameter is not provided, the spaces are assumed to be not 
+        accessible via the file system.  
+    ``nextcloud_files_url``
+        (str) _optional_.  the base URL that end-users should use to access folders via the browser 
+        interface.  This parameter is optional as long as ``nextcloud_base_url`` is provided in which 
+        case a default will be formed from it.
+    ``webdav``
+        (dict) _optional_.  the data for configuring the client for the file manager's WebDAV API 
+        (see :py:class:`~nistoar.midas.dap.fm.clients.webdav.FMWebDAVClient`).  If not provided, 
+        default values will be assembled from the other parameters given here (requiring 
+        ``nextcloud_base_url``, and ``authentication`` to be specified).
+    ``generic_api``
+        (dict) _optional_.  the data for configuring the client for the nextcloud's generic layer 
+        API. (see :py:class:`~nistoar.midas.dap.fm.clients.nextcloud.NextcloudApi`).  If not provided, 
+        default values will be assembled from the other parameters given here (requiring 
+        ``nextcloud_base_url``, and ``authentication`` to be specified).
+    ``authentication``
+        (dict) _optional_.  common authentication configuration shared by the WebDAV and generic layer
+        APIs.  If not provided, the ``webdav`` and ``generic_api`` dictionaries need to provide their 
+        own ``authentication`` parameters (see 
+        :py:class:`~nistoar.midas.dap.fm.clients.webdav.FMWebDAVClient` and 
+        :py:class:`~nistoar.midas.dap.fm.clients.nextcloud.NextcloudApi`).
+    ``ca_bundle``
+        (str) _optional_.  the path to a X.509 CA certificate bundle used to verify the nextcloud 
+        server's site certificate.  This is needed only if the required CA certs are not installed 
+        into the OS.  If provided, this parameter will be passed is as a default for the API clients.
     """
 
     def __init__(self, config: Mapping, log: Logger=None,
@@ -105,7 +144,7 @@ class MIDASFileManagerService:
         create an :py:class:`~nistoar.midas.dap.fm.clients.FMWebDAVClient` according to the 
         configuration provided to this class.
         """
-        cfg = deepcopy(self.cfg.get('webdav', {}))
+        cfg = deepcopy(self.cfg.get('generic_api', {}))
         if _override:
             cfg = merge_config(_override, cfg)
 
@@ -141,15 +180,15 @@ class MIDASFileManagerService:
         self.ensure_user(foruser)
 
         # create the directories (may raise exception)
-        self.wdcli.ensure_directory(space.root_folder)
-        self.wdcli.ensure_directory(space.system_folder)
-        self.wdcli.ensure_directory(space.uploads_folder)
-        self.wdcli.ensure_directory(space.exclude_folder)
-        self.wdcli.ensure_directory(space.trash_folder)
+        self.wdcli.ensure_directory(space.root_davpath)
+        self.wdcli.ensure_directory(space.system_davpath)
+        self.wdcli.ensure_directory(space.uploads_davpath)
+        self.wdcli.ensure_directory(space.exclude_davpath)
+        self.wdcli.ensure_directory(space.trash_davpath)
 
         # share space with user (may raise exception)
         if foruser != self._adminuser:
-            space.set_permissions_for(space.root_folder, foruser, PERM_READ)
+            self.nccli.set_user_permissions(foruser, PERM_READ, space.root_davpath)
             # space.set_permissions_for(space.system_folder, userid, PERM_READ)
             space.set_permissions_for(space.uploads_folder, foruser, PERM_ALL)
 
@@ -198,7 +237,10 @@ class MIDASFileManagerService:
         """
         test access to the Nextcloud API.
         """
-        self.nccli.test()
+        resp = self.nccli.test()
+        if not hasattr(resp, 'status_code'):
+            return False
+        return resp.status_code == 200
 
 PERM_NONE   = 0
 PERM_READ   = 3
@@ -250,7 +292,7 @@ class FMSpace:
         return self._id
 
     @property
-    def root_dir(self):
+    def root_dir(self) -> Path:
         """
         the file path to the user's space's directory on a local filesystem.  This directory contains
         the user's system directory and uploads directory.  
@@ -284,16 +326,16 @@ class FMSpace:
     @property
     def exclude_davpath(self):
         """
-        the resource path to the uploads folder.  This path is used to access the folder via 
-        the WebDAV API.
+        the resource path to the user's uploads exclude folder.  This path is used to access the 
+        folder via the WebDAV API.
         """
         return "/".join([self.uploads_davpath, self.exclude_folder])
 
     @property
     def trash_davpath(self):
         """
-        the resource path to the uploads folder.  This path is used to access the folder via 
-        the WebDAV API.
+        the resource path to the space's uploads trash folder.  This path is used to access the 
+        folder via the WebDAV API.
         """
         return "/".join([self.uploads_davpath, self.trash_folder])
 
@@ -339,7 +381,7 @@ class FMSpace:
         """
         if self.svc._root_dir:
             path = os.sep.join(resource.split('/'))
-            return (self.svc._rootdir / path).exists()
+            return (self.root_dir / path).exists()
 
     def _make_gui_url(self, ncresid):
         return f"{self.svc._ncfilesurl}/{ncresid}?dir={self.uploads_davpath}"
@@ -357,7 +399,7 @@ class FMSpace:
         :return:  the permission code 
                   :rtype: int
         """
-        pdata = self.svc.nccli.get_user_permissions(resource)
+        pdata = self.svc.nccli.get_user_permissions(self.root_davpath+'/'+resource)
         if not pdata.get('ocs'):
             if not self.resource_exists(resource):
                 raise FileManagerResourceNotFound(resource)
@@ -386,7 +428,7 @@ class FMSpace:
             raise ValueError(f"perm: code not recognized: {perm}")
 
         self.svc.ensure_user(userid)
-        self.svc.nccli.set_user_permissions(userid, perm, resource)
+        self.svc.nccli.set_user_permissions(userid, perm, self.root_davpath+'/'+resource)
         
 
     def launch_scan(self, type: str = "def"):
@@ -422,13 +464,3 @@ class FMSpace:
         """
         pass
 
-
-
-
-
-
-
-    # permissions
-
-    # scan
-        

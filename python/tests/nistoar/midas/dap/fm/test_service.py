@@ -1,0 +1,197 @@
+import json, tempfile, shutil, os, sys
+import unittest as test
+from unittest.mock import patch, Mock
+from pathlib import Path
+from logging import Logger
+from copy import deepcopy
+import requests
+
+from nistoar.midas.dap.fm import service as fm
+from nistoar.midas.dap.fm.clients.nextcloud import NextcloudApi
+from nistoar.midas.dap.fm.exceptions import *
+from nistoar.base.config import ConfigurationException
+
+execdir = Path(__file__).parents[0]
+datadir = execdir.parents[0] / 'data'
+certpath = datadir / 'clientAdmin.crt'
+keypath = datadir / 'clientAdmin.key'
+capath = datadir / 'serverCa.crt'
+
+STATUS_TESTER_URL = None
+try:
+    r = requests.get("https://httpstat.us/201")
+    if r.status_code == 201:
+        STATUS_TESTER_URL = "https://httpstat.us/"
+except Exception:
+    pass
+
+tmpdir = tempfile.TemporaryDirectory(prefix="_test_fm_service.")
+rootdir = Path(os.path.join(tmpdir.name, "fmdata"))
+
+def import_file(path, name=None):
+    if not name:
+        name = os.path.splitext(os.path.basename(path))[0]
+    import importlib.util as imputil
+    spec = imputil.spec_from_file_location(name, path)
+    out = imputil.module_from_spec(spec)
+    sys.modules["sim_clients"] = out
+    spec.loader.exec_module(out)
+    return out
+
+import importlib
+testdir = os.path.dirname(os.path.abspath(__file__))
+simcli = os.path.join(testdir, "sim_clients.py")
+sim = import_file(simcli)
+
+def tearDownModules():
+    tmpdir.cleanup()
+
+class MIDASFileManagerServiceTest(test.TestCase):
+
+    def setUp(self):
+        if not os.path.exists(rootdir):
+            os.mkdir(rootdir)
+        self.config = {
+            'nextcloud_base_url': 'http://mocknextcloud/nc',
+            'webdav': {
+                'service_endpoint': 'http://mockservice/api',
+            },
+            'generic_api': {
+                'service_endpoint': 'http://mockservice/api',
+            },
+            'authentication': {
+                'client_cert_path': certpath,
+                'client_key_path':  keypath
+            },
+            'local_storage_root_dir': rootdir,
+            'admin_user': 'admin',
+            'authentication': {
+                'user': 'admin',
+                'pass': 'pw'
+            }
+        }
+
+        nccli = sim.SimNextcloudApi(rootdir, self.config.get('generic_api',{}))
+        wdcli = sim.SimFMWebDAVClient(rootdir, self.config.get('webdav',{}))
+        self.cli = fm.MIDASFileManagerService(self.config, nccli=nccli, wdcli=wdcli)
+
+    def tearDown(self):
+        if os.path.exists(rootdir):
+            shutil.rmtree(rootdir)
+
+    def test_ctor(self):
+        self.cli = fm.MIDASFileManagerService(self.config)
+        self.assertEqual(self.cli._ncbase, self.config['nextcloud_base_url']+'/')
+        self.assertEqual(self.cli._ncfilesurl, self.cli._ncbase+"apps/files/files")
+        self.assertTrue(self.cli.nccli)
+        self.assertTrue(self.cli.wdcli)
+        self.assertEqual(self.cli.nccli.base_url, self.config['generic_api']['service_endpoint']+'/')
+        self.assertEqual(self.cli.wdcli._wdcopts['webdav_root'], "/api")
+        self.assertEqual(self.cli.nccli.authkw, {'auth': ("admin", "pw")})
+
+        del self.config['webdav']
+        del self.config['generic_api']
+        self.cli = fm.MIDASFileManagerService(self.config)
+        self.assertEqual(self.cli.nccli.base_url, self.cli._ncbase+"api/genapi.php/")
+        self.assertEqual(self.cli.wdcli._wdcopts['webdav_root'], "/nc/remote.php/dav/files/admin")
+
+        del self.config['admin_user']
+        with self.assertRaises(ConfigurationException):
+            self.cli = fm.MIDASFileManagerService(self.config)
+        self.config['admin_user'] = 'admin'
+
+        os.rmdir(rootdir)
+        with self.assertRaises(ConfigurationException):
+            self.cli = fm.MIDASFileManagerService(self.config)
+
+#    @patch('requests.request')
+    def test_test(self):  # , mock_request):
+#        mock_resp = Mock()
+#        mock_resp.status_code = 200
+#        mock_request.return_value = mock_resp
+        self.assertEqual(self.cli.test(), True)
+
+    def test_ensure_user(self):
+        self.assertTrue(not self.cli.nccli.is_user('ava1'))
+        self.cli.ensure_user('ava1')
+        self.assertTrue(self.cli.nccli.is_user('ava1'))
+        self.cli.ensure_user('ava1')
+        self.assertTrue(self.cli.nccli.is_user('ava1'))
+
+    def test_space(self):
+        id = "mdst:XXX1"
+        self.assertTrue(not (rootdir/id).exists())
+        self.assertTrue(not self.cli.space_exists(id))
+        with self.assertRaises(FileManagerResourceNotFound):
+            self.cli.get_space(id)
+
+        sp = self.cli.create_space_for(id, 'ava1')
+        self.assertTrue(isinstance(sp, fm.FMSpace))
+        self.assertTrue(self.cli.nccli.is_user('ava1'))
+        self.assertTrue((rootdir/id).is_dir())
+        self.assertTrue((rootdir/id/id).is_dir())
+        self.assertTrue((rootdir/id/(id+"-sys")).is_dir())
+        self.assertTrue((rootdir/id/id/'TRASH').is_dir())
+        self.assertTrue((rootdir/id/id/'EXCLUDE').is_dir())
+
+        self.cli.wdcli.is_directory("/".join((id, id, 'TRASH',)))
+        self.assertEqual(sp.id, id)
+        self.assertTrue(sp.resource_exists(id))
+        self.assertTrue(sp.resource_exists(id+"-sys"))
+        self.assertTrue(sp.resource_exists(id+"/EXCLUDE"))
+        self.assertTrue(sp.resource_exists(id+"/TRASH"))
+
+        sp = self.cli.get_space(id)
+        self.assertTrue(isinstance(sp, fm.FMSpace))
+        self.assertEqual(sp.id, id)
+        self.assertTrue(sp.resource_exists(id))
+        self.assertTrue(sp.resource_exists(id+"-sys"))
+        self.assertTrue(sp.resource_exists(id+"/EXCLUDE"))
+        self.assertTrue(sp.resource_exists(id+"/TRASH"))
+
+        self.cli.delete_space(id)
+        self.assertTrue(not sp.resource_exists(id))
+        self.assertTrue(not sp.resource_exists(id+"-sys"))
+        self.assertTrue(not sp.resource_exists(id+"/EXCLUDE"))
+        self.assertTrue(not sp.resource_exists(id+"/TRASH"))
+        self.assertTrue(not self.cli.space_exists(id))
+        with self.assertRaises(FileManagerResourceNotFound):
+            self.cli.get_space(id)
+        self.assertTrue(not (rootdir/id).exists())
+
+    def test_fmspace(self):
+        id = "mdst:XXX1"
+        sp = self.cli.create_space_for(id, 'ava1')
+        self.assertTrue(isinstance(sp, fm.FMSpace))
+
+        self.assertEqual(sp.id, id)
+        self.assertEqual(sp.root_dir, rootdir/id)
+        self.assertIsNotNone(sp._uploads_info)
+
+        self.assertEqual(sp.root_davpath, id)
+        self.assertEqual(sp.uploads_davpath, '/'.join((id,id,)))
+        self.assertEqual(sp.exclude_davpath, '/'.join((id,id,"EXCLUDE",)))
+        self.assertEqual(sp.trash_davpath, '/'.join((id,id,"TRASH",)))
+        self.assertEqual(sp.system_davpath, '/'.join((id,id+"-sys",)))
+
+        self.assertEqual(sp.uploads_folder, id)
+        self.assertEqual(sp.system_folder, id+"-sys")
+
+        info = sp.get_resource_info(id+"-sys")
+        self.assertIn('size', info)
+        self.assertIn('fileid', info)
+        self.assertEqual(info['name'], f"/{id}/{id}-sys")
+
+        self.assertEqual(sp.get_permissions_for(id, 'ava1'), fm.PERM_ALL)
+        self.assertEqual(sp.get_permissions_for(id, 'gurn'), fm.PERM_NONE)
+        sp.set_permissions_for(id, "gurn", fm.PERM_READ)
+        self.assertEqual(sp.get_permissions_for(id, 'ava1'), fm.PERM_ALL)
+        self.assertEqual(sp.get_permissions_for(id, 'gurn'), fm.PERM_READ)
+        
+
+        
+    
+        
+
+if __name__ == "__main__":
+    test.main()

@@ -145,7 +145,7 @@ class NextcloudApi:
                     err_msg = "File Manager Server Error: "+err_msg
                 raise FileManagerServerError(response.status_code, url, response.text, err_msg)
             elif response.status_code == 404:
-                raise FileManagerResourceNotFound(url, resptext=err_msg)
+                raise FileManagerResourceNotFound(full_url, resptext=err_msg)
             elif response.status_code >= 400:
                 raise FileManagerClientError(err_msg, response.status_code, url)
             elif response.status_code < 200 or response.status_code >= 300:
@@ -191,7 +191,6 @@ class NextcloudApi:
     def scan_all_files(self):
         """ Trigger a scan for all files. """
         return self._get_json('PUT', 'files/scan')
-        return response.json()
 
     def scan_user_files(self, user_name):
         """ Trigger a scan for all files from a user. """
@@ -199,7 +198,8 @@ class NextcloudApi:
 
     def scan_directory_files(self, dir_path):
         """ Trigger a scan for all files inside a directory. """
-        return self._get_json('PUT', f'files/scan/directory/{dir_path}')
+        res = self._handle_request('PUT', f'files/scan/directory/{dir_path}')
+        return res.text
 
     def get_users(self):
         """ Get all users. """
