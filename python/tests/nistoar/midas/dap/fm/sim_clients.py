@@ -173,17 +173,26 @@ class SimNextcloudApi(NextcloudApi):
     xfiletmpl = "<d:response>\n  <d:href>%s</d:href>\n  <d:propstat>\n   <d:prop>\n    <d:resourcetype>%s</d:resourcetype>\n   </d:prop>\n  <d:status>HTTP/1.1 200 OK</d:status>\n  </d:propstat>\n </d:response>"
     xenvtmpl = '<?xml version="1.0"?>\n<d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">\n %s\n</d:multistatus>'
     def scan_directory_files(self, dir_path):
+        dir_path = dir_path.rstrip('/')
         fromdir = self.rootdir / dir_path
         out = []
         if fromdir.is_dir():
             out = [self.xfiletmpl % (self.basepath+dir_path, "collection")]
-            for root, dirs, files in os.walk(fromdir):
-                for f in dirs:
-                    f = os.path.join(root[len(str(self.rootdir))+1:], f)
-                    out.append(self.xfiletmpl % (self.basepath+f, "<d:collection/>"))
-                for f in files:
-                    f = os.path.join(root[len(str(self.rootdir))+1:], f)
-                    out.append(self.xfiletmpl % (self.basepath+f, ""))
+            contents = [f for f in os.listdir(fromdir) if f != '.' and f != '..' and not f.startswith("_")]
+
+            out.extend([self.xfiletmpl % (self.basepath+dir_path+'/'+f,
+                                          "<d:collection/>" if (fromdir/f).is_dir() else "")
+                        for f in contents])
+        else:
+            out = [self.xfiletmpl % (self.basepath+dir_path, "")]
+
+#            for root, dirs, files in os.walk(fromdir):
+#                for f in dirs:
+#                    f = os.path.join(root[len(str(self.rootdir))+1:], f)
+#                    out.append(self.xfiletmpl % (self.basepath+f, "<d:collection/>"))
+#                for f in files:
+#                    f = os.path.join(root[len(str(self.rootdir))+1:], f)
+#                    out.append(self.xfiletmpl % (self.basepath+f, ""))
                     
         return self.xenvtmpl % "\n ".join(out)
 

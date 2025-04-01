@@ -17,14 +17,6 @@ certpath = datadir / 'clientAdmin.crt'
 keypath = datadir / 'clientAdmin.key'
 capath = datadir / 'serverCa.crt'
 
-STATUS_TESTER_URL = None
-try:
-    r = requests.get("https://httpstat.us/201")
-    if r.status_code == 201:
-        STATUS_TESTER_URL = "https://httpstat.us/"
-except Exception:
-    pass
-
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_fm_service.")
 rootdir = Path(os.path.join(tmpdir.name, "fmdata"))
 

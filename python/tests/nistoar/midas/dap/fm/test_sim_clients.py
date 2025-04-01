@@ -134,6 +134,10 @@ class SimNextcloudApiTest(test.TestCase):
         self.assertTrue(resp.startswith("<?xml"))
         self.assertIn("junk", resp)
 
+        resp = self.nccli.scan_directory_files("mdst:0001")
+        self.assertTrue(resp.startswith("<?xml"))
+        self.assertNotIn("junk", resp)
+
 class SimFMWebDAVClientTest(test.TestCase):
 
     def setUp(self):
