@@ -27,6 +27,7 @@ from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils.prov import Action
 from .. import MIDASException
 from .status import RecordStatus
+from .notifier import Notifier
 from nistoar.pdr.utils.prov import ANONYMOUS_USER
 from nistoar.nsd.service import PeopleService, create_people_service
 
@@ -937,7 +938,7 @@ class DBClient(ABC):
     """
 
     def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS,
-                 peopsvc: PeopleService = None):
+                 peopsvc: PeopleService = None,websocket: str = 'ws://localhost:8765', key_websocket: str = '123456_secret_key'):
         """
         initialize the base client.
         :param dict  config:  the configuration data for the client
@@ -956,6 +957,7 @@ class DBClient(ABC):
 
         self._dbgroups = DBGroups(self)
         self._peopsvc = peopsvc
+        self.notifier = Notifier(uri=websocket,api_key=key_websocket)
 
     @property
     def project(self) -> str:
@@ -1025,53 +1027,9 @@ class DBClient(ABC):
         rec['name'] = name
         rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
-        message = f"New {self._projcoll} record created: {name}"
-        self._notify(message)
-        return rec
-    
-
-    def _notify(self, message):
-        """
-        Asynchronously sends a notification message via WebSocket.
-        """
-        try:
-            try:
-                loop = asyncio.get_running_loop()
-                logger.info(f"Obtained running event loop: {loop}")
-            except RuntimeError:
-                # No running event loop; create a new one
-                logger.warning("No running event loop found. Creating a new event loop.")
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                logger.info(f"New event loop created: {loop}")
-
-            if not loop.is_running():
-                logger.warning("Event loop is not running. Starting the event loop.")
-                loop.run_until_complete(self._send_notification(message))
-            else:
-                future = asyncio.run_coroutine_threadsafe(self._send_notification(message), loop)
-                logger.info(f"Notification coroutine submitted to the event loop: {future}")
-        except Exception as e:
-            logger.error(f"Unexpected error in _notify: {e}")
-
-    async def _send_notification(self, message):
-        """
-        Coroutine to send a notification message via WebSocket.
-        """
-        uri = "ws://localhost:8765"  # WebSocket server address
-        logger.info(f" WebSocket server at {uri}...")
-        
-
-        try:
-            logger.info(f"Connecting to WebSocket server at {uri}...")
-            async with websockets.connect(uri) as ws:
-                logger.info(f" Sending WebSocket message: {message}")
-                await ws.send(message)
-                logger.info(" WebSocket message sent successfully.")
-        except Exception as e:
-            logger.error(f" Error sending WebSocket message: {e}")
-
-    
+        message = f"proj-create,{self._projcoll},{name}"
+        self.notifier.notify(message)
+        return rec 
 
     def _default_shoulder(self):
         out = self._cfg.get("default_shoulder")

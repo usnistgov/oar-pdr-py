@@ -352,7 +352,7 @@ class TestInMemoryDBClient(test.TestCase):
                 self.cli.create_record("test_record")
                 await asyncio.sleep(1)
                 self.assertEqual(len(self.received_messages), 1)
-                self.assertIn("New dmp record created: test_record", self.received_messages[0])
+                self.assertIn("123456_secret_key,proj-create, dmp,test_record", self.received_messages[0])
 
             finally:
                 server.close()
