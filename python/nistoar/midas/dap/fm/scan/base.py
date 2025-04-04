@@ -12,15 +12,23 @@ import tempfile
 import threading
 import time
 import uuid
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from typing import List
+from logging import Logger
 
-from flask import current_app, copy_current_request_context
-from flask_jwt_extended import jwt_required
-from flask_restful import Resource
+# from flask import current_app, copy_current_request_context
+# from flask_jwt_extended import jwt_required
+# from flask_restful import Resource
 
-from ..clients import helpers, NextcloudApi, WebDAVApi
+from ..clients import helpers, NextcloudApi, FMWebDAVClient
 from nistoar.midas.dbio import ObjectNotFound
+from nistoar.pdr.utils import checksum_of
+from ..service import FMSpace
+from ..exceptions import (FileManagerException, UnexpectedFileManagerResponse,
+                          FileManagerClientError, FileManagerServerError)
+from webdav3.exceptions import WebDavException
 
 logging.basicConfig(level=logging.INFO)
 
@@ -43,9 +51,11 @@ class UserSpaceScanner(ABC):
     asynchronously (i.e. via the ``async`` keyword); however, :py:meth:`fast_scan` is
     guaranteed to be called before :py:meth:`slow_scan` is queued for the same set of files.
 
-    The scanning functions are passed a dictionary of metadata that describe the files
-    that should be scanned.  The top-level properties capture information about the set of
-    files as a whole; the expected properties in this dictionary are as follows:
+    The scanning functions are passed a proto scan report object--a dictionary of metadata 
+    that describe the files that should be scanned.  The output of the scanning functions are 
+    the same scan report object with additional metadata about the files filled in.  The scan
+    report schema includes top-level properties that capture information 
+    about the set of files as a whole; the recognized properties in this dictionary are as follows:
 
     ``space_id``
         str -- the identifier for the space
@@ -69,7 +79,7 @@ class UserSpaceScanner(ABC):
         examined.
 
     The metadata may include additional top-level properties.  For example, it may include
-    nextcloud properties describing the top level folder that is represents the user space.
+    nextcloud properties describing the top level folder that represents the user space.
 
     Each object in the ``contents`` list is a dictionary that describes a file or folder.  The
     following properties can be expected:
@@ -121,6 +131,23 @@ class UserSpaceScanner(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def init_scannable_content(self, folder=None) -> List[Mapping]:
+        """
+        generate (quickly) a listing of the scannable files under the user's upload directory.  
+        The returned list will be conformant with the ``contents`` property of a scan report that 
+        can be fed to :py:meth:`fast_scan`.  The returned list represents the files allowable by 
+        algorithm implemented by this scanner.  For instance, it may exclude files found in certain 
+        folders (e.g. ``TRASH``) or having a certain naming patterns (e.g. beginning with a ".").  
+
+        :param str folder:  the folder (relative to the user's uploads folder) to list the files 
+                            under.  This list will all files in the name folder along with all in 
+                            its descendent folders.  If None (or an empty string), the uploads 
+                            directory will be assumed as the root of the list.  This folder will 
+                            _not_ be included in the list.  
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def fast_scan(self, content_md: Mapping) -> Mapping:
         """
         synchronously examine a set of files specified by the given file metadata.
@@ -166,6 +193,19 @@ class UserSpaceScanner(ABC):
         """
         raise NotImplementedError()
 
+class FileManagerScanException(FileManagerException):
+    """
+    an exception indicating a problem while starting or running a scanning operation
+    in a file space.  
+    """
+    def __init__(self, message: str, space_id: str=None, scan_id: str=None):
+        self.space_id = space_id
+        self.scan_id = scan_id
+        if space_id:
+            scid = scan_id if scan_id else ""
+            message += f" [{space_id}:{scid}]"
+        super(FileManagerScanException, self).__init__(message)
+
 
 class UserSpaceScannerBase(UserSpaceScanner, ABC):
     """
@@ -173,19 +213,27 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
     base class for full implementations.
     """
 
-    def __init__(self, space: FMSpace, scan_id: str):
+    def __init__(self, space: FMSpace, scan_id: str, skip_pats=[], log: Logger=None):
         """
         initialize the scanner.
 
-        :param str  space_id:  the identifier for the user space that should be scanned
-        :param str user_dir:  the full path on a local filesystem to the directory where
-                               the end-user has uploaded files.
-        :param str  sys_dir:  the full path on a local filesystem to a directory where
-                               the scanner can read and write files that are not visible
-                               to the end user.
+        :param FMSpace  space:  the file manager space object for the space that will be scanned
+        :param str    scan_id:  the unique identifier to give to the scan report.
+        :param list skip_pats:  a list of regular expressions (pattern strings or objects)
+                                that match file names (not including its directory path)
+                                that should be ignored.  Files that match these patterns
+                                will not be scanned and included in the output scan reports.
         """
         self.sp = space
         self.scanid = scan_id
+        self.skipre = []
+        for pat in skip_pats:
+            if not isinstance(pat, re.Pattern):
+                pat = re.compile(pat)
+            self.skipre.append(pat)
+        if not log:
+            log = logging.getLogger(__name__)
+        self.log = log
 
     @property
     def space_id(self):
@@ -200,7 +248,7 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
         """
         the path on local disk where the user's uploads directory is located
         """
-        return self.sp.root_dir
+        return self.sp.root_dir / self.sp.uploads_folder
 
     @property
     def system_dir(self):
@@ -209,7 +257,40 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
         used as the output for the scan metadata file as well as other files the scanner desires 
         to write out.  
         """
-        return self._sysdir
+        return self.sp.root_dir / self.sp.system_folder
+
+    def init_scannable_content(self, folder=None):
+
+        scanroot = self.user_dir
+        if folder:
+            scanroot /= folder
+
+        # descend through the file hierachy to output files
+        out = []
+        base = scanroot
+        try:
+            for base, dirs, files in os.walk(scanroot):
+
+                for f in files:
+                    # ignore any file matching any of the skip patterns
+                    if not any(p.search(f) for p in self.skipre):
+                        out.append({'path': os.path.join(base[len(str(self.user_dir))+1:], f),
+                                    'resource_type': "file"})
+
+                for i in range(len(dirs)):
+                    d = dirs.pop(0)
+                    # ignor any directory matching any of the skip patterns and prevent further descending
+                    if not any(p.search(d) for p in self.skipre):
+                        out.append({'path': os.path.join(base[len(str(self.user_dir))+1:], d),
+                                    'resource_type': "collection"})
+                        dirs.append(d)
+
+        except IOError as ex:
+            raise FileManagerScanException(f"Trouble scanning {base} via filesystem: {str(ex)}")
+        except Exception as ex:
+            raise FileManagerScanException(f"Unexpected error while scanning {base}: {str(ex)}")
+
+        return out
 
     def update_scan_metadata(self, scan_id, md):
         """
@@ -218,221 +299,232 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
         the scan metadata cached to disk.  
         :param str scan_id:  the ID for the scan request
         :param dict     md:  the scan metadata to write out.  This should have the same structure
-                             as what is provided and returned by :py:meth:`fast_scan`.  
+                             as what is provided to and returned by :py:meth:`fast_scan`.  
         :raises FileManagerException:  if there is an error encountered while interacting with 
                              the file manager system, including if the target output folder is 
                              not found.
         """
-        fm_system_path = content_md['fm_system_path']
-        webdav_client = self.sp.svc.wdcli
+        wdcli = self.sp.svc.wdcli
 
         # Upload initial report
-        filename = f"report-{scan_id}.json"
+        filename = f"scan-report-{scan_id}.json"
 
         try:
-            file_content = json.dumps(content_md, indent=4)
-            temp_file = tempfile.NamedTemporaryFile(delete=False)
+            wdcli.authenticate()
+            response = wdcli.wdcli.upload_to(json.dumps(md, indent=4).encode('utf-8'),
+                                             self.sp.system_davpath+'/'+filename)
 
-            # Write content as bytes
-            temp_file.write(file_content.encode('utf-8'))
-            # Go back to the beginning of the file
-            temp_file.seek(0)
-            response = webdav_client.upload_file(str(fm_system_path), temp_file.name, filename)
+            if response.status_code < 200 or response.status_code >= 300:
+                msg = "Unexpected response during upload of '%s' to self.sp.system_davpath: %s (%s)" % \
+                      (filename, response.reason, response.status_code)
+                raise UnexpectedFileManagerResponse(msg, code=response.status_code)
 
-            if response['status'] not in [200, 201, 204]:
-                msg = f"Failed to upload scan report '{filename}': {response.reason}"
-                logging.error(msg)
-                raise FileManagerException(msg)
+            self.log.debug('Uploaded scan file: ' + filename)
 
-            logging.info('Uploaded scan file:' + filename)
+        except WebDavException as e:
+            msg = "Failed to upload '%s' to %s: %s" % (filename, self.sp.system_davpath, str(e))
+            raise FileManagerServerError(msg) from e
 
         except json.JSONDecodeError as e:
-            logging.exception(f"Failed to JSON-encode scan metadata: {e}")
-            raise ValueError("Non-JSON-encodable content metadata provided")
+            raise FileManagerClientError(f"Failed to JSON-encode scan metadata: {str(e)}") from e
 
-        finally:
-            # Close and delete the file
-            temp_file.close()
-            os.unlink(temp_file.name)
-        
+#        except Exception as e:
+#            msg = "Unexpected error while uploading '%s' to %s: %s" % \
+#                  (filename, self.sp.system_davpath, str(e))
+#            raise UnexpectedFileManagerResponse(msg) from e
 
+    def _save_report(self, scanid, md):
+        try:
+            self.update_scan_metadata(self.scanid, md)
+        except FileManagerException as ex:
+            self.log.error(str(ex))
+        except Exception as ex:
+            self.log.exception(ex)
 
-class FileManagerDirectoryScanner(UserSpaceScannerBase):
+    def ensure_registered(self, folder=None):
+        """
+        Request nextcloud to scan the specified folder to register any new or changed files.
+        :param str folder:  the folder relative to the user's space's root (i.e. where id refers 
+                            to the uploads directory).
+        """
+        # Using scan_directory_files() is probably the function we want; however at this time,
+        # it is implemented to just return metadata about the directory.  
+        # 
+        # dirpth = self.space.root_davpath
+        # if folder:
+        #    dirpath += '/'+folder
+        # self.space.nccli.scan_directory_files(dirpth)
+
+        # so in the meantime, we'll use this instead:
+        self.space.nccli.scan_user_files(self.space.svc.cfg.get('adminuser', 'oar_api'))
+
+basic_skip_patterns = [
+    re.compile(r"^\."),       # hidden files
+    re.compile(r"^_")         # anything starting with an underscore ("_")
+]
+exclude_folders_skip_patterns = basic_skip_patterns + [
+    re.compile(r"^TRASH$"),   # trash folders
+    re.compile(r"^EXCLUDE$")  # exclude folders
+]
+
+class BasicScanner(UserSpaceScannerBase):
     """
-    an implementation of the :py:meth:`UserSpaceScanner` leveraging :py:meth:`UserSpaceScannerBase`
-    for the file manager scanning operations.
+    a basic scanner that handles the minimum scanner that captures the minimum file metadata.  All 
+    captured data is included only in the scan report.  
     """
 
     def fast_scan(self, content_md: Mapping) -> Mapping:
-        logging.info("Starting fast scan")
+        """
+        synchronously examine a set of files specified by the given file metadata.
 
-        # write out the initial data
-        self.update_scan_metadata(self.scanid, content_md)
+        This implementation makes sure that each file currently exists and captures basic filesystem
+        metadata for it (size, last modified time, etc.).
+        """
+        if content_md.get('contents'):
+            # sort alphabetically; this puts folders ahead of their members
+            # content_md['contents'].sort(key=itemgetter('path'))
+            content_md['in_progress'] = True
+            totals = {'': 0}
+
+            for i in range(len(content_md['contents'])):
+                fmd = content_md['contents'].pop(0)
+                try:
+                    stat = (self.user_dir / fmd['path']).stat()
+                    fmd['size'] = stat.st_size if fmd['resource_type'] == "file" else 0
+                    fmd['ctime'] = stat.st_ctime
+                    fmd['mtime'] = stat.st_mtime
+                    fmd['last_modified'] = datetime.datetime.fromtimestamp(fmd['mtime']).isoformat()
+                except FileNotFoundError as ex:
+                    # No longer exists: remove it from the list
+                    fmd = None
+                except Exception as ex:
+                    if 'scan_errors' not in fmd or not isinstance(fmd['scan_errors'], list):
+                        fmd['scan_errors'] = []
+                    fmd['scan_errors'].append("Failed to stat file: "+str(ex))
+
+                if fmd:
+                    content_md['contents'].append(fmd)
+
+                # total up sizes
+                if fmd['resource_type'] == 'file':
+                    dir = os.path.dirname(fmd['path'])
+                    if dir not in totals:
+                        totals[dir] = 0
+                    totals[dir] += fmd['size']
+                    if dir:
+                        totals[''] += fmd['size']
+
+        # record total sizes
+        content_md['accumulated_size'] = totals['']
+        for fmd in content_md['contents']:
+            if fmd['resource_type'] == "collection" and fmd['path'] in totals:
+                fmd['accumulated_size'] = totals[fmd['path']]
+
+        # write out the report
+        self._save_report(self.scanid, content_md)
         
-        logging.info("Fast scan completed successfully")
         return content_md
 
     async def slow_scan(self, content_md: Mapping) -> Mapping:
         """
-        Perform a custom scan by calculating file checksums if the file has been modified after
-        the last checksum date (or there has never been a checksum calculated).
-        This method is asynchronous and scans each file of the contents.
+        asynchronously examine a set of files specified by the given file metadata.
 
-        Args:
-            content_md (Mapping): Metadata describing the files to be scanned.
-
-        Returns:
-            Mapping:  The updated metadata with checksums added or updated for each file.
+        This implementation will fetch nextcloud metadata and calculate checksums
         """
-        logging.info("Starting slow scan")
+        # make sure all files are registered with nextcloud
+        scanroot = content_md.get('fm_folder_path', self.space.uploads_davpath)
+        self.ensure_registered(scanroot)
+
+        update_files_lim = 10
+        update_size_lim = 10000000 # 10 MB
+        size_left = update_size_lim
+        files_left = update_file_lim
+        for fmd in content_md.get('contents'):
+            self.slow_scan_file(fmd)
+
+            # update the report (only after processing a certain number of files/bytes)
+            size_left -= fmd.get('size', 0)
+            files_left -= 1
+            if size_left <= 0 or files_left <= 0:
+                files_left = update_files_lim
+                size_left = update_size_lim
+                self._save_report(self.scanid, content_md)
+
+        # write out the final report
+        content_md['in_progress'] = False
+        self._save_report(self.scanid, content_md)
+        
+    def slow_scan_file(self, filemd: Mapping):
+        """
+        examine the specified file and update its metadata accordingly.  This is called by 
+        :py:meth:`slow_scan` on each file in the scan report object.  
+        """
+        # fetch the Nextcloud metadata for the entry (especially need fileid)
+        davpath = '/'.join([self.space.uploads_davpath] + filemd['path'].split('/'))
         try:
-            current_time = datetime.datetime.now()
-            scan_id = content_md['scan_id']
-            fm_system_path = content_md['fm_system_path']
+            
+            ncmd = self.space.wdcli.get_resource_info(davpath)
+            filemd['file_id'] = ncmd.get('fileid')
+            if 'getetag' in ncmd:
+                filemd['etag'] = ncmd['getetag']
 
-            last_scan = self.find_most_recent_scan(scan_id)
+        except FileManagerResourceNotFound as ex:
+            # either this file is not registered yet or it has been deleted
+            pass
+        except Exception as ex:
+            if 'scan_errors' not in filemd or not isinstance(filemd['scan_errors'], list):
+                filemd['scan_errors'] = []
+            filemd['scan_errors'].append(f"Failed to stat file, {filemd['path']}: {str(ex)}")
 
-            async def process_resource(resource):
-                if resource['resource_type'] == 'file':
-                    await update_checksum(resource)
-                elif 'contents' in resource:
-                    for sub_resource in resource['contents']:
-                        await process_resource(sub_resource)
-
-            async def update_checksum(resource):
-                last_modified = datetime.datetime.strptime(resource['last_modified'], '%a, %d %b %Y %H:%M:%S GMT')
-                file_id = resource['fileid']
-                checksum = None
-                last_checksum_date = datetime.datetime.fromisoformat('1970-01-01T00:00:00').replace(
-                    tzinfo=None).isoformat()
-
-                if last_scan:
-                    last_scan_content_md = next(
-                        (item for item in last_scan['contents'] if item['fileid'] == file_id),
-                        None)
-                    if last_scan_content_md and 'last_checksum_date' in last_scan_content_md:
-                        last_checksum_date = datetime.datetime.fromisoformat(
-                            last_scan_content_md['last_checksum_date']).replace(tzinfo=None)
-                        if last_modified < last_checksum_date:
-                            checksum = last_scan_content_md['checksum']
-                            last_checksum_date = last_checksum_date.isoformat()
-
-                if checksum is None:
-                    file_path = resource['path']
-                    checksum = helpers.calculate_checksum(file_path)
-                    last_checksum_date = current_time.isoformat()
-
-                # Update resource
-                resource['checksum'] = checksum
-                resource['last_checksum_date'] = last_checksum_date
-
-            for resource in content_md['contents']:
-                await process_resource(resource)
-
-            # Update the report.json file after each resource has been updated
-            update_json_data = json.dumps(content_md, indent=4)
-            filename = f"report-{scan_id}.json"
-            filepath = os.path.join(fm_system_path, filename)
-            disk_filepath = os.path.join(self.system_dir, filename)
-            webdav_client = WebDAVApi(Config)
-            response = webdav_client.modify_file_content(filepath, update_json_data)
-
-            logging.info("Slow scan completed successfully")
-            return content_md
-
-        except Exception as e:
-            logging.exception(f"An unexpected error occurred during the slow scan: {e}")
-            raise
-
-    def find_most_recent_scan(self, scan_id):
-        most_recent_file = None
-        most_recent_time = 0
-
-        for filename in os.listdir(self.system_dir):
-            file_path = os.path.join(self.system_dir, filename)
-            if not os.path.isfile(file_path):
-                continue
-            modification_time = os.path.getmtime(file_path)
-            # Exclude current scan file from the search
-            if scan_id not in os.path.basename(filename):
-                if modification_time > most_recent_time:
-                    most_recent_file = file_path
-                    most_recent_time = modification_time
-
-        if most_recent_file is None:
-            return None
-
-        # Read the most recent JSON file and convert it to a Python dictionary
-        with open(most_recent_file, 'r') as file:
-            data = json.load(file)
-
-        return data
-
-
+        # calculate the checksum
+        fpath = self.user_dir/filemd['path']
+        if fpath.is_file():
+            try:
+                filemd['checksum'] = checksum_of(fpath)
+            except Exception as ex:
+                if 'scan_errors' not in filemd or not isinstance(filemd['scan_errors'], list):
+                    filemd['scan_errors'] = []
+                filemd['scan_errors'].append(f"Failed to calculate checksum for {filemd['path']}: {str(ex)}")
+        
+        
+        
 class UserSpaceScanDriver:
     """
     A class that launches and manages a given :py:class:UserSpaceScanner to scan a given file
     space.  It is responsible for calling the scanner's ``fast_scan()`` and ``slow_scan()`` methods.
     """
-    def __init__(self, scanner: UserSpaceScanner, space: FMSpace):
+    def __init__(self, scanner: UserSpaceScanner, space: FMSpace, log: Logger=None):
         """
         Create a driver that will execute a given scanner.  
         :param UserSpaceScanner scanner:  the scanner implementation to execute
         :param FMSpace            space:  the file-manager space to scan
+        :param Logger               log:  the Logger to send messages to
         """
         self.space = space
         self.scanner = scanner
+        if not log:
+            log = self.space.log.getChild("scan-driver")
+        self.log = log
 
-    def get_contents(self, folder=None):
-        """
-        return an list of contents in the uploads folder to be provided to the scanner.
-        Each item in the returned list is a dictionary that describes a file or subfolder.  
-        The list complies with the ``contents`` property described in the 
-        :py:class:`UserSpaceScanner` class.  
-        :param str folder:  the folder to get contents of relative to the space's root folder.
-                            If None, the root folder is assumed.
-        """
-        root_dir_from_disk = self.space.root_dir
-        if not folder:
-            folder = self.space.uploads_folder
-        fm_file_path = folder
-        nextcloud_client = self.space.svc.nccli
-        webdav_client = self.space.svc.wdcli
+    def _init_scan_md(self, scan_id, folder=None, launch_time=None):
+        iscomplete = True
+        scfolder = self.space.uploads_folder
+        if folder:
+            iscomplete = False
+            scfolder += '/' + folder
 
-        adminuser = self.space.svc._adminuser
+        if not launch_time:
+            launch_time = time.time()
 
-        nextcloud_xml = nextcloud_client.scan_directory_files(fm_file_path)
-        nextcloud_md = helpers.parse_nextcloud_scan_xml(fm_file_path, nextcloud_xml)
-
-        contents = []
-        for resource in nextcloud_md:
-            resource_path = re.split(adminuser, resource['path'], flags=re.IGNORECASE)[-1].lstrip('/')
-            resource_type = 'file' if 'getcontenttype' in resource else 'folder'
-            file_type = resource.get('getcontenttype', '')
-            size = resource.get('getcontentlength', resource.get('quota-used-bytes', '0'))
-            path = os.path.join(root_dir_from_disk, resource_path)
-
-            resource_md = {
-                'name': path.rstrip('/').split("/")[-1],
-                'fileid': resource['getetag'].strip('"'),
-                'path': path,
-                'size': size,
-                'last_modified': resource['getlastmodified'],
-                'resource_type': resource_type,
-                'file_type': file_type,
-                'scan_errors': [],
-                'contents': [],
-            }
-
-            if resource_md['resource_type'] == 'folder':
-                subdirectory_path = resource_path
-                sub_contents = self.scan_directory_contents(subdirectory_path, root_dir_from_disk)
-                resource_md['contents'].extend(sub_contents)
-                contents.append(resource_md)
-            else:
-                contents.append(resource_md)
-
-        return contents
+        return {
+            'space_id': self.space.id,
+            'scan_id': scan_id,
+            'scan_time': launch_time,
+            'scan_datetime':  datetime.datetime.fromtimestamp(launch_time).isoformat(),
+            'root_folder_path': str(self.space.root_dir/scfolder),
+            'fm_folder_path': scfolder,
+            'contents': []
+        }
 
     def launch_scan(self, folder=None):
         """
@@ -443,63 +535,23 @@ class UserSpaceScanDriver:
         :raises FileManagerException: if an error occurs while prepping scan or during the fast
                             scan phase.  
         """
-        if not folder:
-            folder = self.space.uploads_folder
-        fm_file_path = folder
-        record_name = self.space.id
-
-        nextcloud_client = self.space.svc.nccli
-        webdav_client = self.space.svc.wdcli
-        logging.info(f"Starting file scanning process for record: {record_name}")
-
-        # Instantiate dirs
-        space_id = record_name
-        fm_system_path = self.space.system_folder
-        fm_space_path = self.space.uploads_folder
-        root_dir_from_disk = self.space.root_dir
-        user_dir = os.path.join(root_dir_from_disk, fm_space_path)
-        sys_dir = os.path.join(root_dir_from_disk, fm_system_path)
-
-        # Create task for this scanning task
         scan_id = str(uuid.uuid4())
+        scan_md = self._init_scan_md(scan_id, folder, time.time())
+        self.log.debug("Creating scan for %s with id=%s", self.space.id, scan_id)
 
-        # Find current time
-        current_epoch_time = time.time()
-
+        # get list of files to scan
         try:
-            if not webdav_client.is_directory(fm_space_path):
-                msg = f"Record name '{record_name}' does not exist or missing information"
-                logging.error(msg)
-                raise FileManagerResourceNotFound(record_name, message=msg)
+            scan_md['contents'] = self.scanner.init_scannable_content(folder)
+        except FileManagerException:
+            raise
+        except Exception as ex:
+            raise FileManagerScanException("Unexpected error while getting scan folder contents%s: %s" %
+                                           ((" (%s)" % folder) if folder else "", str(ex),)) from ex
 
-            # Find user space last modified file date
-            dir_info = webdav_client.get_directory_info(fm_space_path)
-
-            last_modified_date = dir_info['last_modified']
-
-            # Convert epoch time to an ISO-formatted string
-            current_datetime = datetime.datetime.fromtimestamp(current_epoch_time)
-            display_time = current_datetime.isoformat()
-
-            # Scan the initial directory and get content metadata
-            contents = self.scan_directory_contents(fm_space_path, root_dir_from_disk)
-
-            content_md = {
-                'space_id': space_id,
-                'scan_id': scan_id,
-                'scan_time': current_epoch_time,
-                'scan_datetime': display_time,
-                'user_dir': str(user_dir),
-                'fm_system_path': str(fm_system_path),
-                'last_modified': last_modified_date,
-                'size': total_scan_contents_size(contents),
-                'is_complete': True,
-                'contents': contents
-            }
-
-            # Run fast scanning and update metadata
-            content_md = self.scanner.fast_scan(content_md)
-
+        self.log.debug("Starting scan %s", scan_id)
+        try:
+            scan_md = self.scanner.fast_scan(content_md)
+            
             # Run the slowScan asynchronously using a thread
             def run_slow_scan():
                 with current_app.app_context():
@@ -509,247 +561,15 @@ class UserSpaceScanDriver:
             # TODO: track threads, avoid simultaneous scanning of same DAP
             thread = threading.Thread(target=run_slow_scan)
             thread.start()
-            logging.info(f"Scanning started successfully for record: {record_name}")
+            self.log.info(f"Scan %s started successfully", scan_id)
 
         except FileManagerException as ex:
             raise
 
         except Exception as ex:
-            raise FileManagerException(f"Unexpected error while scanning {folder}: {str(ex)}") from ex
-        
-        
+            raise FileManagerScanException(f"Unexpected error while scanning {folder}: {str(ex)}") from ex
 
 
-class ScanFiles(Resource):
-    """Resource to handle file scanning operations."""
-
-    def scan_directory_contents(self, fm_file_path, root_dir_from_disk):
-        """
-        Recursively scans directories and their contents.
-
-        Args:
-            fm_file_path (str): File manager file path relative to the root directory.
-            root_dir_from_disk (str): Root directory path from disk.
-
-        Returns:
-            list: List of metadata dictionaries for all files and directories.
-        """
-        nextcloud_client = NextcloudApi(Config)
-        webdav_client = WebDAVApi(Config)
-        contents = []
-        nextcloud_xml = nextcloud_client.scan_directory_files(fm_file_path)
-        nextcloud_md = helpers.parse_nextcloud_scan_xml(fm_file_path, nextcloud_xml)
-
-        for resource in nextcloud_md:
-            resource_path = re.split(Config.NEXTCLOUD_ADMIN_USER, resource['path'], flags=re.IGNORECASE)[-1].lstrip('/')
-            resource_type = 'file' if 'getcontenttype' in resource else 'folder'
-            file_type = resource.get('getcontenttype', '')
-            size = resource.get('getcontentlength', resource.get('quota-used-bytes', '0'))
-            path = os.path.join(root_dir_from_disk, resource_path)
-
-            resource_md = {
-                'name': path.rstrip('/').split("/")[-1],
-                'fileid': resource['getetag'].strip('"'),
-                'path': path,
-                'size': size,
-                'last_modified': resource['getlastmodified'],
-                'resource_type': resource_type,
-                'file_type': file_type,
-                'scan_errors': [],
-                'contents': [],
-            }
-
-            if resource_md['resource_type'] == 'folder':
-                subdirectory_path = resource_path
-                sub_contents = self.scan_directory_contents(subdirectory_path, root_dir_from_disk)
-                resource_md['contents'].extend(sub_contents)
-                contents.append(resource_md)
-            else:
-                contents.append(resource_md)
-
-        return contents
-
-    @jwt_required()
-    def post(self, record_name):
-        """
-        Starts a file scanning process for a specific record.
-        Initiates a fast scan followed by an asynchronous slow scan.
-
-        Args:
-            record_name (str): Name of the record space to scan.
-
-        Returns:
-            tuple: Success response with status code 200, or error response with status code 500.
-        """
-        try:
-            webdav_client = WebDAVApi(Config)
-            logging.info(f"Starting file scanning process for record: {record_name}")
-
-            # Instantiate dirs
-            space_id = record_name
-            fm_system_path = os.path.join(space_id, f"{space_id}-sys")
-            fm_space_path = os.path.join(space_id, f"{space_id}")
-            root_dir_from_disk = Config.NEXTCLOUD_ROOT_DIR_PATH
-            user_dir = os.path.join(root_dir_from_disk, fm_space_path)
-            sys_dir = os.path.join(root_dir_from_disk, fm_system_path)
-
-            # Create task for this scanning task
-            scan_id = str(uuid.uuid4())
-
-            # Find current time
-            current_epoch_time = time.time()
-
-            if not webdav_client.is_directory(fm_space_path):
-                logging.error(f"Record name '{record_name}' does not exist or missing information")
-                return {"error": "Not Found",
-                        "message": f"Record name '{record_name}' does not exist or is missing information"}, 404
-
-            # Find user space last modified file date
-            dir_info = webdav_client.get_directory_info(fm_space_path)
-
-            last_modified_date = dir_info['last_modified']
-
-            # Convert epoch time to an ISO-formatted string
-            current_datetime = datetime.datetime.fromtimestamp(current_epoch_time)
-            display_time = current_datetime.isoformat()
-
-            # Scan the initial directory and get content metadata
-            contents = self.scan_directory_contents(fm_space_path, root_dir_from_disk)
-
-            content_md = {
-                'space_id': space_id,
-                'scan_id': scan_id,
-                'scan_time': current_epoch_time,
-                'scan_datetime': display_time,
-                'user_dir': str(user_dir),
-                'fm_system_path': str(fm_system_path),
-                'last_modified': last_modified_date,
-                'size': total_scan_contents_size(contents),
-                'is_complete': True,
-                'contents': contents
-            }
-
-            # Instantiate Scanning Class
-            scanner = FileManagerDirectoryScanner(space_id, user_dir, sys_dir)
-
-            # Run fast scanning and update metadata
-            content_md = scanner.fast_scan(content_md)
-
-            # Run the slowScan asynchronously using a thread
-            @copy_current_request_context
-            def run_slow_scan():
-                with current_app.app_context():
-                    # Read files from disk for performance
-                    asyncio.run(scanner.slow_scan(content_md))
-
-            thread = threading.Thread(target=run_slow_scan)
-            thread.start()
-
-            success_response = {
-                'success': 'POST',
-                'message': 'Scanning successfully started!',
-                'scan_id': scan_id
-            }
-
-            logging.info(f"Scanning started successfully for record: {record_name}")
-            return success_response, 200
-
-        except FileNotFoundError:
-            logging.error(f"File not found for record: {record_name}")
-            return {'error': 'Not Found', 'message': 'Requested record not found'}, 404
-
-        except ValueError as e:
-            logging.exception(f"Value error: {str(e)}")
-            return {'error': 'Bad Request', 'message': str(e)}, 400
-
-        except Exception as error:
-            logging.exception("An unexpected error occurred: " + str(error))
-            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
-
-    @jwt_required()
-    def get(self, record_name, scan_id):
-        """
-        Retrieves the current state and details of a scanning task by its ID.
-
-        Args:
-            record_name (str): Unique identifier of the record.
-            scan_id (str): Unique identifier of the scanning task.
-
-        Returns:
-            tuple: Content metadata object and status code 200, or error message with status code 404.
-        """
-        try:
-            nextcloud_client = NextcloudApi(Config)
-            content = None
-
-            # Instantiate dirs
-            space_id = record_name
-            fm_system_path = os.path.join(space_id, f"{space_id}-sys")
-            fm_space_path = os.path.join(space_id, f"{space_id}")
-            root_dir_from_disk = Config.NEXTCLOUD_ROOT_DIR_PATH
-            user_dir = os.path.join(root_dir_from_disk, fm_space_path)
-            full_sys_dir = os.path.join(root_dir_from_disk, fm_system_path)
-
-            # Retrieve nextcloud metadata
-            nextcloud_scanned_dir_files = nextcloud_client.scan_directory_files(fm_system_path)
-            nextcloud_md = helpers.parse_nextcloud_scan_xml(user_dir, nextcloud_scanned_dir_files)
-            for file_md in nextcloud_md:
-                if scan_id in file_md['path']:
-                    file_path = helpers.get_correct_path(
-                        os.path.join(full_sys_dir, re.split(r'/|\\', file_md['path'])[-1]))
-                    with open(file_path, 'r') as file:
-                        content = json.load(file)
-                        logging.info(f"Scan {scan_id} found and returned successfully")
-                        return {'success': 'GET', 'message': content}, 200
-
-            if content is None:
-                logging.error(f"Scan {scan_id} not found")
-                return {'error': 'Scan Not Found', 'message': f'Scan {scan_id} not found'}, 404
-
-        except FileNotFoundError as e:
-            logging.exception(f"File not found: {e}")
-            return {'error': 'File Not Found', 'message': str(e)}, 404
-        except Exception as error:
-            logging.exception("An unexpected error occurred: " + str(error))
-            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
-
-    @jwt_required()
-    def delete(self, record_name, scan_id):
-        """
-        Deletes a scanning task report from the file manager using its unique ID.
-
-        Args:
-            record_name (str): Unique identifier of the record.
-            scan_id (str): Unique identifier of the scanning task.
-
-        Returns:
-            tuple: Success response with status code 200, or error response with status code 500.
-        """
-        try:
-            webdav_client = WebDAVApi(Config)
-            # Instantiate dirs
-            space_id = record_name
-            fm_system_path = os.path.join(space_id, f"{space_id}-sys")
-            file_path = os.path.join(fm_system_path, f"report-{scan_id}.json")
-
-            # Delete file
-            logging.info(f"Attempting to delete file: {file_path}")
-            response = webdav_client.delete_file(file_path)
-
-            if response['status'] not in [200, 204]:
-                logging.error(f"Failed to delete scan report '{scan_id}'")
-                return {'error': 'Internal Server Error', 'message': 'Failed to delete scan report'}, 500
-
-            success_response = {
-                'success': 'DELETE',
-                'message': f"Scanning '{scan_id}' deleted successfully!",
-            }
-            logging.info(f"File deleted successfully: {file_path}")
-            return success_response, 200
-
-        except Exception as error:
-            logging.exception("An unexpected error occurred: " + str(error))
-            return {"error": "Internal Server Error", "message": "An unexpected error occurred"}, 500
 
 
 def total_scan_contents_size(contents):

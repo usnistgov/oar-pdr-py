@@ -282,6 +282,7 @@ class FMSpace:
         self._uploads_info = None
         if not log:
             log = self.svc.log.getChild(id)
+        self.log = log
 
     @property
     def id(self):

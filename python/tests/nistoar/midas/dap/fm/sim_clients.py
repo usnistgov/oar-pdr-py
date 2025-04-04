@@ -209,12 +209,18 @@ class SimFMWebDAVClient(FMWebDAVClient):
             datadir = Path(datadir)
         self.rootdir = datadir
         self.cfg = config
+        self.wdcli = None
 
         adminuser = self.cfg.get('authentication',{}).get('user', 'oar_api')
         self.basepath = f"/fm/nc/remote.php/dav/files/{adminuser}/"
 
     def authenticate(self):
-        return "XXXX"
+        self.wdcli = Mock()
+        self.wdcli.upload_to = Mock()
+        reqresp = Mock()
+        reqresp.status_code = 200
+        self.wdcli.upload_to.return_value = reqresp
+    
 
     def is_directory(self, path):
         target = self.rootdir/path
