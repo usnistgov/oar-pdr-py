@@ -366,25 +366,25 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
         self.sp.svc.nccli.scan_user_files(self.sp.svc.cfg.get('adminuser', 'oar_api'))
 
     @classmethod
-    def create_basic_skip_scanner(cls, space, scanid, parentlog=None):
+    def create_basic_skip_scanner(cls, space, scanid, log=None):
         """
         a factory function for creating the scanner assuming the "basic" rules for skipping 
         certain files (skips files starting with "." or "_").
         """
-        if not parentlog:
-            parentlog = logging.getLogger(f"scan.{space.id}")
-        return cls(space, scanid, basic_skip_patterns, parentlog.getChild("basicskip"))
+        if not log:
+            log = logging.getLogger(f"scan.{space.id}")
+        return cls(space, scanid, basic_skip_patterns, log)
 
     @classmethod
-    def create_excludes_skip_scanner(cls, space, scanid, parentlog=None):
+    def create_excludes_skip_scanner(cls, space, scanid, log=None):
         """
         a factory function for creating the scanner assuming the "excludes" rules for skipping 
         certain files.  In addition to the basic skip rules (skipping files that start with "."
         or "_"), it skips folders with names "TRASH" or "EXCLUDE".
         """
-        if not parentlog:
-            parentlog = logging.getLogger(f"scan.{space.id}")
-        return cls(space, scanid, exclude_folders_skip_patterns, parentlog.getChild("exclskip"))
+        if not log:
+            log = logging.getLogger(f"scan.{space.id}")
+        return cls(space, scanid, exclude_folders_skip_patterns, log)
 
 basic_skip_patterns = [
     re.compile(r"^\."),       # hidden files
@@ -408,11 +408,11 @@ class BasicScanner(UserSpaceScannerBase):
         This implementation makes sure that each file currently exists and captures basic filesystem
         metadata for it (size, last modified time, etc.).
         """
+        totals = {'': 0}
         if content_md.get('contents'):
             # sort alphabetically; this puts top files first and folders ahead of their members
             content_md['contents'].sort(key=itemgetter('path'))
             content_md['in_progress'] = True
-            totals = {'': 0}
 
             for i in range(len(content_md['contents'])):
                 fmd = content_md['contents'].pop(0)

@@ -223,7 +223,12 @@ class SimFMWebDAVClient(FMWebDAVClient):
             with open(out, 'wb') as fd:
                 fd.write(data)
             return reqresp
+        def delfile(file):
+            target = self.rootdir/file
+            if target.is_file():
+                target.unlink()
         self.wdcli.upload_to = upto
+        self.wdcli.clean = delfile
     
 
     def is_directory(self, path):

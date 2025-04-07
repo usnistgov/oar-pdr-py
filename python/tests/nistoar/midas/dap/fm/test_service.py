@@ -4,6 +4,7 @@ from unittest.mock import patch, Mock
 from pathlib import Path
 from logging import Logger
 from copy import deepcopy
+from collections.abc import Mapping
 import requests
 
 from nistoar.midas.dap.fm import service as fm
@@ -158,7 +159,8 @@ class MIDASFileManagerServiceTest(test.TestCase):
 
         self.assertEqual(sp.id, id)
         self.assertEqual(sp.root_dir, rootdir/id)
-        self.assertIsNotNone(sp._uploads_info)
+        self.assertIsNotNone(sp._uploads_fileid)
+        self.assertIsNotNone(sp.uploads_file_id)
 
         self.assertEqual(sp.root_davpath, id)
         self.assertEqual(sp.uploads_davpath, '/'.join((id,id,)))
@@ -191,7 +193,7 @@ class MIDASFileManagerServiceTest(test.TestCase):
         self.assertEqual(scmd.get('space_id'), id)
         self.assertEqual(len(scmd['contents']), 0)
 
-        repfile = sp.root_dir/sp.system_folder/sp.scan_report_filename_for(scan_id)
+        repfile = sp.root_dir/sp.system_folder/sp.scan_report_filename_for(scmd['scan_id'])
         self.assertTrue(repfile.is_file())
 
         scid = scmd['scan_id']
@@ -202,10 +204,10 @@ class MIDASFileManagerServiceTest(test.TestCase):
         self.assertEqual(len(scmd['contents']), 0)
 
         sp.delete_scan(scid)
-        repfile = sp.root_dir/sp.system_folder/sp.scan_report_filename_for(scan_id)
+        repfile = sp.root_dir/sp.system_folder/sp.scan_report_filename_for(scid)
         self.assertTrue(not repfile.exists())
 
-        with self.assertRaises(FileNotFoundException):
+        with self.assertRaises(FileNotFoundError):
             sp.get_scan(scid)
         sp.delete_scan(scid)
 

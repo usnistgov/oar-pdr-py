@@ -456,23 +456,23 @@ class FMSpace:
         :raise FileManagerException:  if a failure happens, either while preparing scan or 
                   during the synchronous "fast_scan" phase.
         """
-        from .scan import UserSpaceScanDriver, BasicScanner
+        from .scan import UserSpaceScanDriver, BasicScanner, FileManagerScanException
 
         if not type or type == 'def':
             type = 'basic'
 
         if type == 'basic':
             driver = UserSpaceScanDriver(self, BasicScanner.create_excludes_skip_scanner,
-                                         self.log("basicscan"))
+                                         self.log.getChild("basicscan"))
         else:
             raise FileManagerScanException("unrecognized scan type requested: "+type)
 
-        scan_id = driver.launch_scan()
+        scanid = driver.launch_scan()
 
-        report = self.rootdir/self.system_folder/self.scan_report_filename_for(scan_id)
+        report = self.root_dir/self.system_folder/self.scan_report_filename_for(scanid)
         try: 
             out = read_json(report)
-        except FileNotFoundException as ex:
+        except FileNotFoundError as ex:
             raise FileManagerScanException("scanner failed to write initial report (file not found)") from ex
         except Exception as ex:
             raise FileManagerScanException("failure while reading initial report: "+str(ex)) from ex
@@ -489,13 +489,13 @@ class FMSpace:
                   This will include "is_complete" which will be False if the scan is 
                   still in progress.
                   :rtype: dict
-        :raises FileNotFoundException:  if report could not be found in system folder
+        :raises FileNotFoundError:  if report could not be found in system folder
         :raises FileManagerScanException:  if a failure occurs while reading or parsing the report
         """
-        report = self.rootdir/self.system_folder/self.scan_report_filename_for(scan_id)
+        report = self.root_dir/self.system_folder/self.scan_report_filename_for(scanid)
         try: 
             out = read_json(report)
-        except FileNotFoundException as ex:
+        except FileNotFoundError as ex:
             raise 
         except Exception as ex:
             raise FileManagerScanException("failure while reading initial report: "+str(ex)) from ex
@@ -508,12 +508,12 @@ class FMSpace:
         system folder.
         :param str scanid:  the unique ID assigned to the scan
         """
-        report = self.rootdir/self.system_folder/self.scan_report_filename_for(scan_id)
+        report = self.root_dir/self.system_folder/self.scan_report_filename_for(scanid)
         if not report.is_file():
             # don't care
             return
 
-        report = "/".join([self.system_davpath, self.scan_report_filename_for(scan_id)])
+        report = "/".join([self.system_davpath, self.scan_report_filename_for(scanid)])
 
         try:
             self.svc.wdcli.authenticate()
