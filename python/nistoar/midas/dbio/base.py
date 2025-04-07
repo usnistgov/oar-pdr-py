@@ -56,10 +56,6 @@ ProtectedRecord = NewType("ProtectedRecord", object)
 DBClient = NewType("DBClient", ABC)
 DBPeople = NewType("DBPeople", object)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
 
 class ACLs:
     """
