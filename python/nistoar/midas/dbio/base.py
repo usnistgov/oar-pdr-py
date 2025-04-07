@@ -12,9 +12,7 @@ model and how to interact with the database.
 """
 import time
 import math
-import asyncio
 import logging
-import websockets
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
 from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set

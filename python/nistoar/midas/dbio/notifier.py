@@ -52,5 +52,8 @@ class Notifier:
                     authentified_message = f"{self.api_key},{message}"
                     await websocket.send(authentified_message)
                     logger.info("WebSocket message sent successfully.")
+                    
+                await websocket.close()
+                logger.info("WebSocket connection closed cleanly.")
         except Exception as e:
             logger.error(f"Error sending WebSocket message: {e}")

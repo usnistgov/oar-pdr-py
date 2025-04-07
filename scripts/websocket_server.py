@@ -17,8 +17,8 @@ class WebSocketServer:
         try:
             async for message in websocket:
                 logging.info(f"Received message: {message}")
-                # Broadcast the received message to all connected clients
-                # Authenticate the message
+                logging.info(f"Authenticating message: {self.api_key}")
+
                 if not self._authenticate_message(message):
                     logging.warning("Unauthorized message received. Ignoring.")
                     continue
@@ -26,6 +26,7 @@ class WebSocketServer:
                 _, message_content = message.split(",", 1)
 
                 await asyncio.gather(*(client.send(message_content) for client in self.clients if client != websocket))
+                logging.info(f"Message distributed to {len(self.clients) - 1} clients: {message_content}")
         except websockets.ConnectionClosed:
             logging.info("Client disconnected")
         finally:
@@ -54,7 +55,7 @@ class WebSocketServer:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Start the WebSocket server.")
     parser.add_argument("--port", type=int, default=8765, help="The port to run the WebSocket server on (default: 8765).")
-    parser.add_argument("--api_key", type=str, default="my-secret-api-key", help="The API key for authenticating messages from DBIO.")
+    parser.add_argument("--api_key", type=str, default="123456_secret_key", help="The API key for authenticating messages from DBIO.")
     args = parser.parse_args()
 
     server = WebSocketServer(host="0.0.0.0", port=args.port, api_key=args.api_key)
