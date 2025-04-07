@@ -2,7 +2,6 @@
 provides a base implementation of the scanning capabilties that should be extended to 
 provide the specific logic for extracting metadata from files in a user's space.
 """
-import asyncio
 import datetime
 import json
 import logging
@@ -15,8 +14,9 @@ import uuid
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import List
+from typing import List, Callable
 from logging import Logger
+from operator import itemgetter
 
 # from flask import current_app, copy_current_request_context
 # from flask_jwt_extended import jwt_required
@@ -26,7 +26,7 @@ from ..clients import helpers, NextcloudApi, FMWebDAVClient
 from nistoar.midas.dbio import ObjectNotFound
 from nistoar.pdr.utils import checksum_of
 from ..service import FMSpace
-from ..exceptions import (FileManagerException, UnexpectedFileManagerResponse,
+from ..exceptions import (FileManagerException, UnexpectedFileManagerResponse, FileManagerResourceNotFound,
                           FileManagerClientError, FileManagerServerError)
 from webdav3.exceptions import WebDavException
 
@@ -174,20 +174,27 @@ class UserSpaceScanner(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    async def slow_scan(self, content_md: Mapping) -> Mapping:
+    def slow_scan(self, content_md: Mapping) -> Mapping:
         """
-        asynchronously examine a set of files specified by the given file metadata.
+        extract metadata from a deep examination a set of files specified by scan metadata.  This 
+        function is expected to run asynchronously.  
 
         For the set of files described in the input metadata, it is guaranteed that the
         :py:meth:`fast_scan` method has been called and returned its result.  If the
         :py:meth:`fast_scan` method updated the metadata, those updates should be
         included in the input metadata to this function.
 
-        :param dict content_md:  the content metadata returned by the
-                                 :py:meth:`fast_scan` method that describes the
-                                 files that should be scanned.  See the
-                                 :py:class:`class documentation<UserSpaceScanner>`
-                                 for the schema of this metadata.
+        Note that as part of executing this function asynchronously, the instance for this class 
+        running this method is not guaranteed to be the same one that ran :py:meth:`fast_scan`; thus,
+        implementations should not assume any shared data outside of the configuration (``self.cfg``)
+        and the data passed into the functions.  (The two functions, for example, could be run in two 
+        completely independent processes.)  What is guaranteed is that the input ``content_md`` parameter
+        will be (or otherwise derived from) the output of :py:meth:`fast_scan``.  
+
+        :param dict content_md:  the content metadata returned by the :py:meth:`fast_scan` method that 
+                                 describes the files that should be scanned.  See the
+                                 :py:class:`class documentation<UserSpaceScanner>` for the schema of 
+                                 this metadata.
         :return:  the file-manager metadata that was passed in, possibly updated.
                   :rtype: dict
         """
@@ -292,7 +299,7 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
 
         return out
 
-    def update_scan_metadata(self, scan_id, md):
+    def save_scan_metadata(self, scan_id, md):
         """
         write updated scan metadata to disk where it can be retrieved.  This method can be 
         used by the :py:meth:`fast_scan` and  :py:meth:`slow_scan` implementations to update 
@@ -335,7 +342,7 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
 
     def _save_report(self, scanid, md):
         try:
-            self.update_scan_metadata(self.scanid, md)
+            self.save_scan_metadata(self.scanid, md)
         except FileManagerException as ex:
             self.log.error(str(ex))
         except Exception as ex:
@@ -350,13 +357,34 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
         # Using scan_directory_files() is probably the function we want; however at this time,
         # it is implemented to just return metadata about the directory.  
         # 
-        # dirpth = self.space.root_davpath
+        # dirpth = self.sp.root_davpath
         # if folder:
         #    dirpath += '/'+folder
-        # self.space.nccli.scan_directory_files(dirpth)
+        # self.sp.nccli.scan_directory_files(dirpth)
 
         # so in the meantime, we'll use this instead:
-        self.space.nccli.scan_user_files(self.space.svc.cfg.get('adminuser', 'oar_api'))
+        self.sp.svc.nccli.scan_user_files(self.sp.svc.cfg.get('adminuser', 'oar_api'))
+
+    @classmethod
+    def create_basic_skip_scanner(cls, space, scanid, parentlog=None):
+        """
+        a factory function for creating the scanner assuming the "basic" rules for skipping 
+        certain files (skips files starting with "." or "_").
+        """
+        if not parentlog:
+            parentlog = logging.getLogger(f"scan.{space.id}")
+        return cls(space, scanid, basic_skip_patterns, parentlog.getChild("basicskip"))
+
+    @classmethod
+    def create_excludes_skip_scanner(cls, space, scanid, parentlog=None):
+        """
+        a factory function for creating the scanner assuming the "excludes" rules for skipping 
+        certain files.  In addition to the basic skip rules (skipping files that start with "."
+        or "_"), it skips folders with names "TRASH" or "EXCLUDE".
+        """
+        if not parentlog:
+            parentlog = logging.getLogger(f"scan.{space.id}")
+        return cls(space, scanid, exclude_folders_skip_patterns, parentlog.getChild("exclskip"))
 
 basic_skip_patterns = [
     re.compile(r"^\."),       # hidden files
@@ -381,13 +409,15 @@ class BasicScanner(UserSpaceScannerBase):
         metadata for it (size, last modified time, etc.).
         """
         if content_md.get('contents'):
-            # sort alphabetically; this puts folders ahead of their members
-            # content_md['contents'].sort(key=itemgetter('path'))
+            # sort alphabetically; this puts top files first and folders ahead of their members
+            content_md['contents'].sort(key=itemgetter('path'))
             content_md['in_progress'] = True
             totals = {'': 0}
 
             for i in range(len(content_md['contents'])):
                 fmd = content_md['contents'].pop(0)
+                if 'scan_errors' not in fmd or not isinstance(fmd['scan_errors'], list):
+                    fmd['scan_errors'] = []
                 try:
                     stat = (self.user_dir / fmd['path']).stat()
                     fmd['size'] = stat.st_size if fmd['resource_type'] == "file" else 0
@@ -398,8 +428,6 @@ class BasicScanner(UserSpaceScannerBase):
                     # No longer exists: remove it from the list
                     fmd = None
                 except Exception as ex:
-                    if 'scan_errors' not in fmd or not isinstance(fmd['scan_errors'], list):
-                        fmd['scan_errors'] = []
                     fmd['scan_errors'].append("Failed to stat file: "+str(ex))
 
                 if fmd:
@@ -425,20 +453,20 @@ class BasicScanner(UserSpaceScannerBase):
         
         return content_md
 
-    async def slow_scan(self, content_md: Mapping) -> Mapping:
+    def slow_scan(self, content_md: Mapping) -> Mapping:
         """
-        asynchronously examine a set of files specified by the given file metadata.
+        extract metadata from a deep examination a set of files specified by scan metadata.
 
         This implementation will fetch nextcloud metadata and calculate checksums
         """
         # make sure all files are registered with nextcloud
-        scanroot = content_md.get('fm_folder_path', self.space.uploads_davpath)
+        scanroot = content_md.get('fm_folder_path', self.sp.uploads_davpath)
         self.ensure_registered(scanroot)
 
         update_files_lim = 10
         update_size_lim = 10000000 # 10 MB
         size_left = update_size_lim
-        files_left = update_file_lim
+        files_left = update_files_lim
         for fmd in content_md.get('contents'):
             self.slow_scan_file(fmd)
 
@@ -453,6 +481,8 @@ class BasicScanner(UserSpaceScannerBase):
         # write out the final report
         content_md['in_progress'] = False
         self._save_report(self.scanid, content_md)
+
+        return content_md
         
     def slow_scan_file(self, filemd: Mapping):
         """
@@ -460,20 +490,21 @@ class BasicScanner(UserSpaceScannerBase):
         :py:meth:`slow_scan` on each file in the scan report object.  
         """
         # fetch the Nextcloud metadata for the entry (especially need fileid)
-        davpath = '/'.join([self.space.uploads_davpath] + filemd['path'].split('/'))
+        davpath = '/'.join([self.sp.uploads_davpath] + filemd['path'].split('/'))
         try:
             
-            ncmd = self.space.wdcli.get_resource_info(davpath)
-            filemd['file_id'] = ncmd.get('fileid')
+            ncmd = self.sp.svc.wdcli.get_resource_info(davpath)
+            skip = "name type getetag size resource_type".split()
+            filemd.update(i for i in ncmd.items() if i[0] not in skip)
             if 'getetag' in ncmd:
                 filemd['etag'] = ncmd['getetag']
+            if 'size' in ncmd and filemd['resource_type'] == 'file':
+                filemd['size'] = ncmd['size']
 
         except FileManagerResourceNotFound as ex:
             # either this file is not registered yet or it has been deleted
             pass
         except Exception as ex:
-            if 'scan_errors' not in filemd or not isinstance(filemd['scan_errors'], list):
-                filemd['scan_errors'] = []
             filemd['scan_errors'].append(f"Failed to stat file, {filemd['path']}: {str(ex)}")
 
         # calculate the checksum
@@ -481,27 +512,31 @@ class BasicScanner(UserSpaceScannerBase):
         if fpath.is_file():
             try:
                 filemd['checksum'] = checksum_of(fpath)
+                filemd['last_checksum_date'] = time.time()
             except Exception as ex:
-                if 'scan_errors' not in filemd or not isinstance(filemd['scan_errors'], list):
-                    filemd['scan_errors'] = []
                 filemd['scan_errors'].append(f"Failed to calculate checksum for {filemd['path']}: {str(ex)}")
         
         
         
 class UserSpaceScanDriver:
     """
-    A class that launches and manages a given :py:class:UserSpaceScanner to scan a given file
+    A class that creates, launches, and manages a :py:class:UserSpaceScanner to scan a given file
     space.  It is responsible for calling the scanner's ``fast_scan()`` and ``slow_scan()`` methods.
     """
-    def __init__(self, scanner: UserSpaceScanner, space: FMSpace, log: Logger=None):
+    def __init__(self, space: FMSpace, scanner_fact: Callable, log: Logger=None):
         """
-        Create a driver that will execute a given scanner.  
-        :param UserSpaceScanner scanner:  the scanner implementation to execute
-        :param FMSpace            space:  the file-manager space to scan
-        :param Logger               log:  the Logger to send messages to
+        Create a driver that will execute a scanner.  
+        :param FMSpace         space:  the file-manager space to scan
+        :param Callable scanner_fact:  a factory function for instantiating a UserSpaceScanner to 
+                                       extract metadata from the files found in ``space``.
+                                       This function will be called with three arguments:
+                                       the :py:class:`~nistoar.midas.dap.fm.service.FMSpace` instance 
+                                       (given by ``space``), an identifier to assign to the scan, and
+                                       the Logger to use (given by ``log``).  
+        :param Logger            log:  the Logger to send messages to
         """
         self.space = space
-        self.scanner = scanner
+        self.scnrfact = scanner_fact
         if not log:
             log = self.space.log.getChild("scan-driver")
         self.log = log
@@ -539,9 +574,15 @@ class UserSpaceScanDriver:
         scan_md = self._init_scan_md(scan_id, folder, time.time())
         self.log.debug("Creating scan for %s with id=%s", self.space.id, scan_id)
 
+        scanner = None
+        try:
+            scanner = self.scnrfact(self.space, scan_id, self.log)
+        except Exception as ex:
+            raise FileManagerScanException("Failed to create scanner from factory: "+str(ex)) from ex
+
         # get list of files to scan
         try:
-            scan_md['contents'] = self.scanner.init_scannable_content(folder)
+            scan_md['contents'] = scanner.init_scannable_content(folder)
         except FileManagerException:
             raise
         except Exception as ex:
@@ -550,13 +591,12 @@ class UserSpaceScanDriver:
 
         self.log.debug("Starting scan %s", scan_id)
         try:
-            scan_md = self.scanner.fast_scan(content_md)
-            
+            scan_md = scanner.fast_scan(scan_md)
+
             # Run the slowScan asynchronously using a thread
             def run_slow_scan():
-                with current_app.app_context():
-                    # Read files from disk for performance
-                    asyncio.run(self.scanner.slow_scan(content_md))
+                # Read files from disk for performance
+                scanner.slow_scan(scan_md)
 
             # TODO: track threads, avoid simultaneous scanning of same DAP
             thread = threading.Thread(target=run_slow_scan)
@@ -569,7 +609,7 @@ class UserSpaceScanDriver:
         except Exception as ex:
             raise FileManagerScanException(f"Unexpected error while scanning {folder}: {str(ex)}") from ex
 
-
+        return scan_id
 
 
 def total_scan_contents_size(contents):

@@ -1,0 +1,249 @@
+import json, tempfile, shutil, os, sys, re, time, logging
+import unittest as test
+from unittest.mock import patch, Mock
+from pathlib import Path
+from logging import Logger
+from copy import deepcopy
+import requests
+
+from nistoar.midas.dap.fm import service as fm
+from nistoar.midas.dap.fm.scan import base as scan
+from nistoar.midas.dap.fm.clients import NextcloudApi, FMWebDAVClient
+from nistoar.midas.dap.fm.exceptions import *
+from nistoar.base.config import ConfigurationException
+
+execdir = Path(__file__).parents[0]
+datadir = execdir.parents[1] / 'data'
+certpath = datadir / 'clientAdmin.crt'
+keypath = datadir / 'clientAdmin.key'
+capath = datadir / 'serverCa.crt'
+
+tmpdir = tempfile.TemporaryDirectory(prefix="_test_fm_service.")
+rootdir = Path(os.path.join(tmpdir.name, "fmdata"))
+
+def import_file(path, name=None):
+    if not name:
+        name = os.path.splitext(os.path.basename(path))[0]
+    import importlib.util as imputil
+    spec = imputil.spec_from_file_location(name, path)
+    out = imputil.module_from_spec(spec)
+    sys.modules["sim_clients"] = out
+    spec.loader.exec_module(out)
+    return out
+
+import importlib
+testdir = os.path.dirname(os.path.abspath(__file__))
+simcli = os.path.join(os.path.dirname(testdir), "sim_clients.py")
+sim = import_file(simcli)
+
+def setUpModule():
+    global loghdlr
+    global rootlog
+    rootlog = logging.getLogger()
+    loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_scan.log"))
+    loghdlr.setLevel(logging.DEBUG)
+    rootlog.addHandler(loghdlr)
+    
+def tearDownModules():
+    global loghdlr
+    if loghdlr:
+        if rootlog:
+            rootlog.removeHandler(loghdlr)
+            loghdlr.flush()
+            loghdlr.close()
+        loghdlr = None
+    tmpdir.cleanup()
+
+class BasicScannerTest(test.TestCase):
+
+    def setUp(self):
+        if not os.path.exists(rootdir):
+            os.mkdir(rootdir)
+        self.config = {
+            'nextcloud_base_url': 'http://mocknextcloud/nc',
+            'webdav': {
+                'service_endpoint': 'http://mockservice/api',
+            },
+            'generic_api': {
+                'service_endpoint': 'http://mockservice/api',
+                'authentication': {
+                    'user': 'admin',
+                    'pass': 'pw'
+                }
+            },
+            'local_storage_root_dir': rootdir,
+            'admin_user': 'admin',
+            'authentication': {
+                'user': 'admin',
+                'pass': 'pw'
+            }
+        }
+
+        nccli = sim.SimNextcloudApi(rootdir, self.config.get('generic_api',{}))
+        wdcli = sim.SimFMWebDAVClient(rootdir, self.config.get('webdav',{}))
+        self.cli = fm.MIDASFileManagerService(self.config, nccli=nccli, wdcli=wdcli)
+        self.id = "mdst:YYY1"
+        self.sp = self.cli.create_space_for(self.id, 'ava1')
+        with open(self.sp.root_dir/self.sp.uploads_folder/'junk', 'w') as fd:
+            pass
+        with open(self.sp.root_dir/self.sp.uploads_folder/'.junk', 'w') as fd:
+            pass
+        with open(self.sp.root_dir/self.sp.uploads_folder/'TRASH/oops', 'w') as fd:
+            fd.write("0\n")
+
+    def tearDown(self):
+        if os.path.exists(rootdir):
+            shutil.rmtree(rootdir)
+
+    def test_init_scannable_content(self):
+        self.scanner = scan.BasicScanner(self.sp, "fred", scan.basic_skip_patterns)
+        files = self.scanner.init_scannable_content()
+        names = [f['path'] for f in files]
+        self.assertIn("junk", names)
+        self.assertNotIn(".junk", names)
+        self.assertIn("EXCLUDE", names)
+        self.assertIn("TRASH", names)
+        self.assertIn("TRASH/oops", names)
+        self.assertEqual(len(files), 4)
+
+        files = self.scanner.init_scannable_content("TRASH")
+        names = [f['path'] for f in files]
+        self.assertIn("TRASH/oops", names)
+        self.assertEqual(len(files), 1)
+
+        self.scanner = scan.BasicScanner(self.sp, "fred",
+                                         [re.compile(r"^\."), re.compile(r"^_"), re.compile(r"^TRASH")])
+        files = self.scanner.init_scannable_content()
+        names = [f['path'] for f in files]
+        self.assertIn("junk", names)
+        self.assertNotIn(".junk", names)
+        self.assertIn("EXCLUDE", names)
+        self.assertNotIn("TRASH", names)
+        self.assertNotIn("TRASH/oops", names)
+        self.assertEqual(len(files), 2)
+
+    def test_fast_slow(self):
+        skip = [ re.compile(r"^\."), re.compile(r"^_"), re.compile(r"^EXCLUDE$") ]
+        self.scanner = scan.BasicScanner(self.sp, "fred", skip)
+        self.assertIs(self.scanner.sp, self.sp)
+        self.assertEqual(self.scanner.scanid, "fred")
+        self.assertEqual(self.scanner.space_id, self.id)
+        self.assertEqual(self.scanner.user_dir, self.sp.root_dir/self.sp.uploads_folder)
+
+        def dummy_fact(sp, id, log=None):
+            pass
+
+        driver = scan.UserSpaceScanDriver(self.sp, dummy_fact)
+        content = driver._init_scan_md(self.scanner.scanid)
+        content['contents'] = self.scanner.init_scannable_content()
+        self.assertEqual(content['scan_id'], "fred")
+        self.assertEqual(content['space_id'], self.sp.id)
+        self.assertEqual(content['fm_folder_path'], self.sp.id)
+        self.assertGreater(content['scan_time'], 0)
+        self.assertEqual(len(content['contents']), 3)
+        self.assertEqual(content['contents'][0]['path'], "junk")
+        self.assertNotIn('size', content['contents'][0])
+
+        files = [f.get('path') for f in content['contents']]
+        self.assertIn("junk", files)
+        self.assertIn("TRASH", files)
+        self.assertIn("TRASH/oops", files)
+        self.assertEqual(len(files), 3)
+
+        c = self.scanner.fast_scan(content)
+        self.assertEqual(c['scan_id'], "fred")
+        self.assertEqual(c['space_id'], self.sp.id)
+        self.assertEqual(c['fm_folder_path'], self.sp.id)
+        self.assertEqual(len(c['contents']), 3)
+        self.assertEqual(c['contents'][0]['path'], "TRASH")
+        self.assertEqual(c['contents'][1]['path'], "TRASH/oops")
+        self.assertEqual(c['contents'][2]['path'], "junk")
+        self.assertIn('size', content['contents'][0])
+        self.assertEqual(content['contents'][2]['size'], 0)
+        self.assertEqual(content['contents'][0]['size'], 0)
+        self.assertIn('mtime', content['contents'][0])
+        self.assertNotIn('fileid', content['contents'][0])
+        self.assertNotIn('checksum', content['contents'][0])
+        self.assertNotIn('last_checksum_date', content['contents'][0])
+
+        scanfile = self.sp.root_dir/self.sp.system_folder/"scan-report-fred.json"
+        self.assertTrue(scanfile.is_file())
+        
+        c = self.scanner.slow_scan(c)
+        self.assertEqual(c['scan_id'], "fred")
+        self.assertEqual(c['space_id'], self.sp.id)
+        self.assertEqual(c['fm_folder_path'], self.sp.id)
+        self.assertEqual(len(c['contents']), 3)
+        self.assertEqual(c['contents'][0]['path'], "TRASH")
+        self.assertEqual(c['contents'][1]['path'], "TRASH/oops")
+        self.assertEqual(c['contents'][2]['path'], "junk")
+
+        # TRASH folder
+        fmd = c['contents'][0]
+        self.assertEqual(fmd['resource_type'], "collection")
+        for prop in "size fileid created permissions".split():
+            self.assertIn(prop, fmd)
+        self.assertNotIn("check_sum", fmd)
+        self.assertNotIn("last_checksum_date", fmd)
+        self.assertEqual(fmd["accumulated_size"], 2)
+        self.assertEqual(fmd["size"], 0)
+        errs = fmd.get('scan_errors', [])
+        self.assertEqual(len(errs), 0,
+                         f"{len(errs)} errors reported in 'scan_errors' property")
+
+        # junk file
+        fmd = c['contents'][2]
+        self.assertEqual(fmd['resource_type'], "file")
+        for prop in "size fileid checksum last_checksum_date created permissions".split():
+            self.assertIn(prop, fmd)
+        self.assertGreater(fmd['last_checksum_date'], fmd['ctime'])
+        self.assertEqual(fmd["size"], 0)
+        errs = fmd.get('scan_errors', [])
+        self.assertEqual(len(errs), 0,
+                         f"{len(errs)} errors reported in 'scan_errors' property")
+
+        # test the report contents
+        self.assertTrue(scanfile.is_file())
+        with open(scanfile) as fd:
+            c = json.load(fd)
+        self.assertEqual(c['scan_id'], "fred")
+        self.assertEqual(c['space_id'], self.sp.id)
+        self.assertEqual(c['fm_folder_path'], self.sp.id)
+        self.assertEqual(len(c['contents']), 3)
+        self.assertEqual(c['contents'][0]['path'], "TRASH")
+        self.assertEqual(c['contents'][1]['path'], "TRASH/oops")
+        self.assertEqual(c['contents'][2]['path'], "junk")
+        self.assertEqual(c['accumulated_size'], 2)
+        
+        
+    def test_driver(self):
+        with open(self.sp.root_dir/self.sp.uploads_folder/'junk', 'w') as fd:
+            fd.write("goob\n")
+        driver = scan.UserSpaceScanDriver(self.sp, scan.BasicScanner.create_excludes_skip_scanner)
+        scanid = driver.launch_scan()
+
+        self.assertTrue(scanid)
+        scanfile = self.sp.root_dir/self.sp.system_folder/f"scan-report-{scanid}.json"
+        self.assertTrue(scanfile.is_file())
+
+        time.sleep(0.25)
+        with open(scanfile) as fd:
+            rep = json.load(fd)
+
+        self.assertEqual(rep['scan_id'], scanid)
+        self.assertEqual(rep['space_id'], self.sp.id)
+        self.assertEqual(rep['fm_folder_path'], self.sp.id)
+        self.assertEqual(len(rep['contents']), 1)
+        self.assertEqual(rep['contents'][0]['path'], "junk")
+        self.assertEqual(rep['contents'][0]['size'], 5)
+        self.assertEqual(rep['accumulated_size'], 5)
+        self.assertIn('checksum', rep['contents'][0])
+        self.assertGreater(rep['contents'][0]['last_checksum_date'], rep['contents'][0]['ctime'])
+        
+        
+        
+    
+        
+
+if __name__ == "__main__":
+    test.main()

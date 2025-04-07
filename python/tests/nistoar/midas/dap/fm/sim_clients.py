@@ -216,10 +216,14 @@ class SimFMWebDAVClient(FMWebDAVClient):
 
     def authenticate(self):
         self.wdcli = Mock()
-        self.wdcli.upload_to = Mock()
         reqresp = Mock()
         reqresp.status_code = 200
-        self.wdcli.upload_to.return_value = reqresp
+        def upto(data, folder):
+            out = self.rootdir/folder
+            with open(out, 'wb') as fd:
+                fd.write(data)
+            return reqresp
+        self.wdcli.upload_to = upto
     
 
     def is_directory(self, path):
