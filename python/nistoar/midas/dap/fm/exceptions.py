@@ -14,6 +14,14 @@ class FileManagerException(Exception):
             message = "Unspecified problem accessing the file-manager"
         super(FileManagerException, self).__init__(message)
 
+class FileManagerOpConflict(FileManagerException):
+    """
+    an exception indicating a request for an space operation that is in conflict with the current 
+    state of the space (e.g. creating a space that already exists)
+    """
+    def __init__(self, message: str):
+        super(FileManagerOpConflict, self).__init__(message)
+
 
 class FileManagerServiceError(FileManagerException):
     """

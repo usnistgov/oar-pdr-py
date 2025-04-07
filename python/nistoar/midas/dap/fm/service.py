@@ -23,6 +23,7 @@ import requests
 from .clients import NextcloudApi, FMWebDAVClient
 from .exceptions import *
 from nistoar.base.config import merge_config, ConfigurationException
+from nistoar.pdr.utils import read_json
 
 class MIDASFileManagerService:
     """
@@ -192,7 +193,7 @@ class MIDASFileManagerService:
             # space.set_permissions_for(space.system_folder, userid, PERM_READ)
             space.set_permissions_for(space.uploads_folder, foruser, PERM_ALL)
 
-        space.refresh_uploads_info()
+        space.uploads_file_id
         return space
 
     def space_exists(self, id: str):
@@ -279,7 +280,7 @@ class FMSpace:
         self.svc = fmsvc
         self._id = id
         self._root = self.svc._root_dir / id
-        self._uploads_info = None
+        self._uploads_fileid = None
         if not log:
             log = self.svc.log.getChild(id)
         self.log = log
@@ -355,20 +356,23 @@ class FMSpace:
         """
         return f"{self.id}-sys"
 
-    def refresh_uploads_info(self):
-        """
-        use the WebDAV API to fetch and update the internally cached metadata about the uploads
-        folder (including its Nextcloud file id).
-        """
-        self._uploads_info = self.get_resource_info(self.uploads_folder)
+    @property
+    def uploads_file_id(self):
+        if not self._uploads_fileid:
+            md = self.get_resource_info(self.uploads_folder)
+            self._uploads_fileid = md['fileid']
+        return self._uploads_fileid
 
-    def get_resource_info(self, resource: str):
+    def get_resource_info(self, resource: str=''):
         """
         return the Nextcloud metadata describing the specified resource with in the space.
 
         :param str resource:  the path to the resource relative to the space's root folder
         """
-        out = self.svc.wdcli.get_resource_info('/'.join([self.root_davpath, resource]))
+        res = self.root_davpath
+        if resource:
+            res += '/'+resource
+        out = self.svc.wdcli.get_resource_info(res)
         if out.get('fileid'):
             out['gui_url'] = self._make_gui_url(out['fileid'])
         return out
@@ -430,7 +434,14 @@ class FMSpace:
 
         self.svc.ensure_user(userid)
         self.svc.nccli.set_user_permissions(userid, perm, self.root_davpath+'/'+resource)
-        
+
+    _scan_report_tmpl = "scan-report-%s.json"
+    def scan_report_filename_for(self, scanid):
+        """
+        return the name of scan report file in the space's system folder corresponding to 
+        a given scan identifier.
+        """
+        return self._scan_report_tmpl % scanid
 
     def launch_scan(self, type: str = "def"):
         """
@@ -442,8 +453,32 @@ class FMSpace:
                   This will include "scanid" which can be used to retrieve the scan 
                   results later.
                   :rtype: dict
+        :raise FileManagerException:  if a failure happens, either while preparing scan or 
+                  during the synchronous "fast_scan" phase.
         """
-        pass
+        from .scan import UserSpaceScanDriver, BasicScanner
+
+        if not type or type == 'def':
+            type = 'basic'
+
+        if type == 'basic':
+            driver = UserSpaceScanDriver(self, BasicScanner.create_excludes_skip_scanner,
+                                         self.log("basicscan"))
+        else:
+            raise FileManagerScanException("unrecognized scan type requested: "+type)
+
+        scan_id = driver.launch_scan()
+
+        report = self.rootdir/self.system_folder/self.scan_report_filename_for(scan_id)
+        try: 
+            out = read_json(report)
+        except FileNotFoundException as ex:
+            raise FileManagerScanException("scanner failed to write initial report (file not found)") from ex
+        except Exception as ex:
+            raise FileManagerScanException("failure while reading initial report: "+str(ex)) from ex
+
+        return out
+        
 
     def get_scan(self, scanid: str):
         """
@@ -454,8 +489,18 @@ class FMSpace:
                   This will include "is_complete" which will be False if the scan is 
                   still in progress.
                   :rtype: dict
+        :raises FileNotFoundException:  if report could not be found in system folder
+        :raises FileManagerScanException:  if a failure occurs while reading or parsing the report
         """
-        pass
+        report = self.rootdir/self.system_folder/self.scan_report_filename_for(scan_id)
+        try: 
+            out = read_json(report)
+        except FileNotFoundException as ex:
+            raise 
+        except Exception as ex:
+            raise FileManagerScanException("failure while reading initial report: "+str(ex)) from ex
+
+        return out
 
     def delete_scan(self, scanid: str):
         """
@@ -463,5 +508,18 @@ class FMSpace:
         system folder.
         :param str scanid:  the unique ID assigned to the scan
         """
-        pass
+        report = self.rootdir/self.system_folder/self.scan_report_filename_for(scan_id)
+        if not report.is_file():
+            # don't care
+            return
+
+        report = "/".join([self.system_davpath, self.scan_report_filename_for(scan_id)])
+
+        try:
+            self.svc.wdcli.authenticate()
+            resp = self.svc.wdcli.wdcli.clean(report)
+        except RemoteResourceNotFound as ex:
+            pass
+        except Exception as ex:
+            raise FileManagerScanException("Apparently failed to delete report from space: "+str(ex))
 

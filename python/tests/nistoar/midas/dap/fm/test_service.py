@@ -180,7 +180,37 @@ class MIDASFileManagerServiceTest(test.TestCase):
         self.assertEqual(sp.get_permissions_for(id, 'ava1'), fm.PERM_ALL)
         self.assertEqual(sp.get_permissions_for(id, 'gurn'), fm.PERM_READ)
         
+        self.assertEqual(sp.uploads_file_id, "100")
 
+    def test_fmspace_scan(self):
+        id = "mdst:XXX1"
+        sp = self.cli.create_space_for(id, 'ava1')
+        scmd = sp.launch_scan()
+        self.assertTrue(isinstance(scmd, Mapping))
+        self.assertIn('scan_id', scmd)
+        self.assertEqual(scmd.get('space_id'), id)
+        self.assertEqual(len(scmd['contents']), 0)
+
+        repfile = sp.root_dir/sp.system_folder/sp.scan_report_filename_for(scan_id)
+        self.assertTrue(repfile.is_file())
+
+        scid = scmd['scan_id']
+        scmd = sp.get_scan(scid)
+        self.assertTrue(isinstance(scmd, Mapping))
+        self.assertEqual(scmd['scan_id'], scid)
+        self.assertEqual(scmd.get('space_id'), id)
+        self.assertEqual(len(scmd['contents']), 0)
+
+        sp.delete_scan(scid)
+        repfile = sp.root_dir/sp.system_folder/sp.scan_report_filename_for(scan_id)
+        self.assertTrue(not repfile.exists())
+
+        with self.assertRaises(FileNotFoundException):
+            sp.get_scan(scid)
+        sp.delete_scan(scid)
+
+
+        
         
     
         

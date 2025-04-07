@@ -10,13 +10,13 @@ import re
 import tempfile
 import threading
 import time
-import uuid
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from typing import List, Callable
 from logging import Logger
 from operator import itemgetter
+from random import randint
 
 # from flask import current_app, copy_current_request_context
 # from flask_jwt_extended import jwt_required
@@ -314,7 +314,7 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
         wdcli = self.sp.svc.wdcli
 
         # Upload initial report
-        filename = f"scan-report-{scan_id}.json"
+        filename = self.sp.scan_report_filename_for(scan_id)
 
         try:
             wdcli.authenticate()
@@ -561,6 +561,9 @@ class UserSpaceScanDriver:
             'contents': []
         }
 
+    def _create_scan_id(self):
+        return "%04x" % randint(0, 65536)
+
     def launch_scan(self, folder=None):
         """
         start the file scanning process of the user's upload space.  This executes the fast scan,
@@ -570,7 +573,7 @@ class UserSpaceScanDriver:
         :raises FileManagerException: if an error occurs while prepping scan or during the fast
                             scan phase.  
         """
-        scan_id = str(uuid.uuid4())
+        scan_id = self._create_scan_id()
         scan_md = self._init_scan_md(scan_id, folder, time.time())
         self.log.debug("Creating scan for %s with id=%s", self.space.id, scan_id)
 
