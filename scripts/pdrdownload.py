@@ -260,6 +260,10 @@ def ensure_filelist(listfile, destdir):
     :param listfile:  the table file, either as a URL or a local path
     """
     try:
+        if re.match(r"^([A-Z]:)*\\", listfile):
+            # this is a MS-style file path
+            raise ValueError("")
+
         url = urlparse(listfile)
         if url.scheme:
             # it's a URL
