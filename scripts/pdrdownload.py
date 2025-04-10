@@ -56,7 +56,7 @@ def define_options(progname, parser=None):
     parser.add_argument("-E", "--no-error-list-table", action="store_const", dest="errfile", const=None,
                         help="do not write a file listing the failed downloads (a la -e)")
     parser.add_argument("-I", "--pdrid", metavar="ID", dest="pdrid",
-                        help="assume ID as the identifier for the dataset; ignored if -F is specified. "+
+                        help="assume ID as the identifier for the dataset; ignored if -f is specified. "+
                              "This can either be the PDR ARK identifier or its local part.")
     parser.add_argument("-w", "--overwrite", action="store_true", dest="force",
                         help="download each requested file regardless of whether it already exists in "+
