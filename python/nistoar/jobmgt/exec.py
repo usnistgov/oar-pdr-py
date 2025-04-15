@@ -8,6 +8,7 @@ from pathlib import Path
 import traceback as tb
 
 from nistoar.jobmgt import Job, FatalError, job_state_file
+from nistoar.base import config
 
 def define_options(progname):
     """
