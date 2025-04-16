@@ -35,8 +35,8 @@ def define_options(progname):
                              "execution envelope will upgrade the state file on exit")
     parser.add_argument('-l', '--log-file', type=str, metavar="FILE", dest='logfile', default=None,
                         help="Send log messages to the specified FILE; can be used with -L")
-#    parser.add_argument('args', action='append', dest='args',
-#                        help="Extra arguments to pass into the processor function")
+    parser.add_argument('args', action='append', metavar="ARG",
+                        help="Extra arguments to pass into the processor function")
 
     return parser
 
@@ -131,7 +131,10 @@ def main(args):
         signal.signal(signal.SIGHUP, sighandle)
         signal.signal(signal.SIGTERM, sighandle)
 
-        mod.process(opts.id, cfg, job.info.get('args',[]), log)
+        args = opts.args
+        if not args:
+            job.info.get('args',[])
+        mod.process(opts.id, cfg, args, log)
 
     except KeyboardInterrupt as ex:
         if log:
