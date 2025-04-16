@@ -19,12 +19,14 @@ from copy import deepcopy
 import jsonpatch
 
 from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus, ANONYMOUS,
-                   AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException)
+                   AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException,
+                   InvalidUpdate, InvalidRecord)
 from . import status
 from .. import MIDASException, MIDASSystem
 from nistoar.pdr.utils.prov import Agent, Action
 from nistoar.id.versions import OARVersion
 from nistoar.pdr import ARK_NAAN
+from nistoar.base.config import ConfigurationException
 
 _STATUS_ACTION_CREATE   = RecordStatus.CREATE_ACTION
 _STATUS_ACTION_UPDATE   = RecordStatus.UPDATE_ACTION
@@ -42,9 +44,15 @@ class ProjectService(MIDASSystem):
     to a particular user at construction time (as given by a :py:class:`~nistoar.pdr.utils.Agent`
     instance); thus, requests to this service are subject to internal Authorization checks.
 
-    This base service supports a two parameters, ``dbio`` and ``clients``.  The optional ``dbio`` 
-    parameter will be passed to the :py:class:`~nistoar.midas.dbio.base.DBClientFactory`'s 
+    This base service supports three parameters, ``dbio``, ``default_perms``, and ``clients``.  The 
+    optional ``dbio`` parameter will be passed to the :py:class:`~nistoar.midas.dbio.base.DBClientFactory`'s 
     ``create_client()`` function to create the :py:class:`~nistoar.midas.dbio.base.DBClient`. 
+
+    The optional ``default_perms`` is an object that sets the ACLs for newly created project records.  
+    Its optional properties name the permisson types that defaults are to be set for, including "read", 
+    "write", "admin", and "delete" but can also include other (non-standard) category names.  Each 
+    property is a list of user identifiers that the should be given the particular type of permission.
+    Typically, only virtual group identifiers (like "grp0:public") make sense.
 
     The ``clients`` parameter is an object that places restrictions on the 
     creation of records based on which group the user is part of.  The keys of the object
@@ -92,7 +100,24 @@ class ProjectService(MIDASSystem):
         if not _subsysabbrev:
             _subsysabbrev = "DBIO"
         super(ProjectService, self).__init__(_subsys, _subsysabbrev)
+
+        # set configuration, check values
         self.cfg = config
+        for param in "clients default_perms".split():
+            if not isinstance(self.cfg.get(param,{}), Mapping):
+                raise ConfigurationException("%s: value is not a object as required: %s" %
+                                             (param, type(self.cfg.get(param))))
+        for param,val in self.cfg.get('clients',{}).items():
+            if not isinstance(val, Mapping):
+                raise ConfigurationException("clients.%s: value is not a object as required: %s" %
+                                             (param, repr(val)))
+        for param,val in self.cfg.get('default_perms',{}).items():
+            if not isinstance(val, list) or not all(isinstance(p, str) for p in val):
+                raise ConfigurationException(
+                    "default_perms.%s: value is not a list of strings as required: %s" %
+                    (param, repr(val))
+                )
+        
         if not who:
             who = Agent("dbio.project", Agent.USER, Agent.ANONYMOUS, Agent.PUBLIC)
         self.who = who
@@ -102,6 +127,8 @@ class ProjectService(MIDASSystem):
 
         user = who.actor if who else None
         self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), user)
+        if not self.dbcli.people_service:
+            self.log.warning("No people service available for %s service", project_type)
 
     @property
     def user(self) -> Agent:
@@ -121,9 +148,33 @@ class ProjectService(MIDASSystem):
         :raises AlreadyExists:  if a record owned by the user already exists with the given name
         """
         shoulder = self._get_id_shoulder(self.who)
+
+        foruser = None
+        if meta and meta.get("foruser"):
+            # format of value: either "newuserid" or "olduserid:newuserid"
+            foruser = meta.get("foruser", "").split(":")
+            if not foruser or len(foruser) > 2:
+                foruser = None
+            else:
+                foruser = foruser[-1]
+                
         if self.dbcli.user_id == ANONYMOUS:
+            # Do we need to be more careful in production by cancelling reassign request?
+            # foruser = None
             self.log.warning("A new record requested for an anonymous user")
+
         prec = self.dbcli.create_record(name, shoulder)
+        self._set_default_perms(prec.acls)
+
+        prec.status._data["created_by"] = self.who.id  # don't do this: violates encapsulation
+        if foruser:
+            if self.dbcli.user_id == ANONYMOUS:
+                self.log.warning("%s wants to reassign new record to %s", self.dbcli.user_id, foruser)
+            try:
+                prec.reassign(foruser)  
+            except NotAuthorized as ex:
+                self.log.warning("%s: %s not authorized to reassign owner to %s",
+                                 prec.id, self.dbcli.user_id, foruser)
 
         if meta:
             meta = self._moderate_metadata(meta, shoulder)
@@ -134,7 +185,7 @@ class ProjectService(MIDASSystem):
         elif not prec.meta:
             prec.meta = self._new_metadata_for(shoulder)
         prec.data = self._new_data_for(prec.id, prec.meta)
-        prec.status.act(self.STATUS_ACTION_CREATE, "draft created")
+        prec.status.act(self.STATUS_ACTION_CREATE, "draft created", self.who.actor)
         if data:
             self.update_data(prec.id, data, message=None, _prec=prec)  # this will call prec.save()
         else:
@@ -144,6 +195,11 @@ class ProjectService(MIDASSystem):
         self.log.info("Created %s record %s (%s) for %s", self.dbcli.project, prec.id, prec.name, self.who)
         return prec
 
+    def _set_default_perms(self, acls: ACLs):
+        defs = self.cfg.get("default_perms", {})
+        for perm in defs:
+            acls.grant_perm_to(perm, *defs[perm])
+
     def delete_record(self, id) -> ProjectRecord:
         """
         delete the draft record.  This may leave a stub record in place if, for example, the record 
@@ -152,11 +208,69 @@ class ProjectService(MIDASSystem):
         # TODO:  handling previously published records
         raise NotImplementedError()
 
+    def reassign_record(self, id, recipient: str):
+        """
+        reassign ownership of the record with the given recepient ID.  This is a wrapper around 
+        :py:class:`~nistoar.midas.dbio.base.ProjectRecord`.reassign() that also logs the change.
+        :param            id:  the record identifier to reassign
+        :param str recipient:  the identifier of the user to reassign ownership to
+        :raises InvalidUpdate:  if the recipient ID is not legal or unrecognized
+        :raises NotAuthorized:  if the current user does is not authorized to reassign.  Non-superusers 
+                                must have "admin" permission to reassign.
+        :raises ObjectNotFound: if the record ``id`` is not found
+        :returns:  the identifier for the new owner that was set for the record
+                   :rtype: str
+        """
+        prec = self.dbcli.get_record_for(id)  # may raise ObjectNotFound
+
+        message = "from %s to %s" % (prec.owner, recipient)
+        try:
+            self.log.info("Reassigning ownership of %s %s", id, message)
+            prec.reassign(recipient)
+            prec.save()
+            self._record_action(Action(Action.COMMENT, prec.id, self.who,
+                                       f"Reassigned ownership {message}"))
+            return prec.owner
+
+        except Exception as ex:
+            self.log.error("Failed to reassign record %s to %s: %s", id, recipient, str(ex))
+            raise
+
+    def rename_record(self, id, newname: str):
+        """
+        change the short, mnemonic name assigned to the record with the given recepient ID.  This is 
+        a wrapper around :py:class:`~nistoar.midas.dbio.base.ProjectRecord`.rename() that also logs 
+        the change.
+        :param          id:  the record identifier to rename
+        :param str newname:  the new name to give to the record
+        :raises AlreadyExists:  if the name has already been assigned to another record owned by the 
+                                current user.
+        :raises NotAuthorized:  if the current user does is not authorized to reassign.  Non-superusers 
+                                must have "admin" permission to reassign.
+        :raises ObjectNotFound: if the record ``id`` is not found
+        :returns:  the identifier for the new owner that was set for the record
+                   :rtype: str
+        """
+        prec = self.dbcli.get_record_for(id)  # may raise ObjectNotFound
+
+        message = "from %s to %s" % (prec.name, newname)
+        try:
+            self.log.info("Renaming %s %s", id, message)
+            prec.rename(newname)
+            prec.save()
+            self._record_action(Action(Action.COMMENT, prec.id, self.who,
+                                       f"Renaming {message}"))
+            return prec.name
+
+        except Exception as ex:
+            self.log.error("Failed to rename record %s to %s: %s", id, newname, str(ex))
+            raise
+
     def _get_id_shoulder(self, user: Agent):
         """
         return an ID shoulder that is appropriate for the given user agent
         :param Agent user:  the user agent that is creating a record, requiring a shoulder
-        :raises NotAuthorized: if an uathorized shoulder appropriate for the user cannot be determined.
+        :raises NotAuthorized: if an authorized shoulder appropriate for the user cannot be determined.
         """
         out = None
         client_ctl = self.cfg.get('clients', {}).get(user.agent_class)
@@ -498,7 +612,7 @@ class ProjectService(MIDASSystem):
 
         # update the record status according to the inputs
         if action:
-            prec.status.act(action, message)
+            prec.status.act(action, message, self.who.actor)
         elif message is not None:
             prec.message = message
         prec.status.set_state(status.EDIT)
@@ -541,7 +655,7 @@ class ProjectService(MIDASSystem):
             prec.data = initdata
             if message is None:
                 message = "reset draft to initial defaults"
-            prec.status.act(self.STATUS_ACTION_CLEAR, message)
+            prec.status.act(self.STATUS_ACTION_CLEAR, message, self.who.actor)
 
         else:
             # clearing only part of the data
@@ -564,7 +678,7 @@ class ProjectService(MIDASSystem):
 
             if message is None:
                 message = "reset %s to initial defaults" % part
-            prec.status.act(self.STATUS_ACTION_UPDATE, message)
+            prec.status.act(self.STATUS_ACTION_UPDATE, message, self.who.actor)
 
         # prep the provenance record
         tgt = prec.id
@@ -643,7 +757,7 @@ class ProjectService(MIDASSystem):
             raise NotEditable(id)
 
         stat.set_state(status.PROCESSING)
-        stat.act(self.STATUS_ACTION_FINALIZE, "in progress")
+        stat.act(self.STATUS_ACTION_FINALIZE, "in progress", self.who.actor)
         _prec.save()
         
         try:
@@ -654,7 +768,7 @@ class ProjectService(MIDASSystem):
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "finalize", "errors": ex.errors}))
             stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_FINALIZE, ex.format_errors())
+            stat.act(self.STATUS_ACTION_FINALIZE, ex.format_errors(), self.who.actor)
             self._try_save(_prec)
             raise
 
@@ -664,7 +778,7 @@ class ProjectService(MIDASSystem):
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "finalize", "errors": [emsg]}))
             stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_FINALIZE, emsg)
+            stat.act(self.STATUS_ACTION_FINALIZE, emsg, self.who.actor)
             self._try_save(_prec)
             raise
 
@@ -674,7 +788,7 @@ class ProjectService(MIDASSystem):
 
             if reset_state:
                 stat.set_state(status.READY)
-            stat.act(self.STATUS_ACTION_FINALIZE, message or defmsg)
+            stat.act(self.STATUS_ACTION_FINALIZE, message or defmsg, self.who.actor)
             _prec.save()
 
         self.log.info("Finalized %s record %s (%s) for %s",
@@ -792,7 +906,7 @@ class ProjectService(MIDASSystem):
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": ex.errors}))
             stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_SUBMIT, ex.format_errors())
+            stat.act(self.STATUS_ACTION_SUBMIT, ex.format_errors(), self.who.actor)
             self._try_save(_prec)
             raise
 
@@ -801,7 +915,7 @@ class ProjectService(MIDASSystem):
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": [emsg]}))
             stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_SUBMIT, emsg)
+            stat.act(self.STATUS_ACTION_SUBMIT, emsg, self.who.actor)
             self._try_save(_prec)
             raise
 
@@ -810,7 +924,7 @@ class ProjectService(MIDASSystem):
             self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, defmsg, {"name": "submit"}))
 
             stat.set_state(status.SUBMITTED)
-            stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg)
+            stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg, self.who.actor)
             _prec.save()
 
         self.log.info("Submitted %s record %s (%s) for %s",
@@ -886,91 +1000,6 @@ class ProjectServiceFactory:
         return ProjectService(self._prjtype, self._dbclifact, self._cfg, who, self._log)
 
 
-class InvalidRecord(DBIORecordException):
-    """
-    an exception indicating that record data is invalid and requires correction or completion.
-
-    The determination of invalid data may result from detailed data validation which may uncover 
-    multiple errors.  The ``errors`` property will contain a list of messages, each describing a
-    validation error encounted.  The :py:meth:`format_errors` will format all these messages into 
-    a single string for a (text-based) display. 
-    """
-    def __init__(self, message: str=None, recid: str=None, part: str=None,
-                 errors: List[str]=None, sys=None):
-        """
-        initialize the exception
-        :param str message:  a brief description of the problem with the user input
-        :param str   recid:  the id of the record that data was provided for
-        :param str    part:  the part of the record that was requested for update.  Do not provide 
-                             this parameter if the entire record was provided.
-        :param [str] errors: a listing of the individual errors uncovered in the data
-        """
-        if errors:
-            if not message:
-                if len(errors) == 1:
-                    message = "Validation Error: " + errors[0]
-                elif len(errors) == 0:
-                    message = "Unknown validation errors encountered"
-                else:
-                    message = "Encountered %d validation errors, including: %s" % (len(errors), errors[0])
-        elif message:
-            errors = [message]
-        else:
-            message = "Unknown validation errors encountered while updating data"
-            errors = []
-        
-        super(InvalidRecord, self).__init__(recid, message, sys)
-        self.record_part = part
-        self.errors = errors
-
-    def __str__(self):
-        out = ""
-        if self.record_id:
-            out += "%s: " % self.record_id
-        if self.record_part:
-            out += "%s: " % self.record_part
-        return out + super().__str__()
-
-    def format_errors(self):
-        """
-        format into a string the listing of the validation errors encountered that resulted in 
-        this exception.  The returned string will have embedded newline characters for multi-line
-        text-based display.
-        """
-        if not self.errors:
-            return str(self)
-
-        out = ""
-        if self.record_id:
-            out += "%s: " % self.record_id
-        out += "Validation errors encountered"
-        if self.record_part:
-            out += " in data submitted to update %s" % self.record_part
-        out += ":\n  * "
-        out += "\n  * ".join([str(e) for e in self.errors])
-        return out
-
-class InvalidUpdate(InvalidRecord):
-    """
-    an exception indicating that the user-provided data is invalid or otherwise would result in 
-    invalid data content for a record. 
-
-    The determination of invalid data may result from detailed data validation which may uncover 
-    multiple errors.  The ``errors`` property will contain a list of messages, each describing a
-    validation error encounted.  The :py:meth:`format_errors` will format all these messages into 
-    a single string for a (text-based) display. 
-    """
-    def __init__(self, message: str=None, recid=None, part=None, errors: List[str]=None, sys=None):
-        """
-        initialize the exception
-        :param str message:  a brief description of the problem with the user input
-        :param str   recid:  the id of the record that data was provided for
-        :param str    part:  the part of the record that was requested for update.  Do not provide 
-                             this parameter if the entire record was provided.
-        :param [str] errors: a listing of the individual errors uncovered in the data
-        """
-        super(InvalidUpdate, self).__init__(message, recid, part, errors, sys)
-    
 class PartNotAccessible(DBIORecordException):
     """
     an exception indicating that the user-provided data is invalid or otherwise would result in 

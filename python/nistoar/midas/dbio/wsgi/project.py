@@ -23,6 +23,9 @@ are handled accordingly:
 ``/{projid}/name`` -- :py:class:`ProjectNameHandler`
      returns (GET) or updates (PUT) the user-supplied name of the record.
 
+``/{projid}/owner`` -- :py:class:`ProjectNameHandler`
+     returns ID of current owner (GET) or reassigns ownership to given ID (PUT).
+
 ``/{projid}/data[/...]`` -- :py:class:`ProjectDataHandler`
      returns (GET), updates (PUT, PATCH), or clears (DELETE) the data content of the record.  This
      implementation supports updating individual parts of the data object via PUT, PATCH, DELETE 
@@ -44,6 +47,7 @@ from urllib.parse import parse_qs
 import json
 
 from nistoar.web.rest import ServiceApp, Handler, Agent
+from nistoar.web.formats import JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
 from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
@@ -207,11 +211,14 @@ class ProjectInfoHandler(ProjectRecordHandler):
 
 class ProjectNameHandler(ProjectRecordHandler):
     """
-    handle retrieval/update of a project records mnumonic name
+    handle retrieval/update of a project records owner or mnemonic name
     """
 
+    MAX_NAME_LENGTH = 1024
+    ALLOWED_PROPS = ["name", "owner"]
+
     def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
-                 who: Agent, id: str, config: dict=None, log: Logger=None):
+                 who: Agent, id: str, prop: str, config: dict=None, log: Logger=None):
         """
         Initialize this handler with the request particulars.  This constructor is called 
         by the webs service ServiceApp.  
@@ -224,23 +231,51 @@ class ProjectNameHandler(ProjectRecordHandler):
         :param Callable start_resp:  the WSGI start-response function used to send the response
         :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
+        :param str      prop:  the project record property to be updated; restricted to "name" or "owner"
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
                                will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
                                logger attached to the ServiceApp will be used.  
         """
-        super(ProjectNameHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, "", config, log)
+        if prop not in self.ALLOWED_PROPS:
+            raise ValueError("ProjectNameHandler(): Disallowed prop: "+str(prop))
+        super(ProjectNameHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, prop, config, log)
                                                    
         self._id = id
         if not id:
             # programming error
             raise ValueError("Missing ProjectRecord id")
 
+        # allow output in JSON (default) or plain text
+        fmtsup = JSONSupport()
+        TextSupport.add_support(fmtsup)
+        self._set_default_format_support(fmtsup)
+
+        # allows client to request format via query parameter "format"
+        self._set_format_qp("format")
+
+    def acceptable(self):
+        # not sure if this is really needed
+        if super(ProjectNameHandler, self).acceptable():
+            return True
+        return "text/plain" in self.get_accepts()
+        
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "PUT"])
 
     def do_GET(self, path, ashead=False):
+        if path not in self.ALLOWED_PROPS:
+            self.log.error("ProjectNameHandler: unexpected property request (programmer error?): %s", path)
+            return self.send_error(500, "Internal Server Error")
+
+        try:
+            format = self.select_format()
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
         try:
             prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
@@ -249,27 +284,63 @@ class ProjectNameHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
                                         self._id, ashead=ashead)
 
-        return self.send_json(prec.name, ashead=ashead)
+        if format.name == "text":
+            return self.send_ok(getattr(prec, path), contenttype=format.ctype, ashead=ashead)
+        else:
+            return self.send_json(getattr(prec, path), ashead=ashead)
 
     def do_PUT(self, path):
+        if path not in self.ALLOWED_PROPS:
+            self.log.error("ProjectNameHandler: unexpected property request (programmer error?): %s", path)
+            return self.send_error(500, "Internal Server Error")
+
         try:
-            name = self.get_json_body()
+            format = self.select_format()
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
+        rctype = self._env.get('CONTENT_TYPE', 'application/json')
+        if rctype == "application/x-www-form-urlencoded":  # default for python requests
+            rctype = "application/json"
+        try:
+            if rctype == "text/plain":
+                name = self.get_text_body(self.MAX_NAME_LENGTH+1)
+            elif "/json" in rctype:
+                name = self.get_json_body()
+            else:
+                self.log.debug("Attempt to change %s with unsupported content type: %s", path, rctype)
+                return self.send_error_resp(415, "Unsupported Media Type",
+                                            "Input content-type is not supported", self._id)
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
+        if len(name) > self.MAX_NAME_LENGTH:
+            return self.send_error_resp(400, "Value length too long"
+                                        "Supplied value is tool long for "+path, self._id)
+
         try:
-            prec = self.svc.get_record(self._id)
-            prec.name = name
-            if not prec.authorized(dbio.ACLs.ADMIN):
-                raise dbio.NotAuthorized(self._dbcli.user_id, "change record name")
-            prec.save()
-            return self.send_json(prec.name)
+            if path == "owner":
+                newname = self.svc.reassign_record(self._id, name)  # may raise NotAuthorized
+
+            elif path == "name":
+                newname = self.svc.rename_record(self._id, name)  # may raise NotAuthorized, AlreadyExists
+
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
+        except (dbio.InvalidUpdate, dbio.AlreadyExists) as ex:
+            return self.send_error_resp(400, "Invalid Input", str(ex), self._id)
 
+        if format.name == "text":
+            return self.send_ok(newname, contenttype=format.ctype)
+        else:
+            return self.send_json(newname)
+
+        
 class ProjectDataHandler(ProjectRecordHandler):
     """
     handle retrieval/update of a project record's data content
@@ -327,6 +398,9 @@ class ProjectDataHandler(ProjectRecordHandler):
                                             "No data found at requested property", self._id, ashead=ashead)
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id, ashead=ashead)
+        except dbio.PartNotAccessible as ex:
+            return self.send_error_resp(405, "Data property not retrieveable",
+                                  "Requested data property cannot be retrieved independently of its ancestor")
         return self.send_json(out, ashead=ashead)
 
     def do_DELETE(self, path):
@@ -474,11 +548,32 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         except self.FatalError as ex:
             print("fatal Error")
             return self.send_fatal_error(ex)
-        
+
         path = path.rstrip('/')
         if not path:
+            # create a record
+
+            # support foruser query parameter to set owner
+            foruser = None
+            if 'QUERY_STRING' in self._env:
+                params = parse_qs(self._env['QUERY_STRING'])
+                foruser = params.get('foruser')
+                if foruser:
+                    if len(foruser) > 1:
+                        return send_error_resp(400, "Bad foruser param",
+                                               "foruser parameter may only be applied once")
+                    foruser = None if len(foruser) == 0 else foruser[0]
+            if foruser:
+                input.setdefault("meta", OrderedDict())
+                if foruser.lower() == "true" and input.get("owner"):
+                    input["meta"]["foruser"] = input['owner']
+                else:
+                    input["meta"]["foruser"] = foruser
+
             return self.create_record(input)
+
         elif path == ':selected':
+            # respond to an advanced search
             try: 
                 return self.adv_select_records(input)
             except SyntaxError as syntax:
@@ -612,7 +707,12 @@ class ProjectACLsHandler(ProjectRecordHandler):
         if len(parts) < 2:
             return self.send_json(acl, ashead=ashead)
 
-        return self.send_json(parts[1] in acl, ashead=ashead)
+        # parts[1] is a particular user the client is interested in
+        if parts[1] in [":user", "midas:user"]:
+            # this indicates the currently authenticated user
+            parts[1] = self.who.actor
+
+        return self.send_json(parts[1] in acl, ashead=ashead)  # returns true or false
 
     def do_POST(self, path):
         """
@@ -652,29 +752,47 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
         return self.send_error_resp(405, "POST not allowed on this permission type",
                                     "Updating specified permission is not allowed")
-        
+
     def do_PUT(self, path):
         """
         replace the list of identities in a particular ACL.  This handles PUT ID/acls/PERM; 
         `path` should be set to PERM.  Note that previously set identities are removed. 
         """
-        # make sure a permission type, and only a permission type, is specified
-        path = path.strip('/')
-        if not path or '/' in path:
-            return self.send_error_resp(405, "PUT not allowed", "Unable set ACL membership")
-
+        return self._do_update_acls(path, "PUT")
+        
+    def _do_update_acls(self, path, meth):
+        # update specified ACLs
         try:
-            identities = self.get_json_body()
+            input = self.get_json_body()
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
-        if isinstance(identities, str):
-            identities = [identities]
-        if not isinstance(identities, list):
-            return self.send_error_resp(400, "Wrong input data type"
-                                        "Input data is not a string providing a user/group list")
+        path = path.strip('/')
+        if not path:
+            # requesting bulk update to multiple permissions
+            if not isinstance(input, Mapping):
+                return self.send_error_resp(400, "Wrong input data type"
+                                            "Input data is not an ACLs object with permission properties")
+        else:
+            # requesting update to to a single permission
+            if '/' in path:
+                return self.send_error_resp(405, "PATCH not allowed",
+                                            "ACL PATCH request should not a member name")
+            input = { path: input }
 
+        # validate the input
         # TODO: ensure input value is a bona fide user or group name
+        bad = []
+        for perm in input:
+            if isinstance(input[perm], str):
+                input[perm] = [ input[perm] ]
+            if not isinstance(input[perm], list):
+                bad.append(perm)
+        if bad:
+            return self.send_error_resp(400, "Wrong input data type",
+                                        f"Input permission{'s' if len(bad) > 1 else ''} "+
+                                        f"{','.join(bad)} {'are' if len(bad) > 1 else 'is'} "+
+                                        "not a list of user/group identities")
 
         try:
             prec = self.svc.get_record(self._id)
@@ -684,62 +802,32 @@ class ProjectACLsHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
 
-        if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
+        for perm in input:
+            if perm not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
+                return self.send_error_resp(405, "PATCH not allowed on provided permission type",
+                                            "Updating non-standard permission is not allowed")
+            identities = input[perm]
             try:
-                prec.acls.revoke_perm_from_all(path)
-                prec.acls.grant_perm_to(path, *identities)
-                prec.save()
-                return self.send_json(prec.to_dict().get('acls', {}).get(path,[]))
+                if meth == "PUT":
+                    prec.acls.revoke_perm_from_all(perm)
+                prec.acls.grant_perm_to(perm, *identities)
             except dbio.NotAuthorized as ex:
                 return self.send_unauthorized()
 
-        return self.send_error_resp(405, "PUT not allowed on this permission type",
-                                    "Updating specified permission is not allowed")
-        
+        prec.save()
+        acls = prec.to_dict().get('acls', {})
+        if path:
+            return self.send_json(acls.get(path, []))
+        return self.send_json(acls)
 
     def do_PATCH(self, path):
         """
-        fold given list of identities into a particular ACL.  This handles PATCH ID/acls/PERM; 
-        `path` should be set to PERM.
+        fold given lists of identities into ACLs.  This handles these paths:
+          *  PATCH ID/acls/PERM (`path` is set to PERM): fold the given list of IDs into the PERM list
+          *  PATCH ID/acls (`path` is an empty string): input is an object with ACL names (permissions)
+             to update.
         """
-        try:
-            # input is a list of user and/or group identities to add the PERM ACL
-            identities = self.get_json_body()
-        except self.FatalError as ex:
-            return self.send_fatal_error(ex)
-
-        # make sure path is a permission type (PERM), and only a permission type
-        path = path.strip('/')
-        if not path or '/' in path:
-            return self.send_error_resp(405, "PATCH not allowed",
-                                        "ACL PATCH request should not a member name")
-
-        if isinstance(identities, str):
-            identities = [identities]
-        if not isinstance(identities, list):
-            return self.send_error_resp(400, "Wrong input data type"
-                                        "Input data is not a list of user/group identities")
-
-        # TODO: ensure input value is a bona fide user or group name
-
-        try:
-            prec = self.svc.get_record(self._id)
-        except dbio.NotAuthorized as ex:
-            return self.send_unauthorized()
-        except dbio.ObjectNotFound as ex:
-            return self.send_error_resp(404, "ID not found",
-                                        "Record with requested identifier not found", self._id)
-
-        if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
-            try:
-                prec.acls.grant_perm_to(path, *identities)
-                prec.save()
-                return self.send_json(prec.to_dict().get('acls', {}).get(path, []))
-            except dbio.NotAuthorized as ex:
-                return self.send_unauthorized()
-
-        return self.send_error_resp(405, "PATCH not allowed on this permission type",
-                                    "Updating specified permission is not allowed")
+        return self._do_update_acls(path, "PATCH")
         
     def do_DELETE(self, path):
         """
@@ -952,9 +1040,9 @@ class MIDASProjectApp(ServiceApp):
                 # path is just an ID: 
                 return self._update_handler(service, self, env, start_resp, who, idattrpart[0])
             
-        elif idattrpart[1] == "name":
-            # path=ID/name: get/change the mnumonic name of record ID
-            return self._name_update_handler(service, self, env, start_resp, who, idattrpart[0])
+        elif idattrpart[1] == "name" or idattrpart[1] == "owner":
+            # path=ID/name: get/change the owner or the mnemonic name of record ID
+            return self._name_update_handler(service, self, env, start_resp, who, idattrpart[0], idattrpart[1])
         elif idattrpart[1] == "data":
             # path=ID/data[/...]: get/change the content of record ID
             if len(idattrpart) == 2:

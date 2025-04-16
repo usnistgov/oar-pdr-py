@@ -31,6 +31,8 @@ _action_p   = "action"
 _modified_p = "modified"
 _created_p  = "created"
 _message_p  = "message"
+_creatby_p  = "created_by"
+_bywho_p    = "byWho"
 
 # Common record actions
 # 
@@ -116,6 +118,13 @@ class RecordStatus:
         return datetime.fromtimestamp(math.floor(self.created)).isoformat()
 
     @property
+    def created_by(self) -> str:
+        """
+        a label indicating who originally created the record.  This may be a user ID or an Agent ID.   
+        """
+        return self._data.get(_creatby_p, "unspecified")
+
+    @property
     def since(self) -> float:
         """
         The epoch timestamp when the record entered the current state
@@ -138,6 +147,14 @@ class RecordStatus:
         to a record are record-type-specific; however, there are a set of common actions.
         """
         return self._data[_action_p]
+
+    @property
+    def by_who(self) -> str:
+        """
+        the identifier of the agent that committed the last action applied to the record.  If None,
+        the agent is unknown.
+        """
+        return self._data.get(_bywho_p)
 
     @property
     def modified(self) -> float:
@@ -168,7 +185,7 @@ class RecordStatus:
     def message(self, val):
         self._data[_message_p] = val
 
-    def act(self, action: str, message: str="", when: float=0):
+    def act(self, action: str, message: str="", who: str=None, when: float=0):
         """
         record the application of a particular action on the record
         :param str  action:  the name of the action being applied
@@ -190,6 +207,7 @@ class RecordStatus:
         self._data[_modified_p] = when
         if self._data[_created_p] < 1:
             self._data[_created_p] = when
+        self._data[_bywho_p] = who
 
     def set_state(self, state, when: float=-1):
         """

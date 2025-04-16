@@ -9,15 +9,38 @@ from typing import Iterator, List
 from . import base
 
 from nistoar.base.config import merge_config
+from nistoar.nsd.service import PeopleService, MongoPeopleService, create_people_service
 
 class InMemoryDBClient(base.DBClient):
     """
     an in-memory DBClient implementation 
     """
 
-    def __init__(self, dbdata: Mapping, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS):
+    def __init__(self, dbdata: Mapping, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS,
+                 peopsvc: PeopleService = None):
+        """
+        initialize this client.
+        :param dict  dbdata:  the initial in-memory data store to use.  The structure of this dictionary
+                              is specific to this implementation; thus except when provided as an empty
+                              dictionary (representing an empty database), this should be a dictionary 
+                              copied from another instance of this client.
+        :param dict  config:  the configuration data for the client
+        :param str projcoll:  the type of project to connect with (i.e. the project collection name)
+        :param nativeclient:  where applicable, the native client object to use to connect the back
+                              end database.  The type and use of this client is implementation-specific
+        :param str  foruser:  the user identity to connect as.  This will control what records are 
+                              accessible via this instance's methods.
+        :param PeopleService peopsvc:  a PeopleService to incorporate into this client
+        """
         self._db = dbdata
-        super(InMemoryDBClient, self).__init__(config, projcoll, self._db, foruser)
+        super(InMemoryDBClient, self).__init__(config, projcoll, self._db, foruser, peopsvc)
+
+    def reset(self, dbdata: Mapping = {}):
+        """
+        Reset the database to some initial state, characterized by the given dbdata.  This is intended 
+        for use in unit tests that need to clear contents of the database after each test or suite.
+        """
+        self._db = dbdata
 
     def _next_recnum(self, shoulder):
         if shoulder not in self._db['nextnum']:
@@ -149,6 +172,13 @@ class InMemoryDBClientFactory(base.DBClientFactory):
                               not provided, an empty database is created.
         """
         super(InMemoryDBClientFactory, self).__init__(config)
+        self._init_data = _dbdata
+        self.init_db_data()
+
+    def init_db_data(self, dbdata = None):
+        """
+        reset the internal database to a particular state.
+        """
         self._db = {
             base.DAP_PROJECTS: {},
             base.DMP_PROJECTS: {},
@@ -156,13 +186,25 @@ class InMemoryDBClientFactory(base.DBClientFactory):
             base.PEOPLE_COLL: {},
             "nextnum": {}
         }
-        if _dbdata:
-            self._db.update(deepcopy(_dbdata))
-            
+        if not dbdata:
+            dbdata = self._init_data
+        if dbdata:
+            self._db.update(deepcopy(dbdata))
+
+    def reset(self):
+        """
+        reset the internal database to its original state at construction time
+        """
+        self.init_db_data()
 
     def create_client(self, servicetype: str, config: Mapping={}, foruser: str = base.ANONYMOUS):
         cfg = merge_config(config, deepcopy(self._cfg))
         if servicetype not in self._db:
             self._db[servicetype] = {}
-        return InMemoryDBClient(self._db, cfg, servicetype, foruser)
+
+        peopsvc = self._peopsvc
+        if not peopsvc:
+            peopsvc = self.create_people_service(cfg.get("people_service", {}))
+
+        return InMemoryDBClient(self._db, cfg, servicetype, foruser, peopsvc)
         

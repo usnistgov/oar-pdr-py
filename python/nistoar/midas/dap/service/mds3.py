@@ -38,7 +38,7 @@ from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
 from nistoar.pdr.utils import build_mime_type_map, read_json
 from nistoar.pdr.utils.prov import Agent, Action
-from nistoar.nsd.client import NSDClient
+from nistoar.nsd import NSDServerError
 
 from . import validate
 from .. import nerdstore
@@ -238,7 +238,7 @@ class DAPService(ProjectService):
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: Agent=None,
                  log: Logger=None, nerdstore: NERDResourceStorage=None, project_type=DAP_PROJECTS,
-                 minnerdmver=(0, 6), fmcli=None, nsdcli=None):
+                 minnerdmver=(0, 6), fmcli=None, nsdsvc=None):
         """
         create the service
         :param DBClientFactory dbclient_factory:  the factory to create the DBIO service client from
@@ -253,8 +253,6 @@ class DAPService(ProjectService):
                                    subclass constructors.
         :param FileManager fmcli:  The FileManager client to use; if None, one will be constructed 
                                    from the configuration.
-        :param NSDClient  nsdcli:  The NSD client to use to look up people and organizations; if None, 
-                                   one will be constructed from the configuration.
         """
         super(DAPService, self).__init__(project_type, dbclient_factory, config, who, log,
                                          _subsys="Digital Asset Publication Authoring System",
@@ -269,13 +267,6 @@ class DAPService(ProjectService):
         if not nerdstore:
             nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), log)
         self._store = nerdstore
-
-        self._nsdcli = nsdcli
-        if not self._nsdcli:
-            if not self.cfg.get('nsd', {}).get('service_endpoint'):
-                self.log.warning("NSD service is not configured; name lookups are not possible")
-            else:
-                self._nsdcli = self._make_nsd_client(config['nsd'])
 
         self.cfg.setdefault('assign_doi', ASSIGN_DOI_REQUEST)
         if not self.cfg.get('doi_naan') and self.cfg.get('assign_doi') != ASSIGN_DOI_NEVER:
@@ -295,11 +286,6 @@ class DAPService(ProjectService):
 
     def _make_fm_client(self, fmcfg):
         return FileManager(fmcfg)
-
-    def _make_nsd_client(self, nsdcfg):
-        if not nsdcfg.get('service_endpoint'):
-            raise ConfigurationException("nsd config missing 'service_endpoint' parameter")
-        return NSDClient(nsdcfg['service_endpoint'])
 
     def _choose_mediatype(self, fext):
         defmt = 'application/octet-stream'
@@ -398,6 +384,7 @@ class DAPService(ProjectService):
             # create a record in the metadata store
             if self._store.exists(prec.id):
                 self.log.warning("NERDm data for id=%s unexpectedly found in metadata store", prec.id)
+                self._store.delete(prec.id)
             self._store.load_from(self._new_data_for(prec.id, prec.meta, schemaid), prec.id)
             nerd = self._store.open(prec.id)
             if prec._data.get('file_space') and self._fmcli and hasattr(nerd.files, 'update_hierarchy'):
@@ -473,17 +460,16 @@ class DAPService(ProjectService):
             elif meta.get("contactName"):
                 out['contactPoint'] = self._moderate_contactPoint({"fn": meta["contactName"]}, doval=False)
 
-            ro = self.cfg.get('default_responsible_org', {})
-            if self._nsdcli and out.get('contactPoint', {}).get('hasEmail'):
+            ro = deepcopy(self.cfg.get('default_responsible_org', {}))
+            if self.dbcli.people_service and out.get('contactPoint', {}).get('hasEmail'):
+                ps = self.dbcli.people_service
                 try:
-                    conrec = self._nsdcli.select_people(email=out.get['contactPoint']['hasEmail'])
+                    conrec = ps.get_person_by_email(email=out['contactPoint']['hasEmail'])
                 except NSDServerError as ex:
                     self.log.warning("Unable to get org info on contact from NSD service: %s", str(ex))
                 except Exception as ex:
                     self.log.exception("Unexpected error while accessing NSD service: %s", str(ex))
                 else:
-                    if len(conrec) > 0:
-                        conrec = conrec[0]
                     if conrec:
                         ro['subunits'] = []
                         if not ro.get('title'):
@@ -614,7 +600,7 @@ class DAPService(ProjectService):
                 out = nerd.get_res_data()
                 if part in out:
                     out = out[part]
-                elif part in "description @type contactPoint title rights disclaimer".split():
+                elif part in "description @type contactPoint title rights disclaimer landingPage".split():
                     raise ObjectNotFound(prec.id, part, "%s property not set yet" % part)
                 else:
                     raise PartNotAccessible(prec.id, part, "Accessing %s not supported" % part)
@@ -697,36 +683,82 @@ class DAPService(ProjectService):
         provact = None
         try:
             if part:
+                parts = part.split('/')
                 what = part
-                if part == "authors":
-                    if nerd.authors.count == 0:
-                        return False
-                    nerd.authors.empty()
-                elif part == "references":
-                    if nerd.references.count == 0:
-                        return False
-                    nerd.references.empty()
-                elif part == FILE_DELIM:
-                    if nerd.files.count == 0:
-                        return False
-                    what = "files"
-                    nerd.files.empty()
-                elif part == LINK_DELIM:
-                    if nerd.nonfiles.count == 0:
-                        return False
-                    what = "links"
-                    nerd.nonfiles.empty()
-                elif part == "components":
-                    if nerd.nonfiles.count == 0 and nerd.files.count == 0:
-                        return False
-                    nerd.files.empty()
-                    nerd.nonfiles.empty()
-                elif part in "title rights disclaimer description landingPage keyword".split():
-                    resmd = nerd.get_res_data()
-                    if part not in resmd:
-                        return False
-                    del resmd[part]
-                    nerd.replace_res_data(resmd)
+                if len(parts) == 1:
+                    if part == "authors":
+                        if nerd.authors.count == 0:
+                            return False
+                        nerd.authors.empty()
+                    elif part == "references":
+                        if nerd.references.count == 0:
+                            return False
+                        nerd.references.empty()
+                    elif part == FILE_DELIM:
+                        if nerd.files.count == 0:
+                            return False
+                        what = "files"
+                        nerd.files.empty()
+                    elif part == LINK_DELIM:
+                        if nerd.nonfiles.count == 0:
+                            return False
+                        what = "links"
+                        nerd.nonfiles.empty()
+                    elif part == "components":
+                        if nerd.nonfiles.count == 0 and nerd.files.count == 0:
+                            return False
+                        nerd.files.empty()
+                        nerd.nonfiles.empty()
+                    elif part in "title rights disclaimer description landingPage keyword".split():
+                        resmd = nerd.get_res_data()
+                        if part not in resmd:
+                            return False
+                        del resmd[part]
+                        nerd.replace_res_data(resmd)
+                    else:
+                        raise PartNotAccessible(_prec.id, part, "Clearing %s not allowed" % part)
+
+                elif len(parts) == 2:
+                    # refering to an element of a list or file set
+                    key = parts[1]
+                    m = re.search(r'^\[([\+\-]?\d+)\]$', key)
+                    if m:
+                        try:
+                            key = int(m.group(1))
+                        except ValueError as ex:
+                            raise PartNotAccessible(id, path, "Accessing %s not supported" % path)
+
+                    if parts[0] == "authors":
+                        if nerd.authors.count == 0:
+                            return False
+                        try:
+                            nerd.authors.pop(key)
+                        except (KeyError, IndexError) as ex:
+                            return False
+                    elif parts[0] == "references":
+                        try:
+                            nerd.references.pop(key)
+                        except (KeyError, IndexError) as ex:
+                            return False
+                    elif parts[0] == LINK_DELIM:
+                        try:
+                            nerd.nonfiles.pop(parts[1])
+                        except (KeyError) as ex:
+                            return False
+                    elif parts[0] == "components" or parts[0] == FILE_DELIM:
+                        out = None
+                        if parts[0] != FILE_DELIM:
+                            try:
+                                out = nerd.nonfiles.pop(parts[1])
+                            except (KeyError) as ex:
+                                pass
+                        if not out:
+                            try:
+                                nerd.files.delete_file(parts[1])
+                            except (KeyError) as ex:
+                                return False
+                    else:
+                        raise PartNotAccessible(_prec.id, part, "Clearing %s not allowed" % part)
                 else:
                     raise PartNotAccessible(_prec.id, part, "Clearing %s not allowed" % part)
 
@@ -736,7 +768,7 @@ class DAPService(ProjectService):
                 part = ("/"+part) if part.startswith("pdr:") else ("."+part)
                 provact.add_subaction(Action(Action.DELETE, _prec.id+"#data"+part, self.who,
                                              message))
-                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared "+what)
+                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared "+what, self.who.actor)
 
             else:
                 nerd.authors.empty()
@@ -748,7 +780,7 @@ class DAPService(ProjectService):
                 if not message:
                     message = "clearing all NERDm data"
                 provact = Action(Action.PATCH, _prec.id, self.who, message)
-                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared all NERDm data")
+                _prec.status.act(self.STATUS_ACTION_CLEAR, "cleared all NERDm data", self.who.actor)
 
         except PartNotAccessible:
             # client request error; don't record action
@@ -761,7 +793,7 @@ class DAPService(ProjectService):
                 provact.message = "Failed to clear requested NERDm data"
                 self._record_action(provact)
             
-            _prec.status.act(self.STATUS_ACTION_CLEAR, "Failed to clear NERDm data")
+            _prec.status.act(self.STATUS_ACTION_CLEAR, "Failed to clear NERDm data", self.who.actor)
             _prec.set_state(status.EDIT)
             _prec.data = self._summarize(nerd)
             self._try_save(_prec)
@@ -2251,7 +2283,8 @@ class DAPApp(MIDASProjectApp):
             project_coll = DAP_PROJECTS
         uselog = log.getChild(project_coll)
         if not service_factory:
-            service_factory = DAPServiceFactory(dbcli_factory, config, uselog, project_coll=project_coll)
+            nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), uselog)
+            service_factory = DAPServiceFactory(dbcli_factory, config, uselog, nerdstore, project_coll)
         super(DAPApp, self).__init__(service_factory, uselog, config)
         self._data_update_handler = DAPProjectDataHandler
         self._info_update_handler = DAPProjectInfoHandler
@@ -2288,6 +2321,9 @@ class DAPProjectDataHandler(ProjectDataHandler):
                                             "No data found at requested property", self._id, ashead=ashead)
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id, ashead=ashead)
+        except PartNotAccessible as ex:
+            return self.send_error_resp(405, "Data property not retrieveable",
+                                  "Requested data property cannot be retrieved independently of its ancestor")
         return self.send_json(out)
 
     def do_POST(self, path):
@@ -2306,8 +2342,8 @@ class DAPProjectDataHandler(ProjectDataHandler):
 
         try:
             if not self.svc.dbcli.exists(self._id):
-                return self.end_error_resp(404, "ID not found"
-                                           "Record with requested identifier not found", self._id)
+                return self.send_error_resp(404, "ID not found"
+                                            "Record with requested identifier not found", self._id)
 
             if path == "authors":
                 out = self.svc.add_author(self._id, newdata)

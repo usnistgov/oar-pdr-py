@@ -25,13 +25,15 @@ from nistoar.pdr.utils.prov import Action
 from .. import MIDASException
 from .status import RecordStatus
 from nistoar.pdr.utils.prov import ANONYMOUS_USER
+from nistoar.nsd.service import PeopleService, create_people_service
 
 DAP_PROJECTS = "dap"
 DMP_PROJECTS = "dmp"
 GROUPS_COLL = "groups"
-PEOPLE_COLL = "people"
+PEOPLE_COLL = "people"     # this does not refer to the staff directory database
 DRAFT_PROJECTS = "draft"   # this name is deprecated
 PROV_ACT_LOG = "prov_action_log"
+_AUTHDEL = "_authdel"
 
 DEF_PEOPLE_SHOULDER = "ppl0"
 DEF_GROUPS_SHOULDER = "grp0"
@@ -41,7 +43,8 @@ PUBLIC_GROUP = DEF_GROUPS_SHOULDER + ":public"    # all users are implicitly par
 ANONYMOUS = ANONYMOUS_USER
 
 __all__ = ["DBClient", "DBClientFactory", "ProjectRecord", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP",
-           "ANONYMOUS", "DAP_PROJECTS", "DMP_PROJECTS", "ObjectNotFound", "NotAuthorized", "AlreadyExists"]
+           "ANONYMOUS", "DAP_PROJECTS", "DMP_PROJECTS", "ObjectNotFound", "NotAuthorized", "AlreadyExists",
+           "InvalidRecord", "InvalidUpdate" ]
 
 Permissions = Union[str, Sequence[str], AbstractSet[str]]
 CST = []
@@ -102,7 +105,7 @@ class ACLs:
             if id not in self._perms[perm_name]:
                 self._perms[perm_name].append(id)
 
-    def revoke_perm_from_all(self, perm_name):
+    def revoke_perm_from_all(self, perm_name, protect_owner: bool=True):
         """
         remove the given identities from the list having the given permission.  For each given identity 
         that does not currently have the permission, nothing is done.  
@@ -113,15 +116,26 @@ class ACLs:
         """
         if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
-        if perm_name in self._perms:
-            self._perms[perm_name] = []
 
-    def revoke_perm_from(self, perm_name, *ids):
+        empty = []
+        if protect_owner and self._rec and perm_name in [ACLs.READ, ACLs.ADMIN] and \
+           self._rec.owner in self._perms.get(perm_name,[]):
+            # don't take away the owner's READ or ADMIN permissions
+            empty = [self._rec.owner]
+
+        if perm_name in self._perms:
+            self._perms[perm_name] = empty
+
+    def revoke_perm_from(self, perm_name, *ids, protect_owner: bool=True):
         """
         remove the given identities from the list having the given permission.  For each given identity 
-        that does not currently have the permission, nothing is done.  
+        that does not currently have the permission, nothing is done.  Note that by default, read and 
+        admin permissions cannot be revoked from the owner of the record unless ``protect_owner`` 
+        is set to ``False``.  
         :param str perm_name:  the permission to be revoked
         :param str ids:        the identities of the users the permission should be revoked from
+        :param bool protect_owner:  if True (default), do not revoke the owner's read and admin 
+                               permissions even when the owner is one of the provided IDs.
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to grant this permission
         """
@@ -131,6 +145,10 @@ class ACLs:
         if perm_name not in self._perms:
             return
         for id in ids:
+            if protect_owner and self._rec and self._rec.owner == id and \
+               perm_name in [ACLs.READ, ACLs.ADMIN]:
+                # don't take away the owner's READ or ADMIN permissions
+                continue
             if id in self._perms[perm_name]:
                 self._perms[perm_name].remove(id)
 
@@ -173,6 +191,7 @@ class ProtectedRecord(ABC):
         self._data = self._initialize(recdata)
         self._acls = ACLs(self, self._data.get("acls", {}))
         self._status = RecordStatus(self.id, self._data['status'])
+        self._authdel = _AuthDelegate(self) if self._coll != _AUTHDEL else None
 
     def _initialize(self, recdata: MutableMapping) -> MutableMapping:
         """
@@ -212,6 +231,39 @@ class ProtectedRecord(ABC):
     @property
     def owner(self):
         return self._data.get('owner', "")
+
+    @owner.setter
+    def owner(self, val):
+        self.reassign(val)
+
+    def reassign(self, who: str):
+        """
+        transfer ownership to the given user.  To transfer ownership, the calling user must have 
+        "admin" permission on this record.  Note that this will not remove any permissions assigned 
+        to the former owner.
+
+        :param str who:   the identifier for the user to set as the owner of this record
+        :raises NotAuthorized:  if the calling user is not authorized to change the owner.  
+        :raises InvalidUpdate:  if the target user identifier is not recognized or not legal
+        """
+        if not self.authorized(ACLs.ADMIN):
+            raise NotAuthorized(self._cli.user_id, "change owner")
+
+        # make sure the target user is valid
+        if not self._validate_user_id(who):
+            raise InvalidUpdate("Unable to update owner: invalid user ID: "+str(who))
+
+        self._data['owner'] = who
+        for perm in ACLs.OWN:
+            self.acls.grant_perm_to(perm, who)
+
+    def _validate_user_id(self, who: str):
+        if not bool(who) or not isinstance(who, str):
+            # default test: ensure user is a non-empty string
+            return False
+        if self._cli and self._cli.people_service:
+            return bool(self._cli.people_service.get_person_by_eid(who))
+        return True
 
     @property
     def created(self) -> float:
@@ -323,6 +375,8 @@ class ProtectedRecord(ABC):
              self._data['since']) = olddates
             raise
 
+        self._authdel = _AuthDelegate(self) if self._coll != _AUTHDEL else None
+
     def authorized(self, perm: Permissions, who: str = None):
         """
         return True if the given user has the specified permission to commit an action on this record.
@@ -330,10 +384,9 @@ class ProtectedRecord(ABC):
         also be a custom permission suppported by this type of record.  This implementation will take 
         into account all of the groups the user is a member of.
 
-        Note that in this implementation, the owner of the record is automatically granted all permissions
-        regardless whether the user is explicitly added to the specified access control list.  Further,
-        the underlying configuration can contain a `superusers` property; if set, this implementation will 
-        authorize the user if the user's id matches any of those given in this property list.  
+        Note this implementation supports the notion of _superusers_ which implicitly hold all 
+        premissions.  It will authorize the user if the user's id matches any of those in a list given 
+        by the ``superusers`` configuration property.
 
         :param str|Sequence[str]|Set[str] perm:  a single permission or a list or set of permissions that 
                          the user must have to complete the requested action.  If a list of permissions 
@@ -351,9 +404,11 @@ class ProtectedRecord(ABC):
         if isinstance(perm, list):
             perm = set(perm)
 
+        authdel = self._authdel if self._authdel else self
+
         idents = [who] + list(self._cli.user_groups)
         for p in perm:
-            if not self.acls._granted(p, idents):
+            if not authdel.acls._granted(p, idents):
                 return False
         return True
 
@@ -452,6 +507,18 @@ class ProtectedRecord(ABC):
         out['status']['sinceDate'] = self.status.since_date
         return out
 
+class _AuthDelegate(ProtectedRecord):
+    # for internal use only; used to store original permissions
+    def __init__(self, forrec: ProtectedRecord):
+        usedata = {
+            "id": forrec.id,
+            "ownder": forrec.owner,
+            "acls": deepcopy(forrec._data["acls"])
+        }
+        super(_AuthDelegate, self).__init__(_AUTHDEL, usedata, forrec._cli)
+
+    def save(self):
+        raise RuntimeException("Programming error: _AuthDelegate records should not be saved")
 
 class Group(ProtectedRecord):
     """
@@ -474,9 +541,33 @@ class Group(ProtectedRecord):
     @property
     def name(self):
         """
-        the mnumonic name given to this group by its owner
+        the mnemonic name given to this group by its owner
         """
         return self._data['name']
+
+
+    @name.setter
+    def name(self, val):
+        self.rename(val)
+
+    def rename(self, newname):
+        """
+        assign the given name as the groups's mnemonic name.  If this record was pulled from 
+        the backend storage, then a check will be done to ensure that the name does not match 
+        that of any other group owned by the current user.  
+
+        :param str newname:  the new name to assign to the record
+        :raises NotAuthorized:  if the calling user is not authorized to changed the name; for 
+                                non-superusers, ADMIN permission is required to rename a record.
+        :raises AlreadyExists:  if the name has already been given to a record owned by the 
+                                current user.  
+        """
+        if not self.authorized(ACLs.ADMIN):
+            raise NotAuthorized(self._cli.user_id, "change name")
+        if self._cli and self._cli.name_exists(newname):
+            raise AlreadyExists(f"User {self_cli.user_id} has already defined a group with name={newname}")
+
+        self._data['name'] = newname
 
     def validate(self, errs=None, data=None) -> List[str]:
         """
@@ -555,7 +646,7 @@ class DBGroups(object):
     """
     an interface for creating and using user groups.  Each group has a unique identifier assigned to it
     and holds a list of user (and/or group) identities indicating the members of the groups.  In addition
-    to its unique identifier, a group also has a mnumonic name given to it by the group's owner; the 
+    to its unique identifier, a group also has a mnemonic name given to it by the group's owner; the 
     group name need not be globally unique, but it should be unique within the owner's namespace.  
     """
 
@@ -628,7 +719,7 @@ class DBGroups(object):
         """
         return True if a group with the given name exists.  READ permission on the identified 
         record is not required to use this method.
-        :param str name:  the mnumonic name of the group given to it by its owner
+        :param str name:  the mnemonic name of the group given to it by its owner
         :param str owner: the ID of the user owning the group of interest; if not given, the 
                           user ID attached to the `DBClient` is assumed.
         """
@@ -757,16 +848,32 @@ class ProjectRecord(ProtectedRecord):
     @property
     def name(self) -> str:
         """
-        the mnumonic name given to this record by its creator
+        the mnemonic name given to this record by its creator
         """
         return self._data.get('name', "")
 
     @name.setter
     def name(self, val):
+        self.rename(val)
+
+    def rename(self, newname):
         """
-        assign the given name as the record's mnumonic name
+        assign the given name as the record's mnemonic name.  If this record was pulled from 
+        the backend storage, then a check will be done to ensure that the name does not match 
+        that of any other record owned by the current user.  
+
+        :param str newname:  the new name to assign to the record
+        :raises NotAuthorized:  if the calling user is not authorized to changed the name; for 
+                                non-superusers, ADMIN permission is required to rename a record.
+        :raises AlreadyExists:  if the name has already been given to a record owned by the 
+                                current user.  
         """
-        self._data['name'] = val
+        if not self.authorized(ACLs.ADMIN):
+            raise NotAuthorized(self._cli.user_id, "change name")
+        if self._cli and self._cli.name_exists(newname):
+            raise AlreadyExists(f"User {self_cli.user_id} has already defined a record with name={newname}")
+
+        self._data['name'] = newname
 
     @property
     def data(self) -> MutableMapping:
@@ -822,7 +929,18 @@ class DBClient(ABC):
          the only allowed shoulder will be the default, ``grp0``. 
     """
 
-    def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS):
+    def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS,
+                 peopsvc: PeopleService = None):
+        """
+        initialize the base client.
+        :param dict  config:  the configuration data for the client
+        :param str projcoll:  the type of project to connect with (i.e. the project collection name)
+        :param nativeclient:  where applicable, the native client object to use to connect the back
+                              end database.  The type and use of this client is implementation-specific
+        :param str  foruser:  the user identity to connect as.  This will control what records are 
+                              accessible via this instance's methods.
+        :param PeopleService peopsvc:  a PeopleService to incorporate into this client
+        """
         self._cfg = config
         self._native = nativeclient
         self._projcoll = projcoll
@@ -830,6 +948,7 @@ class DBClient(ABC):
         self._whogrps = None
 
         self._dbgroups = DBGroups(self)
+        self._peopsvc = peopsvc
 
     @property
     def project(self) -> str:
@@ -854,6 +973,14 @@ class DBClient(ABC):
             self.recache_user_groups()
         return self._whogrps
 
+    @property
+    def people_service(self) -> PeopleService:
+        """
+        an attached PeopleService instance or None if such a service is not available.  This service 
+        encapsulates access to the organization's staff directory service.
+        """
+        return self._peopsvc
+
     def recache_user_groups(self):
         """
         the :py:property:`user_groups` contains a cached list of all the groups the user is 
@@ -867,7 +994,7 @@ class DBClient(ABC):
         create (and save) and return a new project record.  A new unique identifier should be assigned
         to the record.
 
-        :param str     name:  the mnumonic name (provided by the requesting user) to give to the 
+        :param str     name:  the mnemonic name (provided by the requesting user) to give to the 
                               record.
         :param str shoulder:  the identifier shoulder prefix to create the new ID with.  
                               (The implementation should ensure that the requested user is authorized 
@@ -951,7 +1078,7 @@ class DBClient(ABC):
         return a dictionary containing data that will constitue a new ProjectRecord with the given 
         identifier assigned to it.  Generally, this record should not be committed yet.
         """
-        return {"id": id}
+        return {"id": id, "status": {"created_by": self.user_id}}
 
     def exists(self, gid: str) -> bool:
         """
@@ -962,9 +1089,9 @@ class DBClient(ABC):
 
     def name_exists(self, name: str, owner: str = None) -> bool:
         """
-        return True if a group with the given name exists.  READ permission on the identified 
+        return True if a project with the given name exists.  READ permission on the identified 
         record is not required to use this method.
-        :param str name:  the mnumonic name of the group given to it by its owner
+        :param str name:  the mnemonic name of the group given to it by its owner
         :param str owner: the ID of the user owning the group of interest; if not given, the 
                           user ID attached to the `DBClient` is assumed.
         """
@@ -1282,7 +1409,7 @@ class DBClientFactory(ABC):
     an abstract class for creating client connections to the database
     """
 
-    def __init__(self, config):
+    def __init__(self, config, peopsvc: PeopleService = None):
         """
         initialize the factory with its configuration.  The configuration provided here serves as 
         the default parameters for the cient as these can be overridden by the configuration parameters
@@ -1290,8 +1417,20 @@ class DBClientFactory(ABC):
         the configure the backend storage be provided here, and that the non-storage parameters--namely,
         the ones that control authorization--be provided via :py:method:`create_client` as these can 
         depend on the type of project being access (e.g. "dmp" vs. "dap").
+
+        :param dict          config:  the DBClient configuration
+        :param PeoplService peopsvc:  a PeopleService to use to look up people in the organization.  If
+                                      not provided, an attempt will be made to create one from the 
+                                      configuration (via its ``people_service`` parameter). 
         """
         self._cfg = config
+        self._peopsvc = peopsvc
+
+    def create_people_service(self, config: Mapping = {}):
+        """
+        create a PeopleService that a DBClient can use
+        """
+        return create_people_service(config)
 
     @abstractmethod
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = ANONYMOUS):
@@ -1331,6 +1470,92 @@ class DBIORecordException(DBIOException):
     def __init__(self, recid, message, sys=None):
         super(DBIORecordException, self).__init__(message, sys=sys)
         self.record_id = recid
+
+
+class InvalidRecord(DBIORecordException):
+    """
+    an exception indicating that record data is invalid and requires correction or completion.
+
+    The determination of invalid data may result from detailed data validation which may uncover 
+    multiple errors.  The ``errors`` property will contain a list of messages, each describing a
+    validation error encounted.  The :py:meth:`format_errors` will format all these messages into 
+    a single string for a (text-based) display. 
+    """
+    def __init__(self, message: str=None, recid: str=None, part: str=None,
+                 errors: List[str]=None, sys=None):
+        """
+        initialize the exception
+        :param str message:  a brief description of the problem with the user input
+        :param str   recid:  the id of the record that data was provided for
+        :param str    part:  the part of the record that was requested for update.  Do not provide 
+                             this parameter if the entire record was provided.
+        :param [str] errors: a listing of the individual errors uncovered in the data
+        """
+        if errors:
+            if not message:
+                if len(errors) == 1:
+                    message = "Validation Error: " + errors[0]
+                elif len(errors) == 0:
+                    message = "Unknown validation errors encountered"
+                else:
+                    message = "Encountered %d validation errors, including: %s" % (len(errors), errors[0])
+        elif message:
+            errors = [message]
+        else:
+            message = "Unknown validation errors encountered while updating data"
+            errors = []
+        
+        super(InvalidRecord, self).__init__(recid, message, sys)
+        self.record_part = part
+        self.errors = errors
+
+    def __str__(self):
+        out = ""
+        if self.record_id:
+            out += "%s: " % self.record_id
+        if self.record_part:
+            out += "%s: " % self.record_part
+        return out + super().__str__()
+
+    def format_errors(self):
+        """
+        format into a string the listing of the validation errors encountered that resulted in 
+        this exception.  The returned string will have embedded newline characters for multi-line
+        text-based display.
+        """
+        if not self.errors:
+            return str(self)
+
+        out = ""
+        if self.record_id:
+            out += "%s: " % self.record_id
+        out += "Validation errors encountered"
+        if self.record_part:
+            out += " in data submitted to update %s" % self.record_part
+        out += ":\n  * "
+        out += "\n  * ".join([str(e) for e in self.errors])
+        return out
+
+class InvalidUpdate(InvalidRecord):
+    """
+    an exception indicating that the user-provided data is invalid or otherwise would result in 
+    invalid data content for a record. 
+
+    The determination of invalid data may result from detailed data validation which may uncover 
+    multiple errors.  The ``errors`` property will contain a list of messages, each describing a
+    validation error encounted.  The :py:meth:`format_errors` will format all these messages into 
+    a single string for a (text-based) display. 
+    """
+    def __init__(self, message: str=None, recid=None, part=None, errors: List[str]=None, sys=None):
+        """
+        initialize the exception
+        :param str message:  a brief description of the problem with the user input
+        :param str   recid:  the id of the record that data was provided for
+        :param str    part:  the part of the record that was requested for update.  Do not provide 
+                             this parameter if the entire record was provided.
+        :param [str] errors: a listing of the individual errors uncovered in the data
+        """
+        super(InvalidUpdate, self).__init__(message, recid, part, errors, sys)
 
 
 class NotAuthorized(DBIOException):

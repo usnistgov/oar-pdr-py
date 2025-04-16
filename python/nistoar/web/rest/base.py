@@ -55,7 +55,7 @@ class Handler(object):
 
         # the output formats supported by this Handler; if None, the client has no choice
         # over the output format.  This should be set at construction time via
-        # set_default_format_support()
+        # _set_default_format_support()
         self._fmtsup = None
         
         # set to the name of the query parameter for requesting a named format (e.g. "format")
