@@ -11,6 +11,27 @@ the following features and capabilities:
 This implementation is intended to manage only a handful of simultaneous jobs.  Scaling up to a large 
 number is expected to require use of a scalable job management system.
 
+## Running Jobs through a Job Queue
+
+An OAR application can launch and manage various jobs via subprocesses by oerating a :py:class:`JobQueue` 
+instance.  An application can run multiple :py:class:`JobQueues <JobQueue>` but each one should apply 
+a different algorithm to its data--as marked by the :py:class:`JobQueue` property, ``execmodule``.  This 
+allows a queue to ensure that multiple Job operations are not applied to the same target data 
+simultaneously.  Here's how one instantiates and uses a quue:
+
+    queue = JobQueue("zipup", "/tmp/queuedir", "my.processing.module")
+    queue.submit("data_id", ["--data-root", "/data/data_id"])
+
+where "zipup" is the name of the queue reflecting the processing that gets applied to submitted data, the 
+directory is where records of submitted jobs are to be written, and "my.processing.module" is the module
+that contains the code for applying the processing.  In the ``submit()`` line, the "data_id" identifies 
+the data that should be processed.  This module must contain a ``process()`` function that applies the 
+processing.  
+
+It is recommended that a :py:class:`JobQueue` be long-lived, instantiated near the start of an 
+application (or as soon as it is known it is needed) and kept in memory until the end of the 
+application.  A good place to hold the instance is as a global symbol in a module that uses it.
+
 ## Job state data 
 
 The state of each job is persisted as part of its queue as a dictionary with the following properties:
@@ -57,7 +78,8 @@ from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
 from logging import Logger
-import logging, os, shutil, threading, json
+from random import randint
+import logging, os, shutil, threading, json, sys
 
 from nistoar.pdr.utils import read_json, write_json, LockedFile
 
@@ -236,7 +258,7 @@ class JobQueue:
     an ordered view of a list of jobs
     """
     def __init__(self, queuename: str, queuedir: Union[Path,str], execmodule: Union[ModuleType,str],
-                 config: Mapping=None, log: Logger=None):
+                 config: Mapping=None, log: Logger=None, resume: bool=True):
         self.name = queuename
         if isinstance(queuedir, str):
             queuedir = Path(queuedir)
@@ -251,13 +273,13 @@ class JobQueue:
         self.log = log
 
         self.pq = queue.PriorityQueue()
-        self._restore_queue()
         self.runner = JobRunner(self.name, self.qdir, self.pq,
                                 self.log.getChild("runner"), self.cfg.get("runner"))
+        self._restore_queue(resume)
 
-    def _restore_queue(self):
+    def _restore_queue(self, trigger=True):
         lockfile = self.qdir/"_restorer.json"
-        time.sleep(randint(0, 25) / 100.0)   # sleep a randome amount of time between 0 and 0.25 s
+        time.sleep(randint(0, 25) / 100.0)   # sleep a random amount of time between 0 and 0.25 s
         if lockfile.is_file():
             lfdata = read_json(lockfile)
             if lfdata['pid'] != os.getpid() and self._restorer_is_running(lfdata):
@@ -275,42 +297,74 @@ class JobQueue:
             statefile = self.qdir/f
             try:
                 job = Job.from_state_file(statefile)
-                if job.info.get('state') == EXITED and not job.info['relaunch']:
+                if job.info.get('state') == EXITED and not job.info.get('relaunch'):
                     statefile.unlink()
-                    log.debug("Cleaned up exited job: %s", did)
+                    self.log.debug("Cleaned up exited job: %s", did)
                     continue
                 if self.is_running(job):
                     continue
 
-                self.submit(job.info['dataid'], job.info.get('args', []), job.priority)
+                self.pq.put_nowait(job)
                 self.log.info("Resubmitting job for %s", job.info['dataid'])
 
             except (ValueError, KeyError):
                 self.log.warning("Trouble reading job state file: %s", statefile.name)
                 statefile.unlink()
-                
+
+        if trigger and not self.pq.empty():
+            self.run_queued()
+
+    def _restorer_is_running(restrdata):
+        if not restrdata.get('pid'):
+            return False
+        cl = self._running_cmd(restrdata['pid'])
+        if not cl:
+            return False
+        return True
+
+    @property
+    def processed(self):
+        """
+        the number of submissions that have been processed since this queue became instantiated.
+        """
+        return self.runner.processed
+
+    @property
+    def pending(self):
+        """
+        the number of submissions that are still waiting to be processed
+        """
+        return self.pq.qsize()
+
         
     def submit(self, dataid: str, args: List[str]=None, priority: int=0, trigger=True) -> Job:
         """
         create and submit a job to process the data with a given ID
         """
-        statefile = get_job_state_file(self.qdir, dataid)
+        queueit = True
+        statefile = job_state_file(self.qdir, dataid)
         if statefile.is_file():
             job = Job.from_state_file(statefile)
-            if job.info.get('state') == RUNNING:
+            if job.state == RUNNING:
                 # don't add if it is already running
                 if self.relaunchable and not job.info['relaunch']:
                     # mark it to be relaunched after it has completed
                     job.info['relaunch'] = True
+                    job.info['priority'] = priority
+                    if args:
+                        job.info['args'] = args
                     job.save_to(statefile)
                 return
+            elif job.state == PENDING:
+                queueit = False
 
         job = Job(self.mod, dataid, args)
         job.priority = priority
         job.save_to(statefile)
 
         # add to in-memory job queue
-        self.pq.put_nowait(job)
+        if queueit:
+            self.pq.put_nowait(job)
         if trigger:
             self.run_queued()
 
@@ -320,7 +374,7 @@ class JobQueue:
         """
         return the job created to process the data with a given ID
         """
-        statefile = get_job_state_file(self.qdir, dataid)
+        statefile = job_state_file(self.qdir, dataid)
         if not statefile.is_file():
             return None
         return Job.from_state_file(statefile)
@@ -331,40 +385,61 @@ class JobQueue:
         """
         self.runner.trigger()
 
-    def queue_size(self):
-        """
-        return the number of jobs currently queued to be run
-        """
-        return self.pq.qsize()
-
     def clean(self, age=300):
         """
         remove records of jobs that have completed more than ``age`` seconds ago.  The default is 5 minutes.
         """
-        pass
+        deadline = time.time() - age
+
+        for f in os.listdir(self.qdir):
+            if not f.endswith(".json") or f.startswith(".") or f.startswith('_'):
+                continue
+            did = f[:-1*len(".json")]
+            statefile = self.qdir/f
+            try:
+                job = Job.from_state_file(statefile)
+                if job.info.get('state') == EXITED and not job.info.get('relaunch') and \
+                   job.info.get('comptime', deadline) < deadline:
+                    statefile.unlink()
+                    self.log.debug("Cleaned up exited job: %s", did)
+            except (ValueError, KeyError):
+                self.log.warning("Trouble reading job state file for cleaning: %s", statefile.name)
+
 
     def is_running(self, job: Job) -> bool:
         """
         return True if the given :py:class:`Job` is in a running state _and_ a matching, running 
         process is found.
         """
-        if 'pid' not in self.info or self.state != RUNNING:
+        if 'pid' not in job.info or job.state != RUNNING:
             return False
         try:
-            proc = psutil.Process(job.info['pid'])
-            cl = p.cmdline()
-            if not any(__name__ in a for a in cl):
+
+            cl = self._running_cmd(job.info['pid'])
+            if not cl or not any(__name__ in a for a in cl):
                 return False
+
             idx = cl.index("-I")
             if idx+1 >= len(cl) or cl[idx+1] != job.info['dataid']:
+                # the data id does not match
                 return False
             if "-Q" in cl and 'queue' in job.info:
                 idx = cl.index("-Q")
                 if idx+1 < len(cl) and cl[idx+1] != job.info['queue']:
+                    # queue name does not match
                     return False
+
             return True
-        except (psutil.NoSuchProcess, ValueError):
+
+        except ValueError:
             return False
+
+    def _running_cmd(self, pid: int) -> Union[List[str],None]:
+        try:
+            proc = psutil.Process(pid)
+            return proc.cmdline()
+        except psutil.NoSuchProcess:
+            return None
 
 class JobRunner:
     """
@@ -383,6 +458,7 @@ class JobRunner:
             config = {}
         self.cfg = config
         self._thdata = threading.local()
+        self.processed = 0
 
     async def _launch_job(self, job: Job):
 
@@ -500,6 +576,7 @@ class JobRunner:
                 processed = asyncio.run(self._drain_queue())
                 self.log.debug("Finished processing %d job%s from queue",
                                processed, "s" if processed != 1 else "")
+                self.processed += processed
             except Exception as ex:
                 self.log.error("Failure managing queue execution: "+str(ex))
 

@@ -18,6 +18,7 @@ lxml
 webdavclient3
 mako
 pyjwt
+psutil
 ejsonschema @ https://github.com/usnistgov/ejsonschema/archive/master.zip
 pynoid @ https://github.com/RayPlante/pynoid/archive/master.zip
 multibag @ https://github.com/usnistgov/multibag-py/archive/0.3.zip

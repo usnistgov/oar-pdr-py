@@ -283,22 +283,26 @@ class TestJobRunner(test.TestCase):
         self.job1.save_to(self.jobdir/(self.job1.data_id+".json"))
         self.job2.save_to(self.jobdir/(self.job2.data_id+".json"))
         self.assertEqual(self.queue.qsize(), 2)
+        self.assertEqual(self.runner.processed, 0)
 
         self.runner.cfg['capture_logging'] = True
         self.runner._run()
         self.assertIn('workers', dir(self.runner._thdata))
         self.assertTrue(isinstance(self.runner._thdata.workers, list))
         self.assertEqual(len(self.runner._thdata.workers), 5)
+        self.assertEqual(self.runner.processed, 2)
 
     def test_trigger(self):
         self.job1.save_to(self.jobdir/(self.job1.data_id+".json"))
         self.job2.save_to(self.jobdir/(self.job2.data_id+".json"))
         self.assertEqual(self.queue.qsize(), 2)
+        self.assertEqual(self.runner.processed, 0)
 
         self.runner.cfg['capture_logging'] = True
         self.runner.trigger()
         time.sleep(0.3)
         self.assertEqual(self.queue.qsize(), 0)
+        self.assertEqual(self.runner.processed, 2)
         
     def test_run_logfile(self):
         self.job1.save_to(self.jobdir/(self.job1.data_id+".json"))
@@ -312,6 +316,89 @@ class TestJobRunner(test.TestCase):
         with open(self.jobdir/(self.job1.data_id+".log")) as fd:
             lines = fd.read()
         self.assertIn("fake processing started", lines)
+
+class TestJobQueue(test.TestCase):
+
+    def setUp(self):
+        global tmpdir
+        self.jobdir = Path(tmpdir.name) / "queue"
+        os.mkdir(self.jobdir)
+
+        self.jobq = jobmgt.JobQueue("test", self.jobdir, "nistoar.jobmgt.testproc")
+
+    def tearDown(self):
+        if self.jobdir.exists():
+            shutil.rmtree(str(self.jobdir))
+
+    def test_ctor(self):
+        self.assertEqual(self.jobq.name, "test")
+        self.assertEqual(self.jobq.qdir, self.jobdir)
+        self.assertEqual(self.jobq.mod, "nistoar.jobmgt.testproc")
+        self.assertEqual(self.jobq.pq.qsize(), 0)
+        self.assertEqual(self.jobq.processed, 0)
+        self.assertEqual(self.jobq.pending, 0)
+
+    def test_submit(self):
+        self.assertEqual(self.jobq.processed, 0)
+        self.assertEqual(self.jobq.pending, 0)
+        self.assertTrue(not (self.jobdir/"pdr0:XX01.json").exists())
+        self.assertTrue(not (self.jobdir/"pdr0:XX02.json").exists())
+
+        self.jobq.submit("pdr0:XX01", trigger=False)
+        self.assertEqual(self.jobq.processed, 0)
+        self.assertEqual(self.jobq.pending, 1)
+        self.jobq.submit("pdr0:XX02", priority=1, trigger=False)
+        self.assertEqual(self.jobq.processed, 0)
+        self.assertEqual(self.jobq.pending, 2)
+
+        self.assertTrue((self.jobdir/"pdr0:XX01.json").exists())
+        self.assertTrue((self.jobdir/"pdr0:XX02.json").exists())
+
+        job = self.jobq.get_job("pdr0:XX01")
+        self.assertEqual(job.data_id, "pdr0:XX01")
+        self.assertEqual(job.priority, 0)
+        self.assertEqual(job.state, jobmgt.PENDING)
+        self.assertEqual(job.info.get('execmodule'), "nistoar.jobmgt.testproc")
+
+        self.jobq.submit("pdr0:XX02", priority=1, trigger=False)
+        self.assertEqual(self.jobq.processed, 0)
+        self.assertEqual(self.jobq.pending, 2)
+
+        self.jobq.run_queued()
+        time.sleep(0.3)
+        self.assertEqual(self.jobq.processed, 2)
+        self.assertEqual(self.jobq.pending, 0)
+
+        self.assertTrue((self.jobdir/"pdr0:XX01.json").exists())
+        self.assertTrue((self.jobdir/"pdr0:XX02.json").exists())
+
+        self.jobq.clean(0)
+        self.assertTrue(not (self.jobdir/"pdr0:XX01.json").exists())
+        self.assertTrue(not (self.jobdir/"pdr0:XX02.json").exists())
+
+    def test_restore_queue(self):
+        self.assertEqual(self.jobq.processed, 0)
+        self.assertEqual(self.jobq.pending, 0)
+
+        job1 = jobmgt.Job("nistoar.jobmgt.testproc", "pdr0-XXXX")
+        job1.save_to(jobmgt.job_state_file(self.jobdir, "pdr0-XXXX"))
+        job2 = jobmgt.Job("nistoar.jobmgt.testproc", "pdr0-YYYY")
+        job2.save_to(jobmgt.job_state_file(self.jobdir, "pdr0-YYYY"))
+        self.jobq.submit("pdr0:XX02")
+
+        time.sleep(0.25)
+        self.assertTrue((self.jobdir/"pdr0:XX02.json").is_file())
+        self.assertEqual(self.jobq.processed, 1)
+        self.assertEqual(self.jobq.pending, 0)
+
+        self.jobq._restore_queue(False)
+        self.assertEqual(self.jobq.processed, 1)
+        self.assertEqual(self.jobq.pending, 2)
+
+        self.jobq.run_queued()
+        time.sleep(0.25)
+        self.assertEqual(self.jobq.processed, 3)
+        self.assertEqual(self.jobq.pending, 0)
 
         
 
