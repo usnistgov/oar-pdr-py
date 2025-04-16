@@ -26,7 +26,7 @@ where "zipup" is the name of the queue reflecting the processing that gets appli
 directory is where records of submitted jobs are to be written, and "my.processing.module" is the module
 that contains the code for applying the processing.  In the ``submit()`` line, the "data_id" identifies 
 the data that should be processed.  This module must contain a ``process()`` function that applies the 
-processing.  
+processing (see :py:class:`Job`).  
 
 It is recommended that a :py:class:`JobQueue` be long-lived, instantiated near the start of an 
 application (or as soon as it is known it is needed) and kept in memory until the end of the 
@@ -74,6 +74,7 @@ import time, asyncio, threading, queue
 from asyncio import subprocess as sp
 from typing import List, Callable, Union
 from types import ModuleType
+from collections import OrderedDict
 from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
@@ -82,6 +83,7 @@ from random import randint
 import logging, os, shutil, threading, json, sys
 
 from nistoar.pdr.utils import read_json, write_json, LockedFile
+from nistoar.base import config as cfgmod
 
 PENDING = 0
 RUNNING = 1
@@ -337,9 +339,14 @@ class JobQueue:
         return self.pq.qsize()
 
         
-    def submit(self, dataid: str, args: List[str]=None, priority: int=0, trigger=True) -> Job:
+    def submit(self, dataid: str, args: List[str]=None, config: Mapping=None,
+               priority: int=0, trigger=True) -> Job:
         """
         create and submit a job to process the data with a given ID
+
+        :param str  dataid:  the identifier for the data to operate on
+        :param [str]  args:  the arguments to pass to the job process when launched
+        :param dict config:  the configuration data to pass into the job when launched
         """
         queueit = True
         statefile = job_state_file(self.qdir, dataid)
@@ -353,12 +360,18 @@ class JobQueue:
                     job.info['priority'] = priority
                     if args:
                         job.info['args'] = args
+                    if config:
+                        job.info['config'] = config
                     job.save_to(statefile)
                 return
             elif job.state == PENDING:
                 queueit = False
 
-        job = Job(self.mod, dataid, args)
+        jcfg = OrderedDict(self.cfg.get('default_job_config', {}))
+        if config:
+            jcfg = cfgmod.merge_config(config, jcfg)
+
+        job = Job(self.mod, dataid, jcfg, args)
         job.priority = priority
         job.save_to(statefile)
 
@@ -470,7 +483,6 @@ class JobRunner:
         cmd = f"{pyexe} -m nistoar.jobmgt.exec".split()
         cmd.extend(["-Q", self.qname, "-I", job.data_id])
         cmd.extend(["-d", str(self.jdir)])
-        cmd.extend(job.info.get('args',[]))
 
         out = sp.DEVNULL
         if self.cfg.get('capture_logging'):
@@ -479,8 +491,10 @@ class JobRunner:
         if self.cfg.get('logdir'):
             logfile = os.path.join(self.cfg['logdir'], job.data_id+".log")
             cmd.extend(["-l", logfile])
+
+        cmd.extend(job.info.get('args',[]))
         # cmd = " ".join(cmd)
-        
+
         proc = await asyncio.create_subprocess_exec(*cmd, stdin=sp.DEVNULL, stderr=sp.STDOUT, stdout=out)
 
         if out is sp.PIPE:
@@ -495,7 +509,7 @@ class JobRunner:
                         try:
                             logdata = json.loads(line)
                         except Exception:
-                            buffer.append(line)
+                            buffer.append(line.rstrip())
                         else:
                             if buffer:
                                 self.log.warning("\n".join(buffer))
@@ -508,10 +522,10 @@ class JobRunner:
                                                        logdata.get("msg",""), [], None)
                             logging.getLogger(logrec.name).handle(logrec)
                     else:
-                        buffer.append(line)
+                        buffer.append(line.rstrip())
 
                 if buffer:
-                    self.log.warning("".join(buffer))
+                    self.log.warning("\n".join(buffer))
 
             await capture()
         else:
@@ -555,7 +569,7 @@ class JobRunner:
                             self.runner.log.warning("%s job exited with status=%d", job.data_id, ec)
                             with open(job_state_file(self.runner.jdir, job.data_id)) as fd:
                                 jd = json.load(fd)
-                            self.runner.log.warning("\n".join(jd('errors', ['??'])))
+                            self.runner.log.warning("\n".join(jd.get('errors', ['??'])))
                         else:
                             self.runner.log.debug("%s job exited successfully", job.data_id)
                 return self.processed
@@ -578,7 +592,7 @@ class JobRunner:
                                processed, "s" if processed != 1 else "")
                 self.processed += processed
             except Exception as ex:
-                self.log.error("Failure managing queue execution: "+str(ex))
+                self.log.exception("Failure managing queue execution: "+str(ex))
 
     def trigger(self):
         """
