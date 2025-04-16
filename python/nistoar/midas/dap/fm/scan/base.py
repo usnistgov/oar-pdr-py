@@ -13,10 +13,14 @@ import time
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import List, Callable
+from typing import List, Callable, Union
 from logging import Logger
 from operator import itemgetter
 from random import randint
+from pathlib import Path
+
+from nistoar.jobmgt import JobQueue
+from nistoar.base import config as cfgmod
 
 # from flask import current_app, copy_current_request_context
 # from flask_jwt_extended import jwt_required
@@ -29,8 +33,6 @@ from ..service import FMSpace
 from ..exceptions import (FileManagerException, UnexpectedFileManagerResponse, FileManagerResourceNotFound,
                           FileManagerClientError, FileManagerServerError)
 from webdav3.exceptions import WebDavException
-
-logging.basicConfig(level=logging.INFO)
 
 # Global dictionary to keep track of scanning job statuses
 scans_states = {}
@@ -230,6 +232,7 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
                                 that match file names (not including its directory path)
                                 that should be ignored.  Files that match these patterns
                                 will not be scanned and included in the output scan reports.
+        :param Logger     log:  the Logger to send messages to
         """
         self.sp = space
         self.scanid = scan_id
@@ -299,50 +302,9 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
 
         return out
 
-    def save_scan_metadata(self, scan_id, md):
-        """
-        write updated scan metadata to disk where it can be retrieved.  This method can be 
-        used by the :py:meth:`fast_scan` and  :py:meth:`slow_scan` implementations to update 
-        the scan metadata cached to disk.  
-        :param str scan_id:  the ID for the scan request
-        :param dict     md:  the scan metadata to write out.  This should have the same structure
-                             as what is provided to and returned by :py:meth:`fast_scan`.  
-        :raises FileManagerException:  if there is an error encountered while interacting with 
-                             the file manager system, including if the target output folder is 
-                             not found.
-        """
-        wdcli = self.sp.svc.wdcli
-
-        # Upload initial report
-        filename = self.sp.scan_report_filename_for(scan_id)
-
-        try:
-            wdcli.authenticate()
-            response = wdcli.wdcli.upload_to(json.dumps(md, indent=4).encode('utf-8'),
-                                             self.sp.system_davpath+'/'+filename)
-
-            if response.status_code < 200 or response.status_code >= 300:
-                msg = "Unexpected response during upload of '%s' to self.sp.system_davpath: %s (%s)" % \
-                      (filename, response.reason, response.status_code)
-                raise UnexpectedFileManagerResponse(msg, code=response.status_code)
-
-            self.log.debug('Uploaded scan file: ' + filename)
-
-        except WebDavException as e:
-            msg = "Failed to upload '%s' to %s: %s" % (filename, self.sp.system_davpath, str(e))
-            raise FileManagerServerError(msg) from e
-
-        except json.JSONDecodeError as e:
-            raise FileManagerClientError(f"Failed to JSON-encode scan metadata: {str(e)}") from e
-
-#        except Exception as e:
-#            msg = "Unexpected error while uploading '%s' to %s: %s" % \
-#                  (filename, self.sp.system_davpath, str(e))
-#            raise UnexpectedFileManagerResponse(msg) from e
-
     def _save_report(self, scanid, md):
         try:
-            self.save_scan_metadata(self.scanid, md)
+            self.sp.save_scan_metadata(self.scanid, md)
         except FileManagerException as ex:
             self.log.error(str(ex))
         except Exception as ex:
@@ -515,15 +477,44 @@ class BasicScanner(UserSpaceScannerBase):
                 filemd['last_checksum_date'] = time.time()
             except Exception as ex:
                 filemd['scan_errors'].append(f"Failed to calculate checksum for {filemd['path']}: {str(ex)}")
-        
-        
+
+def BasicScannerFactory(space, scanid, log=None):
+    return BasicScanner.create_excludes_skip_scanner(space, scanid, log)
+BasicScannerFactory.__fullname__ = f"{__name__}.{BasicScannerFactory.__name__}"
+                
+slow_scan_queue = None
+
+def create_slow_scan_queue(queuedir: Union[Path,str], config: Mapping=None,
+                           log: Logger=None, resume: bool=True) -> JobQueue:
+    """
+    create a :py:class:`nistoar.jobmgt.JobQueue` to use for scanning
+    :param str|Path queuedir:  the directory to use to persist the queue state
+    :param dict       config:  the configuration to use 
+    :param Logger        log:  the Logger to use
+    :param bool       resume:  if True, launch any zombied jobs found in the state directory
+    """
+    from . import jobexec
+    return JobQueue("slow_scan", queuedir, jobexec, config, log, resume)
+
+def set_slow_scan_queue(queuedir: Union[Path,str], config: Mapping=None,
+                        log: Logger=None, resume: bool=True) -> JobQueue:
+    global slow_scan_queue
+    cfg = {
+        "runner": {
+            "capture_logging": True
+        }
+    }
+    if config:
+        cfg = cfgmod.merge_config(config, cfg)
+    slow_scan_queue = create_slow_scan_queue(queuedir, cfg, log, resume)
+    return slow_scan_queue
         
 class UserSpaceScanDriver:
     """
     A class that creates, launches, and manages a :py:class:UserSpaceScanner to scan a given file
     space.  It is responsible for calling the scanner's ``fast_scan()`` and ``slow_scan()`` methods.
     """
-    def __init__(self, space: FMSpace, scanner_fact: Callable, log: Logger=None):
+    def __init__(self, space: FMSpace, scanner_fact: Callable, slowscanq: JobQueue, log: Logger=None):
         """
         Create a driver that will execute a scanner.  
         :param FMSpace         space:  the file-manager space to scan
@@ -533,12 +524,14 @@ class UserSpaceScanDriver:
                                        the :py:class:`~nistoar.midas.dap.fm.service.FMSpace` instance 
                                        (given by ``space``), an identifier to assign to the scan, and
                                        the Logger to use (given by ``log``).  
+        :param JobQueue    slowscanq:  the JobQueue to use to launch slow scans into
         :param Logger            log:  the Logger to send messages to
         """
         self.space = space
         self.scnrfact = scanner_fact
         if not log:
             log = self.space.log.getChild("scan-driver")
+        self.scanq = slowscanq
         self.log = log
 
     def _init_scan_md(self, scan_id, folder=None, launch_time=None):
@@ -586,6 +579,7 @@ class UserSpaceScanDriver:
         # get list of files to scan
         try:
             scan_md['contents'] = scanner.init_scannable_content(folder)
+            
         except FileManagerException:
             raise
         except Exception as ex:
@@ -596,15 +590,25 @@ class UserSpaceScanDriver:
         try:
             scan_md = scanner.fast_scan(scan_md)
 
-            # Run the slowScan asynchronously using a thread
-            def run_slow_scan():
-                # Read files from disk for performance
-                scanner.slow_scan(scan_md)
+            scanfactname = getattr(self.scnrfact, '__fullname__', None)
+            if not scanfactname:
+                scanfactname = f"{self.scnrfact.__module__}.{self.scnrfact.__name__}"
+            cfg = {
+                'service': self.space.svc.cfg,
+                'factory': scanfactname,
+                'scandir': str(self.scanq.qdir)
+            }
+            self.scanq.submit(self.space.id, [scan_id], cfg)
 
-            # TODO: track threads, avoid simultaneous scanning of same DAP
-            thread = threading.Thread(target=run_slow_scan)
-            thread.start()
-            self.log.info(f"Scan %s started successfully", scan_id)
+            # # Run the slowScan asynchronously using a thread
+            # def run_slow_scan():
+            #     # Read files from disk for performance
+            #     scanner.slow_scan(scan_md)
+
+            # # TODO: track threads, avoid simultaneous scanning of same DAP
+            # thread = threading.Thread(target=run_slow_scan)
+            # thread.start()
+            # self.log.info(f"Scan %s started successfully", scan_id)
 
         except FileManagerException as ex:
             raise

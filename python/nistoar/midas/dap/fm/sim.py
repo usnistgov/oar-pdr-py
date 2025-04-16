@@ -1,5 +1,6 @@
 """
-Simulated file manager clients for testing the MIDAS application layer service
+File manager classes that simulate access to the remote API services.  These are intended for use in 
+unittests only and are _not_ fully functional.  
 """
 import json, os, shutil
 from pathlib import Path
@@ -10,6 +11,7 @@ from unittest.mock import Mock
 from nistoar.midas.dap.fm.clients import NextcloudApi, FMWebDAVClient
 from nistoar.midas.dap.fm.exceptions import *
 from nistoar.midas.dap.fm import service as svc
+from nistoar.base.config import ConfigurationException
 
 class SimNextcloudApi(NextcloudApi):
     PERMFILE = "_perms.json"
@@ -278,4 +280,14 @@ class SimFMWebDAVClient(FMWebDAVClient):
             os.remove(target)
 
 
-    
+def SimMIDASFileManagerService(config, log=None):
+    rootdir = config.get('local_storage_root_dir')
+    if not rootdir:
+        raise ConfigurationException("SimMIDASFileManagerService: need missing parameter: "+
+                                     "local_storage_root_dir")
+
+    nccli = SimNextcloudApi(rootdir, config.get('generic_api',{}))
+    wdcli = SimFMWebDAVClient(rootdir, config.get('webdav',{}))
+
+    return svc.MIDASFileManagerService(config, log, nccli, wdcli)
+

@@ -11,7 +11,7 @@ This implementation assumes that it has direct access to storage (for scanning p
 space manipulation is done through the Nextcloud's generic and WebDAV APIs using an administrative,
 functional identity.  
 """
-import os, logging
+import os, logging, json
 from logging import Logger
 from copy import deepcopy
 from pathlib import Path
@@ -19,6 +19,7 @@ from collections.abc import Mapping
 from urllib.parse import urljoin
 
 import requests
+from webdav3.exceptions import WebDavException
 
 from .clients import NextcloudApi, FMWebDAVClient
 from .exceptions import *
@@ -443,6 +444,47 @@ class FMSpace:
         """
         return self._scan_report_tmpl % scanid
 
+    def save_scan_metadata(self, scan_id, md):
+        """
+        write updated scan metadata to disk where it can be retrieved.  This method can be 
+        used by the :py:meth:`fast_scan` and  :py:meth:`slow_scan` implementations to update 
+        the scan metadata cached to disk.  
+        :param str scan_id:  the ID for the scan request
+        :param dict     md:  the scan metadata to write out.  This should have the same structure
+                             as what is provided to and returned by :py:meth:`fast_scan`.  
+        :raises FileManagerException:  if there is an error encountered while interacting with 
+                             the file manager system, including if the target output folder is 
+                             not found.
+        """
+        wdcli = self.svc.wdcli
+
+        # Upload initial report
+        filename = self.scan_report_filename_for(scan_id)
+
+        try:
+            wdcli.authenticate()
+            response = wdcli.wdcli.upload_to(json.dumps(md, indent=4).encode('utf-8'),
+                                             self.system_davpath+'/'+filename)
+
+            if response.status_code < 200 or response.status_code >= 300:
+                msg = "Unexpected response during upload of '%s' to system_davpath: %s (%s)" % \
+                      (filename, response.reason, response.status_code)
+                raise UnexpectedFileManagerResponse(msg, code=response.status_code)
+
+            self.log.debug('Uploaded scan file: ' + filename)
+
+        except WebDavException as e:
+            msg = "Failed to upload '%s' to %s: %s" % (filename, self.system_davpath, str(e))
+            raise FileManagerServerError(msg) from e
+
+        except json.JSONDecodeError as e:
+            raise FileManagerClientError(f"Failed to JSON-encode scan metadata: {str(e)}") from e
+
+#        except Exception as e:
+#            msg = "Unexpected error while uploading '%s' to %s: %s" % \
+#                  (filename, self.system_davpath, str(e))
+#            raise UnexpectedFileManagerResponse(msg) from e
+
     def launch_scan(self, type: str = "def"):
         """
         start a scan of the contents of the space
@@ -456,16 +498,18 @@ class FMSpace:
         :raise FileManagerException:  if a failure happens, either while preparing scan or 
                   during the synchronous "fast_scan" phase.
         """
-        from .scan import UserSpaceScanDriver, BasicScanner, FileManagerScanException
+        from . import scan
 
         if not type or type == 'def':
             type = 'basic'
 
+        scanq = self._get_scan_queue()
+
         if type == 'basic':
-            driver = UserSpaceScanDriver(self, BasicScanner.create_excludes_skip_scanner,
-                                         self.log.getChild("basicscan"))
+            driver = scan.UserSpaceScanDriver(self, scan.BasicScannerFactory,
+                                              scanq, self.log.getChild("basicscan"))
         else:
-            raise FileManagerScanException("unrecognized scan type requested: "+type)
+            raise scan.FileManagerScanException("unrecognized scan type requested: "+type)
 
         scanid = driver.launch_scan()
 
@@ -478,7 +522,28 @@ class FMSpace:
             raise FileManagerScanException("failure while reading initial report: "+str(ex)) from ex
 
         return out
-        
+
+    def _get_scan_queue(self, jobdir=None):
+        from .scan import base as scan
+        if not scan.slow_scan_queue:
+            qcfg = self.svc.cfg.get('scan_queue', {})
+            if not jobdir:
+                jobdir = qcfg.get("jobdir")
+            if not jobdir:
+                raise ConfigurationException("Missing required parameter: scan_queue.jobdir")
+
+            if not isinstance(jobdir, Path):
+                jobdir = Path(str(jobdir))
+            if not jobdir.exists():
+                parent = jobdir.parents[0]
+                if not parent.is_dir():
+                    raise ConfigurationException("Cannot create scan_queue.jobdir directory: "+
+                                                 "parent does exist as a directory")
+                os.mkdir(jobdir)
+            
+            scan.set_slow_scan_queue(jobdir, qcfg)
+
+        return scan.slow_scan_queue
 
     def get_scan(self, scanid: str):
         """

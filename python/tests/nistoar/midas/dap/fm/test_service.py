@@ -1,4 +1,4 @@
-import json, tempfile, shutil, os, sys
+import json, tempfile, shutil, os, sys, time
 import unittest as test
 from unittest.mock import patch, Mock
 from pathlib import Path
@@ -11,6 +11,8 @@ from nistoar.midas.dap.fm import service as fm
 from nistoar.midas.dap.fm.clients.nextcloud import NextcloudApi
 from nistoar.midas.dap.fm.exceptions import *
 from nistoar.base.config import ConfigurationException
+from nistoar.midas.dap.fm import sim
+from nistoar.midas.dap.fm.scan import base as scan, simjobexec
 
 execdir = Path(__file__).parents[0]
 datadir = execdir.parents[0] / 'data'
@@ -20,21 +22,22 @@ capath = datadir / 'serverCa.crt'
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_fm_service.")
 rootdir = Path(os.path.join(tmpdir.name, "fmdata"))
+jobdir = Path(os.path.join(tmpdir.name, "jobqueue"))
 
-def import_file(path, name=None):
-    if not name:
-        name = os.path.splitext(os.path.basename(path))[0]
-    import importlib.util as imputil
-    spec = imputil.spec_from_file_location(name, path)
-    out = imputil.module_from_spec(spec)
-    sys.modules["sim_clients"] = out
-    spec.loader.exec_module(out)
-    return out
+# def import_file(path, name=None):
+#     if not name:
+#         name = os.path.splitext(os.path.basename(path))[0]
+#     import importlib.util as imputil
+#     spec = imputil.spec_from_file_location(name, path)
+#     out = imputil.module_from_spec(spec)
+#     sys.modules["sim_clients"] = out
+#     spec.loader.exec_module(out)
+#     return out
 
-import importlib
-testdir = os.path.dirname(os.path.abspath(__file__))
-simcli = os.path.join(testdir, "sim_clients.py")
-sim = import_file(simcli)
+# import importlib
+# testdir = os.path.dirname(os.path.abspath(__file__))
+# simcli = os.path.join(testdir, "sim_clients.py")
+# sim = import_file(simcli)
 
 def tearDownModules():
     tmpdir.cleanup()
@@ -44,6 +47,8 @@ class MIDASFileManagerServiceTest(test.TestCase):
     def setUp(self):
         if not os.path.exists(rootdir):
             os.mkdir(rootdir)
+        if not os.path.exists(jobdir):
+            os.mkdir(jobdir)
         self.config = {
             'nextcloud_base_url': 'http://mocknextcloud/nc',
             'webdav': {
@@ -56,11 +61,14 @@ class MIDASFileManagerServiceTest(test.TestCase):
                 'client_cert_path': certpath,
                 'client_key_path':  keypath
             },
-            'local_storage_root_dir': rootdir,
+            'local_storage_root_dir': str(rootdir),
             'admin_user': 'admin',
             'authentication': {
                 'user': 'admin',
                 'pass': 'pw'
+            },
+            'scan_queue': {
+                'jobdir': str(jobdir)
             }
         }
 
@@ -71,6 +79,8 @@ class MIDASFileManagerServiceTest(test.TestCase):
     def tearDown(self):
         if os.path.exists(rootdir):
             shutil.rmtree(rootdir)
+        if os.path.exists(jobdir):
+            shutil.rmtree(jobdir)
 
     def test_ctor(self):
         self.cli = fm.MIDASFileManagerService(self.config)
@@ -184,10 +194,16 @@ class MIDASFileManagerServiceTest(test.TestCase):
         
         self.assertEqual(sp.uploads_file_id, "100")
 
+    def _set_scan_queue(self):
+        scan.set_slow_scan_queue(jobdir, resume=False)
+        scan.slow_scan_queue.mod = simjobexec
+        
     def test_fmspace_scan(self):
+        self._set_scan_queue()
         id = "mdst:XXX1"
         sp = self.cli.create_space_for(id, 'ava1')
         scmd = sp.launch_scan()
+        time.sleep(0.5)
         self.assertTrue(isinstance(scmd, Mapping))
         self.assertIn('scan_id', scmd)
         self.assertEqual(scmd.get('space_id'), id)

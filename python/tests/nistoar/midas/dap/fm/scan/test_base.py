@@ -7,10 +7,12 @@ from copy import deepcopy
 import requests
 
 from nistoar.midas.dap.fm import service as fm
-from nistoar.midas.dap.fm.scan import base as scan
 from nistoar.midas.dap.fm.clients import NextcloudApi, FMWebDAVClient
 from nistoar.midas.dap.fm.exceptions import *
 from nistoar.base.config import ConfigurationException
+from nistoar.midas.dap.fm import sim
+from nistoar import jobmgt 
+from nistoar.midas.dap.fm.scan import base as scan, simjobexec
 
 execdir = Path(__file__).parents[0]
 datadir = execdir.parents[1] / 'data'
@@ -20,21 +22,7 @@ capath = datadir / 'serverCa.crt'
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_fm_service.")
 rootdir = Path(os.path.join(tmpdir.name, "fmdata"))
-
-def import_file(path, name=None):
-    if not name:
-        name = os.path.splitext(os.path.basename(path))[0]
-    import importlib.util as imputil
-    spec = imputil.spec_from_file_location(name, path)
-    out = imputil.module_from_spec(spec)
-    sys.modules["sim_clients"] = out
-    spec.loader.exec_module(out)
-    return out
-
-import importlib
-testdir = os.path.dirname(os.path.abspath(__file__))
-simcli = os.path.join(os.path.dirname(testdir), "sim_clients.py")
-sim = import_file(simcli)
+jobdir = Path(os.path.join(tmpdir.name, "jobqueue"))
 
 def setUpModule():
     global loghdlr
@@ -44,7 +32,7 @@ def setUpModule():
     loghdlr.setLevel(logging.DEBUG)
     rootlog.addHandler(loghdlr)
     
-def tearDownModules():
+def tearDownModule():
     global loghdlr
     if loghdlr:
         if rootlog:
@@ -54,11 +42,16 @@ def tearDownModules():
         loghdlr = None
     tmpdir.cleanup()
 
+def dummy_fact(sp, id, log=None):
+    pass
+
 class BasicScannerTest(test.TestCase):
 
     def setUp(self):
         if not os.path.exists(rootdir):
             os.mkdir(rootdir)
+        if not os.path.exists(jobdir):
+            os.mkdir(jobdir)
         self.config = {
             'nextcloud_base_url': 'http://mocknextcloud/nc',
             'webdav': {
@@ -71,7 +64,7 @@ class BasicScannerTest(test.TestCase):
                     'pass': 'pw'
                 }
             },
-            'local_storage_root_dir': rootdir,
+            'local_storage_root_dir': str(rootdir),
             'admin_user': 'admin',
             'authentication': {
                 'user': 'admin',
@@ -79,9 +72,7 @@ class BasicScannerTest(test.TestCase):
             }
         }
 
-        nccli = sim.SimNextcloudApi(rootdir, self.config.get('generic_api',{}))
-        wdcli = sim.SimFMWebDAVClient(rootdir, self.config.get('webdav',{}))
-        self.cli = fm.MIDASFileManagerService(self.config, nccli=nccli, wdcli=wdcli)
+        self.cli = sim.SimMIDASFileManagerService(self.config)
         self.id = "mdst:YYY1"
         self.sp = self.cli.create_space_for(self.id, 'ava1')
         with open(self.sp.root_dir/self.sp.uploads_folder/'junk', 'w') as fd:
@@ -92,8 +83,11 @@ class BasicScannerTest(test.TestCase):
             fd.write("0\n")
 
     def tearDown(self):
+        scan.slow_scan_queue = None
         if os.path.exists(rootdir):
             shutil.rmtree(rootdir)
+        if os.path.exists(jobdir):
+            shutil.rmtree(jobdir)
 
     def test_init_scannable_content(self):
         self.scanner = scan.BasicScanner(self.sp, "fred", scan.basic_skip_patterns)
@@ -123,6 +117,7 @@ class BasicScannerTest(test.TestCase):
         self.assertEqual(len(files), 2)
 
     def test_fast_slow(self):
+        self._set_scan_queue()
         skip = [ re.compile(r"^\."), re.compile(r"^_"), re.compile(r"^EXCLUDE$") ]
         self.scanner = scan.BasicScanner(self.sp, "fred", skip)
         self.assertIs(self.scanner.sp, self.sp)
@@ -130,10 +125,7 @@ class BasicScannerTest(test.TestCase):
         self.assertEqual(self.scanner.space_id, self.id)
         self.assertEqual(self.scanner.user_dir, self.sp.root_dir/self.sp.uploads_folder)
 
-        def dummy_fact(sp, id, log=None):
-            pass
-
-        driver = scan.UserSpaceScanDriver(self.sp, dummy_fact)
+        driver = scan.UserSpaceScanDriver(self.sp, dummy_fact, scan.slow_scan_queue)
         content = driver._init_scan_md(self.scanner.scanid)
         content['contents'] = self.scanner.init_scannable_content()
         self.assertEqual(content['scan_id'], "fred")
@@ -214,19 +206,24 @@ class BasicScannerTest(test.TestCase):
         self.assertEqual(c['contents'][1]['path'], "TRASH/oops")
         self.assertEqual(c['contents'][2]['path'], "junk")
         self.assertEqual(c['accumulated_size'], 2)
-        
+
+    def _set_scan_queue(self):
+        scan.set_slow_scan_queue(jobdir, resume=False)
+        scan.slow_scan_queue.mod = simjobexec
         
     def test_driver(self):
+        self._set_scan_queue()
+        self.assertTrue(scan.slow_scan_queue)
         with open(self.sp.root_dir/self.sp.uploads_folder/'junk', 'w') as fd:
             fd.write("goob\n")
-        driver = scan.UserSpaceScanDriver(self.sp, scan.BasicScanner.create_excludes_skip_scanner)
+        driver = scan.UserSpaceScanDriver(self.sp, scan.BasicScannerFactory, scan.slow_scan_queue)
         scanid = driver.launch_scan()
 
         self.assertTrue(scanid)
         scanfile = self.sp.root_dir/self.sp.system_folder/f"scan-report-{scanid}.json"
         self.assertTrue(scanfile.is_file())
 
-        time.sleep(0.25)
+        time.sleep(0.5)
         with open(scanfile) as fd:
             rep = json.load(fd)
 
@@ -239,11 +236,11 @@ class BasicScannerTest(test.TestCase):
         self.assertEqual(rep['accumulated_size'], 5)
         self.assertIn('checksum', rep['contents'][0])
         self.assertGreater(rep['contents'][0]['last_checksum_date'], rep['contents'][0]['ctime'])
-        
-        
-        
-    
-        
+
+
+
+
+
 
 if __name__ == "__main__":
     test.main()
