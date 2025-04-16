@@ -223,7 +223,8 @@ class BasicScannerTest(test.TestCase):
         scanfile = self.sp.root_dir/self.sp.system_folder/f"scan-report-{scanid}.json"
         self.assertTrue(scanfile.is_file())
 
-        time.sleep(0.5)
+        #time.sleep(0.5)
+        driver.scanq.runner.runthread.join(2.0)
         with open(scanfile) as fd:
             rep = json.load(fd)
 

@@ -24,21 +24,6 @@ tmpdir = tempfile.TemporaryDirectory(prefix="_test_fm_service.")
 rootdir = Path(os.path.join(tmpdir.name, "fmdata"))
 jobdir = Path(os.path.join(tmpdir.name, "jobqueue"))
 
-# def import_file(path, name=None):
-#     if not name:
-#         name = os.path.splitext(os.path.basename(path))[0]
-#     import importlib.util as imputil
-#     spec = imputil.spec_from_file_location(name, path)
-#     out = imputil.module_from_spec(spec)
-#     sys.modules["sim_clients"] = out
-#     spec.loader.exec_module(out)
-#     return out
-
-# import importlib
-# testdir = os.path.dirname(os.path.abspath(__file__))
-# simcli = os.path.join(testdir, "sim_clients.py")
-# sim = import_file(simcli)
-
 def tearDownModules():
     tmpdir.cleanup()
 

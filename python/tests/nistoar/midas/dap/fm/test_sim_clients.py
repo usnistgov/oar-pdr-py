@@ -7,26 +7,10 @@ from copy import deepcopy
 import requests
 
 from nistoar.midas.dap.fm.exceptions import *
-
-# from . import sim_clients as sim
+from nistoar.midas.dap.fm import sim
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_sim_clients.")
 rootdir = Path(os.path.join(tmpdir.name, "fmdata"))
-
-def import_file(path, name=None):
-    if not name:
-        name = os.path.splitext(os.path.basename(path))[0]
-    import importlib.util as imputil
-    spec = imputil.spec_from_file_location(name, path)
-    out = imputil.module_from_spec(spec)
-    sys.modules["sim_clients"] = out
-    spec.loader.exec_module(out)
-    return out
-
-import importlib
-testdir = os.path.dirname(os.path.abspath(__file__))
-simcli = os.path.join(testdir, "sim_clients.py")
-sim = import_file(simcli)
 
 class SimNextcloudApiTest(test.TestCase):
 
