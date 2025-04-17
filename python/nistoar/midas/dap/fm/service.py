@@ -15,6 +15,7 @@ import os, logging, json
 from logging import Logger
 from copy import deepcopy
 from pathlib import Path
+from collections import OrderedDict
 from collections.abc import Mapping
 from urllib.parse import urljoin
 
@@ -24,7 +25,7 @@ from webdav3.exceptions import WebDavException
 from .clients import NextcloudApi, FMWebDAVClient
 from .exceptions import *
 from nistoar.base.config import merge_config, ConfigurationException
-from nistoar.pdr.utils import read_json
+from nistoar.pdr.utils import read_json, write_json
 
 class MIDASFileManagerService:
     """
@@ -194,7 +195,7 @@ class MIDASFileManagerService:
             # space.set_permissions_for(space.system_folder, userid, PERM_READ)
             space.set_permissions_for(space.uploads_folder, foruser, PERM_ALL)
 
-        space.uploads_file_id
+        space._set_creator(foruser)  # side-effect: sets the uploads directory file id
         return space
 
     def space_exists(self, id: str):
@@ -260,12 +261,22 @@ perm_name = {
     PERM_ALL:    "All"
 }
 
+_NO_FM_SUMMARY = OrderedDict([
+    ("file_count", -1),
+    ("folder_count", -1),
+    ("usage", -1),
+    ("syncing", "unsynced"),
+    ("last_modified", "(unknown)"),
+    ("last_scan_id", None)
+])
+
 class FMSpace:
     """
     an encapsulation of a file space in the file manager.  
     """
     trash_folder = "TRASH"
     exclude_folder = "EXCLUDE"
+    summary_file_name = "space_summary.json"
 
     PERM_NONE   = PERM_NONE
     PERM_READ   = PERM_READ
@@ -378,6 +389,9 @@ class FMSpace:
             out['gui_url'] = self._make_gui_url(out['fileid'])
         return out
 
+    def _make_gui_url(self, ncresid):
+        return f"{self.svc._ncfilesurl}/{ncresid}?dir={self.uploads_davpath}"
+
     def resource_exists(self, resource: str):
         """
         return True if the named resource exists in the space
@@ -389,9 +403,66 @@ class FMSpace:
             path = os.sep.join(resource.split('/'))
             return (self.root_dir / path).exists()
 
-    def _make_gui_url(self, ncresid):
-        return f"{self.svc._ncfilesurl}/{ncresid}?dir={self.uploads_davpath}"
+    def _load_summary(self):
+        sumfile = self.root_dir/self.system_folder/self.summary_file_name
+        if sumfile.is_file():
+            out = read_json(sumfile)
+        else:
+            out = deepcopy(_NO_FM_SUMMARY)
+            out['uploads_dir_id'] = self.uploads_file_id
+            self._cache_fm_summary(out)
+        return out
 
+    def summarize(self):
+        """
+        return a metadata object that summarizes the state of the space.  The properties can include:
+        
+        ``file_count``
+            the number of files currently found in the space's uploads folder (as a result of 
+            the last scan).  A negative value indicates the count is unknown (because the scan
+            has not happened yet.
+        ``folder_count``
+            the number of sub-folders currently found in the space's uploads folder (as a result of 
+            the last scan).  A negative value indicates the count is unknown (because the scan
+            has not happened yet.
+        ``usage``
+            the total number of bytes stored as files under the uploads folder
+        ``syncing``
+            the state of scanning: "unsynced", "synced", or "syncing"
+        ``last_scan_id``
+            the ID of the last file scan that was done.  Use this to retrieve the data resulting 
+            from the scan via :py:meth:`get_scan`.
+        ``last_scan_datetime``
+            the ISO-formatted date of the last file scan
+        ``uploads_dir_id``
+            the nextcloud file identifier for the uploads directory (see :py:prop:`uploads_file_id`
+        """
+        out = self._load_summary()
+        try:
+            if out.get('last_scan_id') and out.get('syncing') == "syncing":
+                # determine if syncing has finished
+                scanmd = self.get_scan(out['last_scan_id'])
+                self._update_summary_from_scan(scanmd, out)
+        except Exception as ex:
+            self.log.error("trouble reading last scan data: "+str(ex))
+
+        return out
+
+    def _cache_fm_summary(self, summary):
+        sumfile = self.root_dir/self.system_folder/self.summary_file_name
+        try:
+            write_json(summary, sumfile)
+        except Exception as ex:
+            self.log.error("trouble caching space summary data: "+str(ex))
+
+    def _set_creator(self, userid: str):
+        """
+        cache (as part of the summary) a user as the creator of the space
+        """
+        summary = self._load_summary()
+        summary['created_by'] = userid
+        self._cache_fm_summary(summary)
+            
     def get_permissions_for(self, resource: str, userid: str):
         """
         return the permission level on the specified resource assigned to the given user.
@@ -521,7 +592,27 @@ class FMSpace:
         except Exception as ex:
             raise FileManagerScanException("failure while reading initial report: "+str(ex)) from ex
 
+        try:
+            self._update_summary_from_scan(out)
+        except Exception as ex:
+            self.log.error("Trouble updating summary info from scan: "+str(ex))
+
         return out
+
+    def _update_summary_from_scan(self, scanmd, summary=None):
+        if not summary:
+            summary = self._load_summary()
+        if 'scan_id' in scanmd:
+            summary["last_scan_id"] = scanmd['scan_id']
+            summary['last_scan_started'] = scanmd.get('scan_datetime', 'unknown')
+        summary['syncing'] = "syncing" if scanmd.get('in_progress') else "synced"
+        files = [f for f in scanmd.get('contents',[]) if f.get('resource_type', 'file') == 'file']
+        summary['file_count'] = len(files)
+        summary['folder_count'] = len([f for f in scanmd.get('contents',[])
+                                         if f.get('resource_type', 'file') == 'folder'])
+        summary['usage'] = sum(f.get('size', 0) for f in files)
+
+        self._cache_fm_summary(summary)
 
     def _get_scan_queue(self, jobdir=None):
         from .scan import base as scan

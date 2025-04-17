@@ -179,6 +179,13 @@ class MIDASFileManagerServiceTest(test.TestCase):
         
         self.assertEqual(sp.uploads_file_id, "100")
 
+        md = sp.summarize()
+        self.assertEqual(md['uploads_dir_id'], "100")  # simulated value
+        self.assertEqual(md['file_count'], -1)
+        self.assertEqual(md['folder_count'], -1)
+        self.assertEqual(md['created_by'], 'ava1')
+        self.assertEqual(md['syncing'], 'unsynced')
+
     def _set_scan_queue(self):
         scan.set_slow_scan_queue(jobdir, resume=False)
         scan.slow_scan_queue.mod = simjobexec
@@ -203,6 +210,13 @@ class MIDASFileManagerServiceTest(test.TestCase):
         self.assertEqual(scmd['scan_id'], scid)
         self.assertEqual(scmd.get('space_id'), id)
         self.assertEqual(len(scmd['contents']), 0)
+
+        md = sp.summarize()
+        self.assertEqual(md['uploads_dir_id'], "100")  # simulated value
+        self.assertEqual(md['file_count'], 0)
+        self.assertEqual(md['folder_count'], 0)
+        self.assertEqual(md['created_by'], 'ava1')
+        self.assertEqual(md['syncing'], 'synced')
 
         sp.delete_scan(scid)
         repfile = sp.root_dir/sp.system_folder/sp.scan_report_filename_for(scid)
