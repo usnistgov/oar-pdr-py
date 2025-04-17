@@ -129,6 +129,11 @@ class MIDASFileManagerServiceTest(test.TestCase):
         self.assertTrue(sp.resource_exists(id+"/EXCLUDE"))
         self.assertTrue(sp.resource_exists(id+"/TRASH"))
 
+        self.assertEqual(sp.creator, 'ava1')
+        self.assertEqual(sp.get_known_users(), ['ava1'])
+        sp._add_user('goober')
+        self.assertEqual(sp.get_known_users(), ['ava1', 'goober'])
+
         sp = self.cli.get_space(id)
         self.assertTrue(isinstance(sp, fm.FMSpace))
         self.assertEqual(sp.id, id)

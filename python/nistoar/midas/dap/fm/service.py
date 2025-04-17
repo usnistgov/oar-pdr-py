@@ -11,12 +11,13 @@ This implementation assumes that it has direct access to storage (for scanning p
 space manipulation is done through the Nextcloud's generic and WebDAV APIs using an administrative,
 functional identity.  
 """
-import os, logging, json
+import os, logging, json, re
 from logging import Logger
 from copy import deepcopy
 from pathlib import Path
 from collections import OrderedDict
 from collections.abc import Mapping
+from typing import List
 from urllib.parse import urljoin
 
 import requests
@@ -115,6 +116,8 @@ class MIDASFileManagerService:
             wdcli = self.make_webdav_client(nccli.base_url)
         self.wdcli = wdcli
 
+        self.spaceid_pats = [re.compile(p) for p in self.cfg.get('space_id_patterns', [':'])]
+
     def make_webdav_client(self, generic_url: str=None, _override=None):
         """
         create an :py:class:`~nistoar.midas.dap.fm.clients.FMWebDAVClient` according to the 
@@ -198,7 +201,7 @@ class MIDASFileManagerService:
         space._set_creator(foruser)  # side-effect: sets the uploads directory file id
         return space
 
-    def space_exists(self, id: str):
+    def space_exists(self, id: str) -> bool:
         """
         return True if space for the given DAP record ID exists already
         """
@@ -206,6 +209,15 @@ class MIDASFileManagerService:
             return (self._root_dir / id).exists()
         return self.wdcli.is_directory(id)
 
+    def space_ids(self) -> List[str]:
+        """
+        return the list of identifiers for the existing spaces
+        """
+        if not self.root_dir:
+            return []
+        return [d for d in os.listdir(self.root_dir) if not d.startswith('.') and 
+                                                        not d.startswith("_") and
+                                                        any([p.search(d) for p in self.spaceid_pats])]
     def get_space(self, id: str):
         """
         return the space that has been set up for the DAP with the given record ID
@@ -461,8 +473,23 @@ class FMSpace:
         """
         summary = self._load_summary()
         summary['created_by'] = userid
+        summary.setdefault('users', [])
+        if userid not in summary['users']:
+            summary['users'].append(userid)
         self._cache_fm_summary(summary)
+
+    @property
+    def creator(self):
+        summary = self._load_summary()
+        return summary.get('created_by', '')
             
+    def get_known_users(self):
+        """
+        return a list of IDs for users known to have permissions on this space
+        """
+        summary = self._load_summary()
+        return summary.get('users', [])
+
     def get_permissions_for(self, resource: str, userid: str):
         """
         return the permission level on the specified resource assigned to the given user.
@@ -505,7 +532,19 @@ class FMSpace:
             raise ValueError(f"perm: code not recognized: {perm}")
 
         self.svc.ensure_user(userid)
+        self._add_user(userid)
         self.svc.nccli.set_user_permissions(userid, perm, self.root_davpath+'/'+resource)
+
+    def _add_user(self, userid):
+        """
+        cache (as part of the summary) a user as the creator of the space
+        """
+        summary = self._load_summary()
+        summary.setdefault('users', [])
+        if userid not in summary['users']:
+            summary['users'].append(userid)
+        self._cache_fm_summary(summary)
+        
 
     _scan_report_tmpl = "scan-report-%s.json"
     def scan_report_filename_for(self, scanid):
