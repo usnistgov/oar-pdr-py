@@ -35,7 +35,7 @@ def define_options(progname):
                              "execution envelope will upgrade the state file on exit")
     parser.add_argument('-l', '--log-file', type=str, metavar="FILE", dest='logfile', default=None,
                         help="Send log messages to the specified FILE; can be used with -L")
-    parser.add_argument('args', action='append', metavar="ARG",
+    parser.add_argument('args', action='append', metavar="ARG", nargs='*',
                         help="Extra arguments to pass into the processor function")
 
     return parser

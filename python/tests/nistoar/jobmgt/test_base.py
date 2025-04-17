@@ -300,7 +300,7 @@ class TestJobRunner(test.TestCase):
 
         self.runner.cfg['capture_logging'] = True
         self.runner.trigger()
-        time.sleep(0.3)
+        self.runner.runthread.join(5)
         self.assertEqual(self.queue.qsize(), 0)
         self.assertEqual(self.runner.processed, 2)
         
@@ -365,7 +365,8 @@ class TestJobQueue(test.TestCase):
         self.assertEqual(self.jobq.pending, 2)
 
         self.jobq.run_queued()
-        time.sleep(0.3)
+        self.jobq.runner.runthread.join(5)
+        # time.sleep(0.3)
         self.assertEqual(self.jobq.processed, 2)
         self.assertEqual(self.jobq.pending, 0)
 
@@ -380,13 +381,15 @@ class TestJobQueue(test.TestCase):
         self.assertEqual(self.jobq.processed, 0)
         self.assertEqual(self.jobq.pending, 0)
 
+        self.jobq.runner.cfg['capture_logging'] = True
+        
         job1 = jobmgt.Job("nistoar.jobmgt.testproc", "pdr0-XXXX")
         job1.save_to(jobmgt.job_state_file(self.jobdir, "pdr0-XXXX"))
         job2 = jobmgt.Job("nistoar.jobmgt.testproc", "pdr0-YYYY")
         job2.save_to(jobmgt.job_state_file(self.jobdir, "pdr0-YYYY"))
         self.jobq.submit("pdr0:XX02")
 
-        time.sleep(0.25)
+        self.jobq.runner.runthread.join()
         self.assertTrue((self.jobdir/"pdr0:XX02.json").is_file())
         self.assertEqual(self.jobq.processed, 1)
         self.assertEqual(self.jobq.pending, 0)
@@ -396,7 +399,7 @@ class TestJobQueue(test.TestCase):
         self.assertEqual(self.jobq.pending, 2)
 
         self.jobq.run_queued()
-        time.sleep(0.25)
+        self.jobq.runner.runthread.join()
         self.assertEqual(self.jobq.processed, 3)
         self.assertEqual(self.jobq.pending, 0)
 
