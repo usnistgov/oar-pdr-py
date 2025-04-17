@@ -472,6 +472,8 @@ class JobRunner:
         self.cfg = config
         self._thdata = threading.local()
         self.processed = 0
+        self.cleanup = None
+        self.setup = None
 
     async def _launch_job(self, job: Job):
 
@@ -585,12 +587,20 @@ class JobRunner:
     def _run(self):
         if not self.jq.empty():
             try:
+                if self.setup:
+                    self.log.debug("Executing queue set-up")
+                    self.setup(self.log)
+
                 self.log.debug("Starting queue processing with %d job%s",
                                self.jq.qsize(), "s" if self.jq.qsize() != 1 else "")
                 processed = asyncio.run(self._drain_queue())
                 self.log.debug("Finished processing %d job%s from queue",
                                processed, "s" if processed != 1 else "")
                 self.processed += processed
+
+                if self.cleanup:
+                    self.log.debug("Executing queue clean-up")
+                    self.setup(self.log)
             except Exception as ex:
                 self.log.exception("Failure managing queue execution: "+str(ex))
 
