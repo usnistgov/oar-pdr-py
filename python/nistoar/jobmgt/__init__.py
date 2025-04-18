@@ -667,7 +667,7 @@ class JobRunner:
 
                 if self.cleanup:
                     self.log.debug("Executing queue clean-up")
-                    self.setup(self.log)
+                    self.cleanup(self.log)
             except Exception as ex:
                 self.log.exception("Failure managing queue execution: "+str(ex))
 
