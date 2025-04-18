@@ -43,8 +43,8 @@ class MIDASFileManagerServiceTest(test.TestCase):
                 'service_endpoint': 'http://mockservice/api',
             },
             'authentication': {
-                'client_cert_path': certpath,
-                'client_key_path':  keypath
+                'client_cert_path': str(certpath),
+                'client_key_path':  str(keypath)
             },
             'local_storage_root_dir': str(rootdir),
             'admin_user': 'admin',

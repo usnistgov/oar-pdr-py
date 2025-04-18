@@ -169,6 +169,8 @@ class BasicScannerTest(test.TestCase):
         self.assertEqual(c['contents'][0]['path'], "TRASH")
         self.assertEqual(c['contents'][1]['path'], "TRASH/oops")
         self.assertEqual(c['contents'][2]['path'], "junk")
+        self.assertIn('checksum', content['contents'][2])
+        self.assertIn('last_checksum_date', content['contents'][2])
 
         # TRASH folder
         fmd = c['contents'][0]
@@ -234,6 +236,7 @@ class BasicScannerTest(test.TestCase):
         self.assertEqual(len(rep['contents']), 1)
         self.assertEqual(rep['contents'][0]['path'], "junk")
         self.assertEqual(rep['contents'][0]['size'], 5)
+        self.assertTrue(rep['contents'][0]['checksum'])
         self.assertEqual(rep['accumulated_size'], 5)
         self.assertIn('checksum', rep['contents'][0])
         self.assertGreater(rep['contents'][0]['last_checksum_date'], rep['contents'][0]['ctime'])

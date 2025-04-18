@@ -213,11 +213,11 @@ class MIDASFileManagerService:
         """
         return the list of identifiers for the existing spaces
         """
-        if not self.root_dir:
+        if not self._root_dir:
             return []
-        return [d for d in os.listdir(self.root_dir) if not d.startswith('.') and 
-                                                        not d.startswith("_") and
-                                                        any([p.search(d) for p in self.spaceid_pats])]
+        return [d for d in os.listdir(self._root_dir) if not d.startswith('.') and 
+                                                         not d.startswith("_") and
+                                                         any([p.search(d) for p in self.spaceid_pats])]
     def get_space(self, id: str):
         """
         return the space that has been set up for the DAP with the given record ID
@@ -271,6 +271,14 @@ perm_name = {
     PERM_DELETE: "Delete",
     PERM_SHARE:  "Share",
     PERM_ALL:    "All"
+}
+perm_code = {
+    perm_name[PERM_NONE]:   PERM_NONE,
+    perm_name[PERM_READ]:   PERM_READ,
+    perm_name[PERM_WRITE]:  PERM_WRITE,
+    perm_name[PERM_DELETE]: PERM_DELETE,
+    perm_name[PERM_SHARE]:  PERM_SHARE,
+    perm_name[PERM_ALL]:    PERM_ALL
 }
 
 _NO_FM_SUMMARY = OrderedDict([
@@ -422,6 +430,7 @@ class FMSpace:
         else:
             out = deepcopy(_NO_FM_SUMMARY)
             out['uploads_dir_id'] = self.uploads_file_id
+            out['id'] = self.id
             self._cache_fm_summary(out)
         return out
 
@@ -518,6 +527,27 @@ class FMSpace:
                 return data['permissions']
 
         return PERM_NONE
+
+    def get_permissions(self, resource: str):
+        """
+        return permissions for all known users set on the specified resource.  This uses 
+        :py:meth:`get_known_users` to generate a dictionary of users to permissions.
+
+        :param str resource:  the path to the resource relative to the space's root folder
+        :return:  a dictionary whose keys are user IDs and values are the integer-valued 
+                  permissions assigned to each.
+        """
+        out = {}
+        for userid in self.get_known_users():
+            try:
+                out[userid] = self.get_permissions_for(resource, userid)
+            except Exception as ex:
+                self.log.warning("Trouble accessing permissions for user %s: %s", userid, str(ex))
+
+        if not out and self.creator:
+            raise FileManagerException("Failed to generate permissions on " + resource)
+
+        return out
         
 
     def set_permissions_for(self, resource: str, userid: str, perm: int):
@@ -529,7 +559,7 @@ class FMSpace:
         :param int     perm:  the permission level code to set
         """
         if perm not in perm_name:
-            raise ValueError(f"perm: code not recognized: {perm}")
+            raise ValueError(f"perm: code not recognized/supported: {perm}")
 
         self.svc.ensure_user(userid)
         self._add_user(userid)
