@@ -203,6 +203,8 @@ class Job:
         persist the job state data to the given file
         """
         write_json(self.info, outfile)
+        if not self.source:
+            self.source = outfile
 
     def enable_relaunch(self, onoff=True):
         """
@@ -245,6 +247,38 @@ class Job:
         self.mark_complete(-1, completetime, runtime, errors)
         self.info['state'] = KILLED
 
+    def mark_relaunch(self, args: List[str]=None, config: Mapping=None, priority: int=None):
+        """
+        mark that this job should be relaunched again after completing this run with the 
+        given parameters.  (See also :py:meth:`pop_relaunch_job`.)
+        """
+        info = self.info
+        while info.get('relaunch'):
+            info = info.get('relaunch')
+        relaunch = deepcopy(info)
+        relaunch['state'] = PENDING
+        if args is not None:
+            relaunch['args'] = args
+        if config is not None:
+            relaunch['config'] = config
+        if priority is not None:
+            relaunch['priority'] = priority
+        info['relaunch'] = relaunch
+
+    def pop_relaunch_job(self):
+        """
+        if this Job was marked to be relaunched, return a new relaunch version of it.
+        Meanwhile, the current job is unmarked for relaunching.  This facility prevents 
+        running multiple jobs on the same data (see :py:meth:`mark_relaunch`).
+        """
+        if not self.info.get('relaunch'):
+            return None
+        relaunch = self.info['relaunch']
+        del self.info['relaunch']
+
+        return Job.from_state(relaunch)
+                      
+
 class FatalError(Exception):
     def __init__(self, msg, exitcode: int=10):
         super(FatalError, self).__init__(msg)
@@ -257,7 +291,13 @@ def job_state_file(dir: Path, dataid: str):
 
 class JobQueue:
     """
-    an ordered view of a list of jobs
+    a queue front-end for executing Jobs.  This class encapsulates both the scheduling and the 
+    execution of the jobs: (eventually) executing a job is a matter of adding it to the queue 
+    (via :py:meth:`submit`).  
+
+    Internally, a ``JobQueue`` contains an instance of a :py:class:`JobRunner` that handles the 
+    execution.  By default, the ``JobRunner`` is triggered to start processing the queue when a 
+    ``Job`` is placed on the queue via :py:meth:`submit` (if it is not processing already).  
     """
     def __init__(self, queuename: str, queuedir: Union[Path,str], execmodule: Union[ModuleType,str],
                  config: Mapping=None, log: Logger=None, resume: bool=True):
@@ -270,6 +310,7 @@ class JobQueue:
             config = {}
         self.cfg = config
         self.relaunchable = True
+        self._requeueable = False
         if not log:
             log = logging.getLogger(queuedir.name)
         self.log = log
@@ -348,24 +389,22 @@ class JobQueue:
         :param [str]  args:  the arguments to pass to the job process when launched
         :param dict config:  the configuration data to pass into the job when launched
         """
-        queueit = True
+        if args is None:
+            args = []
         statefile = job_state_file(self.qdir, dataid)
         if statefile.is_file():
-            job = Job.from_state_file(statefile)
-            if job.state == RUNNING:
-                # don't add if it is already running
-                if self.relaunchable and not job.info['relaunch']:
-                    # mark it to be relaunched after it has completed
-                    job.info['relaunch'] = True
-                    job.info['priority'] = priority
-                    if args:
-                        job.info['args'] = args
-                    if config:
-                        job.info['config'] = config
-                    job.save_to(statefile)
+            dosave = False
+            with LockedFile(statefile) as fd:
+                job = Job.from_state(json.load(fd))
+                if job.state in [RUNNING, PENDING]:
+                    # already operating on this data don't requeue
+                    if self.relaunchable and job.info.get('args',[]) != args:
+                        job.mark_relaunch(args, config, priority)
+                        dosave = True
+            if dosave:
+                job.save_to(statefile)
+            if job.state in [RUNNING, PENDING]:
                 return
-            elif job.state == PENDING:
-                queueit = False
 
         jcfg = OrderedDict(self.cfg.get('default_job_config', {}))
         if config:
@@ -376,8 +415,7 @@ class JobQueue:
         job.save_to(statefile)
 
         # add to in-memory job queue
-        if queueit:
-            self.pq.put_nowait(job)
+        self.pq.put_nowait(job)
         if trigger:
             self.run_queued()
 
@@ -457,6 +495,29 @@ class JobQueue:
 class JobRunner:
     """
     a class that executes Jobs in a queue via a dedicated thread.
+
+    A ``JobRunner`` will asynchronously process the jobs in a queue when :py:meth:`trigger` is called.  
+    Each job is executed in a separate process, and the runner uses a separate thread to launch and
+    monitor the jobs.  The execution thread will run until the queue is empty and will not start again
+    until :py:meth:`trigger` is re-called.  
+
+    This class looks for the following configuration parameters:
+
+    ``python_exe``
+         (str) _optional_.  The path to the python executable to use to execute the jobs as a subprocess.
+    ``capture_logging``
+         (bool) _optional_.  If True, the subprocess will set to send its log messages to standard output, 
+         and this runner will capture that output to the runner's log.  If False (default), any thing
+         that goes to the subprocesses standard output will be ignored. 
+    ``logdir``
+         (str) _optional_.  The path to a directory where a logfile from the job can be written.  (An 
+         absolute path is recommended.)  If set, the subprocess will be set to send its log messages to
+         a file in this directory with a name matching the data identifier for the job (with a ".log"
+         extension).  This can be used with ``capture_loggging`` to send log messages to both places.
+    ``maxsim``
+         (int) _optional_.  The maximum number of jobs to process simultaneously (default: 5).  Note 
+         that a feature of this system is not to run jobs running on the same data (as specified 
+         by its data ID) simultaneously.
     """
 
     def __init__(self, qname: str, jobdir: Path, jobq: queue.Queue, log: Logger=None, config: Mapping=None):
@@ -476,6 +537,10 @@ class JobRunner:
         self.setup = None
 
     async def _launch_job(self, job: Job):
+        # mark its state as running
+        if job.source:
+            job.mark_running(-1)  # pid will be replaced after the process actually starts
+            job.save_to(job.source)
 
         pyexe = self.cfg.get("python_exe", "python")
         if not os.path.isabs(pyexe):
@@ -548,16 +613,18 @@ class JobRunner:
                     job = self.jq.get()
                     proc = None
                     try:
+                        if job.source and job.source.is_file():
+                            job = Job.from_state_file(job.source)
                         proc = await self.runner._launch_job(job)
                         ec = await proc.wait()
                         self.processed += 1
                         if job.source and job.source.is_file():
                             job = Job.from_state_file(job.source)
                         if job.info.get('relaunch'):
-                            job.enable_relaunch(False)
-                            job.info['state'] == PENDING
-                            job.save_to(job.source)
-                            self.jq.put_nowait(job)
+                            relaunch = job.pop_relaunch_job()
+                            if job.source:
+                                relaunch.save_to(job.source)
+                            self.jq.put_nowait(relaunch)
                     except asyncio.CancelledError:
                         self.runner.log.warning("Monitor %s task cancelled; shutting down job",
                                                 self.runner.qname)

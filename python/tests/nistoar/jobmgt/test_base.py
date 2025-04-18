@@ -185,6 +185,7 @@ class TestJob(test.TestCase):
         self.assertEqual(str(jobmgt.job_state_file(tmpdir.name, "goob")),
                          os.path.join(tmpdir.name, "goob.json"))
         self.job.save_to(jobmgt.job_state_file(tmpdir.name, self.job.data_id))
+        self.assertIsNotNone(self.job.source)  # was saved above
 
         jobfile = os.path.join(tmpdir.name, self.job.data_id+".json")
         self.assertTrue(os.path.isfile(jobfile))
@@ -198,7 +199,6 @@ class TestJob(test.TestCase):
         self.assertEqual(jobdata['args'], self.args)
         self.assertTrue(isinstance(jobdata['reqtime'], float))
         self.assertGreater(jobdata['reqtime'], 0)
-        self.assertIsNone(self.job.source)
 
         job = jobmgt.Job.from_state(jobdata)
         self.assertEqual(job.info['execmodule'], "goob")
@@ -360,18 +360,31 @@ class TestJobQueue(test.TestCase):
         self.assertEqual(job.state, jobmgt.PENDING)
         self.assertEqual(job.info.get('execmodule'), "nistoar.jobmgt.testproc")
 
+        # test not-relaunchability
         self.jobq.submit("pdr0:XX02", priority=1, trigger=False)
         self.assertEqual(self.jobq.processed, 0)
         self.assertEqual(self.jobq.pending, 2)
+        job = jobmgt.Job.from_state_file(self.jobdir/"pdr0:XX02.json")
+        self.assertTrue(not job.info.get('relaunch'))
+
+        # will be relaunched if with different args
+        self.jobq.submit("pdr0:XX02", args=["1"], priority=1, trigger=False)
+        self.assertEqual(self.jobq.processed, 0)
+        self.assertEqual(self.jobq.pending, 2)
+        job = jobmgt.Job.from_state_file(self.jobdir/"pdr0:XX02.json")
+        self.assertTrue(job.info.get('relaunch'))
+        self.assertTrue(not job.info['relaunch'].get('relaunch'))
 
         self.jobq.run_queued()
         self.jobq.runner.runthread.join(5)
         # time.sleep(0.3)
-        self.assertEqual(self.jobq.processed, 2)
         self.assertEqual(self.jobq.pending, 0)
+        self.assertEqual(self.jobq.processed, 3)
 
         self.assertTrue((self.jobdir/"pdr0:XX01.json").exists())
         self.assertTrue((self.jobdir/"pdr0:XX02.json").exists())
+        job = jobmgt.Job.from_state_file(self.jobdir/"pdr0:XX02.json")
+        self.assertTrue(not job.info.get('relaunch'))
 
         self.jobq.clean(0)
         self.assertTrue(not (self.jobdir/"pdr0:XX01.json").exists())
