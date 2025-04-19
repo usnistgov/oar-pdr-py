@@ -12,7 +12,7 @@ from nistoar.midas.dap.fm.exceptions import *
 from nistoar.base.config import ConfigurationException
 from nistoar.midas.dap.fm import sim
 from nistoar import jobmgt 
-from nistoar.midas.dap.fm.scan import base as scan, simjobexec
+from nistoar.midas.dap.fm.scan import base as scan, simjobexec, BasicScanner, BasicScannerFactory
 
 execdir = Path(__file__).parents[0]
 datadir = execdir.parents[1] / 'data'
@@ -31,6 +31,7 @@ def setUpModule():
     loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_scan.log"))
     loghdlr.setLevel(logging.DEBUG)
     rootlog.addHandler(loghdlr)
+    rootlog.setLevel(logging.DEBUG)
     
 def tearDownModule():
     global loghdlr
@@ -90,7 +91,7 @@ class BasicScannerTest(test.TestCase):
             shutil.rmtree(jobdir)
 
     def test_init_scannable_content(self):
-        self.scanner = scan.BasicScanner(self.sp, "fred", scan.basic_skip_patterns)
+        self.scanner = BasicScanner(self.sp, "fred", scan.basic_skip_patterns)
         files = self.scanner.init_scannable_content()
         names = [f['path'] for f in files]
         self.assertIn("junk", names)
@@ -105,8 +106,8 @@ class BasicScannerTest(test.TestCase):
         self.assertIn("TRASH/oops", names)
         self.assertEqual(len(files), 1)
 
-        self.scanner = scan.BasicScanner(self.sp, "fred",
-                                         [re.compile(r"^\."), re.compile(r"^_"), re.compile(r"^TRASH")])
+        self.scanner = BasicScanner(self.sp, "fred",
+                                    [re.compile(r"^\."), re.compile(r"^_"), re.compile(r"^TRASH")])
         files = self.scanner.init_scannable_content()
         names = [f['path'] for f in files]
         self.assertIn("junk", names)
@@ -119,7 +120,7 @@ class BasicScannerTest(test.TestCase):
     def test_fast_slow(self):
         self._set_scan_queue()
         skip = [ re.compile(r"^\."), re.compile(r"^_"), re.compile(r"^EXCLUDE$") ]
-        self.scanner = scan.BasicScanner(self.sp, "fred", skip)
+        self.scanner = BasicScanner(self.sp, "fred", skip)
         self.assertIs(self.scanner.sp, self.sp)
         self.assertEqual(self.scanner.scanid, "fred")
         self.assertEqual(self.scanner.space_id, self.id)
@@ -218,7 +219,7 @@ class BasicScannerTest(test.TestCase):
         self.assertTrue(scan.slow_scan_queue)
         with open(self.sp.root_dir/self.sp.uploads_folder/'junk', 'w') as fd:
             fd.write("goob\n")
-        driver = scan.UserSpaceScanDriver(self.sp, scan.BasicScannerFactory, scan.slow_scan_queue)
+        driver = scan.UserSpaceScanDriver(self.sp, BasicScannerFactory, scan.slow_scan_queue)
         scanid = driver.launch_scan()
 
         self.assertTrue(scanid)

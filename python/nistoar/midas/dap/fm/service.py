@@ -646,7 +646,7 @@ class FMSpace:
         scanq = self._get_scan_queue()
 
         if type == 'basic':
-            driver = scan.UserSpaceScanDriver(self, scan.BasicScannerFactory,
+            driver = scan.UserSpaceScanDriver(self, scan.DefaultScannerFactory,
                                               scanq, self.log.getChild("basicscan"))
         else:
             raise scan.FileManagerScanException("unrecognized scan type requested: "+type)
@@ -684,7 +684,7 @@ class FMSpace:
         self._cache_fm_summary(summary)
 
     def _get_scan_queue(self, jobdir=None):
-        from .scan import base as scan
+        from .scan import base as scan   # need base to manipulate slow_scan_queue
         if not scan.slow_scan_queue:
             qcfg = self.svc.cfg.get('scan_queue', {})
             if not jobdir:

@@ -6,3 +6,8 @@ scan files and extract metadata.  This can be as simple as file sizes and checks
 complex to include format detection and format-specific metadata extraction.  
 """
 from .base import *
+from .basic import BasicScanner, BasicScannerFactory
+
+DefaultScannerFactory = BasicScannerFactory
+
+
