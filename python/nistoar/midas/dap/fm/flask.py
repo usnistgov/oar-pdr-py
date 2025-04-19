@@ -295,7 +295,7 @@ class SpacePermsResource(Resource):
         try:
             sp = svc.get_space(id)
             for user in rec:
-                perm = perm_code[rec[user]]
+                perm = fmservice.perm_code[rec[user]]
                 sp.set_permissions_for(sp.uploads_folder, user, perm)
 
         except FileManagerResourceNotFound as ex:
@@ -317,6 +317,6 @@ def SpacesBlueprint():
     api.add_resource(SpaceResource, '/spaces/<string:id>')
     api.add_resource(SpaceScansResource, '/spaces/<string:id>/scans')
     api.add_resource(SpaceScanReportResource, '/spaces/<string:spaceid>/scans/<string:scanid>')
-    api.add_resource(SpacePermsResource, '/spaces/<string:spaceid>/perms')
+    api.add_resource(SpacePermsResource, '/spaces/<string:id>/perms')
     return bp
 
