@@ -12,6 +12,7 @@ from flask_restful import Api, Resource, url_for
 
 from nistoar.base.config import configure_log, ConfigurationException
 from nistoar.midas.dap.fm import service as fmservice
+from nistoar.midas.dap.fm.exceptions import *
 
 class AuthHandler(ABC):
     """
@@ -124,13 +125,13 @@ def make_error_response(message: str, code: int, intent: str=None):
 def server_error(message: str=None, intent: str=None, code: int=500):
     if not message:
         message = "Internal server error"
-    return make_error_resonse(message, code, intent)
+    return make_error_response(message, code, intent)
 
 def not_found(message: str, intent: str=None, code: int=404):
-    return make_error_resonse(message, code, intent)
+    return make_error_response(message, code, intent)
 
 def bad_input(message: str, intent: str=None, code: int=400):
-    return make_error_resonse(message, code, intent)
+    return make_error_response(message, code, intent)
 
 class SpacesResource(Resource):
     """
@@ -145,7 +146,24 @@ class SpacesResource(Resource):
         return svc.space_ids()
 
     @auth.authorization_required
+    def head(self):
+        """
+        test that this service is available
+        """
+        if current_app.service.test():
+            return "", 200
+        return "", 500
+
+    @auth.authorization_required
     def post(self):
+        """
+        create a new file manager space.  The input is a JSON object that must contain two properties:
+        
+        ``id``
+             the identifier to assign to the space
+        ``foruser``
+             the identifier for the user that will need full access permissions on the space
+        """
         svc = current_app.service
         rec = request.json
         if not rec:
@@ -161,14 +179,14 @@ class SpacesResource(Resource):
             return sp.summarize()
 
         except FileManagerOpConflict as ex:
-            return make_error_response(str(ex), 405, "Create a new space")
+            return make_error_response(str(ex), 405, "creating a new space")
             return {"message": str(ex)}, 405
         except FileManagerException as ex:
             current_app.logger.error(str(ex))
-            return server_error()
+            return server_error(intent="creating a new space")
         except Exception as ex:
             current_app.logger.exception(ex)
-            return server_error()
+            return server_error(intent="creating a new space")
 
 class SpaceResource(Resource):
     """
@@ -176,16 +194,58 @@ class SpaceResource(Resource):
     """
     @auth.authorization_required
     def get(self, id):
+        """
+        return some summary information about the identified space
+        """
         svc = current_app.service
         try:
             sp = svc.get_space(id)
             return sp.summarize()
 
         except FileManagerResourceNotFound as ex:
-            return not_found("Requested space not found", "request space by identifier")
+            return not_found("Requested space not found", "summarizing a space")
+        except Exception as ex:
+            self.log.exception(ex)
+            return server_error(intent="summarizing a space")
+
+    @auth.authorization_required
+    def head(self, id):
+        """
+        test for the existence of the identified space
+        """
+        svc = current_app.service
+        try:
+            if not svc.space_exists(id):
+                return "", 404
+            return "", 200
+        except Exception as ex:
+            self.log.exception(ex)
+            return "", 500
+
+    @auth.authorization_required
+    def delete(self, id):
+        """
+        delete the file manager space having the given ID.  404 is returned if the space does not 
+        exist.  
+        """
+        svc = current_app.service
+        try:
+            svc.delete_space(id)
+            return "", 200
+        except FileManagerResourceNotFound as ex:
+            return not_found("Requested space not found", "deleting a space")
+        except Exception as ex:
+            self.log.exception(ex)
+            return "", 500
 
     @auth.authorization_required
     def put(self, id):
+        """
+        create a new file manager space, assigning it a given identifier.  The input is a JSON object that 
+        must contain the property, ``foruser``, which represents the identifier for the user that will need 
+        full access permissions on the space.  If the input object includes an ``id`` property, it will be 
+        ignored.
+        """
         svc = current_app.service
         rec = request.json
         if not rec:
@@ -206,6 +266,9 @@ class SpaceScansResource(Resource):
     """
     @auth.authorization_required
     def get(self, id):
+        """
+        return a list of the available scan reports.  
+        """
         svc = current_app.service
 
         try: 
@@ -213,10 +276,14 @@ class SpaceScansResource(Resource):
             # todo
             return [ ]
         except FileManagerResourceNotFound as ex:
-            return not_found("Requested space not found", "request space scanning")
+            return not_found("Requested space not found", "requesting space scanning")
 
     @auth.authorization_required
     def post(self, id):
+        """
+        request the creation of a new scan of the uploads directory.  An initial version of the scan
+        report is returned, but the scanning will continue asynchronously.
+        """
         svc = current_app.service
 
         try: 
@@ -224,7 +291,7 @@ class SpaceScansResource(Resource):
             return sp.launch_scan()
             
         except FileManagerResourceNotFound as ex:
-            return not_found("Requested space not found", "request space scanning")
+            return not_found("Requested space not found", "requesting space scanning")
         except FileManagerScanException as ex:
             self.log.error(str(ex))
             return server_error()
@@ -239,6 +306,12 @@ class SpaceScanReportResource(Resource):
     
     @auth.authorization_required
     def get(self, spaceid, scanid):
+        """
+        return the report for the scan having the given identifier.  If the scan is still in progress,
+        the returned report will be a preliminary version.
+        :param str spaceid:  the identifier for the space that was (or is being) scanned
+        :param str  scanid:  the identifier for the scan that was launched on the specified space
+        """
         svc = current_app.service
 
         try: 
@@ -246,9 +319,9 @@ class SpaceScanReportResource(Resource):
             return sp.get_scan(scanid)
 
         except FileManagerResourceNotFound as ex:
-            return not_found("Requested space not found", "request scan report")
+            return not_found("Requested space not found", "requesting scan report")
         except FileNotFoundError as ex:
-            return not_found("Scan report not found (may have been purged)", "request scan report")
+            return not_found("Scan report not found (may have been purged)", "requesting scan report")
         except FileManagerScanException as ex:
             self.log.error(str(ex))
             return server_error()
@@ -256,19 +329,40 @@ class SpaceScanReportResource(Resource):
             self.log.exception(ex)
             return server_error()
 
+    @auth.authorization_required
+    def delete(self, spaceid, scanid):
+        """
+        test for the existence of the identified space
+        """
+        svc = current_app.service
+        try:
+            sp = svc.get_space(spaceid)
+            sp.delete_scan(scanid)
+            return "", 200
+        except FileManagerResourceNotFound as ex:
+            return not_found("Requested space not found", "deleting a scan report")
+        except Exception as ex:
+            self.log.exception(ex)
+            return "", 500
+
 class SpacePermsResource(Resource):
     """
     Access to the permissions of a particular space (/spaces/[id]/perms)
     """
 
     def get(self, id):
+        """
+        return the permissions for the known users of the given space.  The output will be a JSON 
+        object whose keys are user identifiers and values are labels indicating their respective 
+        access permission--one of "None", "Read", "Write", "Delete", "Share", ore "All".
+        """
         svc = current_app.service
 
         try: 
             sp = svc.get_space(id)
             perms = sp.get_permissions(sp.uploads_folder)
         except FileManagerResourceNotFound as ex:
-            return not_found("Requested space not found", "request scan report")
+            return not_found("Requested space not found", "requesting scan report")
         except FileManagerScanException as ex:
             self.log.error(str(ex))
             return server_error()
@@ -284,6 +378,13 @@ class SpacePermsResource(Resource):
         return perms
 
     def patch(self, id):
+        """
+        update the permissions on the identified space.  The input must be a JSON object whose keys
+        are the identifiers of the users to update permissions for and values are the labels of the 
+        new permissions to assign, one of "None", "Read", "Write", "Delete", "Share", ore "All".
+        User IDs are only needed for those users that are to be changed.  The output, on the other hand,
+        will provide permissions of all known users with permissions set for this space.
+        """
         svc = current_app.service
         rec = request.json
 

@@ -109,6 +109,15 @@ class TestFlaskApp(test.TestCase):
         self.assertTrue(isinstance(data, list))
         self.assertEqual(data, [sp.id])
         
+        resp = self.client.head("/mfm1/spaces/mds3:0010", headers=self.authhdrs)
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.text, '')
+        resp = self.client.get("/mfm1/spaces/mds3:0010", headers=self.authhdrs)
+        self.assertEqual(resp.status_code, 404)
+        data = resp.json
+        self.assertIn("message", data)
+        self.assertIn("intent", data)
+
         resp = self.client.post("/mfm1/spaces",
                                 json={'id':"mds3:0010", 'for_user': 'ava1'},
                                 headers=self.authhdrs)
@@ -119,6 +128,10 @@ class TestFlaskApp(test.TestCase):
         self.assertEqual(data['users'], ['ava1'])
         self.assertEqual(data['id'], "mds3:0010")
         
+        resp = self.client.head("/mfm1/spaces/mds3:0010", headers=self.authhdrs)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.text, '')
+
         resp = self.client.put("/mfm1/spaces/mds3:0020",
                                json={'for_user': 'ava1'},
                                headers=self.authhdrs)
