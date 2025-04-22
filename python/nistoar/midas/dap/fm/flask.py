@@ -6,6 +6,7 @@ from functools import wraps
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from collections.abc import Mapping
+from typing import List
 
 from flask import Flask, request, current_app, jsonify, make_response, Blueprint
 from flask_restful import Api, Resource, url_for
@@ -47,14 +48,19 @@ class AuthHandler(ABC):
             return make_error_response("Not authorized", 401)
         return wrapper
 
-class DelegatedX509AuthHandler(AuthHandler):
+class AllowedBaseAuthHandler(AuthHandler):
+    def __init__(self, allowed_users: List[str]):
+        self.allowed = allowed_users
+
+    def authorize(self, clientid):
+        return clientid in self.allowed
+
+
+class DelegatedX509AuthHandler(AllowedBaseAuthHandler):
     """
     An AuthHandler that relies on an reverse proxy service to handle parsing and validation of 
     a client X.509 certificate.
     """
-
-    def __init__(self, allowed_users):
-        self.allowed = allowed_users
 
     def authenticate(self):
         """
@@ -65,10 +71,21 @@ class DelegatedX509AuthHandler(AuthHandler):
             return None
         return request.headers.get("X_CLIENT_CN")
 
-    def authorize(self, clientid):
-        return clientid in self.allowed
+class NoAuthNeededAuthHandler(AllowedBaseAuthHandler):
+    """
+    An AuthHandler that requires no credentials from client and sets a default user
+    """
+
+    def __init__(self, assume_user: str):
+        self.user = assume_user
+        super(NoAuthNeededAuthHandler, self).__init__([self.user])
+
+    def authenticate(self):
+        return self.user
+
 
 auth = DelegatedX509AuthHandler(['admin'])
+# auth = NoAuthNeededAuthHandler('admin')
 
 def create_app(config: Mapping, fmsvc: fmservice.MIDASFileManagerService=None):
     """
@@ -89,6 +106,9 @@ def create_app(config: Mapping, fmsvc: fmservice.MIDASFileManagerService=None):
     if not isinstance(config.get('allowed_service_endpoints', []), list):
         raise ConfigurationException("Config param, allowed_service_endpoints, not a str: " +
                                      str(type(config.get('allowed_service_endpoints'))))
+    if not isinstance(config.get('allowed_users', []), list):
+        raise ConfigurationException("Config param, allowed_service_users, not a str: " +
+                                     str(type(config.get('allowed_service_users'))))
 
     configure_log(config=config)
 
@@ -101,6 +121,8 @@ def create_app(config: Mapping, fmsvc: fmservice.MIDASFileManagerService=None):
     app.name = config.get('name', 'midasfm')
     app.logger = logging.getLogger(app.name)
     app.config.update(config)
+    if config.get('allowed_service_users'):
+        auth.allowed_users = config['allowed_service_users']
 
     if not fmsvc:
         fmsvc = fmservice.MIDASFileManagerService(config.get('service', {}), app.logger)
@@ -172,6 +194,7 @@ class SpacesResource(Resource):
         if "id" not in rec:
             return {"message": "Create space request missing 'id' property" }, 400
         if "for_user" not in rec:
+            print("create_space: "+str(rec))
             return {"message": "Create space request missing 'for_user' property" }, 400
 
         try:
@@ -179,7 +202,7 @@ class SpacesResource(Resource):
             return sp.summarize()
 
         except FileManagerOpConflict as ex:
-            return make_error_response(str(ex), 405, "creating a new space")
+            return make_error_response(str(ex), 409, "creating a new space")
             return {"message": str(ex)}, 405
         except FileManagerException as ex:
             current_app.logger.error(str(ex))
@@ -257,8 +280,15 @@ class SpaceResource(Resource):
             sp = svc.create_space_for(id, rec['for_user'])
             return sp.summarize()
 
-        except FileManagerResourceNotFound as ex:
-            return not_found("Requested space not found", "request space by identifier")
+        except FileManagerOpConflict as ex:
+            return make_error_response(str(ex), 405, "creating a new space")
+            return {"message": str(ex)}, 405
+        except FileManagerException as ex:
+            current_app.logger.error(str(ex))
+            return server_error(intent="creating a new space")
+        except Exception as ex:
+            current_app.logger.exception(ex)
+            return server_error(intent="creating a new space")
 
 class SpaceScansResource(Resource):
     """

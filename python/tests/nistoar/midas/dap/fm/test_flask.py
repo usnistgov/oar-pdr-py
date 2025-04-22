@@ -211,7 +211,7 @@ class TestFlaskApp(test.TestCase):
         self.assertTrue((sp.root_dir/sp.uploads_folder).is_dir())
         self.assertTrue((sp.root_dir/sp.system_folder).is_dir())
 
-        # start a scan, get a report
+        # get initial permissions
         resp = self.client.get("/mfm1/spaces/"+spid+"/perms", headers=self.authhdrs)
         rep = resp.json
 

@@ -24,7 +24,7 @@ tmpdir = tempfile.TemporaryDirectory(prefix="_test_fm_service.")
 rootdir = Path(os.path.join(tmpdir.name, "fmdata"))
 jobdir = Path(os.path.join(tmpdir.name, "jobqueue"))
 
-def tearDownModules():
+def tearDownModule():
     tmpdir.cleanup()
 
 class MIDASFileManagerServiceTest(test.TestCase):
