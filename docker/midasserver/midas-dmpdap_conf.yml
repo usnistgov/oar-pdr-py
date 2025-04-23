@@ -100,3 +100,16 @@ services:
                 describedBy: "http://localhost:9091/docs/nsdisvc-elements.html"
                 href:        "http://localhost:9091/midas/nsdi/v1"
                 version:     v1
+   group:
+     about:
+       message: "Group API available"
+       title: "Group Management API"
+       href: "http://localhost:9091/midas/group"
+       describedBy: "http://localhost:9091/docs/groupsvc-elements.html"
+     dbio:
+       superusers: [ "rlp3" ]
+       allowed_group_shoulders: [ "grp0" ]
+       default_shoulder: grp0
+     default_convention: grp0
+     conventions:
+       grp0: {}
