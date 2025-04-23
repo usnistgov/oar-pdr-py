@@ -12,6 +12,10 @@ basedir = os.path.dirname(os.path.dirname(os.path.dirname(
 port = 9091
 baseurl = "http://localhost:{0}/".format(port)
 
+uwsgi_opts = "--plugin python3"
+if os.environ.get("OAR_UWSGI_OPTS") is not None:
+    uwsgi_opts = os.environ['OAR_UWSGI_OPTS']
+
 def startService(authmeth=None):
     tdir = tmpdir()
     srvport = port
@@ -20,9 +24,9 @@ def startService(authmeth=None):
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
     wpy = "python/tests/nistoar/pdr/describe/sim_describe_svc.py"
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
-          "--wsgi-file {2} --pidfile {3}"
-    cmd = cmd.format(os.path.join(tdir,"simsrv.log"), srvport,
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --pidfile {4}"
+    cmd = cmd.format(os.path.join(tdir,"simsrv.log"), uwsgi_opts, srvport,
                      os.path.join(basedir, wpy), pidfile)
     os.system(cmd)
     time.sleep(0.5)

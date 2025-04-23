@@ -133,6 +133,110 @@ class TestAbout(test.TestCase):
         self.assertIn("404 ", self.resp[0])
 
 
+class TestDevAbout(test.TestCase):
+
+    def start(self, status, headers=None, extup=None):
+        self.resp.append(status)
+        for head in headers:
+            self.resp.append("{0}: {1}".format(head[0], head[1]))
+
+    def body2dict(self, body):
+        return json.loads("\n".join(self.tostr(body)), object_pairs_hook=OrderedDict)
+
+    def tostr(self, resplist):
+        return [e.decode() for e in resplist]
+
+    def setUp(self):
+        self.data = {
+            "goob": "gurn",
+            "foo": {
+                "bar": [1, 2, 3]
+            }
+        }
+        self.clifact = inmem.InMemoryDBClientFactory({})
+        self.app = app.DevAbout(rootlog, self.clifact, self.data)
+        self.workdir = None
+        self.resp = []
+
+    def tearDown(self):
+        if self.workdir and os.path.exists(self.workdir):
+            shutil.rmtree(self.workdir)
+
+    def test_ctor(self):
+        self.assertEqual(sorted(list(self.app.data.keys())), "foo goob message".split())
+        self.assertEqual(self.app.data['message'], "Service is available")
+        for key in self.data.keys():
+            self.assertEqual(self.app.data[key], self.data[key])
+
+    def test_get(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+
+        data = self.body2dict(body)
+        self.assertEqual(sorted(list(self.app.data.keys())), "foo goob message".split())
+        self.assertEqual(data['message'], "Service is available")
+        for key in self.data.keys():
+            self.assertEqual(data[key], self.data[key])
+        
+        self.data['message'] = "Services are ready"
+        self.app = app.About(rootlog, self.data)
+        self.resp = []
+        body = self.app(req, self.start)
+        data = self.body2dict(body)
+        self.assertEqual(sorted(list(self.app.data.keys())), "foo goob message".split())
+        self.assertEqual(self.app.data['message'], "Services are ready")
+        for key in self.data.keys():
+            self.assertEqual(self.app.data[key], self.data[key])
+
+    def test_delete(self):
+        self.assertEqual(self.app._dbfact._db[base.DMP_PROJECTS], {})  # empty to start
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': '/'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+
+        data = self.body2dict(body)
+        self.assertEqual(sorted(list(self.app.data.keys())), "foo goob message".split())
+        self.assertEqual(data['message'], "Database reset")
+        self.assertEqual(self.app._dbfact._db[base.DMP_PROJECTS], {})  # empty to start
+
+        self.resp = []
+        self.app._dbfact._db[base.DMP_PROJECTS]["dmp:1"] = {"name": "goob"}
+        self.assertNotEqual(self.app._dbfact._db[base.DMP_PROJECTS], {})  # empty to start
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+
+        data = self.body2dict(body)
+        self.assertEqual(sorted(list(self.app.data.keys())), "foo goob message".split())
+        self.assertEqual(data['message'], "Database reset")
+        self.assertEqual(self.app._dbfact._db[base.DMP_PROJECTS], {})  # empty to start
+
+    def test_wrong_dbcli(self):
+        self.workdir = os.path.join(tmpdir.name, 'dbfiles')
+        if not os.path.exists(self.workdir):
+            os.mkdir(self.workdir)
+        self.clifact = fsbased.FSBasedDBClientFactory({}, self.workdir)
+        self.app = app.DevAbout(rootlog, self.clifact, self.data)
+
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': '/'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("500 ", self.resp[0])
+
+        self.app = app.DevAbout(rootlog, None, self.data)
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("405 ", self.resp[0])
+
+
 class TestServiceAppFactory(test.TestCase):
 
     def setUp(self):

@@ -115,6 +115,28 @@ class TestMDS3DAPService(test.TestCase):
         with self.assertRaises(AlreadyExists):
             self.svc.create_record("goob")
 
+    @test.skipIf(not os.environ.get('MONGO_PEOPLE_URL'), "test mongodb people database not available")
+    def test_create_record_useps(self):
+        cfg = {
+            "people_service": { "factory": "mongo", "db_url": os.environ.get('MONGO_PEOPLE_URL') }
+        }
+        self.dbfact = inmem.InMemoryDBClientFactory(cfg, {"nextnum": { "mdsy": 2 }})
+
+        pgp = prov.Agent("midas", prov.Agent.USER, "pgp1", "midas", email="phillip.proctor@nist.gov")
+        self.svc = mds3.DAPService(self.dbfact, self.cfg, pgp, rootlog.getChild("mds3"))
+        self.nerds = self.svc._store
+        self.assertTrue(not self.svc.dbcli.name_exists("gurn"))
+
+        prec = self.svc.create_record("gurn", {"color": "red"}, {})
+
+        self.assertEqual(prec.name, "gurn")
+        self.assertEqual(prec.id, "mdsy:0003")
+        nerd = self.svc.get_nerdm_data(prec.id)
+        self.assertTrue(isinstance(nerd.get('responsibleOrganization'), list))
+        self.assertEqual(nerd['responsibleOrganization'][0]['title'], 'NIST')
+        self.assertEqual(len(nerd['responsibleOrganization'][0].get('subunits',[])), 3)
+
+
     def test_create_record_withdata(self):
         self.create_service()
         self.assertTrue(not self.svc.dbcli.name_exists("gurn"))
