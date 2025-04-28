@@ -13,7 +13,7 @@ import re
 from logging import Logger, getLogger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
-from typing import List
+from typing import List, Union
 from copy import deepcopy
 
 import jsonpatch
@@ -221,7 +221,7 @@ class ProjectService(MIDASSystem):
                                                   provact)
                 out = prec
             else:
-                # can complete forget this record
+                # can completely forget this record
                 self.dbcli.delete_record(prec.id)
 
         except Exception as ex:
@@ -263,12 +263,12 @@ class ProjectService(MIDASSystem):
         try:
             # Create restorer from archived_at URL
             # TODO: this will be replaced with the use of a factory that processes the archived_at URL
-            dbclient = self.dbcli.client_for(f"{self.dbcli.project}_latest")
+            pubclient = self.dbcli.client_for(f"{self.dbcli.project}_latest")
             # restorer = DBIOStoreRestorer(dbclient, self._arkify_recid(prec.id))
             # prec.data = restorer.get_data()
 
             # Restore data and set into project record
-            pubrec = dbclient.get_record_for(self._arkify_recid(prec.id), ACLs.READ)
+            pubrec = pubclient.get_record_for(self._arkify_recid(prec.id), ACLs.READ)
             prec.data = pubrec.data
 
             if reset_state:
@@ -924,7 +924,9 @@ class ProjectService(MIDASSystem):
 
     def _apply_final_updates(self, prec: ProjectRecord, vers_inc_lev: int=None):
         # update the data content
-        self._finalize_data(prec)
+        vil = self._finalize_data(prec)
+        if vers_inc_lev is None:
+            vers_inc_lev = vil
 
         # ensure a finalized version
         ver = self._finalize_version(prec, vers_inc_lev)
@@ -987,11 +989,17 @@ class ProjectService(MIDASSystem):
             return "ark:/%s/%s-%s" % (naan, m.group(1), m.group(2))
         return recid
 
-    def _finalize_data(self, prec):
+    def _finalize_data(self, prec) -> Union[int,None]:
         """
         update the data content for the record in preparation for submission.
+        @return  the version increment level that should be applied to determine the 
+                 published version based on the status of the data.  1 means incrment 
+                 the patch field only, 2 means a minor incrment, and 3 means a major 
+                 increment.  0 means the version should not be incrmented, and None 
+                 means take default.  
+                 @rtype int
         """
-        pass
+        return None
 
     def submit(self, id: str, message: str=None, _prec=None) -> status.RecordStatus:
         """
@@ -1058,6 +1066,8 @@ class ProjectService(MIDASSystem):
 
         self.log.info("Submitted %s record %s (%s) for %s",
                       self.dbcli.project, _prec.id, _prec.name, self.who)
+        if poststat != status.SUBMITTED:
+            self.log.info("Final status: %s", poststat)
         return stat.clone()
             
 
@@ -1081,7 +1091,7 @@ class ProjectService(MIDASSystem):
                              not due to anything the client did, but rather reflects a system problem
                              (e.g. from a downstream service). 
         """
-        endstate = status.SUBMITTED    # or could be status.PUBLISHED
+        endstate = status.PUBLISHED    # or could be status.SUBMITTED
         try:
             latestcli = self.dbcli.client_for(f"{self.dbcli.project}_latest", AUTOADMIN)
             versioncli = self.dbcli.client_for(f"{self.dbcli.project}_version", AUTOADMIN)

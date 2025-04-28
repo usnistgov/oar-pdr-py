@@ -2235,6 +2235,56 @@ class DAPService(ProjectService):
             self.validate_json(resmd)
         return resmd
 
+    def _finalize_data(self, prec) -> Union[int,None]:
+        """
+        update the data content for the record in preparation for submission.
+        """
+        nerd = self._store.open(prec.id)
+        self._finalize_authors(prec, nerd)
+
+        # should sub-IDs be normalized in some way?
+
+        return None
+
+    def _finalize_authors(self, prec, nerd):
+        """
+        make sure all authors have their ``fn`` property set
+        """
+        for id in nerd.authors.ids:
+            auth = nerd.authors.get(id)
+            if not auth.get('fn') and auth.get('familyName'):
+                auth['fn'] = auth['familyName']
+                if auth.get('givenName'):
+                    auth['fn'] += ", %s" % auth['givenName']
+                if auth.get('middleName'):
+                    auth['fn'] += " %s" % auth['middleName']
+            nerd.authors.set(id, auth)
+
+    def _finalize_dates(self, prec, nerd):
+        """
+        update all the NERDm date stamps
+        """
+        firstpub = not bool(prec.status.published_as)
+        now = datetime.fromtimestamp(time.time()).isoformat()
+
+        dates = OrderedDict()
+        dates['annotated'] = now
+        
+        
+
+    def _finalize_version(self, prec: ProjectRecord, vers_inc_lev: int=None):
+        ver = super()._finalize_version(prec, vers_inc_lev)
+        nerd = self._store.open(prec.id)
+        resmd = nerd.get_res_data()
+        
+        # set NERDm version
+        prec.data["version"] = ver
+        resmd["version"] = ver
+        nerd.replace_res_data(resmd)
+
+        
+        
+
                 
 class DAPServiceFactory(ProjectServiceFactory):
     """

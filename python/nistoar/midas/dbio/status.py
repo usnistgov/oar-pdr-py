@@ -14,7 +14,7 @@ from nistoar.pdr.utils.prov import Action
 
 # Available record states:
 #
-EDIT       = "edit"        # Record is currently being edit for a new released version
+EDIT       = "edit"        # Record is currently being edited for a new released version
 PROCESSING = "processing"  # Record is being processed at the moment and cannot be updated
                            #   further until this processing is complete.
 READY      = "ready"       # Record is ready for submission having finalized and passed all
