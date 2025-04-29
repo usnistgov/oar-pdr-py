@@ -6,6 +6,7 @@ Note that this module is similar in intent and implementation to
 """
 import math
 from collections.abc import Mapping
+from typing import List
 from time import time
 from datetime import datetime
 from copy import deepcopy
@@ -35,6 +36,8 @@ _created_p  = "created"
 _message_p  = "message"
 _creatby_p  = "created_by"
 _bywho_p    = "byWho"
+_submitted_p    = "submitted"
+_published_p    = "published"
 _last_version_p = "last_version"
 _published_as_p = "published_as"
 _archived_at_p  = "archived_at"
@@ -212,6 +215,120 @@ class RecordStatus:
         self._data[_message_p] = val
 
     @property
+    def submitted(self) -> float:
+        """
+        The epoch timestamp when the record was last submitted for publication
+        """
+        return self._data.get(_submitted_p, -1)
+
+    @property
+    def submitted_date(self) -> str:
+        """
+        The timestamp when the record was last submitted for publication, formatted as an ISO string
+        """
+        if self.submitted <= 0:
+            return "(not yet submitted)"
+        return datetime.fromtimestamp(math.floor(self.submitted)).isoformat()
+
+    def pubreview(self, revsys: str, phase: str, id: str=None, infourl: str=None, 
+                  feedback: List[Mapping]=None, fbreplace: bool=True, **extra_info):
+        """
+        register a current phase of an external review for publication along with other information 
+        as to its status, including feedback for the authors.  A publication review typically comes 
+        after the project is submitted and before final publication, but this implementation does 
+        not enforce this.  
+
+        This method can be used to provide reviewer feed back to the record's authors/editors.  Each 
+        piece of feedback (which could be a request, suggestion, or comment) is a dictionary with the 
+        following properties:
+        ``reviewer``
+             (str) _recommended_.  a user identifier or full name of the reviewer or other origin of 
+             this piece of feedback.
+        ``type``
+             (str) _optional_.  a label indicating the type of feedback.  Special values include, 
+             ``req`` (required to be addressed for approval), ``warn`` (not required but of potentially
+             serious concern or otherwise strongly recommended), ``rec`` (recommended to be addressed),
+             and ``comment`` (just a comment with no explicit recommendation being made).  Other values
+             are allowed (as defined by the external system) but will be interpreted by default as 
+             comments.  
+        ``description``
+             (str) _required_.  text describing the request or comment
+
+        Other properties are allowed as defined by the external review system.
+
+        If previously saved feedback is replaced, it will be assumed that those items have been addressed 
+        and no longer need attention by the authors.
+
+        :param str  revsys:  a unique name for the external review system providing this information.
+        :param str   phase:  a label indicating the phase of review that the project is currently in. 
+                             The values are defined by the external review system.
+        :param str      id:  an identifier used by the external review system to track the review.  If 
+                             None, then there is none defined and can probably default to the current 
+                             project identifier
+        :param str infourl:  a URL that DBIO client user can access to get information on the status of 
+                             the external review.  If None, such information is not (yet) available
+        :param list feedback:  a list of reviewer feedback.  If None, the previously saved feedback will 
+                             be retained.  If an empty list and ``fbreplace`` is True (default), the 
+                             previously save feedback will be dropped and replaced with an empty list.
+        :param bool fbreplace:  if True (default), this feedback should replace all previously registered 
+                             feedback
+        :param extra_info:   Other JSON-encodable properties that should be included in the registration.
+        """
+        pubrev = OrderedDict([('phase', phase)])
+        if id:
+            pubrev['@id'] = id
+        if infourl:
+            pubrev['info_at'] = infourl
+
+        oldfb = self._data.get(_pubreview_p, {}).get('feedback', [])
+        if feedback is not None:
+            if isinstance(feedback, tuple):
+                feedback = list(feedback)
+            if not isinstance(feedback, list) or any([not isinstance(fb, Mapping) for fb in feedback]):
+                raise ValueError("RecordStatus.pubreview(): feedback is not a list of dicts")
+            try:
+                json.dumps(feedback)
+            except Exception as ex:
+                raise ValueError("RecordStatus.pubreview(): feedback is not JSON-encodable")
+
+            if not fbreplace and oldfb:
+                feedback = oldfb + feedback
+            pubrev['feedback'] = feedback
+        elif oldfb:
+            pubrev['feedback'] = oldfb
+
+        if extra_info:
+            for prop in extra_info:
+                if prop in pubrev:
+                    continue
+                try: 
+                    json.dumps(extra_info[prop])
+                except Exception as ex:
+                    raise ValueError(f"RecordStatus.pubreview(): {prop} is not JSON-encodable")
+                pubrev[prop] = extra_info[prop]
+
+        self._data.setdefault(_pubreview_p, {})
+        self._data[_pubreview_p][revsys] = pubrev
+
+        return pubrev
+
+    @property
+    def published(self) -> float:
+        """
+        The epoch timestamp when the record was last published 
+        """
+        return self._data.get(_published_p, -1)
+
+    @property
+    def published_date(self) -> str:
+        """
+        The timestamp when the record was last published, formatted as an ISO string
+        """
+        if self.published <= 0:
+            return "(not yet published)"
+        return datetime.fromtimestamp(math.floor(self.published)).isoformat()
+
+    @property
     def published_as(self):
         """
         the identifier that this draft record was most recently published as.  If None,
@@ -239,14 +356,16 @@ class RecordStatus:
         """
         return self._data.get(_archived_at_p)
 
-    def publish(self, pub_id: str, version: str, arch_loc: str = None):
+    def publish(self, pub_id: str, version: str, arch_loc: str = None, asof: float = -1):
         """
         set or update the publishing status properties
-        :param str  pub_id:  the identifier that the record has been published as
-        :param str version:  the version that was assigned to that publication
+        :param str   pub_id: the identifier that the record has been published as
+        :param str  version: the version that was assigned to that publication
         :param str arch_loc: a URL that indicates where the publication was archived at.
                              If None, the associated property is not set, incicating that 
                              a default location should be assumed.  
+        :param float   asof: the date to record as the publication date, in epoch seconds.
+                             If None or <= 0, the current time will be recorded.
         """
         if not pub_id or not isinstance(pub_id, str):
             raise ValueError("Status.publish(): pub_id must be a non-empty str")
@@ -258,6 +377,9 @@ class RecordStatus:
         self._data[_last_version_p] = version
         if arch_loc:
             self._data[_archived_at_p] = arch_loc
+        if not asof or asof < 0:
+            asof = time()
+        self._data[_published_p] = asof
 
     def act(self, action: str, message: str="", who: str=None, when: float=0):
         """

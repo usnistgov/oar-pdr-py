@@ -35,6 +35,7 @@ _STATUS_ACTION_FINALIZE = "finalize"
 _STATUS_ACTION_SUBMIT   = "submit"
 _STATUS_ACTION_UPDATEPREP = "update-prep"
 _STATUS_ACTION_RESTORE  = "restore"
+_STATUS_ACTION_PUBLISH  = "publish"
 
 DEF_PUBLISHED_SUFFIX = "_published"
 
@@ -79,11 +80,12 @@ class ProjectService(MIDASSystem):
     This parameter gives the identifier shoulder that should be used the identifier for a new record 
     created under the user group.  Subclasses of this service class may support other parameters. 
     """
-    STATUS_ACTION_CREATE   = _STATUS_ACTION_CREATE  
-    STATUS_ACTION_UPDATE   = _STATUS_ACTION_UPDATE  
-    STATUS_ACTION_CLEAR    = _STATUS_ACTION_CLEAR   
+    STATUS_ACTION_CREATE   = _STATUS_ACTION_CREATE
+    STATUS_ACTION_UPDATE   = _STATUS_ACTION_UPDATE
+    STATUS_ACTION_CLEAR    = _STATUS_ACTION_CLEAR
     STATUS_ACTION_FINALIZE = _STATUS_ACTION_FINALIZE
-    STATUS_ACTION_SUBMIT   = _STATUS_ACTION_SUBMIT  
+    STATUS_ACTION_SUBMIT   = _STATUS_ACTION_SUBMIT
+    STATUS_ACTION_PUBLISH  = _STATUS_ACTION_PUBLISH
     STATUS_ACTION_UPDATEPREP = _STATUS_ACTION_UPDATEPREP
     STATUS_ACTION_RESTORE  = _STATUS_ACTION_RESTORE  
 
@@ -1025,6 +1027,8 @@ class ProjectService(MIDASSystem):
         if not _prec:
             _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)   # may raise ObjectNotFound/NotAuthorized
         stat = _prec.status
+        if stat.state not in [status.EDIT, status.READY]:
+            raise NotSubmitable(_prec.id, "Project not in submitable state: "+ stat.state)
         self.finalize(id, message, _prec=_prec)  # may raise NotEditable
 
         # this record is ready for submission.  Send the record to its post-editing destination,
@@ -1077,10 +1081,9 @@ class ProjectService(MIDASSystem):
         accordingly.
 
         This method should be overridden to provide project-specific handling.  This generic 
-        implementation will simply copy the data contents of the record to another collection.
-
-        This default implement will save the data in a project record with PROJCOLL_latest collection
-        (and the PROJCOLL_version collection).  
+        implementation will immediately publish the record (via :py:meth:`_publish`).  Its 
+        default implementation will simply copy the data contents of the record to another 
+        collection.
 
         :returns:  the label indicating its post-editing state
                    :rtype: str
@@ -1090,6 +1093,173 @@ class ProjectService(MIDASSystem):
                              occurred preventing successful submission.  This error is typically 
                              not due to anything the client did, but rather reflects a system problem
                              (e.g. from a downstream service). 
+        """
+        return self._publish(prec)  # returned state will be PUBLISHED if successful
+
+    def apply_external_review(self, id: str, revsys: str, phase: str, revid: str=None, 
+                              infourl: str=None, feedback: List[Mapping]=None, 
+                              request_changes: bool=False, fbreplace: bool=True, **extra_info):
+        """
+        register information about external review activity and possibly apply specific updates
+        accordingly.  
+
+        Generally, regular users are not authorized to call this function.
+
+        :param str  revsys:  a unique name for the external review system providing this information.
+        :param str   phase:  a label indicating the phase of review that the project is currently in. 
+                             The values are defined by the external review system.
+        :param str      id:  an identifier used by the external review system to track the review.  If 
+                             None, then there is none defined and can probably default to the current 
+                             project identifier
+        :param str infourl:  a URL that DBIO client user can access to get information on the status of 
+                             the external review.  If None, such information is not (yet) available
+        :param list feedback:  a list of reviewer feedback.  If None, the previously saved feedback will 
+                             be retained.  If an empty list and ``fbreplace`` is True (default), the 
+                             previously save feedback will be dropped and replaced with an empty list.
+        :param boo request_changes:  if True, return this record to a state that allows the authors to 
+                             make further edits.  (This would include changing the record state to 
+                             "edit".)  This record must currently be in the "submitted" state, otherwise,
+                             this parameter will be ignored.
+        :param bool fbreplace:  if True (default), this feedback should replace all previously registered 
+                             feedback
+        :param extra_info:   Other JSON-encodable properties that should be included in the registration.
+        """
+        _prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)   # may raise ObjectNotFound/NotAuthorized
+        stat = _prec.status
+
+        revmd = stat.pubreview(revsys, phase, revid, infourl, feedback, fbreplace, **extra_info)
+        if not self._apply_external_review_updates(_prec, revmd):
+            _prec.save()
+
+        msg = "external review phase in progress"
+        if revmd.get('phase'):
+            msg += ": "+revmd['phase']
+        if revmd.get('feedback'):
+            msg += "; feedback provided"
+        self.dbcli.record_action(Action(Action.COMMENT, _prec.id, self.who, msg))
+        self.log.info("%s: %s", _prec.id, msg)
+
+    def _apply_external_review_updates(self, prec: ProjectRecord, pubrevmd: Mapping=None):
+        # apply any automated changes to the record according the given feedback
+        # This exists as a specialization point.  return True if the record was saved 
+        return False
+
+    def approve(self, id: str, revsys: str, revid: str=None, infourl: str=None, publish: bool=True):
+        """
+        mark this project as approved for publication by an external review system.  This will
+        call :py:meth:`apply_external_review` with phase "approved".  If ``publish`` is ``True``
+        and the record is in a publishable state, the publishing process will be triggered 
+        automatically.  
+
+        Generally, regular users are not authorized to call this function.
+        """
+        self.apply_external_review(id, revsys, "approved", revid, infourl, [])
+        if publish:
+            self.publish()
+
+    def publish(self, id: str, _prec=None, **kwargs):
+        """
+        initiate the publishing processing for the given record (including preservation).  Generally,
+        regular users are not authorized to call this function directly.  The record must be in a 
+        SUBMITTED state.
+        :param str      id:  the identifier of the record to submit
+        :returns:  a Project status instance providing the post-submission status
+                   :rtype: RecordStatus
+        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+                             an undefined or unrecognized part of the data
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
+                             given by `id`.  
+        :raises NotEditable:  the requested record is not in the edit state.  
+        :raises NotSubmitable:  if the finalization produces an invalid record because the record 
+                             contains invalid data or is missing required data.
+        :raises SubmissionFailed:  if, during actual submission (i.e. after finalization), an error 
+                             occurred preventing successful submission.  This error is typically 
+                             not due to anything the client did, but rather reflects a system problem
+                             (e.g. from a downstream service). 
+        """
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)   # may raise ObjectNotFound/NotAuthorized
+        stat = _prec.status
+        if stat.state == status.PUBLISHED:
+            raise NotSubmitable(_prec.id, "Already published")
+        if stat.state == status.INPRESS:
+            raise NotSubmitable(_prec.id, "Publication already in progress")
+        if stat.state == status.EDIT:
+            raise NotSubmitable(_prec.id, "Project has not been submitted for publication yet")
+        if stat.state not in [status.SUBMITTED, status.ACCEPTED]:
+            raise NotSubmitable(_prec.id, "Project has not in a publishable state: "+stat.state)
+
+        if stat.state != status.ACCEPTED:
+            reviews = stat._data.get(status._pubreview_p)
+            if reviews and not all(r.get('phase','') == "approved" for r in reviews.values()):
+                raise NotSubmitable(_prec.id, "Not all external reviews are completed")
+
+        self.log.info("Submitting rec, %s, for publication", _prec.id)
+        try:
+            poststat = self._publish(_prec)
+            if poststat not in [status.PUBLISHED, status.INPRESS]:
+                raise RuntimeException("Publishing submission returned unexpected state: "+poststat)
+
+        except InvalidRecord as ex:
+            emsg = "publishing process failed: "+str(ex)
+            self.log.error(f"{emsg}")
+            self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
+                                       {"name": "publish", "errors": ex.errors}))
+            stat.set_state(status.UNWELL)
+            stat.act(self.STATUS_ACTION_PUBLISH, ex.format_errors(), self.who.actor)
+            self._try_save(_prec)
+            raise
+
+        except Exception as ex:
+            emsg = "Publishing process failed due to an internal error"
+            self.log.exception(ex)
+            self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
+                                       {"name": "publish", "errors": [emsg]}))
+            stat.set_state(status.UNWELL)
+            emsg += f": {str(ex)}"
+            stat.act(self.STATUS_ACTION_PUBLISH, emsg, self.who.actor)
+            self._try_save(_prec)
+            raise
+
+        else:
+            message = "Revised"
+            if _prec.data.get('@version', '1.0.0') == '1.0.0':
+                message = "Initial"
+            message +=  " publication"
+            if poststat == status.PUBLISHED:
+                message += " successful"
+            else:
+                message += " in progress"
+
+            # record provenance record
+            self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, message, {"name": "publish"}))
+
+            stat.set_state(poststat)
+            stat.act(self.STATUS_ACTION_PUBLISH, message, self.who.actor)
+            _prec.save()
+
+#        self.log.info("Submitted %s record %s (%s) for %s for final publication",
+#                      self.dbcli.project, _prec.id, _prec.name, self.who)
+        return stat.clone()
+        
+
+    def _publish(self, prec: ProjectRecord):
+        """
+        Actually launch the publishing process on the given record and update its state  
+        accordingly.
+
+        This method should be overridden to provide project-specific handling.  This generic 
+        implementation will simply copy the data contents of the record to another collection.
+
+        This default implement will save the data in a project record with PROJCOLL_latest collection
+        (and the PROJCOLL_version collection).  
+
+        :returns:  the label indicating its post-editing state
+                   :rtype: str
+        :raises NotSubmitable:  if this record is not in a publishable state.
+        :raises SubmissionFailed:  if an error occurs while submitting the record for publication.
+                             This error is typically not due to anything the client did, but rather 
+                             reflects a system problem (e.g. from a downstream service). 
         """
         endstate = status.PUBLISHED    # or could be status.SUBMITTED
         try:
@@ -1123,10 +1293,15 @@ class ProjectService(MIDASSystem):
             self.log.error("%s: Problem with default publication submission: %s", prec.id, str(ex))
             raise SubmissionFailed(prec.id) from ex
 
+        if endstate == status.PUBLISHED:
+            base = self.cfg.get('published_resolver_ep', 'midas:')
+            prec.status.publish(recd['id'], recd['data'].get("@version", "0"),
+                                f"{base}{self.dbcli.project}_latest/{recd['id']}")
+
+        self.log.info("Successfully published %s as %s version %s (into %s_latest collection)",
+                      prec.id, recd['id'], recd['data'].get("@version", 0), self.dbcli.project)
         return endstate
 
-
-                    
 
 class ProjectServiceFactory:
     """

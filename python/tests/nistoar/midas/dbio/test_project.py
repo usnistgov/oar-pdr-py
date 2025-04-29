@@ -1,5 +1,6 @@
 import os, json, pdb, logging, tempfile, re
 import unittest as test
+from collections.abc import Mapping
 
 from nistoar.midas.dbio import inmem, base
 from nistoar.midas.dbio import project, status
@@ -445,7 +446,7 @@ class TestProjectService(test.TestCase):
         prec = self.project.get_record(prec.id)
         self.assertEqual(prec.data.get("@version"), "1.0.0")
         self.assertEqual(prec.data.get("@id"), "ark:/88434/mdm1-0003")
-        self.assertEqual(prec.status.state, "submitted")
+        self.assertEqual(prec.status.state, "published")
 
         pubcli = self.project.dbcli.client_for(self.project.dbcli.project+"_latest")
         pubrec = pubcli.get_record_for(prec.data["@id"])
@@ -466,6 +467,162 @@ class TestProjectService(test.TestCase):
         self.assertEqual(pubrec.acls._perms['admin'], [])
         self.assertEqual(pubrec.acls._perms['read'], ["grp0:public"])
 
+    def test_apply_external_review(self):
+        self.create_service()
+        prec = self.project.create_record("goob")
+        self.assertEqual(prec.status.state, "edit")
+        self.assertIn("created", prec.status.message)
+        self.assertNotIn("@version", prec.data)
+        self.assertNotIn("@id", prec.data)
+
+        id = prec.id
+        with self.assertRaises(project.NotAuthorized):
+            self.project.apply_external_review(id, "nps", "group-leader-review", id, "/od/id/"+id)
+
+        self.project.dbcli._cfg['superusers'] = ['nstr1']
+        prec = self.project.get_record(id)
+        prec.acls.grant_perm_to(base.ACLs.PUBLISH, 'nstr1')
+        prec.save()
+        self.project.dbcli._cfg['superusers'] = []
+        
+        with self.assertRaises(project.NotSubmitable):
+            self.project.publish(id)  # not submitted yet
+
+        self.project.apply_external_review(id, "nps", "group-leader-review", id, "/od/id/"+id)
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "edit")
+        sdata = stat.to_dict()
+        self.assertIn("nps", sdata.get("external_review", {}))
+        self.assertNotIn("elrs", sdata.get("external_review", {}))
+        rdata = sdata.get("external_review", {}).get("nps")
+        self.assertTrue(isinstance(rdata, Mapping))
+        self.assertEqual(rdata['phase'], "group-leader-review")
+        self.assertEqual(rdata['@id'], id)
+        self.assertEqual(rdata['info_at'], "/od/id/"+id)
+        self.assertNotIn('feedback', rdata)
+        self.assertNotIn('gurn', rdata)
+
+        fb = {
+            "reviewer": "jerry",
+            "type": "warn",
+            "description": "this looks like dangerous gnostic data"
+        }
+        self.project.apply_external_review(id, "elrs", "tech", feedback=[fb], gurn="burn")
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "edit")
+        sdata = stat.to_dict()
+        self.assertIn("nps", sdata.get("external_review", {}))
+        self.assertIn("elrs", sdata.get("external_review", {}))
+        rdata = sdata.get("external_review", {}).get("elrs")
+        self.assertTrue(isinstance(rdata, Mapping))
+        self.assertEqual(rdata['phase'], "tech")
+        self.assertNotIn('@id', rdata)
+        self.assertNotIn('info_at', rdata)
+        self.assertIn('feedback', rdata)
+        self.assertEqual(len(rdata['feedback']), 1)
+        self.assertEqual(rdata['feedback'][0], fb)
+        self.assertIn('gurn', rdata)
+
+        self.assertLess(prec.status.submitted, 0)
+        prec.status.set_state(status.SUBMITTED)
+        self.assertGreater(prec.status.submitted, 0)
+        prec.save()
+
+        self.project.apply_external_review(id, "elrs", "tech", id, feedback=[])
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "submitted")
+        sdata = stat.to_dict()
+        self.assertIn("nps", sdata.get("external_review", {}))
+        self.assertIn("elrs", sdata.get("external_review", {}))
+        rdata = sdata.get("external_review", {}).get("elrs")
+        self.assertTrue(isinstance(rdata, Mapping))
+        self.assertEqual(rdata['phase'], "tech")
+        self.assertEqual(rdata['@id'], id)
+        self.assertNotIn('info_at', rdata)
+        self.assertIn('feedback', rdata)
+        self.assertEqual(len(rdata['feedback']), 0)
+        self.assertIn('gurn', rdata)
+
+        with self.assertRaises(project.NotSubmitable):
+            self.project.publish(id)
+
+        self.project.approve(id, "elrs", publish=False)
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "submitted")
+        sdata = stat.to_dict()
+        self.assertIn("nps", sdata.get("external_review", {}))
+        self.assertIn("elrs", sdata.get("external_review", {}))
+        rdata = sdata.get("external_review", {}).get("elrs")
+        self.assertEqual(rdata.get('phase'), "approved")
+        rdata = sdata.get("external_review", {}).get("nps")
+        self.assertNotEqual(rdata.get('phase'), "approved")
+        
+        with self.assertRaises(project.NotSubmitable):
+            self.project.publish(id)
+
+        self.project.approve(id, "nps", publish=False)
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "submitted")
+        sdata = stat.to_dict()
+        self.assertIn("nps", sdata.get("external_review", {}))
+        self.assertIn("elrs", sdata.get("external_review", {}))
+        rdata = sdata.get("external_review", {}).get("elrs")
+        self.assertEqual(rdata.get('phase'), "approved")
+        rdata = sdata.get("external_review", {}).get("nps")
+        self.assertEqual(rdata.get('phase'), "approved")
+
+        self.project.publish(id)
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "published")
+
+    def test_publish(self):
+        self.create_service()
+        prec = self.project.create_record("goob")
+        self.assertEqual(prec.status.state, "edit")
+        self.assertIn("created", prec.status.message)
+        self.assertNotIn("@version", prec.data)
+        self.assertNotIn("@id", prec.data)
+        id = prec.id
+        
+        with self.assertRaises(project.NotAuthorized):
+            self.project.publish(id)  
+
+        self.project.dbcli._cfg['superusers'] = ['nstr1']
+        prec = self.project.get_record(id)
+        prec.acls.grant_perm_to(base.ACLs.PUBLISH, 'nstr1')
+        prec.save()
+        self.project.dbcli._cfg['superusers'] = []
+        
+        with self.assertRaises(project.NotSubmitable):
+            self.project.publish(id)  # not submitted yet
+        prec = self.project.get_record(id)
+        self.assertLess(prec.status.submitted, 0)
+
+        prec.status.set_state(status.INPRESS)
+        prec.save()
+        with self.assertRaises(project.NotSubmitable):
+            self.project.publish(id)  # in press already
+
+        prec.status.set_state(status.SUBMITTED)
+        prec.save()
+        prec = self.project.get_record(id)
+        self.assertGreater(prec.status.submitted, 0)
+        self.assertLess(prec.status.published, 0)
+
+        self.project.publish(id)
+        prec = self.project.get_record(id)
+        self.assertGreater(prec.status.submitted, 0)
+        self.assertGreater(prec.status.published, 0)
+        
+        
+        
+        
 class TestProjectServiceFactory(test.TestCase):
 
     def setUp(self):
@@ -506,7 +663,6 @@ class TestProjectServiceFactory(test.TestCase):
         prec = svc.create_record("goob")
         self.assertEqual(prec._coll, "dmp")
     
-
     
 
 

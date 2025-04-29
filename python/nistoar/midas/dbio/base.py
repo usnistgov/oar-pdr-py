@@ -68,6 +68,7 @@ class ACLs:
     ADMIN = 'admin'
     DELETE = 'delete'
     OWN = (READ, WRITE, ADMIN, DELETE,)
+    PUBLISH = 'publish'
 
     def __init__(self, forrec: ProtectedRecord, acldata: MutableMapping = None):
         """
@@ -99,6 +100,8 @@ class ACLs:
         """
         if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli.user_id, "grant permission")
+        if perm_name == self.PUBLISH and not self._rec.is_superuser():
+            raise NotAuthorized(self._rec._cli.user_id, "grant permission")
 
         if perm_name not in self._perms:
             self._perms[perm_name] = []
@@ -114,6 +117,8 @@ class ACLs:
                                authorized to grant the permission
         """
         if not self._rec.authorized(self.ADMIN):
+            raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
+        if perm_name == self.PUBLISH and not self._rec.is_superuser():
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
 
         empty = []
@@ -140,6 +145,8 @@ class ACLs:
         """
         if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
+        if perm_name == self.PUBLISH and not self._rec.is_superuser():
+            raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
 
         if perm_name not in self._perms:
             return
@@ -160,7 +167,7 @@ class ACLs:
         This should be considered lowlevel; consider using :py:method:`authorized` instead which resolves 
         a users membership.  
         """
-        return len(set(self._perms[perm_name]).intersection(ids)) > 0
+        return len(set(self._perms.get(perm_name, [])).intersection(ids)) > 0
 
     def __str__(self):
         return "<ACLs: {}>".format(str(self._perms))
@@ -395,7 +402,7 @@ class ProtectedRecord(ABC):
         """
         if not who:
             who = self._cli.user_id
-        if who in (self._cli._cfg.get("superusers", []) + [AUTOADMIN]):
+        if self.is_superuser(who):
             return True
 
         if isinstance(perm, str):
@@ -411,6 +418,10 @@ class ProtectedRecord(ABC):
                 return False
         return True
 
+    def is_superuser(self, who: str=None):
+        if not who:
+            who = self._cli.user_id
+        return who in (self._cli._cfg.get("superusers", []) + [AUTOADMIN])
 
     def searched(self, cst: CST):
         """
