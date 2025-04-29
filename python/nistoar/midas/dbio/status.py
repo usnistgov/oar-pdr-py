@@ -4,7 +4,8 @@ Module for tracking the status of a dbio record.
 Note that this module is similar in intent and implementation to 
 :py:mod:`nistoar.pdr.publish.service.status` but has implemented to different requirements.
 """
-import math
+import math, json
+from collections import OrderedDict
 from collections.abc import Mapping
 from typing import List
 from time import time
@@ -41,6 +42,7 @@ _published_p    = "published"
 _last_version_p = "last_version"
 _published_as_p = "published_as"
 _archived_at_p  = "archived_at"
+_pubreview_p    = "external_review"
 
 # Common record actions
 # 
@@ -280,7 +282,10 @@ class RecordStatus:
         if infourl:
             pubrev['info_at'] = infourl
 
-        oldfb = self._data.get(_pubreview_p, {}).get('feedback', [])
+        oldrev = self._data.get(_pubreview_p, {}).get(revsys, {})
+        oldfb = oldrev.get('feedback', [])
+        if 'feedback' in oldrev:
+            del oldrev['feedback']
         if feedback is not None:
             if isinstance(feedback, tuple):
                 feedback = list(feedback)
@@ -307,6 +312,9 @@ class RecordStatus:
                     raise ValueError(f"RecordStatus.pubreview(): {prop} is not JSON-encodable")
                 pubrev[prop] = extra_info[prop]
 
+        if oldrev:
+            oldrev.update(pubrev)
+            pubrev = oldrev
         self._data.setdefault(_pubreview_p, {})
         self._data[_pubreview_p][revsys] = pubrev
 
@@ -356,7 +364,7 @@ class RecordStatus:
         """
         return self._data.get(_archived_at_p)
 
-    def publish(self, pub_id: str, version: str, arch_loc: str = None, asof: float = -1):
+    def publish(self, pub_id: str, version: str, arch_loc: str = None, when: float = -1):
         """
         set or update the publishing status properties
         :param str   pub_id: the identifier that the record has been published as
@@ -364,8 +372,10 @@ class RecordStatus:
         :param str arch_loc: a URL that indicates where the publication was archived at.
                              If None, the associated property is not set, incicating that 
                              a default location should be assumed.  
-        :param float   asof: the date to record as the publication date, in epoch seconds.
-                             If None or <= 0, the current time will be recorded.
+        :param float  when:  the epoch timestamp to record as the time of publication.  A value of 
+                             zero (default) indicates that the timestamp should be set when the 
+                             record is saved.  A value less than zero will cause the current 
+                             time to be set.  
         """
         if not pub_id or not isinstance(pub_id, str):
             raise ValueError("Status.publish(): pub_id must be a non-empty str")
@@ -377,9 +387,12 @@ class RecordStatus:
         self._data[_last_version_p] = version
         if arch_loc:
             self._data[_archived_at_p] = arch_loc
-        if not asof or asof < 0:
-            asof = time()
-        self._data[_published_p] = asof
+
+        # clear any publication review information
+        if _pubreview_p in self._data:
+            del self._data[_pubreview_p]
+
+        self.set_state(PUBLISHED, when)
 
     def act(self, action: str, message: str="", who: str=None, when: float=0):
         """
@@ -425,10 +438,16 @@ class RecordStatus:
             if self._data[_created_p] < 1:
                 self._data[_created_p] = when
 
+            if state in [PUBLISHED, SUBMITTED]:
+                if state == SUBMITTED or self._data.get(_submitted_p, -1) < 0:
+                    self._data[_submitted_p] = when
+                if state == PUBLISHED:
+                    self._data[_published_p] = when
+
     def set_times(self, set_modified=True):
         """
         update any dates that are waiting to be set.  This will be called when the record is 
-        saved.  
+        saved.  This does not affect the submitted or published times.  
         :param bool set_modified:  if True (default), the modified time will always be updated; 
                                    otherwise, it is only updated if it is non-positive.
         """
@@ -439,6 +458,11 @@ class RecordStatus:
             self._data[_since_p] = now
         if set_modified or self._data[_modified_p] < 1:
             self._data[_modified_p] = now
+
+        if self._data.get(_submitted_p, -1) == 0:
+            self._data[_submitted_p] = now
+        if self._data.get(_published_p, -1) == 0:
+            self._data[_published_p] = now
         
     def to_dict(self, with_id=True):
         """
