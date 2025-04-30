@@ -67,6 +67,9 @@ services:
           default: 
              default_shoulder: mdm1
 
+      default_perms:
+          read: [ "grp0:public" ]
+
       dbio: 
          superusers:                [ "rlp3" ]
          allowed_project_shoulders: ["mdm0", "mdm1"]

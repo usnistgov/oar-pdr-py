@@ -16,7 +16,7 @@ CLASSIFIERS = [
 ]
 
 SCRIPTS = [
-    'pdr.py', 'pdrhealthcheck.py',
+    'pdr.py', 'pdrhealthcheck.py', 'nsdsync.py',
     'resolver-uwsgi.py', 'pdp-uwsgi.py', 'midas-uwsgi.py'
 ]
 

@@ -9,7 +9,7 @@
 # along with all required python libraries.
 #
 #########################################################################
-FROM oar-metadata/ejsonschema
+FROM oar-metadata/mdenv
 
 RUN apt-get update && apt-get install -y python3-yaml curl wget less sudo zip \
                                          p7zip-full ca-certificates git
