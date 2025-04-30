@@ -581,8 +581,8 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertIn("req", resp)
         self.assertIn("warn", resp)
         self.assertIn("rec", resp)
-        self.assertEqual(len(resp['req']), 4)
-        self.assertEqual(len(resp['warn']), 2)
+        self.assertEqual(len(resp['req']), 3)
+        self.assertEqual(len(resp['warn']), 3)
         self.assertEqual(len(resp['rec']), 1)
 
         
