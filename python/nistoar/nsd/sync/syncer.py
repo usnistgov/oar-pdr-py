@@ -181,16 +181,17 @@ def _write_nsd_people(out: Union[list,_JSONListWriter], baseurl: str, forous=Non
 def _write_nsd_ou_people(out: Union[list,_JSONListWriter], fullurl: str, ouid: int, token: str=None):
     page = 1
     needmore = True
-    togo = None
+    count = 0
     while needmore:
         data = _get_nsd_people_page(fullurl, ouid, page, token)
         if 'userInfo' not in data:
             raise NSDException(f"Unexpected {PEOPLE} output: missing 'userInfo' property: {data.keys()}")
       
         out.extend(data['userInfo'])
+        count += len(data['userInfo'])
         page += 1
-        needmore = (data.get('totalCount', len(data['userInfo'])) - len(out)) > 0
-        if len(out) > TOOMANY:
+        needmore = (data.get('totalCount', len(data['userInfo'])) - count) > 0
+        if count > TOOMANY:
             raise RuntimeException(f"Possible programming error: unable to escape People-fetch loop")
 
     return out
