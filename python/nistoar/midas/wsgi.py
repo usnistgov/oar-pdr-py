@@ -535,7 +535,7 @@ _MIDASServiceApps = {
 #    "nsdi/v1":   nsdiv1.NSDIndexerAppFactory
     "nsd/oar1":  PeopleServiceFactory(oar1),
     "nsd/nsd1":  PeopleServiceFactory(nsd1),
-#   "group/grp0": group.MIDASGroupApp.factory_for(),
+   "group/grp0": group.MIDASGroupApp.factory_for(),
 
 }
 
@@ -574,11 +574,12 @@ class MIDASApp(AuthenticatedWSGIApp):
         if base_ep is None:
             base_ep = config.get('base_endpoint', DEF_BASE_PATH)
         super(MIDASApp, self).__init__(config, log, base_ep)
+        self.base_path: str = base_ep.rstrip('/')
             
         if not self.cfg.get("services"):
             raise ConfigurationException("No MIDAS apps configured (missing 'services' parameter)")
 
-        # Load MIDAS project servies based on what's in the configuration (i.e. if only the dmp app
+        # Load MIDAS project services based on what's in the configuration (i.e. if only the dmp app
         # is configured, only that app will be available; others will return 404)
         if not subapp_factory_funcs:
             subapp_factory_funcs = _MIDASServiceApps

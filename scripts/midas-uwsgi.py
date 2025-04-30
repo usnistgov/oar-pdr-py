@@ -31,6 +31,7 @@ This script also pays attention to the following environment variables:
 """
 import os, sys, logging, copy
 from copy import deepcopy
+from nistoar.base.config import ConfigurationException
 
 try:
     import nistoar
