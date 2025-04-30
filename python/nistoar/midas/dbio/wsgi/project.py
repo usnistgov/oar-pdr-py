@@ -44,9 +44,10 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence, Callable
 from typing import Iterator
 from urllib.parse import parse_qs
-import json
+import json, re
 
 from nistoar.web.rest import ServiceApp, Handler, Agent
+from nistoar.pdr.utils.validate import ValidationResults
 from nistoar.web.formats import JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
 from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
@@ -870,7 +871,7 @@ class ProjectStatusHandler(ProjectRecordHandler):
     """
     handle status requests and actions
     """
-    _requestable_actions = [ ProjectService.STATUS_ACTION_FINALIZE, ProjectService.STATUS_ACTION_SUBMIT ] 
+    _requestable_actions = [ ProjectService.STATUS_ACTION_FINALIZE, ProjectService.STATUS_ACTION_SUBMIT ]
 
     def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
                  who: Agent, id: str, datapath: str="", config: dict=None, log: Logger=None):
@@ -927,12 +928,17 @@ class ProjectStatusHandler(ProjectRecordHandler):
         elif path == "action":
             out = out.action
         elif path == "message":
-            out = out.action
+            out = out.message
+        elif path == "todo":
+            return self.review()
+                
         elif path:
             return self.send_error_resp(404, "Status property not accessible",
                                         "Requested status property is not accessible", self._id, ashead=ashead)
+        else:
+            out = out.to_dict()
             
-        return self.send_json(out.to_dict(), ashead=ashead)
+        return self.send_json(out, ashead=ashead)
 
     def do_PUT(self, path):
         """
@@ -969,6 +975,8 @@ class ProjectStatusHandler(ProjectRecordHandler):
         return self._apply_action(req.get('action'), req.get('message'))
         
     def _apply_action(self, action, message=None):
+        if action:
+            action = action.lower()
         try:
             if message and action is None:
                 stat = self.svc.update_status_message(self._id, message)
@@ -993,7 +1001,65 @@ class ProjectStatusHandler(ProjectRecordHandler):
 
         return self.send_json(stat.to_dict())
 
+    def review(self, ashead=False):
+        """
+        run the review operation on the project record and send the results back to the client
+        """
+        try:
+
+            res = self.svc.review(self._id)
+            if res is None:
+                return self.send_error_resp(404, "todo property not accessible",
+                                            "Status property, todo, is not accessible",
+                                            self._id, ashead=ashead)
+
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found", self._id)
         
+        if res is None:
+            return self.send_error_resp(404, "todo property not accessible",
+                                        "Status property, todo, is not accessible", self._id, ashead=ashead)
+
+        return self.send_json(self.__class__.export_review(res))
+
+    @classmethod
+    def export_review(cls, res: ValidationResults) -> Mapping:
+        """
+        return JSON-encodable version of review results appropriate for sending back to web clients
+        """
+        # subjre = re.compile("#(\w\S*)$")
+        
+        # convert ValidationResults to todo export JSON
+        todo = { "req": [], "warn": [], "rec": [] }
+        for issue in res.failed():
+            label = issue.label.split(maxsplit=1)
+            jissue = { "id": f"{issue.profile}@{issue.profile_version} {label[0]}", "subject": "" }
+            if len(label) > 1:
+                jissue["subject"] = label[1]
+            if len(issue.comments) > 0:
+                jissue["summary"] = issue.comments[0]
+                jissue["details"] = [ issue.specification ] + list(issue.comments[1:])
+            else:
+                jissue["summary"] = issue.specification
+                jissue["details"] = []
+
+            if issue._type & issue.REQ:
+                todo["req"].append(jissue)
+            elif issue._type & issue.WARN:
+                todo["warn"].append(jissue)
+            elif issue._type & issue.REC:
+                todo["rec"].append(jissue)
+
+        todo['req'].sort(key=lambda e: e.get("id"))
+        todo['warn'].sort(key=lambda e: e.get("id"))
+        todo['rec'].sort(key=lambda e: e.get("id"))
+
+        return todo
+
+            
         
 class MIDASProjectApp(ServiceApp):
     """
