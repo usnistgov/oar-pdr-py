@@ -442,7 +442,7 @@ def create_people_service(config):
         dburl = config.get("db_url")
         if not dburl:
             raise ConfigurationException("Missing required config param: people_service.db_url")
-        logging.getLogger("nsd.create_people_service").debug("Creating a MongoPeopleService")
+        # logging.getLogger("nsd.create_people_service").debug("Creating a MongoPeopleService")
         return MongoPeopleService(dburl)
 
     elif config.get("factory"):
