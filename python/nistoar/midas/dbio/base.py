@@ -1429,7 +1429,8 @@ class DBClientFactory(ABC):
 
     def create_people_service(self, config: Mapping = {}):
         """
-        create a PeopleService that a DBClient can use
+        create a PeopleService that a DBClient can use.  The configuration data provided here is 
+        typically value of the ``people_service`` parameter (when that value is a dictionary).
         """
         return create_people_service(config)
 
