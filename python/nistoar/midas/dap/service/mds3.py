@@ -233,6 +233,12 @@ class DAPService(ProjectService):
     ``default_responsible_org``
         a dictionary containing NERDm Affiliation metadata to be provided as the default to the 
         ``responsibleOrganization`` NERDm property. 
+    ``nerdstorage``
+        a dictionary configuring the :py:class:`~nistoar.midas.dap.nerdstore.NERDResourceStorage` 
+        to use to manage NERDm metadata.  Note that if this dictionary does not have a 
+        ``file_manager`` property set but the dictionary has a sibling ``file_manager`` property 
+        (described above), that ``file_manager`` dictionary will be added to the ``nerdstorage``
+        dictionary.  
 
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
@@ -2298,7 +2304,10 @@ class DAPApp(MIDASProjectApp):
             project_coll = DAP_PROJECTS
         uselog = log.getChild(project_coll)
         if not service_factory:
-            nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), uselog)
+            # nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), uselog)
+            # Let the DAPServiceFactory create its preferred nerdstore if we don't have a special one
+            # to inject
+            nerdstore = None
             service_factory = DAPServiceFactory(dbcli_factory, config, uselog, nerdstore, project_coll)
         super(DAPApp, self).__init__(service_factory, uselog, config)
         self._data_update_handler = DAPProjectDataHandler
