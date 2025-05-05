@@ -31,7 +31,7 @@ from .base import DBIOHandler
 from nistoar.web.rest import ServiceApp, Handler, Agent
 from nistoar.midas.dbio import NotAuthorized, ObjectNotFound, AlreadyExists, InvalidUpdate
 from nistoar.midas.dbio import ACLs, DBClientFactory, ANONYMOUS
-from nistoar.midas.dbio.base import Group, DBGroups
+from nistoar.midas.dbio.base import Group, DBGroups, DEF_GROUPS_SHOULDER
 
 import logging
 
@@ -140,7 +140,9 @@ class GroupServiceFactory:
         """
         Build a GroupService for the given user identity.
         """
-        dbcli = self.dbcli_factory.create_client("groups", config=self.config, foruser=who.actor)
+        if who is None:
+            who = Agent("dbio.group", Agent.USER, Agent.ANONYMOUS, Agent.PUBLIC)
+        dbcli = self.dbcli_factory.create_client("groups", config = self.config, foruser = who.actor)
         return GroupService(dbcli, self.log)
 
 
@@ -203,7 +205,7 @@ class GroupHandler(DBIOHandler):
 
     def __init__(self, svcapp: ServiceApp, svc: GroupService, wsgienv: dict, start_resp: Callable,
                  who: Agent, shoulder: str, path: str, config: dict = None, log: Logger = None):
-        super().__init__(svcapp, None, wsgienv, start_resp, who, path, config, log)
+        super().__init__(svcapp, None, wsgienv, start_resp, who, "", config, log)
         self.svc = svc
         self._shoulder = shoulder
         self._full_path = path.strip('/')
@@ -357,23 +359,17 @@ class MIDASGroupApp(ServiceApp):
                 self,  # parent ServiceApp
                 svc,  # GroupService
                 env, start_resp, who,
-                "",  # shoulder (empty)
+                DEF_GROUPS_SHOULDER,  # shoulder (group api version)
                 self.cfg, self.log)
 
         parts = path.split('/', 1)
         shoulder = parts[0]
         subpath = parts[1] if len(parts) > 1 else ""
 
-        logger.debug(f"subpath {str(subpath)}")
+        logger.debug(f"group_id={shoulder}  extra={subpath}")
 
-        if not subpath:
-            # => /<shoulder> with no further subpath => create group
-            return GroupSelectionHandler(self, svc, env, start_resp, who, shoulder,
-                                         self.cfg, self.log)
-        else:
-            # => /<shoulder>/<group_id>...
-            return GroupHandler(self, svc, env, start_resp, who, shoulder, subpath,
-                                self.cfg, self.log)
+        return GroupHandler(self, svc, env, start_resp, who, shoulder, subpath and f"{shoulder}/{subpath}" or shoulder,
+                            self.cfg, self.log)
 
     class _factory:
         """
