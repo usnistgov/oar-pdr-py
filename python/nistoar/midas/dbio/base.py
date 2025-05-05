@@ -12,6 +12,7 @@ model and how to interact with the database.
 """
 import time
 import math
+import logging
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
 from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
@@ -24,6 +25,7 @@ from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils.prov import Action
 from .. import MIDASException
 from .status import RecordStatus
+from .notifier import Notifier
 from nistoar.pdr.utils.prov import ANONYMOUS_USER
 from nistoar.pdr.utils.validate import ValidationResults, ALL
 from nistoar.nsd.service import PeopleService, create_people_service
@@ -931,7 +933,7 @@ class DBClient(ABC):
     """
 
     def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS,
-                 peopsvc: PeopleService = None):
+                 peopsvc: PeopleService = None,websocket: str = 'ws://localhost:8765', key_websocket: str = '123456_secret_key'):
         """
         initialize the base client.
         :param dict  config:  the configuration data for the client
@@ -950,6 +952,7 @@ class DBClient(ABC):
 
         self._dbgroups = DBGroups(self)
         self._peopsvc = peopsvc
+        self.notifier = Notifier(uri=websocket,api_key=key_websocket)
 
     @property
     def project(self) -> str:
@@ -1019,7 +1022,9 @@ class DBClient(ABC):
         rec['name'] = name
         rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
-        return rec
+        message = f"proj-create,{self._projcoll},{name}"
+        self.notifier.notify(message)
+        return rec 
 
     def _default_shoulder(self):
         out = self._cfg.get("default_shoulder")
