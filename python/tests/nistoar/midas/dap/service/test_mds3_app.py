@@ -545,6 +545,48 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['action'], '')
         self.assertNotIn('file_count', resp)  # file manager not engaged
 
+    def test_review(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({
+            "name": "Gurn's Opus",
+            "data": {"title": "Goobers!"},
+            "meta": {"willUpload": True }
+        }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        id = resp['id']
+
+        self.resp = []
+        path = id + '/status/todo'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectStatusHandler))
+        self.assertEqual(hdlr._path, "todo")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+
+        self.assertIn("req", resp)
+        self.assertIn("warn", resp)
+        self.assertIn("rec", resp)
+        self.assertEqual(len(resp['req']), 3)
+        self.assertEqual(len(resp['warn']), 3)
+        self.assertEqual(len(resp['rec']), 1)
+
+        
+
     def test_put_title(self):
         path = ""
         req = {

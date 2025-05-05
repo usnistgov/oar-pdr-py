@@ -27,6 +27,7 @@ from .. import MIDASException
 from .status import RecordStatus
 from .notifier import Notifier
 from nistoar.pdr.utils.prov import ANONYMOUS_USER
+from nistoar.pdr.utils.validate import ValidationResults, ALL
 from nistoar.nsd.service import PeopleService, create_people_service
 
 DAP_PROJECTS = "dap"
@@ -1433,7 +1434,8 @@ class DBClientFactory(ABC):
 
     def create_people_service(self, config: Mapping = {}):
         """
-        create a PeopleService that a DBClient can use
+        create a PeopleService that a DBClient can use.  The configuration data provided here is 
+        typically value of the ``people_service`` parameter (when that value is a dictionary).
         """
         return create_people_service(config)
 
