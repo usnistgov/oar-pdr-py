@@ -25,7 +25,7 @@ from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils.prov import Action
 from .. import MIDASException
 from .status import RecordStatus
-from .notifier import Notifier
+from .notifier import DBIOClientNotifier
 from nistoar.pdr.utils.prov import ANONYMOUS_USER
 from nistoar.pdr.utils.validate import ValidationResults, ALL
 from nistoar.nsd.service import PeopleService, create_people_service
@@ -933,7 +933,7 @@ class DBClient(ABC):
     """
 
     def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS,
-                 peopsvc: PeopleService = None,websocket: str = 'ws://localhost:8765', key_websocket: str = '123456_secret_key'):
+                 peopsvc: PeopleService = None, notifier: DBIOClientNotifier = None):
         """
         initialize the base client.
         :param dict  config:  the configuration data for the client
@@ -943,6 +943,8 @@ class DBClient(ABC):
         :param str  foruser:  the user identity to connect as.  This will control what records are 
                               accessible via this instance's methods.
         :param PeopleService peopsvc:  a PeopleService to incorporate into this client
+        :param DBIOClientNotifier notifier:  a DBIOClientNotifier to use to alert DBIO clients about 
+                              updates to the DBIO data.
         """
         self._cfg = config
         self._native = nativeclient
@@ -952,7 +954,7 @@ class DBClient(ABC):
 
         self._dbgroups = DBGroups(self)
         self._peopsvc = peopsvc
-        self.notifier = Notifier(uri=websocket,api_key=key_websocket)
+        self.notifier = notifier
 
     @property
     def project(self) -> str:
@@ -1022,8 +1024,9 @@ class DBClient(ABC):
         rec['name'] = name
         rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
-        message = f"proj-create,{self._projcoll},{name}"
-        self.notifier.notify(message)
+        if self.notifier:
+            message = f"proj-create,{self._projcoll},{name}"
+            self.notifier.notify(message)
         return rec 
 
     def _default_shoulder(self):
@@ -1415,7 +1418,7 @@ class DBClientFactory(ABC):
     an abstract class for creating client connections to the database
     """
 
-    def __init__(self, config, peopsvc: PeopleService = None):
+    def __init__(self, config, peopsvc: PeopleService = None, notifier: DBIOClientNotifier = None):
         """
         initialize the factory with its configuration.  The configuration provided here serves as 
         the default parameters for the cient as these can be overridden by the configuration parameters
@@ -1428,16 +1431,47 @@ class DBClientFactory(ABC):
         :param PeoplService peopsvc:  a PeopleService to use to look up people in the organization.  If
                                       not provided, an attempt will be made to create one from the 
                                       configuration (via its ``people_service`` parameter). 
+        :param DBIOClientNotifier notifier:  a DBIOClientNotifier to use for sending alerts to 
+                                      listeners about new records created via the DBIO.  If not 
+                                      provided, an attempt to create one will be made using the 
+                                      configuration (via its ``client_notifier`` parameter; see
+                                      :py:meth:`create_client_notifier`).
         """
         self._cfg = config
         self._peopsvc = peopsvc
+        self._notifier = notifier
 
     def create_people_service(self, config: Mapping = {}):
         """
         create a PeopleService that a DBClient can use.  The configuration data provided here is 
-        typically value of the ``people_service`` parameter (when that value is a dictionary).
+        typically the value of the ``people_service`` parameter (when that value is a dictionary).
         """
         return create_people_service(config)
+
+    def create_client_notifier(self, config: Mapping = {}):
+        """
+        create a DBIOClientNotifier using the given configuration.  The configuration data 
+        provided here is typically the value of the ``client_notifier`` from the DBIO configuration.
+        The following sub-parameters are supported:
+        
+        ``service_endpoint``
+             the WebSocket URL for the notification server to send messages to
+        ``broadcast_key``
+             the token to use in communications that identifies the DBIO to the server as 
+             a broadcaster of messages.
+
+        :param dict config:  the configuration used to create the notifier (see above)
+        """
+        if 'service_endpoint' not in config:
+            raise ConfigurationException("Missing required configuration parameter: "+
+                                         "client_notifier.service_endpoint")
+        return DBIOClientNotifier(config['service_endpoint'], config.get("broadcast_key", ""))
+
+    def _create_notifier_from_config(self, config: Mapping = {}):
+        ncfg = config.get('client_notifier')
+        if not ncfg:
+            return None
+        return self.create_client_notifier(ncfg)
 
     @abstractmethod
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = ANONYMOUS):

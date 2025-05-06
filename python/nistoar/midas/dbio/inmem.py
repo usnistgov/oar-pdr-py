@@ -7,6 +7,7 @@ from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
+from .notifier import DBIOClientNotifier
 
 from nistoar.base.config import merge_config
 from nistoar.nsd.service import PeopleService, MongoPeopleService, create_people_service
@@ -17,7 +18,7 @@ class InMemoryDBClient(base.DBClient):
     """
 
     def __init__(self, dbdata: Mapping, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS,
-                 peopsvc: PeopleService = None):
+                 peopsvc: PeopleService = None, notifier: DBIOClientNotifier = None):
         """
         initialize this client.
         :param dict  dbdata:  the initial in-memory data store to use.  The structure of this dictionary
@@ -31,9 +32,11 @@ class InMemoryDBClient(base.DBClient):
         :param str  foruser:  the user identity to connect as.  This will control what records are 
                               accessible via this instance's methods.
         :param PeopleService peopsvc:  a PeopleService to incorporate into this client
+        :param DBIOClientNotifier notifier:  a DBIOClientNotifier to use to alert DBIO clients about 
+                              updates to the DBIO data.
         """
         self._db = dbdata
-        super(InMemoryDBClient, self).__init__(config, projcoll, self._db, foruser, peopsvc)
+        super(InMemoryDBClient, self).__init__(config, projcoll, self._db, foruser, peopsvc, notifier)
 
     def reset(self, dbdata: Mapping = {}):
         """
@@ -205,6 +208,9 @@ class InMemoryDBClientFactory(base.DBClientFactory):
         peopsvc = self._peopsvc
         if not peopsvc:
             peopsvc = self.create_people_service(cfg.get("people_service", {}))
+        notifier = self._notifier
+        if not notifier:
+            notifier = self._create_notifier_from_config(cfg)
 
-        return InMemoryDBClient(self._db, cfg, servicetype, foruser, peopsvc)
+        return InMemoryDBClient(self._db, cfg, servicetype, foruser, peopsvc, notifier)
         
