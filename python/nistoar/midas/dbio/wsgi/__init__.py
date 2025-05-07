@@ -10,5 +10,6 @@ non-project collections in the DBIO layer--namely, the groups endpoint (which tr
 groups used for access control).
 """
 from .project import MIDASProjectApp
+from .group import MIDASGroupApp
 from .base import ServiceApp, Handler, DBIOHandler, Agent
 

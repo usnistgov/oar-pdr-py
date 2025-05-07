@@ -31,6 +31,7 @@ This script also pays attention to the following environment variables:
 """
 import os, sys, logging, copy
 from copy import deepcopy
+from nistoar.base.config import ConfigurationException
 
 try:
     import nistoar
@@ -42,6 +43,7 @@ except ImportError:
         sys.path.insert(0, oarpath)
     import nistoar
 
+import nistoar.midas
 from nistoar.base import config
 from nistoar.midas.dbio import MongoDBClientFactory, InMemoryDBClientFactory, FSBasedDBClientFactory
 from nistoar.midas import wsgi
@@ -158,7 +160,8 @@ if nsdcfg:
     except ConfigurationException as ex:
         logging.warning("Unable to initialize NSD database: %s", str(ex))
 
-print("MIDAS service ready with "+dbtype+" backend")
-logging.info("MIDAS service ready with "+dbtype+" backend")
+msg = f"MIDAS service (v{nistoar.midas.__version__}) ready with {dbtype} backend"
+print(msg)
+logging.info(msg)
 if nsdcfg:
     logging.info("...and NSD service built-in")

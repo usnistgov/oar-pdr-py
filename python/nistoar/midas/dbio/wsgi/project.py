@@ -45,6 +45,10 @@ from logging import Logger
 from typing import Iterator
 from urllib.parse import parse_qs
 
+import json, re
+
+from nistoar.web.rest import ServiceApp, Handler, Agent
+from nistoar.pdr.utils.validate import ValidationResults
 from nistoar.web.formats import JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
 from nistoar.web.rest import ServiceApp, Handler, Agent
 
@@ -759,23 +763,41 @@ class ProjectACLsHandler(ProjectRecordHandler):
         replace the list of identities in a particular ACL.  This handles PUT ID/acls/PERM;
         `path` should be set to PERM.  Note that previously set identities are removed.
         """
-        # make sure a permission type, and only a permission type, is specified
-        path = path.strip('/')
-        if not path or '/' in path:
-            return self.send_error_resp(405, "PUT not allowed", "Unable set ACL membership")
-
+        return self._do_update_acls(path, "PUT")
+        
+    def _do_update_acls(self, path, meth):
+        # update specified ACLs
         try:
-            identities = self.get_json_body()
+            input = self.get_json_body()
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
-        if isinstance(identities, str):
-            identities = [identities]
-        if not isinstance(identities, list):
-            return self.send_error_resp(400, "Wrong input data type"
-                                        "Input data is not a string providing a user/group list")
+        path = path.strip('/')
+        if not path:
+            # requesting bulk update to multiple permissions
+            if not isinstance(input, Mapping):
+                return self.send_error_resp(400, "Wrong input data type"
+                                            "Input data is not an ACLs object with permission properties")
+        else:
+            # requesting update to to a single permission
+            if '/' in path:
+                return self.send_error_resp(405, "PATCH not allowed",
+                                            "ACL PATCH request should not a member name")
+            input = { path: input }
 
+        # validate the input
         # TODO: ensure input value is a bona fide user or group name
+        bad = []
+        for perm in input:
+            if isinstance(input[perm], str):
+                input[perm] = [ input[perm] ]
+            if not isinstance(input[perm], list):
+                bad.append(perm)
+        if bad:
+            return self.send_error_resp(400, "Wrong input data type",
+                                        f"Input permission{'s' if len(bad) > 1 else ''} "+
+                                        f"{','.join(bad)} {'are' if len(bad) > 1 else 'is'} "+
+                                        "not a list of user/group identities")
 
         try:
             prec = self.svc.get_record(self._id)
@@ -785,62 +807,32 @@ class ProjectACLsHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
 
-        if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
+        for perm in input:
+            if perm not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
+                return self.send_error_resp(405, "PATCH not allowed on provided permission type",
+                                            "Updating non-standard permission is not allowed")
+            identities = input[perm]
             try:
-                prec.acls.revoke_perm_from_all(path)
-                prec.acls.grant_perm_to(path, *identities)
-                prec.save()
-                return self.send_json(prec.to_dict().get('acls', {}).get(path,[]))
+                if meth == "PUT":
+                    prec.acls.revoke_perm_from_all(perm)
+                prec.acls.grant_perm_to(perm, *identities)
             except dbio.NotAuthorized as ex:
                 return self.send_unauthorized()
 
-        return self.send_error_resp(405, "PUT not allowed on this permission type",
-                                    "Updating specified permission is not allowed")
-
+        prec.save()
+        acls = prec.to_dict().get('acls', {})
+        if path:
+            return self.send_json(acls.get(path, []))
+        return self.send_json(acls)
 
     def do_PATCH(self, path):
         """
-        fold given list of identities into a particular ACL.  This handles PATCH ID/acls/PERM;
-        `path` should be set to PERM.
+        fold given lists of identities into ACLs.  This handles these paths:
+          *  PATCH ID/acls/PERM (`path` is set to PERM): fold the given list of IDs into the PERM list
+          *  PATCH ID/acls (`path` is an empty string): input is an object with ACL names (permissions)
+             to update.
         """
-        try:
-            # input is a list of user and/or group identities to add the PERM ACL
-            identities = self.get_json_body()
-        except self.FatalError as ex:
-            return self.send_fatal_error(ex)
-
-        # make sure path is a permission type (PERM), and only a permission type
-        path = path.strip('/')
-        if not path or '/' in path:
-            return self.send_error_resp(405, "PATCH not allowed",
-                                        "ACL PATCH request should not a member name")
-
-        if isinstance(identities, str):
-            identities = [identities]
-        if not isinstance(identities, list):
-            return self.send_error_resp(400, "Wrong input data type"
-                                        "Input data is not a list of user/group identities")
-
-        # TODO: ensure input value is a bona fide user or group name
-
-        try:
-            prec = self.svc.get_record(self._id)
-        except dbio.NotAuthorized as ex:
-            return self.send_unauthorized()
-        except dbio.ObjectNotFound as ex:
-            return self.send_error_resp(404, "ID not found",
-                                        "Record with requested identifier not found", self._id)
-
-        if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
-            try:
-                prec.acls.grant_perm_to(path, *identities)
-                prec.save()
-                return self.send_json(prec.to_dict().get('acls', {}).get(path, []))
-            except dbio.NotAuthorized as ex:
-                return self.send_unauthorized()
-
-        return self.send_error_resp(405, "PATCH not allowed on this permission type",
-                                    "Updating specified permission is not allowed")
+        return self._do_update_acls(path, "PATCH")
 
     def do_DELETE(self, path):
         """
@@ -940,12 +932,17 @@ class ProjectStatusHandler(ProjectRecordHandler):
         elif path == "action":
             out = out.action
         elif path == "message":
-            out = out.action
+            out = out.message
+        elif path == "todo":
+            return self.review()
+                
         elif path:
             return self.send_error_resp(404, "Status property not accessible",
                                         "Requested status property is not accessible", self._id, ashead=ashead)
-
-        return self.send_json(out.to_dict(), ashead=ashead)
+        else:
+            out = out.to_dict()
+            
+        return self.send_json(out, ashead=ashead)
 
     def do_PUT(self, path):
         """
@@ -982,6 +979,8 @@ class ProjectStatusHandler(ProjectRecordHandler):
         return self._apply_action(req.get('action'), req.get('message'))
 
     def _apply_action(self, action, message=None):
+        if action:
+            action = action.lower()
         try:
             if message and action is None:
                 stat = self.svc.update_status_message(self._id, message)
@@ -1006,8 +1005,67 @@ class ProjectStatusHandler(ProjectRecordHandler):
 
         return self.send_json(stat.to_dict())
 
+    def review(self, ashead=False):
+        """
+        run the review operation on the project record and send the results back to the client
+        """
+        try:
 
+            res = self.svc.review(self._id)
+            if res is None:
+                return self.send_error_resp(404, "todo property not accessible",
+                                            "Status property, todo, is not accessible",
+                                            self._id, ashead=ashead)
 
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found", self._id)
+        
+        if res is None:
+            return self.send_error_resp(404, "todo property not accessible",
+                                        "Status property, todo, is not accessible", self._id, ashead=ashead)
+
+        return self.send_json(self.__class__.export_review(res))
+
+    @classmethod
+    def export_review(cls, res: ValidationResults) -> Mapping:
+        """
+        return JSON-encodable version of review results appropriate for sending back to web clients
+        """
+        # subjre = re.compile("#(\w\S*)$")
+        
+        # convert ValidationResults to todo export JSON
+        todo = { "req": [], "warn": [], "rec": [] }
+        for issue in res.failed():
+            label = issue.label.split(maxsplit=1)
+            jissue = { "id": f"{issue.profile}@{issue.profile_version} {label[0]}", "subject": "" }
+            if len(label) > 1:
+                jissue["subject"] = label[1]
+            if len(issue.comments) > 0:
+                jissue["summary"] = issue.comments[0]
+                jissue["details"] = [ issue.specification ] + list(issue.comments[1:])
+            else:
+                jissue["summary"] = issue.specification
+                jissue["details"] = []
+
+            if issue._type & issue.REQ:
+                todo["req"].append(jissue)
+            elif issue._type & issue.WARN:
+                todo["warn"].append(jissue)
+            elif issue._type & issue.REC:
+                todo["rec"].append(jissue)
+
+        todo['req'].sort(key=lambda e: e.get("id"))
+        todo['warn'].sort(key=lambda e: e.get("id"))
+        todo['rec'].sort(key=lambda e: e.get("id"))
+
+        return todo
+
+            
+        
+>>>>>>> origin/integration
 class MIDASProjectApp(ServiceApp):
     """
     a base web app for an interface handling project record.

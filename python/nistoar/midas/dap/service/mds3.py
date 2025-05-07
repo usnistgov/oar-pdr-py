@@ -15,7 +15,7 @@ The key features of the mds3 conventions are:
     ``_moderate_*`` functions in the :py:class:`DAPService` class.)
 
 Support for the web service frontend is provided via :py:class:`DAPApp` class, an implementation
-of the WSGI-based :ref:class:`~nistoar.pdr.publish.service.wsgi.ServiceApp`.
+of the WSGI-based :ref:class:`~nistoar.web.rest.ServiceApp`.
 """
 import os, re, pkg_resources, random, string, time, math
 from datetime import datetime
@@ -33,11 +33,13 @@ from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, No
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
                                   ProjectSelectionHandler, ServiceApp)
 from ...dbio import status
+from ..review import DAPReviewer, DAPNERDmReviewValidator
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
 from nistoar.pdr.utils import build_mime_type_map, read_json
 from nistoar.pdr.utils.prov import Agent, Action
+from nistoar.pdr.utils.validate import ValidationResults, ALL, REQ
 from nistoar.nsd import NSDServerError
 
 from . import validate
@@ -231,6 +233,12 @@ class DAPService(ProjectService):
     ``default_responsible_org``
         a dictionary containing NERDm Affiliation metadata to be provided as the default to the 
         ``responsibleOrganization`` NERDm property. 
+    ``nerdstorage``
+        a dictionary configuring the :py:class:`~nistoar.midas.dap.nerdstore.NERDResourceStorage` 
+        to use to manage NERDm metadata.  Note that if this dictionary does not have a 
+        ``file_manager`` property set but the dictionary has a sibling ``file_manager`` property 
+        (described above), that ``file_manager`` dictionary will be added to the ``nerdstorage``
+        dictionary.  
 
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
@@ -1731,16 +1739,29 @@ class DAPService(ProjectService):
         #         objlist.set(i, item)
         #     else:
         #         objlist.append(item)
-            
 
-            
-            
-        
-                        
 
-#################
 
-            
+    def review(self, id, want=ALL, _prec=None) -> ValidationResults:
+        """
+        Review the record with the given identifier for completeness and correctness, and return lists of 
+        suggestions for completing the record.  The recommendations come as a set of validation issues.
+        The issues of type ``REQ`` _must_ be corrected before finalization or the finalization 
+        will fail.  ``WARN`` issues technically do not have to be addressed, but they indicate
+        possible inconsistancies that are unintended by the client/author.  This method should
+        not update the record in any way and, thus, only requires read permission.
+        :param str      id:  the identifier of the record to finalize
+        :param int    want:  the categories of tests to apply and return (default: ALL)
+        :returns:  a set of required and recommended changes to make
+                   :rtype: ValidationResults
+        :raises ObjectNotFound:  if no record with the given ID exists
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the 
+                                 record given by `id`.  
+        """
+        prec = self.get_record(id)   # may raise exceptions
+        reviewer = DAPReviewer.create_reviewer(self._store, self.cfg.get("review",{}))
+        return reviewer.validate(prec, want)
+
     def validate_json(self, json, schemauri=None):
         """
         validate the given JSON data record against the give schema, raising an exception if it 
@@ -2235,7 +2256,7 @@ class DAPService(ProjectService):
             self.validate_json(resmd)
         return resmd
 
-                
+
 class DAPServiceFactory(ProjectServiceFactory):
     """
     Factory for creating DAPService instances attached to a backend DB implementation and which act 
@@ -2283,7 +2304,10 @@ class DAPApp(MIDASProjectApp):
             project_coll = DAP_PROJECTS
         uselog = log.getChild(project_coll)
         if not service_factory:
-            nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), uselog)
+            # nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), uselog)
+            # Let the DAPServiceFactory create its preferred nerdstore if we don't have a special one
+            # to inject
+            nerdstore = None
             service_factory = DAPServiceFactory(dbcli_factory, config, uselog, nerdstore, project_coll)
         super(DAPApp, self).__init__(service_factory, uselog, config)
         self._data_update_handler = DAPProjectDataHandler
@@ -2451,6 +2475,7 @@ class DAPProjectInfoHandler(ProjectInfoHandler):
                                         "Trouble communicating with file manager")
 
         return self.send_json(fssumm)
+        
 
 class DAPProjectSelectionHandler(ProjectSelectionHandler):
     """
@@ -2485,5 +2510,3 @@ class DAPProjectSelectionHandler(ProjectSelectionHandler):
         for rec in self._dbcli.select_constraint_records(filter, perms):
             yield to_DAPRec(rec, self._fmcli)
 
-
-    

@@ -344,7 +344,7 @@ class OrgHandler(OARNSDHandler):
         
 class ReadyHandler(OARNSDHandler):
     """
-    Handle requests for organization information (e.g. everything under "/oar1/org")
+    Handle health (and load) requests ("/oar")
     """
     def do_GET(self, path, ashead=False, format=None):
         try:
@@ -360,12 +360,15 @@ class ReadyHandler(OARNSDHandler):
         return self.send_json(out, "Not Ready", 503, ashead=ashead)
 
     def do_LOAD(self, path):
-        if self.who.actor not in self.cfg.get("loaderusers", []):
+        allowed = self.cfg.get("allowed_loaders", [])
+        if self.who.actor not in allowed and self.who.agent_class not in allowed:
             self.log.warning("Unauthorized user attempted reload NSD data: %s", self.who.actor)
             return self.send_error_obj(401, "Not Authorized",
                                        f"{self.who.actor} is not authorized to reload")
 
         try:
+            if not self.cfg.get("quiet", False):
+                self.log.info("NSD reload triggered by %s", str(self.who))
             self.app.load_from()
             return self.send_error_obj(200, "Data Reloaded", "Successfully reloaded NSD data")
         except ConfigurationException as ex:
