@@ -294,7 +294,13 @@ class TestProjectService(test.TestCase):
         with self.assertRaises(project.NotEditable):
             self.project.finalize(prec.id)
         
+    def test_default_review(self):
+        self.create_service()
+        prec = self.project.create_record("goob")
+        self.assertIsNone(self.project.review(prec.id))
         
+        with self.assertRaises(project.ObjectNotFound):
+            self.project.review("goober")
 
 
 class TestProjectServiceFactory(test.TestCase):

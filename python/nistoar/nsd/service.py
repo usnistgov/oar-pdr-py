@@ -1,7 +1,7 @@
 """
-A semi-mock implementation of a person directory look-up service
+A staff directory look-up service
 """
-import json, os
+import json, os, logging
 from collections import OrderedDict
 from collections.abc import Mapping
 from abc import ABC, abstractmethod
@@ -15,7 +15,7 @@ from pymongo.errors import PyMongoError, OperationFailure
 
 class PeopleService(ABC):
     """
-    An implementation of the NSD
+    An abstract interface to a staff directory.  
     """
     OU_ORG_TYPE  = "ou"
     DIV_ORG_TYPE = "div"
@@ -435,10 +435,14 @@ def create_people_service(config):
     """
     instantiate a :py:class:`PeopleService` instance based on the given configuration
     """
+    if not isinstance(config, Mapping):
+        raise ConfigurationException("people_service config: not a dictionary: "+str(config))
+
     if config.get("factory") == "mongo":
         dburl = config.get("db_url")
         if not dburl:
             raise ConfigurationException("Missing required config param: people_service.db_url")
+        # logging.getLogger("nsd.create_people_service").debug("Creating a MongoPeopleService")
         return MongoPeopleService(dburl)
 
     elif config.get("factory"):

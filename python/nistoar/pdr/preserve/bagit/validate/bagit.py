@@ -5,7 +5,7 @@ import os, re
 from collections import OrderedDict
 from urllib.parse import urlparse
 
-from .base import (Validator, ValidatorBase, ALL, ValidationResults,
+from .base import (Validator, BagValidatorBase, ALL, ValidationResults,
                    ERROR, WARN, REC, ALL, PROB)
 from ..bag import NISTBag
 from ....utils import checksum_of
@@ -14,7 +14,7 @@ csfunctions = {
     "sha256":  checksum_of
 }
 
-class BagItValidator(ValidatorBase):
+class BagItValidator(BagValidatorBase):
     """
     A validator that runs tests for compliance to the base BagIt standard
     """
@@ -23,7 +23,7 @@ class BagItValidator(ValidatorBase):
     def __init__(self, config=None):
         super(BagItValidator, self).__init__(config)
 
-    def test_bagit_txt(self, bag, want=ALL, results=None):
+    def test_bagit_txt(self, bag, want=ALL, results=None, **kw):
         """
         test that the bagit.txt file exists and has the required contents
         """
@@ -32,39 +32,34 @@ class BagItValidator(ValidatorBase):
             out = ValidationResults(bag.name, want)
         bagitf = os.path.join(bag.dir, "bagit.txt")
 
-        t = self._issue("2.1.1-1", "Bag must contain a bag-info.txt file")
-        out._err(t, os.path.exists(bagitf))
+        t = self._err("2.1.1-1", "Bag must contain a bag-info.txt file")
+        t = out._add_applied(t, os.path.exists(bagitf))
         if t.failed():
             return out
         
         baginfo = bag.get_baginfo(bagitf)
-        t = self._issue("2.1.1-2",
-                        "bagit.txt must contain element: BagIt-Version")
-        out._err(t, 'BagIt-Version' in baginfo)
+        t = self._err("2.1.1-2", "bagit.txt must contain element: BagIt-Version")
+        t = out._add_applied(t, 'BagIt-Version' in baginfo)
 
         if t.passed():
-            t = self._issue("2.1.1-3",
-                            "bagit.txt: BagIt-Version must be set to {0}"
-                            .format(self.profile[1]))
-            out._err(t, baginfo['BagIt-Version'] == ["0.97"])
+            t = self._err("2.1.1-3",
+                          f"bagit.txt: BagIt-Version must be set to {self.profile[1]}")
+            t = out._add_applied(t, baginfo['BagIt-Version'] == ["0.97"])
 
-        t = self._issue("2.1.1-4",
-                  "bagit.txt must contain element: Tag-File-Character-Encoding")
-        out._err(t, 'Tag-File-Character-Encoding' in baginfo)
+        t = self._err("2.1.1-4", "bagit.txt must contain element: Tag-File-Character-Encoding")
+        t = out._add_applied(t, 'Tag-File-Character-Encoding' in baginfo)
 
         if t.passed():
-            t = self._issue("2.1.1-5",
-                "bagit.txt: Tag-File-Character-Encoding must be set to 'UTF-8'")
-            out._err(t, baginfo['Tag-File-Character-Encoding'] == ["UTF-8"])
+            t = self._err("2.1.1-5", "bagit.txt: Tag-File-Character-Encoding must be set to 'UTF-8'")
+            t = out._add_applied(t, baginfo['Tag-File-Character-Encoding'] == ["UTF-8"])
 
-        t = self._issue("2.1.1-6", "bagit.txt: recommend using this " +
-                                   "element order: BagIt-Version, " +
-                                   "Tag-File-Character-Encoding")
-        out._rec(t, list(baginfo.keys()) == ["BagIt-Version", "Tag-File-Character-Encoding"])
+        t = self._rec("2.1.1-6", "bagit.txt: recommend using this element order: BagIt-Version, " +
+                                 "Tag-File-Character-Encoding")
+        t = out._add_applied(t, list(baginfo.keys()) == ["BagIt-Version", "Tag-File-Character-Encoding"])
                                              
         return out
 
-    def test_data_dir(self, bag, want=ALL, results=None):
+    def test_data_dir(self, bag, want=ALL, results=None, **kw):
         """
         test that the data directory exists
         """
@@ -72,12 +67,12 @@ class BagItValidator(ValidatorBase):
         if not out:
             out = ValidationResults(bag.name, want)
 
-        t = self._issue("2.1.2", "Bag must contain payload directory, data/")
-        out._err(t, os.path.exists(os.path.join(bag.dir, "data")))
+        t = self._err("2.1.2", "Bag must contain payload directory, data/")
+        t = out._add_applied(t, os.path.exists(os.path.join(bag.dir, "data")))
 
         return out
 
-    def test_manifest(self, bag, want=ALL, results=None):
+    def test_manifest(self, bag, want=ALL, results=None, **kw):
         out = results
         if not out:
             out = ValidationResults(bag.name, want)
@@ -86,7 +81,7 @@ class BagItValidator(ValidatorBase):
         check = tcfg.get('check_checksums', True)
         return self._test_manifest(bag, "manifest", check, out, want)
 
-    def test_tagmanifest(self, bag, want=ALL, results=None):
+    def test_tagmanifest(self, bag, want=ALL, results=None, **kw):
         out = results
         if not out:
             out = ValidationResults(bag.name, want)
@@ -100,9 +95,8 @@ class BagItValidator(ValidatorBase):
         manifests = [f for f in os.listdir(bag.dir) if manire.match(f)]
 
         if basename == "manifest":
-            t = self._issue("2.1.3-1", "Bag requires at least one "+
-                            "manifest-<alg>.txt file")
-            out._err(t, len(manifests) > 0)
+            t = self._err("2.1.3-1", "Bag requires at least one manifest-<alg>.txt file")
+            t = out._add_applied(t, len(manifests) > 0)
             if t.failed():
                 return out
 
@@ -134,9 +128,7 @@ class BagItValidator(ValidatorBase):
                     else:
                         paths[parts[1]] = parts[0]
 
-            t = self._issue("2.1.3-2",
-                            "Manifest file lines must match format "+
-                            "CHECKSUM FILENAME")
+            t = self._err("2.1.3-2", "Manifest file lines must match format CHECKSUM FILENAME")
             comms = None
             if badlines:
                 if len(badlines) > 4:
@@ -145,10 +137,9 @@ class BagItValidator(ValidatorBase):
                 s = (len(badlines) > 1 and "s") or ""
                 comms = "{0}: line{1} {2}" \
                         .format(mfile, s, ", ".join([str(b) for b in badlines]))
-            out._err(t, len(badlines) == 0, comms)
+            t = out._add_applied(t, len(badlines) == 0, comms)
 
-            t = self._issue("2.1.3-3",
-                            "manifest-<alg>.txt file lists only payload files")
+            t = self._err("2.1.3-3", "manifest-<alg>.txt file lists only payload files")
             comms = None
             if notdata:
                 s = (len(notdata) > 1 and "s") or ""
@@ -157,7 +148,7 @@ class BagItValidator(ValidatorBase):
                 comms = ["{0}: line{1} {2}" 
                   .format(mfile, s, ", ".join([str(n[0]) for n in notdata[:4]]))]
                 comms.extend( [n[1] for n in notdata] )
-            out._err(t, len(notdata) == 0, comms)
+            t = out._add_applied(t, len(notdata) == 0, comms)
 
             # make sure all paths exist
             missing = []
@@ -169,24 +160,23 @@ class BagItValidator(ValidatorBase):
                 elif not os.path.isfile(fp):
                     notafile.append(datap)
 
-            t = self._issue("2.1.3-7", "Manifest must list only files")
+            t = self._err("2.1.3-7", "Manifest must list only files")
             comm = None
             if len(notafile) > 0:
                 s = (len(notafile) > 1 and "s") or ""
                 comm = ["{0} non-file{1} listed in {2}"
                         .format(len(notafile), s, mfile)]
                 comm += notafile
-            out._err(t, len(notafile) == 0, comm)
+            t = out._add_applied(t, len(notafile) == 0, comm)
 
-            t = self._issue("3-1-2",
-                            "Bag must contain all files listed in manifest")
+            t = self._err("3-1-2", "Bag must contain all files listed in manifest")
             comm = None
             if len(missing) > 0:
                 s = (len(missing) > 1 and "s") or ""
                 comm = ["{0} missing file{1} from {2}"
                         .format(len(missing), s, mfile)]
                 comm += missing
-            out._err(t, len(missing) == 0, comm)
+            t = out._add_applied(t, len(missing) == 0, comm)
 
             # check that all files in the payload are listed in the manifest
             notfound = []
@@ -205,35 +195,34 @@ class BagItValidator(ValidatorBase):
                     elif check and csfunc and csfunc(fp) != paths[datap]:
                         failed.append(datap)
 
-            t = self._issue("2.1.3-4",
-                     "All payload files must be listed in at least one manifest")
+            t = self._rec("2.1.3-4", "All payload files must be listed in at least one manifest")
             comm = None
             if len(notfound) > 0:
                 s = (len(notfound) > 1 and "s") or ""
                 comm = ["{0} payload file{1} not listed in {2}"
                         .format(len(notfound), s, mfile)]
                 comm += notfound
-            out._rec(t, len(notfound) == 0, comm)
+            t = out._add_applied(t, len(notfound) == 0, comm)
 
-            t = self._issue("3-2-2", "Every checksum must be verifiable")
+            t = self._err("3-2-2", "Every checksum must be verifiable")
             if len(failed) > 0:
                 s = (len(failed) > 1 and "s") or ""
                 es = (len(failed) == 1 and "es") or ""
                 comm = ["{0} recorded checksum{1} in {2} do{3} not verify against file"
                        .format(len(failed), s, mfile, es)]
                 comm += failed
-            out._err(t, len(failed) == 0, comm)
+            t = out._add_applied(t, len(failed) == 0, comm)
 
         return out
             
-    def test_baginfo(self, bag, want=ALL, results=None):
+    def test_baginfo(self, bag, want=ALL, results=None, **kw):
         out = results
         if not out:
             out = ValidationResults(bag.name, want)
         baginfof = os.path.join(bag.dir, "bag-info.txt")
 
-        t = self._issue("2.2.2-1", "A bag should include a bag-info.txt file")
-        out._rec(t, os.path.exists(baginfof))
+        t = self._rec("2.2.2-1", "A bag should include a bag-info.txt file")
+        t = out._add_applied(t, os.path.exists(baginfof))
         if t.failed():
             return out
         
@@ -242,9 +231,12 @@ class BagItValidator(ValidatorBase):
         for fld in _fmt_tests:
             if fld in data:
                 badvals = []
-                t = self._issue("2.2.2-"+fld,
-                                "{0} value should match format, {1}"
-                                .format(fld, _fmt_tests[fld][0]))
+                if fld == "Bag-Size":
+                    t = self._rec("2.2.2-"+fld,
+                                  f"{fld} value should match format, {_fmt_tests[fld][0]}")
+                else:
+                    t = self._err("2.2.2-"+fld,
+                                  f"{fld} value should match format, {_fmt_tests[fld][0]}")
                 for val in data[fld]:
                     if not _fmt_tests[fld][1](val):
                         badvals.append(val)
@@ -252,10 +244,7 @@ class BagItValidator(ValidatorBase):
                 comm = None
                 if len(badvals) > 0:
                     comm = list(badvals)
-                if fld == "Bag-Size":
-                    out._rec(t, len(badvals) == 0, comm)
-                else:
-                    out._err(t, len(badvals) == 0, comm)
+                out._add_applied(t, len(badvals) == 0, comm)
 
         return out
 
@@ -272,8 +261,7 @@ class BagItValidator(ValidatorBase):
                 if not fmtre.match(line) and (i == 1 or not cntre.match(line)):
                     badlines.append(i)
 
-        t = self._issue("2.2.2-2","bag-info.txt lines must match "+
-                        "label-colon-value format")
+        t = self._err("2.2.2-2","bag-info.txt lines must match label-colon-value format")
         comm = None
         if badlines:
             s = (len(badlines) > 1 and "s") or ""
@@ -281,11 +269,11 @@ class BagItValidator(ValidatorBase):
                 badlines[3] = '...'
                 badlines = badlines[:4]
             comm = "line{0} {1}".format(s, ", ".join([str(b) for b in badlines]))
-        out._err(t, len(badlines) == 0, comm)
+        t = out._add_applied(t, len(badlines) == 0, comm)
 
         return out
 
-    def test_fetch_txt(self, bag, want=ALL, results=None):
+    def test_fetch_txt(self, bag, want=ALL, results=None, **kw):
         out = results
         if not out:
             out = ValidationResults(bag.name, want)
@@ -325,15 +313,14 @@ class BagItValidator(ValidatorBase):
                 errs[err] = "Malformed: line{0} {1})" \
                     .format(s, ", ".join([str(e) for e in errs[err]]))
 
-        t = self._issue(FMT,
-                        "fetch.txt lines must match format URL LENGTH FILENAME")
-        out._err(t, not bool(errs[FMT]), errs[FMT])
+        t = self._err(FMT, "fetch.txt lines must match format URL LENGTH FILENAME")
+        t = out._add_applied(t, not bool(errs[FMT]), errs[FMT])
 
-        t = self._issue(ICL,  "Content length (field 2) must be an integer")
-        out._err(t, not bool(errs[ICL]), errs[ICL])
+        t = self._err(ICL,  "Content length (field 2) must be an integer")
+        t = out._add_applied(t, not bool(errs[ICL]), errs[ICL])
 
-        t = self._issue(URL,  "First field must be a URL")
-        out._err(t, not bool(errs[URL]), errs[URL])
+        t = self._err(URL,  "First field must be a URL")
+        t = out._add_applied(t, not bool(errs[URL]), errs[URL])
 
         return out
 

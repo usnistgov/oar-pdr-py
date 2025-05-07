@@ -915,7 +915,7 @@ class TestMIDASProjectApp(test.TestCase):
     def test_acls_methnotallowed(self):
         path = "mdm1:0003/acls"
         req = {
-            'REQUEST_METHOD': 'PUT',
+            'REQUEST_METHOD': 'DELETE',
             'PATH_INFO': self.rootpath + path
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
@@ -923,10 +923,59 @@ class TestMIDASProjectApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("405 ", self.resp[0])
 
-        self.resp = []
-        req['REQUEST_METHOD'] = 'DELETE'
+    def test_getupd_aclsperm_bulk(self):
+        path = "mdm1:0003/acls"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        prec = self.create_record()
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        acls = self.body2dict(body)
+        self.assertEqual(acls.get("read"),   ["nstr1"])
+        self.assertEqual(acls.get("write"),  ["nstr1"])
+        self.assertEqual(acls.get("admin"),  ["nstr1"])
+        self.assertEqual(acls.get("delete"), ["nstr1"])
+
+        self.resp = []
+        req['REQUEST_METHOD'] = 'PATCH'
+        req['wsgi.input'] = StringIO(json.dumps({"read": ["gary", "hank"], "write": "hank"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        acls = self.body2dict(body)
+        self.assertEqual(acls.get("read"), ["nstr1", "gary", "hank"])
+        self.assertEqual(acls.get("write"), ["nstr1", "hank"])
+        self.assertEqual(acls.get("admin"), ["nstr1"])
+        self.assertEqual(acls.get("delete"), ["nstr1"])
+
+        self.resp = []
+        req['REQUEST_METHOD'] = 'PATCH'
+        req['wsgi.input'] = StringIO(json.dumps({"read": ["alice"], "write": [], "admin": []}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        acls = self.body2dict(body)
+        self.assertEqual(acls.get("read"), ["nstr1", "gary", "hank", "alice"])
+        self.assertEqual(acls.get("write"), ["nstr1", "hank"])
+        self.assertEqual(acls.get("admin"), ["nstr1"])
+        self.assertEqual(acls.get("delete"), ["nstr1"])
+
+        self.resp = []
+        req['REQUEST_METHOD'] = 'PUT'
+        req['wsgi.input'] = StringIO(json.dumps({"read": ["alice"], "write": [], "admin": []}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        acls = self.body2dict(body)
+        self.assertEqual(acls.get("read"), ["nstr1", "alice"])
+        self.assertEqual(acls.get("write"), [])
+        self.assertEqual(acls.get("admin"), ["nstr1"])
+        self.assertEqual(acls.get("delete"), ["nstr1"])
+
+
 
     def test_getupd_aclsperm(self):
         path = "mdm1:0003/acls/read"
@@ -986,7 +1035,7 @@ class TestMIDASProjectApp(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
         self.assertIn("200 ", self.resp[0])
-        self.assertEqual(self.body2dict(body), ["hank", "nstr1"])
+        self.assertEqual(self.body2dict(body), ["nstr1", "hank"])  # order changes due to protect_owner
 
         self.resp = []
         req['REQUEST_METHOD'] = 'GET'
@@ -994,7 +1043,23 @@ class TestMIDASProjectApp(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
         self.assertIn("200 ", self.resp[0])
-        self.assertEqual(self.body2dict(body), ["hank", "nstr1"])
+        self.assertEqual(self.body2dict(body), ["nstr1", "hank"])  # order changes due to protect_owner
+
+        self.resp = []
+        req['REQUEST_METHOD'] = 'PATCH'
+        req['wsgi.input'] = StringIO(json.dumps(["hank", "gary"]))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), ["nstr1", "hank", "gary"])
+
+        self.resp = []
+        req['REQUEST_METHOD'] = 'GET'
+        del req['wsgi.input']
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), ["nstr1", "hank", "gary"])
         
     def test_getdel_aclspermmem(self):
         path = "mdm1:0003/acls/write/hank"
@@ -1164,6 +1229,48 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertIn('since', resp)
         self.assertIn('message', resp)
         
+    def test_get_status_todo(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "big", "owner": "nobody", "data": {"color": "red"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "big")
+        self.assertEqual(resp['owner'], "nstr1")
+        self.assertEqual(resp['id'], "mdm1:0003")
+        self.assertNotIn("todo", resp['status'])
+
+        self.resp = []
+        path = "mdm1:0003/status/todo"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectStatusHandler))
+        self.assertEqual(hdlr._path, "todo")
+        body = hdlr.handle()
+        self.assertIn("404 ", self.resp[0])
+        self.assertIn("todo", self.resp[0])
+
+        self.resp = []
+        path = "mdm1:goob/status/todo"
+        req['PATH_INFO'] = self.rootpath + path
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectStatusHandler))
+        self.assertEqual(hdlr._path, "todo")
+        body = hdlr.handle()
+        self.assertIn("404 ", self.resp[0])
+        self.assertNotIn("todo", self.resp[0])
+
     def test_update_status_message(self):
         path = ""
         req = {
@@ -1277,5 +1384,6 @@ class TestMIDASProjectApp(test.TestCase):
                          
 if __name__ == '__main__':
     test.main()
+
 
 
