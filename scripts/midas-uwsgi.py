@@ -170,3 +170,5 @@ print(msg)
 logging.info(msg)
 if nsdcfg:
     logging.info("...and NSD service built-in")
+if cfg.get('dbio', {}).get('client_notifier'):
+    logging.info("...and with client notifier")

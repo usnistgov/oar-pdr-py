@@ -158,7 +158,7 @@ def main(progname, args):
     else:
         # default logging
         lev = logging.DEBUG if opts.verbose else logging.INFO
-        fmt = "%(name)s: %(levelname)s: %(message)"
+        fmt = "%(asctime)s %(name)s: %(levelname)s: %(message)s"
         logging.basicConfig(level=lev, format=fmt)
         
     # launch the server (Note: None args will defer to config/defaults)
