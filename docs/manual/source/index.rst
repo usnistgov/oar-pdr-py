@@ -34,6 +34,7 @@ Table of Contents
 
   * What the PDR Does
   * Architecture Overview
+  * ``nistoar`` Software Overview
 
 * Data Publication System
   

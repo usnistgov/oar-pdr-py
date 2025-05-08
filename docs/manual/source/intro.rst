@@ -67,3 +67,30 @@ Architecture Overview
 * Ingest in terms of the OASIS model
 
 
+nistoar Software Overview
+=========================
+
+* System modules
+
+  * midas
+  * pdr
+  * nsd
+  * rmm
+  * distrib
+
+* Infrastructure modules
+
+  * base
+  * nerdm
+  * web
+  * jobmgt
+  * other
+
+* Relationship to other repositories
+
+  * oar-metadata
+  * other system repositories
+  * other front-end repositories
+
+
+    
