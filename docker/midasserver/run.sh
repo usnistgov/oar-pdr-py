@@ -60,6 +60,12 @@ ARGUMENTS
                                 does not effect the DBIO backend (use -M for this).  
   -p, --port NUM                The port that the service should listen to 
                                 (default: 9091)
+  -N, --with-notifier           Also launch the DBIO client notifier server
+  --notifier-url URL            The URL of an externally running client notifier server 
+                                to use (don't use with -N)
+  --notifier-key KEY            The authorization key to use to identify the MIDAS server
+                                to the client notifier server.  If not set, a default will 
+                                be used.
   -h, --help                    Print this text to the terminal and then exit
 
 EOF
@@ -86,11 +92,12 @@ CONFIGFILE=
 LOGFILE=
 USEMONGO=
 STOREDIR=
-DBTYPE=inmem
+DBTYPE=
 ADDNSD=
 DETACH=
 PPLDATADIR=
 VOLOPTS="-v $repodir/dist:/app/dist"
+ENVOPTS=
 while [ "$1" != "" ]; do
     case "$1" in
         -b|--build)
@@ -148,6 +155,25 @@ while [ "$1" != "" ]; do
             vol=$1
             VOLOPTS="$VOLOPTS -v $vol"
             ;;
+        -N|--with-notifier)
+            notifierurl=internal
+            ;;
+        --notifier-url)
+            shift
+            notifierurl=$1
+            ;;
+        --notifier-url=*)
+            shift
+            notifierurl=`echo $1 | sed -e 's/[^=]*=//'`
+            ;;
+        --notifier-key)
+            shift
+            notifierkey=$1
+            ;;
+        --notifier-key=*)
+            shift
+            notifierkey=`echo $1 | sed -e 's/[^=]*=//'`
+            ;;
         -h|--help)
             usage
             exit
@@ -169,7 +195,7 @@ while [ "$1" != "" ]; do
                 false
             }
             STOREDIR=$1
-            DBTYPE=fsbased
+            [ -n "$DBTYPE" ] || DBTYPE=fsbased
             ;;
     esac
     shift
@@ -219,7 +245,11 @@ configext=`echo $CONFIGFILE | sed -e 's/^.*\.//' | tr A-Z a-z`
 configparent=`dirname $CONFIGFILE`
 configfile=`(cd $configparent; pwd)`/`basename $CONFIGFILE`
 VOLOPTS="$VOLOPTS -v ${configfile}:/app/midas-config.${configext}:ro"
-ENVOPTS="-e OAR_MIDASSERVER_CONFIG=/app/midas-config.${configext}"
+ENVOPTS="$ENVOPTS -e OAR_MIDASSERVER_CONFIG=/app/midas-config.${configext}"
+[ -z "$notifierurl" ] || {
+    ENVOPTS="$ENVOPTS -e OAR_CLINOTIF_URL=$notifierurl"
+    [ -z "$notifierkey" ] || ENVOPTS="$ENVOPTS -e OAR_CLINOTIF_KEY=$notifierkey"
+}
 
 [ -z "$LOGFILE" ] || {
     dir=`dirname $LOGFILE`
@@ -257,6 +287,7 @@ fi
 
 NETOPTS=
 STOP_MONGO=true
+true ${DBTYPE:=inmem}
 if [ "$DBTYPE" = "mongo" -o -n "$ADDNSD" ]; then
     DOCKER_COMPOSE="docker compose"
     (docker compose version > /dev/null 2>&1) || DOCKER_COMPOSE=docker-compose
@@ -306,7 +337,9 @@ if [ "$ACTION" = "stop" ]; then
     stop_server || true
     $STOP_MONGO
 else
-    echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp -p 8765:8765 --rm --name=$CONTAINER_NAME $DETACH $PACKAGE_NAME/midasserver $DBTYPE
+    echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp \
+               -p 8765:8765 --rm --name=$CONTAINER_NAME $DETACH $D\
+               $PACKAGE_NAME/midasserver $DBTYPE
     docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp -p 8765:8765 --rm --name=$CONTAINER_NAME $DETACH $PACKAGE_NAME/midasserver $DBTYPE
 fi
 

@@ -7,6 +7,7 @@ from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
+from .notifier import DBIOClientNotifier
 
 from nistoar.pdr.utils import read_json, write_json
 from nistoar.base.config import ConfigurationException, merge_config
@@ -18,11 +19,11 @@ class FSBasedDBClient(base.DBClient):
     """
 
     def __init__(self, dbroot: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS,
-                 peopsvc: PeopleService = None):
+                 peopsvc: PeopleService = None, notifier: DBIOClientNotifier = None):
         self._root = Path(dbroot)
         if not self._root.is_dir():
             raise base.DBIOException("FSBasedDBClient: %s: does not exist as a directory" % dbroot)
-        super(FSBasedDBClient, self).__init__(config, projcoll, self._root, foruser, peopsvc)
+        super(FSBasedDBClient, self).__init__(config, projcoll, self._root, foruser, peopsvc, notifier)
 
     def _ensure_collection(self, collname):
         collpath = self._root / collname
@@ -260,6 +261,9 @@ class FSBasedDBClientFactory(base.DBClientFactory):
         peopsvc = self._peopsvc
         if not peopsvc:
             peopsvc = self.create_people_service(cfg.get("people_service", {}))
+        notifier = self._notifier
+        if not notifier:
+            notifier = self._create_notifier_from_config(cfg)
 
-        return FSBasedDBClient(self._dbroot, cfg, servicetype, foruser, peopsvc)
+        return FSBasedDBClient(self._dbroot, cfg, servicetype, foruser, peopsvc, notifier)
 
