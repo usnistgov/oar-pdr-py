@@ -30,7 +30,11 @@ Table of Contents
    This is a placeholder TOC for editing purposes.  It will be replaced by the 
    dynamically-generated list below.
 
-* Architecture Overview
+* Introduction
+
+  * What the PDR Does
+  * Architecture Overview
+
 * Data Publication System
   
   * Overview
@@ -65,5 +69,6 @@ Table of Contents
    :maxdepth: 2
    :caption: Contents:
 
+   intro
    api
 

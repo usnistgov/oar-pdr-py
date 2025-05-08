@@ -1,5 +1,6 @@
+************************
 The Python API Reference
-========================
+************************
 
 The ``nistoar`` package is divided into sub-packages each covering a
 major subsystem or capability.
@@ -20,6 +21,5 @@ major subsystem or capability.
    nistoar.rmm
    nistoar.testing
    nistoar.web
-   nistoar.midas.dbio.base.ACLs
 
 
