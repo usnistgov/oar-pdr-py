@@ -90,6 +90,12 @@ if uwsgi.opt.get("oar_log_file"):
 
 config.configure_log(config=cfg)
 
+# Is there a client notification service running we should talk to?
+if uwsgi.opt.get('dbio_clinotif_config_file'):
+    cnscfg = config.resolve_configuration(_dec(uwsgi.opt['dbio_clinotif_config_file']))
+    cfg.setdefault('dbio', {})
+    cfg['dbio']['client_notifier'] = cnscfg
+
 # setup the MIDAS database backend
 dbtype = _dec(uwsgi.opt.get("oar_midas_db_type"))
 if not dbtype:
@@ -164,3 +170,5 @@ print(msg)
 logging.info(msg)
 if nsdcfg:
     logging.info("...and NSD service built-in")
+if cfg.get('dbio', {}).get('client_notifier'):
+    logging.info("...and with client notifier")

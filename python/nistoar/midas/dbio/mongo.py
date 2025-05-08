@@ -6,6 +6,7 @@ from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
+from .notifier import DBIOClientNotifier
 
 from pymongo import MongoClient, ASCENDING
 
@@ -22,7 +23,7 @@ class MongoDBClient(base.DBClient):
     HISTORY_COLL = 'history'
 
     def __init__(self, dburl: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS,
-                 peopsvc: PeopleService = None):
+                 peopsvc: PeopleService = None, notifier: DBIOClientNotifier = None):
         """
         create the client with its connector to the MongoDB database
 
@@ -32,13 +33,15 @@ class MongoDBClient(base.DBClient):
                              used to authorize access to its contents
         :param PeopleService peopsvc:  a PeopleService that the client can use to look up people in the 
                              organization.
+        :param DBIOClientNotifier notifier:  a DBIOClientNotifier to use to alert DBIO clients about 
+                             updates to the DBIO data.
         """
         if not _dburl_re.match(dburl):
             raise ValueError("DBClient: Bad dburl format (need 'mongodb://[USER:PASS@]HOST[:PORT]/DBNAME'): "+
                              dburl)
         self._dburl = dburl
         self._mngocli = None
-        super(MongoDBClient, self).__init__(config, projcoll, None, foruser, peopsvc)
+        super(MongoDBClient, self).__init__(config, projcoll, None, foruser, peopsvc, notifier)
 
     def connect(self):
         """
@@ -336,6 +339,10 @@ class MongoDBClientFactory(base.DBClientFactory):
                     pscfg["db_url"] = self._dburl
             peopsvc = self.create_people_service(pscfg)
 
-        return MongoDBClient(self._dburl, cfg, servicetype, foruser, peopsvc)
+        notifier = self._notifier
+        if not notifier:
+            notifier = self._create_notifier_from_config(cfg)
+
+        return MongoDBClient(self._dburl, cfg, servicetype, foruser, peopsvc, notifier)
 
 
