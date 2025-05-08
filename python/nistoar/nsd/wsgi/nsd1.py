@@ -2,7 +2,7 @@
 A RESTful web service interface to the PeopleService. This implementation is intended to be compatible
 with the NIST Staff Directory (NSD) Service. 
 """
-import logging, json, re
+import logging, json, re, os
 from collections import OrderedDict
 from collections.abc import Mapping, Callable
 from typing import List
@@ -159,7 +159,11 @@ class NSDServiceApp(ServiceApp):
         if datadir:
             datacfg = dict(self.cfg.items())
             datacfg['dir'] = str(datadir)
-        self.svc.load(datacfg, self.log, True)
+        if os.path.isdir(datacfg['dir']):
+            self.svc.load(datacfg, self.log, True)
+        else:
+            self.log.warning("%s: NSD data directory does not exist; no data will be loaded",
+                             datacfg['dir'])
 
 PeopleServiceApp = NSDServiceApp
 
