@@ -83,6 +83,13 @@ class NSDSyncer:
             raise ConfigurationException("Missing required configuration: dir")
         if isinstance(dir, str):
             dir = Path(dir)
+        if not dir.is_dir() and self.cfg.get("create_dest_dir", True):
+            try:
+                dir.mkdir()
+            except FileNotFoundError as ex:
+                raise ConfigurationException(f"{dir.parents[0]}: does not exist as a directory") from ex
+            except Exception as ex:
+                raise ConfigurationException(f"{dir}: unable create NSD data dir: {str(ex)}") from ex
         if not dir.is_dir():
             raise ConfigurationException(f"{dir}: does not exist as a directory")
 
