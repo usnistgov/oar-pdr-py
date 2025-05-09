@@ -75,7 +75,7 @@ def tearDownModule():
 def mk_dlurls_local(bagdir):
     # convert the download urls so that they point to the local
     # sim dist service
-    datadotnist = re.compile(r'^https://data.nist.gov/')
+    datadotnist = re.compile(r'^https://data\.nist\.gov/')
 
     mddir = os.path.join(bagdir, "metadata")
     for (dpath, dirs, files) in os.walk(mddir):
