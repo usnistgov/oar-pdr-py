@@ -7,6 +7,7 @@ from nistoar.midas.dbio import project as prj
 from nistoar.midas.dap.service import mds3
 from nistoar.pdr.utils import read_nerd, prov
 from nistoar.nerdm.constants import CORE_SCHEMA_URI
+from nistoar.pdr.utils.validate import ALL, REQ, WARN
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_mds3.")
 loghdlr = None
@@ -1056,7 +1057,21 @@ class TestMDS3DAPService(test.TestCase):
         res = nerd.get_res_data()
         self.assertEqual(res.get('landingPage'), "https://example.com/")
         
-                
+    def test_review(self):
+        self.create_service()
+        prec = self.svc.create_record("goob", {"title": "Goobers!"}, {"willUpload": True})
+
+        res = self.svc.review(prec.id, _prec=prec)
+        self.assertIsNotNone(res)
+        self.assertEqual(res.count_applied(), 9)
+        self.assertEqual(res.count_passed(), 2)
+        self.assertIn("1.2.1 title", [t.label for t in res.passed()])
+
+        res = self.svc.review(prec.id, REQ, _prec=prec)
+        self.assertIsNotNone(res)
+        self.assertEqual(res.count_applied(), 5)
+        self.assertEqual(res.count_passed(), 1)
+        self.assertIn("1.2.1 title", [t.label for t in res.passed()])
         
 
                          

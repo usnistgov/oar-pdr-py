@@ -48,6 +48,8 @@ class FMFSResourceStorage(FSBasedResourceStorage):
         fmcfg = config.get('file_manager')
         if fmcfg:
             fm = FileManager(fmcfg)
+        else:
+            logger.warning("No FileManager client available to nerdstore")
         
         return cls(config['store_dir'], fm, config.get("default_shoulder", "nrd"), logger)
 

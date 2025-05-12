@@ -160,9 +160,10 @@ from nistoar.nsd.wsgi import nsd1, oar1
 from .dbio.wsgi import group
 
 
-log = logging.getLogger(system.system_abbrev)   \
-             .getChild(system.subsystem_abbrev) \
-             .getChild('wsgi')
+log = logging.getLogger(system.system_abbrev)
+if system.subsystem_abbrev:
+    log = log.getChild(system.subsystem_abbrev)
+log = log.getChild('wsgi')
 
 DEF_BASE_PATH = "/midas/"
 DEF_DBIO_CLIENT_FACTORY_CLASS = InMemoryDBClientFactory

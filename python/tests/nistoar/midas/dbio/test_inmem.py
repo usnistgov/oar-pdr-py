@@ -1,6 +1,7 @@
-import os, json, pdb, logging
+import os, json, pdb, logging,asyncio 
 from pathlib import Path
 import unittest as test
+import websockets
 
 from nistoar.midas.dbio import inmem, base
 from nistoar.pdr.utils.prov import Action, Agent
@@ -29,7 +30,10 @@ with open(dmp_path, 'r') as file:
 class TestInMemoryDBClientFactory(test.TestCase):
 
     def setUp(self):
-        self.cfg = {"goob": "gurn"}
+        self.cfg = {
+            "goob": "gurn",
+            "client_notifier": { "service_endpoint": "ws://localhost/" }
+        }
         self.fact = inmem.InMemoryDBClientFactory(
             self.cfg, {"nextnum": {"hank": 2}})
 
@@ -41,6 +45,8 @@ class TestInMemoryDBClientFactory(test.TestCase):
         self.assertEqual(self.fact._db.get(base.GROUPS_COLL), {})
         self.assertEqual(self.fact._db.get(base.PEOPLE_COLL), {})
         self.assertEqual(self.fact._db.get("nextnum"), {"hank": 2})
+        self.assertIsNone(self.fact._peopsvc)
+        self.assertIsNone(self.fact._notifier)
 
     def test_create_client(self):
         cli = self.fact.create_client(base.DMP_PROJECTS, {}, "ava1")
@@ -51,6 +57,10 @@ class TestInMemoryDBClientFactory(test.TestCase):
         self.assertIsNone(cli._whogrps)
         self.assertIs(cli._native, self.fact._db)
         self.assertIsNotNone(cli._dbgroups)
+        self.assertIsNone(cli._peopsvc)
+
+        self.assertIsNotNone(cli.notifier)
+        self.assertEqual(cli.notifier.api_key, "")
 
 
 class TestInMemoryDBClient(test.TestCase):
@@ -60,6 +70,15 @@ class TestInMemoryDBClient(test.TestCase):
         self.user = "nist0:ava1"
         self.cli = inmem.InMemoryDBClientFactory({}).create_client(
             base.DMP_PROJECTS, self.cfg, self.user)
+        self.received_messages = []
+
+    async def mock_websocket_server(self, websocket):
+        """
+        Mock WebSocket server to capture messages sent by the client.
+        """
+        async for message in websocket:
+            self.received_messages.append(message)
+        
 
     def test_next_recnum(self):
         self.assertEqual(self.cli._next_recnum("goob"), 1)
@@ -269,8 +288,6 @@ class TestInMemoryDBClient(test.TestCase):
             }}, self.cli)
         self.cli._db[base.DMP_PROJECTS][id] = rec.to_dict()
 
-        
-        
 
         id = "pdr0:0006"
         rec = base.ProjectRecord(
@@ -332,6 +349,35 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")
+    
+    def test_notify(self):
+        """
+        Test that a WebSocket message is sent when a record is created.
+        """
+        self.assertIsNone(self.cli.notifier)
+
+        notifcfg = {
+            "service_endpoint": "ws://localhost:8765",
+            "broadcast_key": "secret_key"
+        }
+        fact = inmem.InMemoryDBClientFactory({ "client_notifier": notifcfg })
+        self.cli = fact.create_client(base.DMP_PROJECTS, self.cfg, self.user)
+        self.assertIsNotNone(self.cli.notifier)
+        
+        async def run_test():
+            server = await websockets.serve(self.mock_websocket_server, "localhost", 8765)
+
+            try:
+                self.cli.create_record("test_record")
+                await asyncio.sleep(1)
+                self.assertEqual(len(self.received_messages), 1)
+                self.assertIn("secret_key,proj-create,dmp,test_record", self.received_messages[0])
+
+            finally:
+                server.close()
+                await server.wait_closed()
+        asyncio.run(run_test())
+
 
     def test_select_records(self):
         # test query on existing but empty collection

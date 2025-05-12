@@ -878,7 +878,8 @@ def authenticate_via_jwt(svcname: str, env: Mapping, jwtcfg: Mapping, log: Logge
                      invalid_reason="Invalid token can not be decoded")
 
     # make sure the token has an expiration date
-    if jwtcfg.get('require_expiration', True) and not userinfo.get('exp'):
+    if jwtcfg.get('require_expiration', True) and \
+       userinfo.get("agent_type", "user") != "auto" and not userinfo.get('exp'):
         # Note expiration was checked implicitly by the above jwt.decode() call
         log.warning("Rejecting non-expiring token for user %s", userinfo.get('sub', "(unknown)"))
         if jwtcfg.get('raise_on_invalid'):
