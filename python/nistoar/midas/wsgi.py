@@ -12,7 +12,7 @@ the following endpoints:
   * ``/dap/mds3/`` -- the Digital Assets Publication (DAP) Authoring API, for drafting data and 
     software publications (according to the mds3 convention) to be submitted to the Public Data 
     Repository (PDR)
-  * ``/groups/`` -- the API for creating and managing access permission groups for collaborative 
+  * ``/group/grp0/`` -- the API for creating and managing access permission groups for collaborative
     authoring.
   * ``/nsdi/v1/`` -- an API for retrieving fast indexes matching entries in the NIST Staff Directory
     (see :py:mod:`nistoar.midas.nsdi` for details).
@@ -157,6 +157,8 @@ from .nsdi.wsgi import v1 as nsdiv1
 from nistoar.base.config import ConfigurationException, merge_config
 
 from nistoar.nsd.wsgi import nsd1, oar1
+from .dbio.wsgi import group
+
 
 log = logging.getLogger(system.system_abbrev)
 if system.subsystem_abbrev:
@@ -176,7 +178,7 @@ class ServiceAppFactory:
     def __init__(self, config: Mapping, subapps: Mapping):
         """
         :param Mapping subapps:  a mapping of type names (referred to in the configuration) to 
-                                 a ServiceApp class (factory function that produces a ServiceApp) that 
+                                 a ServiceApp class (factory function that produces a ServiceApp) that
                                  takes four arguments: an application name, a ``Logger`` instance, 
                                  a :py:class:`~nistoar.midas.dbio.DBIOClientFactory` instance, 
                                  and the complete convention-specific configuration appropriate 
@@ -533,7 +535,9 @@ _MIDASServiceApps = {
     "dap/mds3":  mds3.DAPApp,
 #    "nsdi/v1":   nsdiv1.NSDIndexerAppFactory
     "nsd/oar1":  PeopleServiceFactory(oar1),
-    "nsd/nsd1":  PeopleServiceFactory(nsd1)
+    "nsd/nsd1":  PeopleServiceFactory(nsd1),
+   "group/grp0": group.MIDASGroupApp.factory_for(),
+
 }
 
 class MIDASApp(AuthenticatedWSGIApp):
@@ -571,11 +575,12 @@ class MIDASApp(AuthenticatedWSGIApp):
         if base_ep is None:
             base_ep = config.get('base_endpoint', DEF_BASE_PATH)
         super(MIDASApp, self).__init__(config, log, base_ep)
+        self.base_path: str = base_ep.rstrip('/')
             
         if not self.cfg.get("services"):
             raise ConfigurationException("No MIDAS apps configured (missing 'services' parameter)")
 
-        # Load MIDAS project servies based on what's in the configuration (i.e. if only the dmp app
+        # Load MIDAS project services based on what's in the configuration (i.e. if only the dmp app
         # is configured, only that app will be available; others will return 404)
         if not subapp_factory_funcs:
             subapp_factory_funcs = _MIDASServiceApps
@@ -602,7 +607,29 @@ class MIDASApp(AuthenticatedWSGIApp):
                 log.warning("JWT Authentication: token expiration is not required")
 
         # Add the groups endpoint
-        # TODO
+        grp_svc_cfg = self.cfg.get("services", {}).get("group", {})
+
+        if "group/grp0" not in self.subapps:
+            grp_convs_cfg = grp_svc_cfg.get("conventions") or {"grp0": {}}
+
+            group_about = About(log, grp_svc_cfg.get("about", {}))
+
+            for cnv_name, cnv_cfg in grp_convs_cfg.items():
+                cnv_full_cfg = merge_config(cnv_cfg, grp_svc_cfg)
+
+                grp_factory = group.GroupServiceFactory(dbio_client_factory, cnv_full_cfg.get("dbio", {}), log,)
+                grp_app = group.MIDASGroupApp(grp_factory, log, cnv_full_cfg)
+                mount_path = f"group/{cnv_name}"
+
+                self.subapps[mount_path] = grp_app
+                group_about.add_version(cnv_name, {
+                    "href": f"{self.base_path.rstrip('/')}/{mount_path}",
+                    **cnv_full_cfg.get("about", {})
+                })
+
+            default_cnv = next(iter(grp_convs_cfg))
+            self.subapps["group/def"] = self.subapps[f"group/{default_cnv}"]
+            self.subapps["group"] = group_about
 
     def authenticate_user(self, env: Mapping, agents: List[str]=None, client_id: str=None) -> Agent:
         """

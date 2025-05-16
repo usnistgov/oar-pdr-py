@@ -1,20 +1,20 @@
 """
-A web service interface to various MIDAS project records.  
+A web service interface to various MIDAS project records.
 
-A _project record_ is a persistable record that is compliant with the MIDAS Common Database project 
+A _project record_ is a persistable record that is compliant with the MIDAS Common Database project
 data model, where examples of a "project record" types include DMP records and data publication drafts.
-The :py:class:`MIDASProjectApp` encapsulates the handling of requests to create and manipulate project 
+The :py:class:`MIDASProjectApp` encapsulates the handling of requests to create and manipulate project
 records.  If desired, this class can be specialized for a particular project type; as an example, see
 :py:mod:`nistoar.midas.dap.service.mds3`.
 
-This implementation uses the simple :py:mod:`nistoar-internal WSGI 
-framework<nistoar.pdr.publish.service.wsgi>` to handle the specific web service endpoints.  The 
-:py:class:`MIDASProjectApp` is the router for the Project collection endpoint: it analyzes the relative 
+This implementation uses the simple :py:mod:`nistoar-internal WSGI
+framework<nistoar.pdr.publish.service.wsgi>` to handle the specific web service endpoints.  The
+:py:class:`MIDASProjectApp` is the router for the Project collection endpoint: it analyzes the relative
 URL path and delegates the handling to a more specific handler class.  In particular, these endpoints
 are handled accordingly:
 
 ``/`` -- :py:class:`ProjectSelectionHandler`
-     responds to to project search queries to find project records matching search criteria (GET) 
+     responds to to project search queries to find project records matching search criteria (GET)
      as well as accepts requests to create new records (POST).
 
 ``/{projid}`` -- :py:class:`ProjectHandler`
@@ -28,10 +28,10 @@ are handled accordingly:
 
 ``/{projid}/data[/...]`` -- :py:class:`ProjectDataHandler`
      returns (GET), updates (PUT, PATCH), or clears (DELETE) the data content of the record.  This
-     implementation supports updating individual parts of the data object via PUT, PATCH, DELETE 
-     based on the path relative to ``data``.   Subclasses (e.g. with the 
+     implementation supports updating individual parts of the data object via PUT, PATCH, DELETE
+     based on the path relative to ``data``.   Subclasses (e.g. with the
      :py:mod:`DAP specialization<nistoar.midas.dap.service.mds3>`) may also support POST for certain
-     array-type properties within ``data``.  
+     array-type properties within ``data``.
 
 ``/{projid}/acls[/...]`` -- :py:class:`ProjectACLsHandler`
      returns (GET) or updates (PUT, PATCH, POST, DELETE) access control lists for the record.
@@ -39,9 +39,9 @@ are handled accordingly:
 ``/{projid}/*`` -- :py:class`ProjectInfoHandler`
      returns other non-editable parts of the record via GET (including the ``meta`` property).
 """
-from logging import Logger
 from collections import OrderedDict
-from collections.abc import Mapping, Sequence, Callable
+from collections.abc import Mapping, Callable
+from logging import Logger
 from typing import Iterator
 from urllib.parse import parse_qs
 import json, re
@@ -49,37 +49,39 @@ import json, re
 from nistoar.web.rest import ServiceApp, Handler, Agent
 from nistoar.pdr.utils.validate import ValidationResults
 from nistoar.web.formats import JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
-from ... import dbio
-from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
+from nistoar.web.rest import ServiceApp, Handler, Agent
+
 from .base import DBIOHandler
 from .search_sorter import SortByPerm
+from ... import dbio
+from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 
 __all__ = ["MIDASProjectHandler", "ProjectDataHandler"]
 
 class ProjectRecordHandler(DBIOHandler):
     """
-    base handler class for all requests on project records.  
+    base handler class for all requests on project records.
     """
-    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
                  who: Agent, path: str="", config: dict=None, log: Logger=None):
         """
-        Initialize this handler with the request particulars.  
+        Initialize this handler with the request particulars.
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this
                                constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param Agent     who:  the authenticated user making the request.  
-        :param str      path:  the relative path to be handled by this handler; typically, some starting 
-                               portion of the original request path has been stripped away to handle 
+        :param Agent     who:  the authenticated user making the request.
+        :param str      path:  the relative path to be handled by this handler; typically, some starting
+                               portion of the original request path has been stripped away to handle
                                produce this value.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
                                will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
-        :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the ServiceApp will be used.  
+        :param Logger    log:  the logger to use within this handler; if not provided (typical), the
+                               logger attached to the ServiceApp will be used.
         """
 
         super(ProjectRecordHandler, self).__init__(svcapp, service.dbcli, wsgienv, start_resp, who,
@@ -91,25 +93,25 @@ class ProjectHandler(ProjectRecordHandler):
     handle access to the whole project record
     """
 
-    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
                  who: Agent, id: str, config: dict=None, log: Logger=None):
         """
-        Initialize this handler with the request particulars.  This constructor is called 
-        by the webs service ServiceApp.  
+        Initialize this handler with the request particulars.  This constructor is called
+        by the webs service ServiceApp.
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this
                                constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param Agent     who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.
         :param str        id:  the ID of the project record being requested
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
                                will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
-        :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the ServiceApp will be used.  
+        :param Logger    log:  the logger to use within this handler; if not provided (typical), the
+                               logger attached to the ServiceApp will be used.
         """
 
         super(ProjectHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, "", config, log)
@@ -128,7 +130,7 @@ class ProjectHandler(ProjectRecordHandler):
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
-            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
+            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found",
                                         self._id, ashead=ashead)
 
         return self.send_json(prec.to_dict(), ashead=ashead)
@@ -141,7 +143,7 @@ class ProjectHandler(ProjectRecordHandler):
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
-            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
+            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found",
                                         self._id)
         except NotImplementedError as ex:
             return self.send_error(501, "Not Implemented")
@@ -154,26 +156,26 @@ class ProjectInfoHandler(ProjectRecordHandler):
     handle retrieval of simple parts of a project record.  Only GET requests are allowed via this handler.
     """
 
-    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
                  who: Agent, id: str, attribute: str, config: dict={}, log: Logger=None):
         """
-        Initialize this handler with the request particulars.  This constructor is called 
-        by the webs service ServiceApp.  
+        Initialize this handler with the request particulars.  This constructor is called
+        by the webs service ServiceApp.
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this
                                constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param Agent     who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.
         :param str        id:  the ID of the project record being requested
         :param str attribute:  a recognized project model attribute
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
                                will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
-        :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the ServiceApp will be used.  
+        :param Logger    log:  the logger to use within this handler; if not provided (typical), the
+                               logger attached to the ServiceApp will be used.
         """
 
         super(ProjectInfoHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, attribute,
@@ -221,28 +223,28 @@ class ProjectNameHandler(ProjectRecordHandler):
     def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
                  who: Agent, id: str, prop: str, config: dict=None, log: Logger=None):
         """
-        Initialize this handler with the request particulars.  This constructor is called 
-        by the webs service ServiceApp.  
+        Initialize this handler with the request particulars.  This constructor is called
+        by the webs service ServiceApp.
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this
                                constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param Agent     who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.
         :param str        id:  the ID of the project record being requested
         :param str      prop:  the project record property to be updated; restricted to "name" or "owner"
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
                                will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
-        :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the ServiceApp will be used.  
+        :param Logger    log:  the logger to use within this handler; if not provided (typical), the
+                               logger attached to the ServiceApp will be used.
         """
         if prop not in self.ALLOWED_PROPS:
             raise ValueError("ProjectNameHandler(): Disallowed prop: "+str(prop))
         super(ProjectNameHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, prop, config, log)
-                                                   
+
         self._id = id
         if not id:
             # programming error
@@ -261,7 +263,7 @@ class ProjectNameHandler(ProjectRecordHandler):
         if super(ProjectNameHandler, self).acceptable():
             return True
         return "text/plain" in self.get_accepts()
-        
+
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "PUT"])
 
@@ -282,7 +284,7 @@ class ProjectNameHandler(ProjectRecordHandler):
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
-            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
+            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found",
                                         self._id, ashead=ashead)
 
         if format.name == "text":
@@ -341,35 +343,35 @@ class ProjectNameHandler(ProjectRecordHandler):
         else:
             return self.send_json(newname)
 
-        
+
 class ProjectDataHandler(ProjectRecordHandler):
     """
     handle retrieval/update of a project record's data content
     """
 
-    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
                  who: Agent, id: str, datapath: str, config: dict=None, log: Logger=None):
         """
-        Initialize this data request handler with the request particulars.  This constructor is called 
-        by the webs service ServiceApp in charge of the project record interface.  
+        Initialize this data request handler with the request particulars.  This constructor is called
+        by the webs service ServiceApp in charge of the project record interface.
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this
                                constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param Agent     who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.
         :param str        id:  the ID of the project record being requested
         :param str  datapath:  the subpath pointing to a particular piece of the project record's data;
-                               this will be a '/'-delimited identifier pointing to an object property 
-                               within the data object.  This will be an empty string if the full data 
+                               this will be a '/'-delimited identifier pointing to an object property
+                               within the data object.  This will be an empty string if the full data
                                object is requested.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
                                will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
-        :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the ServiceApp will be used.  
+        :param Logger    log:  the logger to use within this handler; if not provided (typical), the
+                               logger attached to the ServiceApp will be used.
         """
         super(ProjectDataHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, datapath,
                                                  config, log)
@@ -406,7 +408,7 @@ class ProjectDataHandler(ProjectRecordHandler):
 
     def do_DELETE(self, path):
         """
-        respond to a DELETE request.  This is used to clear the value of a particular property 
+        respond to a DELETE request.  This is used to clear the value of a particular property
         within the project data or otherwise reset the project data to its initial defaults.
         :param str path:  a path to the portion of the data to clear
         """
@@ -433,7 +435,7 @@ class ProjectDataHandler(ProjectRecordHandler):
             return self.send_fatal_error(ex)
 
         try:
-            data = self.svc.replace_data(self._id, newdata, path)  
+            data = self.svc.replace_data(self._id, newdata, path)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
@@ -446,7 +448,7 @@ class ProjectDataHandler(ProjectRecordHandler):
                                         "Requested part of data cannot be updated")
         except dbio.NotEditable as ex:
             return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit")
-                                        
+
 
         return self.send_json(data)
 
@@ -483,22 +485,22 @@ class ProjectSelectionHandler(ProjectRecordHandler):
     def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
                  who: Agent, iftype: str=None, config: dict=None, log: Logger=None):
         """
-        Initialize this record request handler with the request particulars.  This constructor is called 
-        by the webs service ServiceApp in charge of the project record interface.  
+        Initialize this record request handler with the request particulars.  This constructor is called
+        by the webs service ServiceApp in charge of the project record interface.
 
-        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this
                                constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param Agent     who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.
         :param str    iftype:  a name for the search interface type that is requested.  Recognized values
                                include ":selected" which supports Mongo-like filter syntax.  If not provided,
                                a simple query-parameter-based filter syntax is used.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
                                will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
-        :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the ServiceApp will be used.  
+        :param Logger    log:  the logger to use within this handler; if not provided (typical), the
+                               logger attached to the ServiceApp will be used.
         """
         if iftype is None:
             iftype = ""
@@ -510,8 +512,8 @@ class ProjectSelectionHandler(ProjectRecordHandler):
 
     def _select_records(self, perms, **constraints) -> Iterator[ProjectRecord]:
         """
-        submit a search query in a project specific way.  This method is provided as a 
-        hook to subclasses that may need to specialize the search strategy or manipulate the results.  
+        submit a search query in a project specific way.  This method is provided as a
+        hook to subclasses that may need to specialize the search strategy or manipulate the results.
         This implementation passes the query directly to the generic DBClient instance.
         :return:  a generator that iterates through the matched records
         """
@@ -575,7 +577,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
 
         elif path == ':selected':
             # respond to an advanced search
-            try: 
+            try:
                 return self.adv_select_records(input)
             except SyntaxError as syntax:
                 return self.send_error(400, "Wrong query structure for filter")
@@ -583,13 +585,13 @@ class ProjectSelectionHandler(ProjectRecordHandler):
                 return self.send_error(204, "No Content")
             except AttributeError as attribute:
                 return self.send_error(400, "Attribute Error, not a json")
-        
+
         else:
             return self.send_error(400, "Selection resource not found")
 
     def adv_select_records(self, input: Mapping):
         """
-        submit a record search 
+        submit a record search
         :param dict filter:   the search constraints for the search.
         """
         filter = input.get("filter", {})
@@ -610,8 +612,8 @@ class ProjectSelectionHandler(ProjectRecordHandler):
 
     def _adv_select_records(self, filter, perms) -> Iterator[ProjectRecord]:
         """
-        submit the advanced search query in a project-specific way. This method is provided as a 
-        hook to subclasses that may need to specialize the search strategy or manipulate the results.  
+        submit the advanced search query in a project-specific way. This method is provided as a
+        hook to subclasses that may need to specialize the search strategy or manipulate the results.
         This base implementation passes the query directly to the generic DBClient instance.
         :return:  a generator that iterates through the matched records
         """
@@ -621,8 +623,8 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         """
         create a new record
         :param dict newdata:  the initial data for the record.  This data is expected to conform to
-                              the DBIO record schema (with ``data`` and ``meta`` content appropriate 
-                              for the project type). 
+                              the DBIO record schema (with ``data`` and ``meta`` content appropriate
+                              for the project type).
         """
         if not newdata.get('name'):
             return self.send_error_resp(400, "Bad POST input", "No mneumonic name provided")
@@ -637,7 +639,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         except dbio.InvalidUpdate as ex:
             return self.send_error_resp(400, "Submitted data creates an invalid record",
                                         ex.format_errors())
-    
+
         return self.send_json(prec.to_dict(), "Project Created", 201)
 
 
@@ -646,30 +648,30 @@ class ProjectACLsHandler(ProjectRecordHandler):
     handle retrieval/update of a project record's data content
     """
 
-    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
                  who: Agent, id: str, datapath: str="", config: dict=None, log: Logger=None):
         """
-        Initialize this data request handler with the request particulars.  This constructor is called 
-        by the webs service ServiceApp in charge of the project record interface.  
+        Initialize this data request handler with the request particulars.  This constructor is called
+        by the webs service ServiceApp in charge of the project record interface.
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this
                                constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param Agent     who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.
         :param str        id:  the ID of the project record being requested
         :param str  permpath:  the subpath pointing to a particular permission ACL; it can either be
                                simply a permission name, PERM (e.g. "read"), or a p
-                               this will be a '/'-delimited identifier pointing to an object property 
-                               within the data object.  This will be an empty string if the full data 
+                               this will be a '/'-delimited identifier pointing to an object property
+                               within the data object.  This will be an empty string if the full data
                                object is requested.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
                                will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
-        :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the ServiceApp will be used.  
+        :param Logger    log:  the logger to use within this handler; if not provided (typical), the
+                               logger attached to the ServiceApp will be used.
         """
         super(ProjectACLsHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, datapath,
                                                  config, log)
@@ -678,47 +680,47 @@ class ProjectACLsHandler(ProjectRecordHandler):
             # programming error
             raise ValueError("Missing ProjectRecord id")
 
-        
+
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "POST", "PUT", "PATCH", "DELETE"])
 
     def do_GET(self, path, ashead=False):
+        path = path.strip('/')
+
         try:
             prec = self.svc.get_record(self._id)
-        except dbio.NotAuthorized as ex:
+        except dbio.NotAuthorized:
             return self.send_unauthorized()
-        except dbio.ObjectNotFound as ex:
+        except dbio.ObjectNotFound:
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found",
                                         self._id, ashead=ashead)
-
-        recd = prec.to_dict()
         if not path:
-            return self.send_json(recd.get('acls', {}), ashead=ashead)
+            # "GET /<id>/acls" with no sub-path => return entire dictionary
+            return self.send_json(prec.to_dict().get('acls', {}), ashead=ashead)
 
-        path = path.strip('/')
         parts = path.split('/', 1)
-        acl = recd.get('acls', {}).get(parts[0])
-        if acl is None:
-            if parts[0] not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
-                return self.send_error_resp(404, "Unsupported ACL type",
-                                            "Request for unsupported ACL type", ashead=ashead)
-            acl = []
+        perm_name = parts[0] if parts else None
+        userorgroup = parts[1] if len(parts) > 1 else None
 
-        if len(parts) < 2:
-            return self.send_json(acl, ashead=ashead)
+        if not userorgroup:
+            all_ids_with_perm = prec.to_dict().get('acls', {}).get(perm_name, [])
+            return self.send_json(all_ids_with_perm, ashead=ashead)
 
-        # parts[1] is a particular user the client is interested in
-        if parts[1] in [":user", "midas:user"]:
-            # this indicates the currently authenticated user
-            parts[1] = self.who.actor
+        if userorgroup in [":user", "midas:user"]:
+            userorgroup = self.who.actor
 
-        return self.send_json(parts[1] in acl, ashead=ashead)  # returns true or false
+        try:
+            allowed = prec.authorized(perm_name, who=userorgroup)
+        except dbio.NotAuthorized:
+            return self.send_unauthorized()
+
+        return self.send_json(allowed, ashead=ashead)
 
     def do_POST(self, path):
         """
-        add an identity to the acl for a specified permission.  This handles POST ID/acls/PERM; 
-        `path` should be set to PERM.  
+        add an identity to the acl for a specified permission.  This handles POST ID/acls/PERM;
+        `path` should be set to PERM.
         """
         try:
             # the input should be a single string giving a user or group identity to add to PERM ACL
@@ -756,8 +758,8 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
     def do_PUT(self, path):
         """
-        replace the list of identities in a particular ACL.  This handles PUT ID/acls/PERM; 
-        `path` should be set to PERM.  Note that previously set identities are removed. 
+        replace the list of identities in a particular ACL.  This handles PUT ID/acls/PERM;
+        `path` should be set to PERM.  Note that previously set identities are removed.
         """
         return self._do_update_acls(path, "PUT")
         
@@ -777,8 +779,8 @@ class ProjectACLsHandler(ProjectRecordHandler):
         else:
             # requesting update to to a single permission
             if '/' in path:
-                return self.send_error_resp(405, "PATCH not allowed",
-                                            "ACL PATCH request should not a member name")
+                return self.send_error_resp(405, f"{meth} not allowed",
+                                            f"ACL {meth} request should not include a member name")
             input = { path: input }
 
         # validate the input
@@ -805,7 +807,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
         for perm in input:
             if perm not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
-                return self.send_error_resp(405, "PATCH not allowed on provided permission type",
+                return self.send_error_resp(405, f"{meth} not allowed on provided permission type",
                                             "Updating non-standard permission is not allowed")
             identities = input[perm]
             try:
@@ -832,7 +834,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
         
     def do_DELETE(self, path):
         """
-        remove an identity from an ACL.  This handles DELETE ID/acls/PERM/USER; `path` should 
+        remove an identity from an ACL.  This handles DELETE ID/acls/PERM/USER; `path` should
         be set to PERM/USER.
         """
         if path is None:
@@ -873,30 +875,30 @@ class ProjectStatusHandler(ProjectRecordHandler):
     """
     _requestable_actions = [ ProjectService.STATUS_ACTION_FINALIZE, ProjectService.STATUS_ACTION_SUBMIT ]
 
-    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
                  who: Agent, id: str, datapath: str="", config: dict=None, log: Logger=None):
         """
-        Initialize this data request handler with the request particulars.  This constructor is called 
-        by the webs service ServiceApp in charge of the project record interface.  
+        Initialize this data request handler with the request particulars.  This constructor is called
+        by the webs service ServiceApp in charge of the project record interface.
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this
                                constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param Agent     who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.
         :param str        id:  the ID of the project record being requested
         :param str  permpath:  the subpath pointing to a particular permission ACL; it can either be
                                simply a permission name, PERM (e.g. "read"), or a p
-                               this will be a '/'-delimited identifier pointing to an object property 
-                               within the data object.  This will be an empty string if the full data 
+                               this will be a '/'-delimited identifier pointing to an object property
+                               within the data object.  This will be an empty string if the full data
                                object is requested.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
                                will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
-        :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the ServiceApp will be used.  
+        :param Logger    log:  the logger to use within this handler; if not provided (typical), the
+                               logger attached to the ServiceApp will be used.
         """
         super(ProjectStatusHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, datapath,
                                                    config, log)
@@ -934,7 +936,8 @@ class ProjectStatusHandler(ProjectRecordHandler):
                 
         elif path:
             return self.send_error_resp(404, "Status property not accessible",
-                                        "Requested status property is not accessible", self._id, ashead=ashead)
+                                        "Requested status property is not accessible",
+                                        self._id, ashead=ashead)
         else:
             out = out.to_dict()
             
@@ -942,12 +945,12 @@ class ProjectStatusHandler(ProjectRecordHandler):
 
     def do_PUT(self, path):
         """
-        request an action to be applied to the record 
+        request an action to be applied to the record
         """
         path = path.strip('/')
         if path:
             return self.send_error_resp(405, "PUT not allowed", "PUT is not allowed on a status property")
-                                        
+
         try:
             req = self.get_json_body()
         except self.FatalError as ex:
@@ -965,7 +968,7 @@ class ProjectStatusHandler(ProjectRecordHandler):
         path = path.strip('/')
         if path:
             return self.send_error_resp(405, "PATCH not allowed", "PATCH is not allowed on a status property")
-                                        
+
         try:
             req = self.get_json_body()
         except self.FatalError as ex:
@@ -973,7 +976,7 @@ class ProjectStatusHandler(ProjectRecordHandler):
 
         # if action is not set, the message will just get updated.
         return self._apply_action(req.get('action'), req.get('message'))
-        
+
     def _apply_action(self, action, message=None):
         if action:
             action = action.lower()
@@ -1083,9 +1086,9 @@ class MIDASProjectApp(ServiceApp):
         return a handler instance to handle a particular request to a path
         :param Mapping env:  the WSGI environment containing the request
         :param Callable start_resp:  the start_resp function to use initiate the response
-        :param str    path:  the path to the resource being requested.  This is usually 
-                             relative to a parent path that this ServiceApp is configured to 
-                             handle.  
+        :param str    path:  the path to the resource being requested.  This is usually
+                             relative to a parent path that this ServiceApp is configured to
+                             handle.
         :param Agent   who:  the authenticated user agent making the request
         """
 
@@ -1103,9 +1106,9 @@ class MIDASProjectApp(ServiceApp):
                 # path starts with ":" (e.g. ":selected"); this indicates a search resource
                 return self._selection_handler(service, self, env, start_resp, who, idattrpart[0])
             else:
-                # path is just an ID: 
+                # path is just an ID:
                 return self._update_handler(service, self, env, start_resp, who, idattrpart[0])
-            
+
         elif idattrpart[1] == "name" or idattrpart[1] == "owner":
             # path=ID/name: get/change the owner or the mnemonic name of record ID
             return self._name_update_handler(service, self, env, start_resp, who, idattrpart[0], idattrpart[1])
@@ -1146,15 +1149,11 @@ class MIDASProjectApp(ServiceApp):
     @classmethod
     def factory_for(cls, project_coll):
         """
-        return a factory function that instantiates this class connected to the given DBIO collection.  
-        This is intended for plugging this ServiceApp into the main WSGI app as is.  
-        :param str project_coll:  the name of the DBIO project collection to use for creating and 
+        return a factory function that instantiates this class connected to the given DBIO collection.
+        This is intended for plugging this ServiceApp into the main WSGI app as is.
+        :param str project_coll:  the name of the DBIO project collection to use for creating and
                                   updating project records.
         """
         return cls._factory(project_coll)
 
-        
 
-    
-
-        

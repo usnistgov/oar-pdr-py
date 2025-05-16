@@ -1,0 +1,154 @@
+openapi: 3.1.0
+
+info:
+  title: MIDAS Group Management Service (GMS) – Convention GRP0
+  summary: Create, inspect and manage user groups used for access‑control
+  description: |-
+    The Group Management Service (GMS) lets a client create/delete "group" records
+    and maintain their membership lists.
+  contact:
+    name: MIDAS Support
+    email: datasupport@nist.gov
+
+  version: "0"
+
+servers:
+  - url: https://localhost/midas/group
+
+paths:
+  /{version}:
+    summary: the collection of all groups for this version shoulder (e.g. grp0)
+    parameters:
+      - $ref: "#/components/parameters/version"
+    post:
+      summary: create a new group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupRequest"
+      responses:
+        "201":
+          description: group created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupRecord"
+        "400":
+          description: invalid input
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } }
+        "401":
+          description: unauthenticated / not authorised
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } }
+
+  /{version}/{groupId}:
+    parameters:
+      - $ref: "#/components/parameters/version"
+      - $ref: "#/components/parameters/groupId"
+
+    get:
+      summary: retrieve a group record
+      responses:
+        "200": { description: found, content: { application/json: { schema: { $ref: "#/components/schemas/GroupRecord" } } } }
+        "404": { description: not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+    post:
+      summary: add members to a group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              anyOf:
+                - type: string
+                - type: array
+                  items: { type: string }
+      responses:
+        "200": { description: membership updated, content: { application/json: { schema: { $ref: "#/components/schemas/Members" } } } }
+        "400": { description: bad request, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+    put:
+      summary: replace the entire membership list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              anyOf:
+                - type: string
+                - type: array
+                  items: { type: string }
+      responses:
+        "200": { description: membership replaced, content: { application/json: { schema: { $ref: "#/components/schemas/Members" } } } }
+
+    delete:
+      summary: delete the group
+      responses:
+        "200": { description: group deleted }
+
+  /{version}/{groupId}/{memberId}:
+    parameters:
+      - $ref: "#/components/parameters/version"
+      - $ref: "#/components/parameters/groupId"
+      - $ref: "#/components/parameters/memberId"
+    delete:
+      summary: remove a single member from the group
+      responses:
+        "200": { description: member removed }
+        "404": { description: group not found or member not present,
+                 content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+components:
+
+  parameters:
+    version:
+      name: version
+      in: path
+      required: true
+      description: version shoulder (e.g. **grp0**, **grp1**)
+      schema: { type: string, pattern: "^grp[0-9]+$" }
+
+    groupId:
+      name: groupId
+      in: path
+      required: true
+      schema: { type: string }
+
+    memberId:
+      name: memberId
+      in: path
+      required: true
+      schema: { type: string }
+
+  schemas:
+
+    ErrorResponse:
+      type: object
+      properties:
+        http:code:  { type: integer }
+        http:reason:{ type: string }
+        pdr:message:{ type: string }
+      required: [http:code, http:reason, pdr:message]
+
+    CreateGroupRequest:
+      type: object
+      required: [name]
+      properties:
+        name:    { type: string, description: mnemonic name }
+        foruser: { type: string, description: optional owner id }
+
+    GroupRecord:
+      type: object
+      required: [id, name, owner, members]
+      properties:
+        id:      { type: string }
+        name:    { type: string }
+        owner:   { type: string }
+        members: { $ref: "#/components/schemas/Members" }
+
+    Members:
+      type: array
+      items: { type: string }
