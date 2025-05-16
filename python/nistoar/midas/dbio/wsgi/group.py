@@ -364,11 +364,12 @@ class MIDASGroupApp(ServiceApp):
 
         parts = path.split('/', 1)
         shoulder = parts[0]
-        subpath = parts[1] if len(parts) > 1 else ""
-
+        if len(parts) == 1:
+            return GroupSelectionHandler(self, svc, env, start_resp, who, shoulder, self.cfg, self.log)
+        subpath = parts[1]
         logger.debug(f"group_id={shoulder}  extra={subpath}")
 
-        return GroupHandler(self, svc, env, start_resp, who, shoulder, subpath and f"{shoulder}/{subpath}" or shoulder,
+        return GroupHandler(self, svc, env, start_resp, who, shoulder, subpath,
                             self.cfg, self.log)
 
     class _factory:
