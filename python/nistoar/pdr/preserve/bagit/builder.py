@@ -33,6 +33,7 @@ from multibag import open_headbag
 
 NORM=15  # Log Level for recording normal activity
 logging.addLevelName(NORM, "NORMAL")
+
 # log = logging.getLogger(__name__)
 
 DEF_BAGLOG_FORMAT = "%(asctime)s %(levelname)s: %(message)s"
@@ -70,6 +71,14 @@ NERDM_CONTEXT = "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld"
 DISTSERV = "https://"+PDR_PUBLIC_SERVER+"/od/ds/"
 DEF_MERGE_CONV = "pdp0"
 FILECMP_ID_START = FILECMP_EXTENSION.strip('/') + '/'
+
+def mask_sensitive_data(data):
+    """
+    Masks sensitive data such as phone numbers by redacting all but the last 4 digits.
+    """
+    if not data or len(data) <= 4:
+        return data
+    return '*' * (len(data) - 4) + data[-4:]
 
 class BagBuilder(PreservationSystem):
     """
@@ -2437,8 +2446,8 @@ class BagBuilder(PreservationSystem):
                             print("         {0}".format(line.strip()),
                                   file=fd)
                     if 'phoneNumber' in cp:
-                        print("         Phone: {0}".format(cp['phoneNumber'].strip()),
-                              file=fd)
+                        masked_phone = mask_sensitive_data(cp['phoneNumber'].strip())
+                        print("    Phone: {0}".format(masked_phone), file=fd)
                     fd.write("\n")
 
                 # description
