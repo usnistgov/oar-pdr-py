@@ -4,6 +4,7 @@ import unittest as test
 
 from nistoar.midas.dbio import inmem, base
 from nistoar.midas.dbio.base import ACLs
+from nistoar.pdr.utils.prov import Agent
 
 class TestACLs(test.TestCase):
 
@@ -84,7 +85,7 @@ class TestACLs(test.TestCase):
         self.assertEqual(len(list(it)), 2)
 
     def test_unauthorized(self):
-        self.cli._who = "gary"
+        self.cli._who = Agent("test", Agent.USER, "gary")
         with self.assertRaises(base.NotAuthorized):
             self.acls.grant_perm_to(ACLs.WRITE, "alice")
 

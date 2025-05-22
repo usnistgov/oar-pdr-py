@@ -49,11 +49,13 @@ class TestInMemoryDBClientFactory(test.TestCase):
         self.assertIsNone(self.fact._notifier)
 
     def test_create_client(self):
-        cli = self.fact.create_client(base.DMP_PROJECTS, {}, "ava1")
+        avauser = Agent("dbio", Agent.AUTO, "ava1", "test")
+        cli = self.fact.create_client(base.DMP_PROJECTS, {}, avauser)
         self.assertEqual(cli._db, self.fact._db)
         self.assertEqual(cli._cfg, self.fact._cfg)
         self.assertEqual(cli._projcoll, base.DMP_PROJECTS)
-        self.assertEqual(cli._who, "ava1")
+        self.assertEqual(cli.user_id, "ava1")
+        self.assertTrue(isinstance(cli._who, Agent))
         self.assertIsNone(cli._whogrps)
         self.assertIs(cli._native, self.fact._db)
         self.assertIsNotNone(cli._dbgroups)
@@ -68,8 +70,9 @@ class TestInMemoryDBClient(test.TestCase):
     def setUp(self):
         self.cfg = {"default_shoulder": "mds3"}
         self.user = "nist0:ava1"
+        self.agent = Agent("dbio", Agent.AUTO, self.user, "test")
         self.cli = inmem.InMemoryDBClientFactory({}).create_client(
-            base.DMP_PROJECTS, self.cfg, self.user)
+            base.DMP_PROJECTS, self.cfg, self.agent)
         self.received_messages = []
 
     async def mock_websocket_server(self, websocket):

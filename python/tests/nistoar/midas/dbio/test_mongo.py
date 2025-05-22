@@ -87,7 +87,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, "bob")
         self.assertEqual(self.cli._cfg, self.fact._cfg)
         self.assertEqual(self.cli._projcoll, base.DMP_PROJECTS)
-        self.assertEqual(self.cli._who, "bob")
+        self.assertEqual(self.cli.user_id, "bob")
         self.assertIsNone(self.cli._whogrps)
         self.assertIsNone(self.cli._native)
         self.assertIsNotNone(self.cli._dbgroups)

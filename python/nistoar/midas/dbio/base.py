@@ -22,7 +22,7 @@ from enum import Enum
 from datetime import datetime
 
 from nistoar.base.config import ConfigurationException
-from nistoar.pdr.utils.prov import Action
+from nistoar.pdr.utils.prov import Action, Agent
 from .. import MIDASException
 from .status import RecordStatus
 from .notifier import DBIOClientNotifier
@@ -932,16 +932,19 @@ class DBClient(ABC):
          the only allowed shoulder will be the default, ``grp0``. 
     """
 
-    def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS,
-                 peopsvc: PeopleService = None, notifier: DBIOClientNotifier = None):
+    def __init__(self, config: Mapping, projcoll: str, nativeclient=None,
+                 foruser: Union[Agent,str] = ANONYMOUS, peopsvc: PeopleService = None, 
+                 notifier: DBIOClientNotifier = None):
         """
         initialize the base client.
         :param dict  config:  the configuration data for the client
         :param str projcoll:  the type of project to connect with (i.e. the project collection name)
         :param nativeclient:  where applicable, the native client object to use to connect the back
                               end database.  The type and use of this client is implementation-specific
-        :param str  foruser:  the user identity to connect as.  This will control what records are 
-                              accessible via this instance's methods.
+        :param Agent|str foruser:  the user identity to connect as.  This will control what records are 
+                              accessible via this instance's methods.  If the value is a string, it is 
+                              assumed to be a login user name; it will be internally mapped to an 
+                              Agent instance.  
         :param PeopleService peopsvc:  a PeopleService to incorporate into this client
         :param DBIOClientNotifier notifier:  a DBIOClientNotifier to use to alert DBIO clients about 
                               updates to the DBIO data.
@@ -949,6 +952,8 @@ class DBClient(ABC):
         self._cfg = config
         self._native = nativeclient
         self._projcoll = projcoll
+        if isinstance(foruser, str):
+            foruser = Agent("dbio", Agent.USER, foruser, Agent.PUBLIC)
         self._who = foruser
         self._whogrps = None
 
@@ -968,7 +973,7 @@ class DBClient(ABC):
         """
         the identifier of the user that this client is acting on behalf of
         """
-        return self._who
+        return self._who.actor
 
     @property
     def user_groups(self) -> frozenset:
@@ -993,7 +998,7 @@ class DBClient(ABC):
         a member of.  This function will recache this list (resulting in queries to the backend 
         database).  
         """
-        self._whogrps = frozenset(self.groups.select_ids_for_user(self._who))
+        self._whogrps = frozenset(self.groups.select_ids_for_user(self.user_id))
 
     def create_record(self, name: str, shoulder: str = None, foruser: str = None) -> ProjectRecord:
         """
@@ -1051,7 +1056,7 @@ class DBClient(ABC):
         return self._authorized_create(shoulder, shldrs, who)
 
     def _authorized_create(self, shoulder, shoulders, who):
-        if self._who and who != self._who and self._who not in self._cfg.get("superusers", []):
+        if self.user_id and who != self.user_id and self.user_id not in self._cfg.get("superusers", []):
             return False
         return shoulder in shoulders
 

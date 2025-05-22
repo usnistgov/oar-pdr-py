@@ -147,7 +147,7 @@ class DAPProjectRecord(ProjectRecord):
             return
         if not self._data.get('file_space', {}).get('creator'):
             if not who:
-                who = self._cli._who
+                who = self._cli.user_id
             try:
                 self._fmcli.get_record_space(self.id)
             except FileSpaceNotFound as ex:

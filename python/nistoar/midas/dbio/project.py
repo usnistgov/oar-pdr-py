@@ -127,8 +127,7 @@ class ProjectService(MIDASSystem):
             log = getLogger(self.system_abbrev).getChild(self.subsystem_abbrev).getChild(project_type)
         self.log = log
 
-        user = who.actor if who else None
-        self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), user)
+        self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), self.who)
         if not self.dbcli.people_service:
             self.log.warning("No people service available for %s service", project_type)
 
