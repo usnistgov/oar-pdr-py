@@ -678,14 +678,13 @@ class DBGroups(object):
         :raises AlreadyExists:  if the user has already defined a group with this name
         :raises NotAuthorized:  if the user is not authorized to create this group
         """
-        if not foruser:
-            foruser = self._cli.user_id
-        if not self._cli._authorized_group_create(self._shldr, foruser):
+        if not self._cli._authorized_group_create(self._shldr, self._cli._who, foruser):
             raise NotAuthorized(self._cli.user_id, "create group")
 
+        if not foruser:
+            foruser = self._cli.user_id
         if self.name_exists(name, foruser):
-            raise AlreadyExists(
-                "User {} has already defined a group with name={}".format(foruser, name))
+            raise AlreadyExists(f"User {foruser} has already defined a group with name={name}")
 
         out = Group({
             "id": self._mint_id(self._shldr, name, foruser),
@@ -1012,14 +1011,12 @@ class DBClient(ABC):
                               to request the shoulder.)
         :param str  foruser:  the ID of the user that should be registered as the owner.  If not 
                               specified, the value of :py:property:`user_id` will be assumed.  In 
-                              this implementation, only a superuser can create a record for someone 
-                              else.
+                              this implementation, only a superuser (or an admin account) can create a 
+                              record for someone else.
         """
-        if not foruser:
-            foruser = self.user_id
         if not shoulder:
-            shoulder = self._default_shoulder()
-        if not self._authorized_project_create(shoulder, foruser):
+            shoulder = self._default_project_shoulder()
+        if not self._authorized_project_create(shoulder, self._who, foruser):
             raise NotAuthorized(self.user_id, "create record")
         if self.name_exists(name, foruser):
             raise AlreadyExists(
@@ -1034,30 +1031,46 @@ class DBClient(ABC):
             self.notifier.notify(message)
         return rec 
 
-    def _default_shoulder(self):
-        out = self._cfg.get("default_shoulder")
+    def _default_project_shoulder(self):
+        out = self._cfg.get("default_project_shoulder", self._cfg.get("default_shoulder"))
         if not out:
             raise ConfigurationException(
-                "Missing required configuration parameter: default_shoulder")
+                "Missing required configuration parameter: default_project_shoulder")
         return out
 
-    def _authorized_project_create(self, shoulder, who):
-        shldrs = set(self._cfg.get("allowed_project_shoulders", []))
-        defshldr = self._cfg.get("default_shoulder")
-        if defshldr:
-            shldrs.add(defshldr)
-        return self._authorized_create(shoulder, shldrs, who)
+    def _authorized_project_create(self, shoulder, agent, foruser=None):
+        # backword compatibility hack
+        if "default_shoulder" in self._cfg:
+            self._cfg.setdefault("default_project_shoulder", self._cfg["default_shoulder"])
 
-    def _authorized_group_create(self, shoulder, who):
-        shldrs = set(self._cfg.get("allowed_group_shoulders", []))
-        defshldr = DEF_GROUPS_SHOULDER
-        if defshldr:
-            shldrs.add(defshldr)
-        return self._authorized_create(shoulder, shldrs, who)
+        shldrs = self._allowed_shoulders_for("project", agent)
+        return self._authorized_create(shoulder, shldrs, foruser)
 
-    def _authorized_create(self, shoulder, shoulders, who):
-        if self.user_id and who != self.user_id and self.user_id not in self._cfg.get("superusers", []):
+    def _authorized_group_create(self, shoulder, agent, foruser=None):
+        shldrs = self._allowed_shoulders_for("group", agent)
+        return self._authorized_create(shoulder, shldrs, foruser)
+
+    def _allowed_shoulders_for(self, rectype, agent):
+        shldrcfg = self._cfg.get(f"allowed_{rectype}_shoulders", [])
+        if isinstance(shldrcfg, list):
+            shldrcfg = { "": shldrcfg }   # these are the "public" shoulders (anyone can create under)
+        defshldr = self._cfg.get(f"default_{rectype}_shoulder")
+        if defshldr:
+            shldrcfg.setdefault("", []).append(defshldr)
+
+        allowed4agent = set(shldrcfg[""])
+        for g in agent.groups:
+            if g in shldrcfg:
+                allowed4agent.update(shldrcfg[g])
+        return allowed4agent
+
+    def _authorized_create(self, shoulder, shoulders, foruser=None):
+        if foruser and foruser != self.user_id and self.user_id not in self._cfg.get("superusers", []) \
+           and self._who.agent_class != Agent.ADMIN:
+            # Sorry, if not superuser, can't create for another user
             return False
+
+        # is the requested should among the ones allowed for user?
         return shoulder in shoulders
 
     def _mint_id(self, shoulder):

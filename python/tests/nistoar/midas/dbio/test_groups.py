@@ -7,7 +7,7 @@ from nistoar.midas.dbio import inmem, base
 class TestGroup(test.TestCase):
 
     def setUp(self):
-        self.cfg = { "default_shoulder": "pdr0" }
+        self.cfg = { "default_group_shoulder": "grp0" }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
@@ -96,7 +96,7 @@ class TestGroup(test.TestCase):
 class TestDBGroups(test.TestCase):
 
     def setUp(self):
-        self.cfg = { "default_shoulder": "pdr0" }
+        self.cfg = { "default_group_shoulder": "grp0" }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)

@@ -8,7 +8,11 @@ from nistoar.pdr.utils.prov import Action, Agent
 class TestDBClient(test.TestCase):
 
     def setUp(self):
-        self.cfg = { "default_shoulder": "pdr0", "allowed_project_shoulders": ["mds3"] }
+        self.cfg = {
+            "default_project_shoulder": "pdr0",
+            "default_group_shoulder": "grp0",
+            "allowed_project_shoulders": ["mds3"]
+        }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
         self.cli = self.fact.create_client(base.DRAFT_PROJECTS, {}, self.user)
