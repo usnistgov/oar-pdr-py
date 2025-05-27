@@ -99,6 +99,22 @@ class TestDBClient(test.TestCase):
         rec = self.cli.create_record("test", "mds3")
         self.assertEqual(rec.id, "mds3:0003")
 
+    def test_create_client_with_localid(self):
+        with self.assertRaises(base.NotAuthorized):
+            self.cli.create_record("test", "mdm1")
+
+        with self.assertRaises(base.NotAuthorized):
+            self.cli.create_record("test", "pdr0", localid="01000")
+
+        self.cli._cfg["localid_providers"] = {
+            self.cli._who.agent_class: ["pdr0"]
+        }
+        self.assertEqual(self.cli._cfg["localid_providers"].get("public"), ["pdr0"])
+
+        rec = self.cli.create_record("test", "pdr0", localid="01000")
+        self.assertEqual(rec.name, "test")
+        self.assertEqual(rec.id, "pdr0:01000")
+
     def test_get_record(self):
         with self.assertRaises(base.ObjectNotFound):
             self.cli.get_record_for("pdr0:0001")

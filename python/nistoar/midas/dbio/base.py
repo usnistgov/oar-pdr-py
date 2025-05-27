@@ -999,10 +999,16 @@ class DBClient(ABC):
         """
         self._whogrps = frozenset(self.groups.select_ids_for_user(self.user_id))
 
-    def create_record(self, name: str, shoulder: str = None, foruser: str = None) -> ProjectRecord:
+    def create_record(self, name: str, shoulder: str = None,
+                      foruser: str = None, localid: str = None) -> ProjectRecord:
         """
-        create (and save) and return a new project record.  A new unique identifier should be assigned
-        to the record.
+        create (and save) and return a new project record.  
+
+        This function is responsible for assigning a new unique identifier to the 
+        newly created record; normally, this is done by combining the requested shoulder to a 
+        newly minted local identifier.  The requesting user must be authorized to create a 
+        record with the requested shoulder.  If authorized, the user may also requested a 
+        specific local identifier.
 
         :param str     name:  the mnemonic name (provided by the requesting user) to give to the 
                               record.
@@ -1013,16 +1019,22 @@ class DBClient(ABC):
                               specified, the value of :py:property:`user_id` will be assumed.  In 
                               this implementation, only a superuser (or an admin account) can create a 
                               record for someone else.
+        :param str  localid:  Request a particular local identifier 
+        :raises NotAuthorized:  if the requesting user is not authorized to create a record with the 
+                              given ``shoulder`` (or ``localid``). 
+        :raises AlreadyExists:  if the user (``foruser``, if given, or the requesting user, otherwise)
+                              already has a record with the requested ``name`` or if a record already 
+                              exists with the requested ``shoulder``-``localid`` combination.  
         """
         if not shoulder:
             shoulder = self._default_project_shoulder()
         if not self._authorized_project_create(shoulder, self._who, foruser):
             raise NotAuthorized(self.user_id, "create record")
-        if self.name_exists(name, foruser):
+        if self.name_exists(name, foruser or self.user_id):
             raise AlreadyExists(
                 "User {} has already defined a record with name={}".format(foruser, name))
 
-        rec = self._new_record_data(self._mint_id(shoulder))
+        rec = self._new_record_data(self._mint_id(shoulder, localid))
         rec['name'] = name
         rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
@@ -1073,13 +1085,41 @@ class DBClient(ABC):
         # is the requested should among the ones allowed for user?
         return shoulder in shoulders
 
-    def _mint_id(self, shoulder):
+    def _mint_id(self, shoulder, localid=None):
         """
         create and register a new identifier that can be attached to a new project record
         :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
                                how the identifier is formed.  
+        :param str localid:    the requester-provided local identifier to combine with the shoulder 
+                               prefix to create the new record identifier.  If None (as typical),
+                               a new local idenfier will created according to the internal minting 
+                               rules.  
+        :raises AlreadExists:  if ``localid`` is provided but is already in use with the given shoulder
+        :raises NotAuthorized: if the current user is not allowed to specify a local identifier with 
+                               the given shoulder.
         """
-        return "{0}:{1:04}".format(shoulder, self._next_recnum(shoulder))
+        locid = localid
+        if not locid:
+            locid = "{0:04}".format(self._next_recnum(shoulder))
+        out = f"{shoulder}:{locid}"
+
+        if localid:
+            # superuser is always allowed to provide a localid
+            if self.user_id not in self._cfg.get("superusers", []):
+                # does this Agent have permission to provide localid with given shoulder?
+                providers = self._cfg.get("localid_providers", {})
+                allowed_shoulders = set()
+                for g in self._who.groups:
+                    if g in providers:
+                        allowed_shoulders.update(providers[g])
+                if shoulder not in allowed_shoulders:
+                    raise NotAuthorized("Agent %s is not allowed to request a specific local ID" %
+                                        str(self._who))
+
+            if self.exists(out):
+                raise AlreadyExists(f"ID {out} already exists")
+
+        return out
 
     def _parse_id(self, id):
         pair = id.rsplit(':', 1)
