@@ -32,7 +32,7 @@ from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, No
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
                                   ProjectSelectionHandler, ServiceApp)
-from ...dbio import status
+from ...dbio import status, ANONYMOUS
 from ..review import DAPReviewer, DAPNERDmReviewValidator
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
@@ -340,21 +340,53 @@ class DAPService(ProjectService):
         """
         return to_DAPRec(super().get_record(id), self._fmcli)
 
-    def create_record(self, name, data=None, meta=None) -> ProjectRecord:
+    def create_record(self, name, data=None, meta=None, dbid: str=None) -> ProjectRecord:
         """
         create a new project record with the given name.  An ID will be assigned to the new record.
         :param str  name:  the mnuemonic name to assign to the record.  This name cannot match that
                            of any other record owned by the user. 
         :param dict data:  the initial data content to assign to the new record.  
         :param dict meta:  the initial metadata to assign to the new record.  
-        :raises NotAuthorized:  if the authenticated user is not authorized to create a record
-        :raises AlreadyExists:  if a record owned by the user already exists with the given name
+        :param str  dbid:  a requested identifier or ID shoulder to assign to the record; if the 
+                           value does not include a colon (``:``), it will be interpreted as the
+                           desired shoulder that will be attached an internally minted local 
+                           identifier; otherwise, the value will be taken as a full identifier. 
+                           If not provided (default), an identifier will be minted using the 
+                           default shoulder.
+        :raises NotAuthorized:  if the authenticated user is not authorized to create a record, or 
+                                when ``dbid`` is provided, the user is not authorized to create a 
+                                record with the specified shoulder or ID.
+        :raises AlreadyExists:  if a record owned by the user already exists with the given name or
+                                the given ``dbid``.
         :raises InvalidUpdate:  if the data given in either the ``data`` or ``meta`` parameters are
                                 invalid (i.e. is not compliant with schemas and restrictions asociated
                                 with this project type).
         """
-        shoulder = self._get_id_shoulder(self.who)
-        prec = to_DAPRec(self.dbcli.create_record(name, shoulder), self._fmcli)
+        localid = None
+        shoulder = None
+        if dbid:
+            if ':' not in dbid:
+                # interpret dbid to be a requested shoulder
+                shoulder = dbid
+            else:
+                shoulder, localid = dbid.split(':', 1)
+        else:
+            shoulder = self._get_id_shoulder(self.who)
+
+        foruser = None
+        if meta and meta.get("foruser"):
+            # format of value: either "newuserid" or "olduserid:newuserid"
+            foruser = meta.get("foruser", "").split(":")
+            if not foruser or len(foruser) > 2:
+                foruser = None
+            else:
+                foruser = foruser[-1]
+                
+        if self.dbcli.user_id == ANONYMOUS:
+            # Do we need to be more careful in production by cancelling reassign request?
+            self.log.warning("A new DAP record requested for an anonymous user")
+
+        prec = to_DAPRec(self.dbcli.create_record(name, shoulder, None, localid), self._fmcli)
         nerd = None
 
         # create the space in the file-manager
@@ -362,6 +394,15 @@ class DAPService(ProjectService):
             prec.ensure_file_space(self.who.actor)
                 
         try:
+            if foruser:
+                if self.dbcli.user_id == ANONYMOUS:
+                    self.log.warning("%s wants to reassign new record to %s", self.dbcli.user_id, foruser)
+                try:
+                    prec.reassign(foruser)  
+                except NotAuthorized as ex:
+                    self.log.warning("%s: %s not authorized to reassign owner to %s",
+                                     prec.id, self.dbcli.user_id, foruser)
+
             if meta:
                 meta = self._moderate_metadata(meta, shoulder)
                 if prec.meta:

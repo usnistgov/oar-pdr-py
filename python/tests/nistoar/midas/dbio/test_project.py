@@ -149,6 +149,24 @@ class TestProjectService(test.TestCase):
         self.assertEqual(prec.data, {"color": "red"})
         self.assertEqual(prec.meta, {"temper": "dark", "agent_vehicle": 'midas'})
 
+    def test_create_record_withlocalid(self):
+        self.create_service()
+        self.assertTrue(not self.project.dbcli.name_exists("gurn"))
+
+        with self.assertRaises(project.NotAuthorized):
+            self.project.create_record("gurn", {"color": "red"}, {"temper": "dark"}, "mdm0:goob")
+
+        self.project.dbcli._cfg["localid_providers"] = {
+            self.project.dbcli._who.agent_class: ["mdm0"]
+        }
+        self.assertEqual(self.project.dbcli._cfg["localid_providers"].get("midas"), ["mdm0"])
+
+        prec = self.project.create_record("gurn", {"color": "red"}, {"temper": "dark"}, "mdm0:goob")
+        self.assertEqual(prec.name, "gurn")
+        self.assertEqual(prec.id, "mdm0:goob")
+        self.assertEqual(prec.data, {"color": "red"})
+        self.assertEqual(prec.meta, {"temper": "dark", "agent_vehicle": 'midas'})
+
     def test_create_record_reassign(self):
         self.create_service()
         self.assertTrue(not self.project.dbcli.name_exists("gurn"))

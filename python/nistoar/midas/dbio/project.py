@@ -138,17 +138,35 @@ class ProjectService(MIDASSystem):
         """
         return self.who
 
-    def create_record(self, name, data=None, meta=None) -> ProjectRecord:
+    def create_record(self, name, data=None, meta=None, dbid: str=None) -> ProjectRecord:
         """
         create a new project record with the given name.  An ID will be assigned to the new record.
         :param str  name:  the mnuemonic name to assign to the record.  This name cannot match that
                            of any other record owned by the user. 
         :param dict data:  the initial data content to assign to the new record.  
         :param dict meta:  the initial metadata to assign to the new record.  
-        :raises NotAuthorized:  if the authenticated user is not authorized to create a record
-        :raises AlreadyExists:  if a record owned by the user already exists with the given name
+        :param str  dbid:  a requested identifier or ID shoulder to assign to the record; if the 
+                           value does not include a colon (``:``), it will be interpreted as the
+                           desired shoulder that will be attached an internally minted local 
+                           identifier; otherwise, the value will be taken as a full identifier. 
+                           If not provided (default), an identifier will be minted using the 
+                           default shoulder.
+        :raises NotAuthorized:  if the authenticated user is not authorized to create a record, or 
+                                when ``dbid`` is provided, the user is not authorized to create a 
+                                record with the specified shoulder or ID.
+        :raises AlreadyExists:  if a record owned by the user already exists with the given name or
+                                the given ``dbid``.
         """
-        shoulder = self._get_id_shoulder(self.who)
+        localid = None
+        shoulder = None
+        if dbid:
+            if ':' not in dbid:
+                # interpret dbid to be a requested shoulder
+                shoulder = dbid
+            else:
+                shoulder, localid = dbid.split(':', 1)
+        else:
+            shoulder = self._get_id_shoulder(self.who)
 
         foruser = None
         if meta and meta.get("foruser"):
@@ -164,7 +182,7 @@ class ProjectService(MIDASSystem):
             # foruser = None
             self.log.warning("A new record requested for an anonymous user")
 
-        prec = self.dbcli.create_record(name, shoulder)
+        prec = self.dbcli.create_record(name, shoulder, localid=localid)
         self._set_default_perms(prec.acls)
 
         prec.status._data["created_by"] = self.who.id  # don't do this: violates encapsulation

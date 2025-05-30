@@ -1028,7 +1028,10 @@ class DBClient(ABC):
         """
         if not shoulder:
             shoulder = self._default_project_shoulder()
-        if not self._authorized_project_create(shoulder, self._who, foruser):
+        if localid:
+            if not self._authorized_localid_provider(shoulder, self._who):
+                raise NotAuthorized(self.user_id, "create record with specified localid")
+        elif not self._authorized_project_create(shoulder, self._who, foruser):
             raise NotAuthorized(self.user_id, "create record")
         if self.name_exists(name, foruser or self.user_id):
             raise AlreadyExists(
@@ -1036,6 +1039,8 @@ class DBClient(ABC):
 
         rec = self._new_record_data(self._mint_id(shoulder, localid))
         rec['name'] = name
+        if foruser:
+            rec['owner'] = foruser
         rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
         if self.notifier:
@@ -1085,6 +1090,17 @@ class DBClient(ABC):
         # is the requested should among the ones allowed for user?
         return shoulder in shoulders
 
+    def _authorized_localid_provider(self, shoulder, agent):
+        if agent.actor in self._cfg.get("superusers", []) or agent.agent_class == Agent.ADMIN:
+            return True
+
+        # does this Agent have permission to provide localid with given shoulder?
+        providers = self._cfg.get("localid_providers", {})
+        for g in self._who.groups:
+            if g in providers and shoulder in providers[g]:
+                return True
+        return False
+
     def _mint_id(self, shoulder, localid=None):
         """
         create and register a new identifier that can be attached to a new project record
@@ -1104,18 +1120,10 @@ class DBClient(ABC):
         out = f"{shoulder}:{locid}"
 
         if localid:
-            # superuser is always allowed to provide a localid
-            if self.user_id not in self._cfg.get("superusers", []):
-                # does this Agent have permission to provide localid with given shoulder?
-                providers = self._cfg.get("localid_providers", {})
-                allowed_shoulders = set()
-                for g in self._who.groups:
-                    if g in providers:
-                        allowed_shoulders.update(providers[g])
-                if shoulder not in allowed_shoulders:
-                    raise NotAuthorized("Agent %s is not allowed to request a specific local ID" %
-                                        str(self._who))
-
+            if not self._authorized_localid_provider(shoulder, self._who):
+                raise NotAuthorized(self.user_id,
+                                    message="Agent %s is not allowed to request a specific local ID" %
+                                            str(self._who))
             if self.exists(out):
                 raise AlreadyExists(f"ID {out} already exists")
 

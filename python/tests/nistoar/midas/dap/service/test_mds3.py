@@ -203,6 +203,47 @@ class TestMDS3DAPService(test.TestCase):
                                                      "hasEmail": "mailto:gurn@thejerk.org"})
         self.assertTrue(isinstance(prec.data.get('responsibleOrganization'), list))
         self.assertEqual(prec.data['responsibleOrganization'][0], 'NIST')
+
+    def test_create_record_withdbid(self):
+        self.create_service()
+        self.assertTrue(not self.svc.dbcli.name_exists("gurn"))
+
+        with self.assertRaises(mds3.NotAuthorized):
+            self.svc.create_record("goob", {"title": "test"},
+                                   {"creatorIsContact": "TRUE",
+                                    "softwareLink": "https://github.com/usnistgov/goob" },
+                                   dbid="mds2:1492")
+
+        self.svc.dbcli._cfg["localid_providers"] = {
+            self.svc.dbcli._who.agent_class: ["mds2"]
+        }
+        # self.svc.dbcli._cfg["allowed_project_shoulders"].append("mds2")
+        self.assertEqual(self.svc.dbcli._cfg["localid_providers"].get("midas"), ["mds2"])
+
+        prec = self.svc.create_record("goob", {"title": "test"},
+                                      {"creatorIsContact": "TRUE", "foruser": "ava1",
+                                       "softwareLink": "https://github.com/usnistgov/goob" },
+                                      "mds2:1492")
+        self.assertEqual(prec.name, "goob")
+        self.assertEqual(prec.id, "mds2:1492")
+        self.assertEqual(prec.owner, "ava1")
+        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
+                                     "softwareLink": "https://github.com/usnistgov/goob",
+                                     "agent_vehicle": "midas" })
+        self.assertEqual(prec.data['doi'], "doi:10.88888/mds2-1492")
+        self.assertEqual(prec.data['@id'], "ark:/88434/mds2-1492")
+        self.assertEqual(prec.data['nonfile_count'], 1)
+        self.assertIn('contactPoint', prec.data)
+        self.assertTrue(isinstance(prec.data.get('responsibleOrganization'), list))
+        self.assertEqual(prec.data['responsibleOrganization'][0], 'NIST')
+        nerd = self.svc._store.open(prec.id)
+        resmd = nerd.get_res_data()
+        links = nerd.nonfiles
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links.get(0)['accessURL'], prec.meta['softwareLink'])
+        self.assertTrue(isinstance(resmd.get('responsibleOrganization'), list))
+        self.assertEqual(len(resmd['responsibleOrganization']), 1)
+        self.assertEqual(resmd['responsibleOrganization'][0]['title'], 'NIST')
     
     def test_moderate_restype(self):
         self.create_service()
