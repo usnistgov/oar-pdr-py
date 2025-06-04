@@ -110,10 +110,11 @@ class ACLs:
 
     def revoke_perm_from_all(self, perm_name, protect_owner: bool=True):
         """
-        remove the given identities from the list having the given permission.  For each given identity 
+        remove all identities from the given permission.  For each given identity 
         that does not currently have the permission, nothing is done.  
-        :param str perm_name:  the permission to be revoked
-        :param str ids:        the identities of the users the permission should be revoked from
+        :param str perm_name:  the permission to be revoked from everyone
+        :param bool protect_owner:  if True, the owner will be left as the sole user with the given 
+                               permission.
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to grant this permission
         """
@@ -239,13 +240,14 @@ class ProtectedRecord(ABC):
     def owner(self, val):
         self.reassign(val)
 
-    def reassign(self, who: str):
+    def reassign(self, who: str, disown: bool=False):
         """
         transfer ownership to the given user.  To transfer ownership, the calling user must have 
         "admin" permission on this record.  Note that this will not remove any permissions assigned 
         to the former owner.
 
-        :param str who:   the identifier for the user to set as the owner of this record
+        :param str     who:  the identifier for the user to set as the owner of this record
+        :param bool disown:  if True, remove the previous owner from the various permissions
         :raises NotAuthorized:  if the calling user is not authorized to change the owner.  
         :raises InvalidUpdate:  if the target user identifier is not recognized or not legal
         """
@@ -256,9 +258,12 @@ class ProtectedRecord(ABC):
         if not self._validate_user_id(who):
             raise InvalidUpdate("Unable to update owner: invalid user ID: "+str(who))
 
+        oldowner = self._data['owner']
         self._data['owner'] = who
         for perm in ACLs.OWN:
             self.acls.grant_perm_to(perm, who)
+            if disown and oldowner != who:
+                self.acls.revoke_perm_from(perm, oldowner)
 
     def _validate_user_id(self, who: str):
         if not bool(who) or not isinstance(who, str):
@@ -398,6 +403,8 @@ class ProtectedRecord(ABC):
                          attached to the DBClient is assumed.
         """
         if not who:
+            if Agent.ADMIN in self._cli._who.groups:
+                return True
             who = self._cli.user_id
         if who in self._cli._cfg.get("superusers", []):
             return True

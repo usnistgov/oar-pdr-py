@@ -138,6 +138,15 @@ class ProjectService(MIDASSystem):
         """
         return self.who
 
+    def exists(self, id) -> bool:
+        """
+        return True if there exists a project record (of the type this service is configured for) 
+        with the given identifier.  
+
+        This implementation simply delegates the question to the internal DBClient instance.  
+        """
+        return self.dbcli.exists(id)
+
     def create_record(self, name, data=None, meta=None, dbid: str=None) -> ProjectRecord:
         """
         create a new project record with the given name.  An ID will be assigned to the new record.
@@ -227,7 +236,7 @@ class ProjectService(MIDASSystem):
         # TODO:  handling previously published records
         raise NotImplementedError()
 
-    def reassign_record(self, id, recipient: str):
+    def reassign_record(self, id, recipient: str, disown: bool=False):
         """
         reassign ownership of the record with the given recepient ID.  This is a wrapper around 
         :py:class:`~nistoar.midas.dbio.base.ProjectRecord`.reassign() that also logs the change.
@@ -245,7 +254,7 @@ class ProjectService(MIDASSystem):
         message = "from %s to %s" % (prec.owner, recipient)
         try:
             self.log.info("Reassigning ownership of %s %s", id, message)
-            prec.reassign(recipient)
+            prec.reassign(recipient, disown)
             prec.save()
             self._record_action(Action(Action.COMMENT, prec.id, self.who,
                                        f"Reassigned ownership {message}"))
@@ -537,6 +546,7 @@ class ProjectService(MIDASSystem):
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
                              the given `newdata` is a value that should be set to the property pointed 
                              to by `part`.  
+        :param str message:  an optional message that will be recorded as an explanation of the replacement.
         :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to `id`.
                              If this is not provided, the record will by fetched anew based on the `id`.  
         :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
@@ -905,7 +915,7 @@ class ProjectService(MIDASSystem):
         (based on its form), it is returned unchanged.  
         """
         naan = self.cfg.get('ark_naan', ARK_NAAN)
-        m = re.match('^(\w+):([\w\-\/]+)$', recid)
+        m = re.match(r'^(\w+):([\w\-\/]+)$', recid)
         if m:
             return "ark:/%s/%s-%s" % (naan, m.group(1), m.group(2))
         return recid

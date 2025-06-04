@@ -386,7 +386,7 @@ class DAPService(ProjectService):
             # Do we need to be more careful in production by cancelling reassign request?
             self.log.warning("A new DAP record requested for an anonymous user")
 
-        prec = to_DAPRec(self.dbcli.create_record(name, shoulder, None, localid), self._fmcli)
+        prec = to_DAPRec(self.dbcli.create_record(name, shoulder, foruser, localid), self._fmcli)
         nerd = None
 
         # create the space in the file-manager
@@ -394,14 +394,14 @@ class DAPService(ProjectService):
             prec.ensure_file_space(self.who.actor)
                 
         try:
-            if foruser:
-                if self.dbcli.user_id == ANONYMOUS:
-                    self.log.warning("%s wants to reassign new record to %s", self.dbcli.user_id, foruser)
-                try:
-                    prec.reassign(foruser)  
-                except NotAuthorized as ex:
-                    self.log.warning("%s: %s not authorized to reassign owner to %s",
-                                     prec.id, self.dbcli.user_id, foruser)
+            # if foruser:
+            #     if self.dbcli.user_id == ANONYMOUS:
+            #         self.log.warning("%s wants to reassign new record to %s", self.dbcli.user_id, foruser)
+            #     try:
+            #         prec.reassign(foruser)  
+            #     except NotAuthorized as ex:
+            #         self.log.warning("%s: %s not authorized to reassign owner to %s",
+            #                          prec.id, self.dbcli.user_id, foruser)
 
             if meta:
                 meta = self._moderate_metadata(meta, shoulder)
@@ -418,14 +418,14 @@ class DAPService(ProjectService):
                 schemaid = data["_schema"]
                 m = re.search(r'/v(\d+\.\d+(\.\d+)*)#?$', schemaid)
                 if schemaid.startswith(NERDM_SCH_ID_BASE) and m:
-                    ver = m.group(1).split('.')
+                    ver = [int(d) for d in m.group(1).split('.')]
                     for i in range(len(ver)):
                         if i >= len(self._minnerdmver):
                             break;
-                        if ver[i] < self._minnerdmver[1]:
+                        if ver[i] < self._minnerdmver[i]:
                             raise InvalidUpdate("Requested NERDm schema version, " + m.group(1) +
                                                 " does not meet minimum requirement of " +
-                                                ".".join(self._minnerdmver), sys=self)
+                                                ".".join([str(d) for d in self._minnerdmver]), sys=self)
                 else:
                     raise InvalidUpdate("Unsupported schema for NERDm schema requested: " + schemaid,
                                         sys=self)
@@ -656,7 +656,7 @@ class DAPService(ProjectService):
 
         return out
 
-    def replace_data(self, id, newdata, part=None):
+    def replace_data(self, id, newdata, part=None, message="", _prec=None):
         """
         Replace the currently stored data content of a record with the given data.  It is expected that 
         the new data will be filtered/cleansed via an internal call to :py:method:`moderate_data`.  
@@ -665,6 +665,8 @@ class DAPService(ProjectService):
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
                              the given ``newdata`` is a value that should be set to the property pointed 
                              to by ``part``.  
+        :param str message:  an optional message that will be recorded as an explanation of the replacement.
+        :return:  the updated data (which may be slightly different from what was provided)
         :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to 
                              ``id``.  If this is not provided, the record will by fetched anew based on 
                              the ``id``.
@@ -677,7 +679,7 @@ class DAPService(ProjectService):
         :raises InvalidUpdate:  if the provided ``newdata`` represents an illegal or forbidden update or 
                              would otherwise result in invalid data content.
         """
-        return self._update_data(id, newdata, part, replace=True)
+        return self._update_data(id, newdata, part, replace=True, message=message, prec=_prec)
 
     def update_data(self, id, newdata, part=None, message="", _prec=None):
         """
@@ -688,6 +690,7 @@ class DAPService(ProjectService):
                              the given ``newdata`` is a value that should be set to the property pointed 
                              to by ``part``.  
         :param str message:  an optional message that will be recorded as an explanation of the update.
+        :return:  the updated data (which may be slightly different from what was provided)
         :raises ObjectNotFound:  if no record with the given ID exists or the ``part`` parameter points to 
                              an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
