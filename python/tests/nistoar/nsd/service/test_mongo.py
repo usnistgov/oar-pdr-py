@@ -31,7 +31,7 @@ def tearDownModule():
     tmpdir.cleanup()
 
 testdir = Path(__file__).parents[0]
-datadir = testdir / 'data'
+datadir = testdir.parents[0] / 'data'
 
 dburl = None
 dbname = None
@@ -51,6 +51,9 @@ class TestMongoPeopleService(test.TestCase):
 
     def tearDown(self):
         self.svc._cli.drop_database(dbname)
+        self.svc._cli.close()
+        self.svc._cli = None
+        self.svc = None
 
     def test_load(self):
         self.assertEqual(self.svc._cli[dbname]['OUs'].count_documents({}), 0)
@@ -121,6 +124,7 @@ class TestMongoPeopleService(test.TestCase):
 
 
     def test_select_people_exact(self):
+        self.tearDown()
         self.svc = serv.MongoPeopleService(dburl, True)
         self.svc.load(self.cfg, rootlog)
 
