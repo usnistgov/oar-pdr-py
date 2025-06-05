@@ -4,6 +4,8 @@ module providing implementations of an staff directory service.  A
 to return staff and organization metadata.  The :py:mod:`.wsgi module<nistoar.nsd.wsgi>` is responsible 
 for exposing a service through a web interface.  
 """
+from collections.abc import Mapping
+
 from .base import PeopleService
 from .mongo import MongoPeopleService
 
@@ -22,8 +24,8 @@ def create_people_service(config):
         return MongoPeopleService(dburl)
 
     elif config.get("factory") == "files":
-        from .files import FileBasedPeopleService
-        return FileBasedPeopleService(config)
+        from .files import FilesBasedPeopleService
+        return FilesBasedPeopleService(config)
 
     elif config.get("factory"):
         raise ConfigurationException("people_service.factory type not supported: "+config["factory"])
