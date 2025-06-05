@@ -120,7 +120,7 @@ class PeopleService(ABC):
         resolve a person's ORCID into a full description of the person, or None if the ORCID
         is not recognized.
         """
-        return self._get_person_by(self.ORCID_PROP, email)
+        return self._get_person_by(self.ORCID_PROP, orcid)
         
     def get_person_by_eid(self, eid: str) -> Mapping:
         """
