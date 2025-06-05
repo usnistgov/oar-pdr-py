@@ -273,6 +273,39 @@ class TestMongoPeopleService(test.TestCase):
         self.assertIsNotNone(who)
         self.assertEqual(who["lastName"], "Austin")
 
+    def test_select_best_person_matches(self):
+        self.svc.load(self.cfg, rootlog)
+
+        peops = self.svc.select_best_person_matches("Proctor, Phil")
+        self.assertEqual(len(peops), 1)
+        self.assertEqual(peops[0]['lastName'], "Proctor")
+
+        peops = self.svc.select_best_person_matches("Austin, Phillip")
+        self.assertEqual(len(peops), 1)
+        self.assertEqual(peops[0]['lastName'], "Austin")
+
+        peops = self.svc.select_best_person_matches("Bergman, Peter")
+        self.assertEqual(len(peops), 1)
+        self.assertEqual(peops[0]['lastName'], "Bergman")
+        peops = self.svc.select_best_person_matches("Berg, Peter")
+        self.assertEqual(len(peops), 1)
+        self.assertEqual(peops[0]['lastName'], "Bergman")
+
+        peops = self.svc.select_best_person_matches("Phillip Austin")
+        self.assertEqual(len(peops), 1)
+        self.assertEqual(peops[0]['lastName'], "Austin")
+        
+        peops = self.svc.select_best_person_matches("Austin Phil")
+        self.assertEqual(len(peops), 1)
+        self.assertEqual(peops[0]['lastName'], "Austin")
+        
+        peops = self.svc.select_best_person_matches("Phillip")
+        self.assertEqual(len(peops), 2)
+        peops = self.svc.select_best_person_matches("Phillip, ")
+        self.assertEqual(len(peops), 0)
+        peops = self.svc.select_best_person_matches(", Phillip")
+        self.assertEqual(len(peops), 2)
+
         
         
         

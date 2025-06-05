@@ -129,4 +129,54 @@ class PeopleService(ABC):
         """
         return self._get_person_by(self.EID_PROP, eid)
         
+    def select_best_person_matches(self, name: str, ignore_commas: bool=False):
+        """
+        return the closest matches to a given name made up of family and given names.  The result
+        is a list of matching EIDs.  (This can be resolved via :py:meth:`get_person_by_eid`.)  By
+        default (unless ``ignore_commas=True``), a comma in the name indicated that the family name
+        appears first.  
+        :param str name: a full name in any order
+        :param bool ignore_commas:  do not assume a name order if a comma appears in ``name`` and
+                                    ignore its presence
+        :return:  a list of the best matched people records
+                  :rtype: List[Mapping]
+        """
+        if not name:
+            return []
+
+        byname = []
+        if ',' in name:
+            names = [n.strip() for n in name.split(',', 1)]
+            if name[0]:
+                byname.append( list(self.select_people({'lastName': [names[0]]})) )
+            if len(names) > 1 and names[1]:
+                byname.append( list(self.select_people({'firstName': [names[1]]})) )
+
+        else:
+            names = name.split()
+            for nm in names:
+                byname.append(self.select_people({}, [nm]))
+
+        # to select the most matched person, count the number of times each EID was matched
+        scores = {}
+        for res in byname:
+            for person in res:
+                eid = person.get(self.EID_PROP)
+                if not eid:
+                    continue
+                if eid not in scores:
+                    scores[eid] = [0, person]
+                scores[eid][0] += 1
+
+        if not scores:
+            return []
+        maxmatches = max([s[0] for s in scores.values()])
+        if len(byname) > 1 and maxmatches < 2:
+            # the first and last names need to both match at least partially
+            return []
+        return [s[1] for s in scores.values() if s[0] == maxmatches]
+
     
+
+                
+        
