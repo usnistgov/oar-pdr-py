@@ -394,15 +394,6 @@ class DAPService(ProjectService):
             prec.ensure_file_space(self.who.actor)
                 
         try:
-            # if foruser:
-            #     if self.dbcli.user_id == ANONYMOUS:
-            #         self.log.warning("%s wants to reassign new record to %s", self.dbcli.user_id, foruser)
-            #     try:
-            #         prec.reassign(foruser)  
-            #     except NotAuthorized as ex:
-            #         self.log.warning("%s: %s not authorized to reassign owner to %s",
-            #                          prec.id, self.dbcli.user_id, foruser)
-
             if meta:
                 meta = self._moderate_metadata(meta, shoulder)
                 if prec.meta:

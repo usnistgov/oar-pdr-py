@@ -3,7 +3,7 @@ a module providing utility code for creating command-line interfaces to OAR syst
 """
 import os, sys, logging
 from copy import deepcopy
-from argparse import ArgumentParser, HelpFormatter
+from argparse import ArgumentParser, HelpFormatter, SUPPRESS
 
 from nistoar.pdr.exceptions import StateException
 from nistoar.base.config import ConfigurationException
@@ -65,6 +65,7 @@ def define_prog_opts(progname, description=None, epilog=None, parser=None):
     parser.add_argument("-A", "--actor-id", type=str, dest="actor", metavar='USERID',
                         help="An identifer representing the real user executing this command, used to "+
                              "record the actor in provenance logs")
+    parser.add_argument("--vehicle", type=str, dest="vehicle", default=parser.prog, help=SUPPRESS)
 
     return parser
 

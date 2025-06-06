@@ -81,28 +81,28 @@ class TestRegpubCmd(test.TestCase):
         cfg = {}
         args = self.cmd.parse_args("-q regpub mds2-88888".split())
         agent = regpub.get_agent(args, cfg)
-        self.assertEqual(agent.vehicle, "regpub")
+        self.assertEqual(agent.vehicle, "midasadm")
         self.assertEqual(agent.actor, os.getlogin())
         self.assertEqual(agent.actor_type, agent.USER)
         self.assertEqual(agent.groups, (agent.ADMIN,))
 
         os.environ['LOGNAME'] = "gjc1"
         agent = regpub.get_agent(args, cfg)
-        self.assertEqual(agent.vehicle, "regpub")
+        self.assertEqual(agent.vehicle, "midasadm")
         self.assertEqual(agent.actor, "gjc1")
         self.assertEqual(agent.actor_type, agent.USER)
         self.assertEqual(agent.groups, (agent.ADMIN,))
 
         args = self.cmd.parse_args("-q -A ava1 regpub mds2-88888".split())
         agent = regpub.get_agent(args, cfg)
-        self.assertEqual(agent.vehicle, "regpub")
+        self.assertEqual(agent.vehicle, "midasadm")
         self.assertEqual(agent.actor, "ava1")
         self.assertEqual(agent.actor_type, agent.USER)
         self.assertEqual(agent.groups, (agent.ADMIN,))
         
         cfg['auto_users'] = "ava1"
         agent = regpub.get_agent(args, cfg)
-        self.assertEqual(agent.vehicle, "regpub")
+        self.assertEqual(agent.vehicle, "midasadm")
         self.assertEqual(agent.actor, "ava1")
         self.assertEqual(agent.actor_type, agent.AUTO)
         self.assertEqual(agent.groups, (agent.ADMIN,))

@@ -8,6 +8,7 @@ from collections.abc import Mapping
 
 from .base import PeopleService
 from .mongo import MongoPeopleService
+from .. import NSDClientError, NSDException, NSDResourceNotFound
 
 def create_people_service(config):
     """

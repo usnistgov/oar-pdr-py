@@ -49,6 +49,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     """
     p = subparser
     p.description = description
+    p.cmd = as_cmd
     p.add_argument("nerdref", metavar="AIPID-OR-FILE", type=str, 
                    help="either an AIP-ID for the dataset to load or the path to a file containing "+
                         "the NERDm Resource metadata for the dataset.  If an ID is provided, the "+
@@ -167,6 +168,8 @@ def execute(args, config: Mapping=None, log: Logger=None):
                 log.info("Changing owner to %s", args.owner)
                 svc.reassign_record(dbid, args.owner, True)
 
+            rec = svc.dbcli.get_record_for(dbid, ACLs.WRITE)
+
         except (NotEditable, NotAuthorized) as ex:
             raise CommandFailure(args.cmd, f"{dbid}: unexpected record state problem: {str(ex)}", 11)
         except Exception as ex:
@@ -192,23 +195,6 @@ def execute(args, config: Mapping=None, log: Logger=None):
         except NotAuthorized as ex:
             raise CommandFailure(args.cmd, f"{name}: {str(ex)}", 9)
 
-        try:
-            when = nerd.get('annotated') or nerd.get('revised') or \
-                   nerd.get('first_issued') or nerd.get('issued') or 0
-            if isinstance(when, str):
-                when = datetime.fromisoformat(when).timestamp()
-            rec.status.publish(nerd['@id'], version, None, when)
-            rec.status.act("registered-published",
-                           "Legacy DAP publication registered as published",
-                           rec.status.since)
-            rec.save()
-
-            svc._record_action(Action(Action.COMMENT, rec.id, svc.who,
-                                      "Registered as published legacy DAP"))
-                                      
-        except NotAuthorized as ex:
-            raise CommandFailure(args.cmd, f"Unexpected authorization issue ({str(ex)})", 9)
-
     if args.pubread and PUBLIC_GROUP not in args.rp:
         args.rp.append(PUBLIC_GROUP)
     if args.rp or args.wp or args.ap:
@@ -218,9 +204,25 @@ def execute(args, config: Mapping=None, log: Logger=None):
             rec.acls.grant_perm_to(ACLs.WRITE, *args.wp)
         if args.ap:
             rec.acls.grant_perm_to(ACLs.ADMIN, *args.ap)
-        rec.save()
-        
 
+    try:
+        when = nerd.get('annotated') or nerd.get('revised') or \
+               nerd.get('first_issued') or nerd.get('issued') or 0
+        if isinstance(when, str):
+            when = datetime.fromisoformat(when).timestamp()
+        rec.status.publish(nerd['@id'], version, None, when)
+        rec.status.act("registered-published",
+                       "Legacy DAP publication registered as published",
+                       rec.status.since)
+        rec.save()
+
+        svc._record_action(Action(Action.COMMENT, rec.id, svc.who,
+                                  "Registered as published legacy DAP"))
+                                  
+    except NotAuthorized as ex:
+        raise CommandFailure(args.cmd, f"Unexpected authorization issue ({str(ex)})", 9)
+
+        
 def get_agent(args, config: Mapping):
     who = args.actor
     utype = Agent.USER
@@ -228,7 +230,7 @@ def get_agent(args, config: Mapping):
         who = getuser()
     if who in config.get("auto_users", []):
         utype = Agent.AUTO
-    return Agent(args.cmd, utype, who, Agent.ADMIN)
+    return Agent(args.vehicle, utype, who, Agent.ADMIN)
 
 def create_DAPService(who: Agent, args, config: Mapping, log: Logger):
     # determine which DAPService implementation we're using

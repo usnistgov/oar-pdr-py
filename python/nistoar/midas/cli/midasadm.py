@@ -17,7 +17,7 @@ from nistoar.pdr import def_etc_dir
 description = "execute MIDAS administrative operations"
 epilog = None
 default_prog_name = "midasadm"
-default_conf_file = os.path.join(def_etc_dir, "midasadm-cli-config.yml")
+default_conf_file = os.path.join(def_etc_dir, "midasadm_conf.yml")
 
 def main(cmdname, args):
     """
