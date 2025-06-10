@@ -42,6 +42,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
         as_cmd = default_name
     out = cli.CommandSuite(as_cmd, subparser)
     out.load_subcommand(regpub)
+    out.load_subcommand(setstate)
 
     return out
 
