@@ -54,18 +54,16 @@ class TestMDS3DAPApp(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mds3"
-                },
-                "default": {
-                    "default_shoulder": "mds3"
-                }
-            },
             "dbio": {
                 "superusers": [ "rlp" ],
-                "allowed_project_shoulders": ["mds3", "pdr1"],
-                "default_shoulder": "mds3"
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "midas": "mds3"
+                    },
+                    "allowed_shoulders": {
+                        "midas": ["mds3", "pdr1"]
+                    }
+                }
             },
             "assign_doi": "always",
             "doi_naan": "10.88888",
@@ -84,7 +82,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.rootpath = "/midas/dap/mds3"
 
     def create_record(self, name="goob", meta=None):
-        cli = self.dbfact.create_client(base.DAP_PROJECTS, self.cfg["dbio"], nistr.actor)
+        cli = self.dbfact.create_client(base.DAP_PROJECTS, self.cfg["dbio"], nistr)
         out = cli.create_record(name, "pdr1")
         if meta:
             out.meta = meta

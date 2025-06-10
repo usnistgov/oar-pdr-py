@@ -7,7 +7,13 @@ from nistoar.midas.dbio import inmem, base
 class TestGroup(test.TestCase):
 
     def setUp(self):
-        self.cfg = { "default_group_shoulder": "grp0" }
+        self.cfg = {
+            "group_id_minting": {
+                "default_shoulder": {
+                    "public": "grp0"
+                }
+            }
+        }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
@@ -96,7 +102,13 @@ class TestGroup(test.TestCase):
 class TestDBGroups(test.TestCase):
 
     def setUp(self):
-        self.cfg = { "default_group_shoulder": "grp0" }
+        self.cfg = {
+            "group_id_minting": {
+                "default_shoulder": {
+                    "public": "grp0"
+                }
+            }
+        }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
@@ -108,8 +120,10 @@ class TestDBGroups(test.TestCase):
         self.assertEqual(self.dbg._shldr, base.DEF_GROUPS_SHOULDER)
 
     def test_mint_id(self):
-        self.assertEqual(self.dbg._mint_id("a", "b", "c"), "a:c:b")
-
+        with self.assertRaises(base.NotAuthorized):
+            self.assertEqual(self.dbg._mint_id("a", "b", "c"), "a:c:b")
+        self.assertEqual(self.dbg._mint_id("grp0", "b", "c"), "grp0:c:b")
+            
     def test_create_group(self):
         # group does not exist yet
         id = "grp0:nist0:ava1:enemies"

@@ -134,6 +134,15 @@ class TestMongoDBClient(test.TestCase):
         self.cli.disconnect()
         self.assertIsNone(self.cli._native)
 
+    def test_free(self):
+        self.assertEqual(self.cli._dburl, dburl)
+        self.assertIsNone(self.cli._native)
+        self.cli.connect()
+        self.assertIsNotNone(self.cli._native)
+        self.assertIsNotNone(self.cli.native)
+        self.cli.free()
+        self.assertIsNone(self.cli._native)
+
     def test_auto_connect(self):
         self.assertEqual(self.cli._dburl, dburl)
         self.assertIsNone(self.cli._native)
@@ -578,7 +587,13 @@ class TestMongoProjectRecord(test.TestCase):
 class TestMongoDBGroups(test.TestCase):
 
     def setUp(self):
-        self.cfg = { "default_group_shoulder": "grp0" }
+        self.cfg = {
+            "group_id_minting": {
+                "default_shoulder": {
+                    "public": "grp0"
+                }
+            }
+        }
         self.fact = mongo.MongoDBClientFactory(self.cfg, dburl)
         self.user = "nist0:ava1"
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)

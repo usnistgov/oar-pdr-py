@@ -435,19 +435,18 @@ class TestMIDASApp(test.TestCase):
                         "describedBy": "https://midas3.nist.gov/midas/apidocs",
                         "href": "http://midas3.nist.gov/midas/dmp"
                     },
-                    "clients": {
-                        "midas": {
-                            "default_shoulder": "mdm1"
-                        },
-                        "default": {
-                            "default_shoulder": "mdm0"
-                        }
-                    },
                     "dbio": {
                         "default_convention": "mdm1",
                         "superusers": [ "rlp" ],
-                        "allowed_project_shoulders": ["mdm1", "spc1"],
-                        "default_shoulder": "mdm0"
+                        "project_id_minting": {
+                            "default_shoulder": {
+                                "midas": "mdm0",
+                                "public": "mdm0"
+                            },
+                            "allowed_shoulders": {
+                                "midas": ["mdm1", "spc1" ]
+                            }
+                        }
                     },
                     "conventions": {
                         "mdm1": {
@@ -478,16 +477,18 @@ class TestMIDASApp(test.TestCase):
                     },
                     "project_name": "drafts",
                     "type": "dmp/mdm1",
-                    "clients": {
-                        "default": {
-                            "default_shoulder": "mds3"
-                        }
-                    },
                     "dbio": {
                         "default_convention": "mds3",
                         "superusers": [ "rlp" ],
-                        "allowed_project_shoulders": ["mds3", "pdr0"],
-                        "default_shoulder": "mds3"
+                        "project_id_minting": {
+                            "default_shoulder": {
+                                "midas": "mds3",
+                                "public": "mds3"
+                            },
+                            "allowed_shoulders": {
+                                "midas": ["mds3", "pdr0" ]
+                            }
+                        }
                     },
                 },
                 "pyu": {

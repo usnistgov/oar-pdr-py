@@ -32,21 +32,19 @@ class TestProjectService(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mdm1"
-                },
-                "default": {
-                    "default_shoulder": "mdm0"
-                }
-            },
             "default_perms": {
                 "read":  ["grp0:public"],
                 "edit":  ["grp0:overlord"]
             },
             "dbio": {
-                "allowed_project_shoulders": ["mdm1", "spc1"],
-                "default_shoulder": "mdm0"
+                "project_id_minting": {
+                    "allowed_shoulders": {
+                        "public": [],
+                        "midas":  ["mdm0", "mdm1", "spc1"]
+                    },
+                    "default_shoulder": { "public": "mdm1" },
+                    "localid_providers": { "midas": ["mdm1"] }
+                }
             }
         }
         self.fact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdm1": 2 }})
@@ -75,21 +73,23 @@ class TestProjectService(test.TestCase):
 
     def test_get_id_shoulder(self):
         self.create_service()
-        self.assertEqual(self.project._get_id_shoulder(nistr), "mdm1")
-        
-        usr = prov.Agent("midas", prov.Agent.USER, "nstr1", "malware")
-        self.assertEqual(self.project._get_id_shoulder(usr), "mdm0")
+        self.assertIsNone(self.project._get_id_shoulder(nistr, {}))
 
-        del self.cfg['clients']['default']['default_shoulder']
-        self.create_service()
-        with self.assertRaises(project.NotAuthorized):
-            self.project._get_id_shoulder(usr)
-        del self.cfg['clients']['default']
-        self.create_service()
-        with self.assertRaises(project.NotAuthorized):
-            self.project._get_id_shoulder(usr)
+        ## _get_id_shoulder() now returns None by default
+        #
+        # usr = prov.Agent("midas", prov.Agent.USER, "nstr1", "malware")
+        # self.assertEqual(self.project._get_id_shoulder(usr), "mdm0")
+
+        # del self.cfg['clients']['default']['default_shoulder']
+        # self.create_service()
+        # with self.assertRaises(project.NotAuthorized):
+        #     self.project._get_id_shoulder(usr)
+        # del self.cfg['clients']['default']
+        # self.create_service()
+        # with self.assertRaises(project.NotAuthorized):
+        #     self.project._get_id_shoulder(usr)
         
-        self.assertEqual(self.project._get_id_shoulder(nistr), "mdm1")
+        # self.assertEqual(self.project._get_id_shoulder(nistr), "mdm1")
 
     def test_extract_data_part(self):
         data = {"color": "red", "pos": {"x": 23, "y": 12, "grid": "A", "vec": [22, 11, 0], "desc": {"a": 1}}}
@@ -156,10 +156,11 @@ class TestProjectService(test.TestCase):
         with self.assertRaises(project.NotAuthorized):
             self.project.create_record("gurn", {"color": "red"}, {"temper": "dark"}, "mdm0:goob")
 
-        self.project.dbcli._cfg["localid_providers"] = {
+        self.project.dbcli._cfg["project_id_minting"]["localid_providers"] = {
             self.project.dbcli._who.agent_class: ["mdm0"]
         }
-        self.assertEqual(self.project.dbcli._cfg["localid_providers"].get("midas"), ["mdm0"])
+        self.assertEqual(self.project.dbcli._cfg["project_id_minting"]["localid_providers"].get("midas"),
+                         ["mdm0"])
 
         prec = self.project.create_record("gurn", {"color": "red"}, {"temper": "dark"}, "mdm0:goob")
         self.assertEqual(prec.name, "gurn")
@@ -334,8 +335,14 @@ class TestProjectServiceFactory(test.TestCase):
                 }
             },
             "dbio": {
-                "allowed_project_shoulders": ["mdm1", "spc1"],
-                "default_shoulder": "mdm0"
+                "project_id_minting": {
+                    "allowed_shoulders": {
+                        "public": [],
+                        "midas":  ["mdm1", "spc1"]
+                    },
+                    "default_shoulder": { "public": "mdm0" },
+                    "localid_providers": { "midas": ["mdm0"] }
+                }
             }
         }
 

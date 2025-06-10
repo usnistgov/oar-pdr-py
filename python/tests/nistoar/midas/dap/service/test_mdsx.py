@@ -33,17 +33,15 @@ class TestDAPService(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mdsx"
-                },
-                "default": {
-                    "default_shoulder": "mdsx"
-                }
-            },
             "dbio": {
-                "allowed_project_shoulders": ["mdsx", "spc1"],
-                "default_shoulder": "mdsx",
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "midas": "mdsx"
+                    },
+                    "allowed_shoulders": {
+                        "midas": ["mdsx", "spc1"]
+                    }
+                }
             },
             "assign_doi": "always",
             "doi_naan": "88888"

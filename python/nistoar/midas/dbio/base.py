@@ -685,16 +685,19 @@ class DBGroups(object):
         :raises AlreadyExists:  if the user has already defined a group with this name
         :raises NotAuthorized:  if the user is not authorized to create this group
         """
-        if not self._cli._authorized_group_create(self._shldr, self._cli._who, foruser):
-            raise NotAuthorized(self._cli.user_id, "create group")
+        if self.name_exists(name, foruser or self._cli.user_id):
+            raise AlreadyExists(
+                "User {} has already defined a record with name={}".format(foruser, name))
 
+        if foruser and foruser != self._cli.user_id \
+           and self._cli.user_id not in self._cli._cfg.get("superusers", []) \
+           and self._cli._who.agent_class != Agent.ADMIN:
+            raise NotAuthorized(f"{str(self._cli._who)} is not allowed to create a group for another user")
         if not foruser:
             foruser = self._cli.user_id
-        if self.name_exists(name, foruser):
-            raise AlreadyExists(f"User {foruser} has already defined a group with name={name}")
 
         out = Group({
-            "id": self._mint_id(self._shldr, name, foruser),
+            "id": self._mint_id(self._shldr, name, foruser),   # may raise NotAuthorized
             "name": name,
             "owner": foruser,
             "members": [foruser],
@@ -715,6 +718,13 @@ class DBGroups(object):
         :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
                                how the identifier is formed.  
         """
+        # determine shoulder if not provided
+        mintcfg = self._cli._cfg.get("group_id_minting", {})
+        if not shoulder:
+            shoulder = self._cli._get_default_shoulder(mintcfg, self._cli._who)    # may raise NotAuthorized
+        elif not self._cli._authorized_for_shoulder(mintcfg, shoulder, self._cli._who):
+            raise NotAuthorized(str(self._cli._who), f"create a group under the {shoulder}")
+
         return "{}:{}:{}".format(shoulder, owner, name)
 
     def exists(self, gid: str) -> bool:
@@ -1033,16 +1043,13 @@ class DBClient(ABC):
                               already has a record with the requested ``name`` or if a record already 
                               exists with the requested ``shoulder``-``localid`` combination.  
         """
-        if not shoulder:
-            shoulder = self._default_project_shoulder()
-        if localid:
-            if not self._authorized_localid_provider(shoulder, self._who):
-                raise NotAuthorized(self.user_id, "create record with specified localid")
-        elif not self._authorized_project_create(shoulder, self._who, foruser):
-            raise NotAuthorized(self.user_id, "create record")
         if self.name_exists(name, foruser or self.user_id):
             raise AlreadyExists(
                 "User {} has already defined a record with name={}".format(foruser, name))
+
+        if foruser and foruser != self.user_id and self.user_id not in self._cfg.get("superusers", []) \
+           and self._who.agent_class != Agent.ADMIN:
+            raise NotAuthorized(str(self._who), "create a record for another user")
 
         rec = self._new_record_data(self._mint_id(shoulder, localid))
         rec['name'] = name
@@ -1055,64 +1062,12 @@ class DBClient(ABC):
             self.notifier.notify(message)
         return rec 
 
-    def _default_project_shoulder(self):
-        out = self._cfg.get("default_project_shoulder", self._cfg.get("default_shoulder"))
-        if not out:
-            raise ConfigurationException(
-                "Missing required configuration parameter: default_project_shoulder")
-        return out
-
-    def _authorized_project_create(self, shoulder, agent, foruser=None):
-        # backword compatibility hack
-        if "default_shoulder" in self._cfg:
-            self._cfg.setdefault("default_project_shoulder", self._cfg["default_shoulder"])
-
-        shldrs = self._allowed_shoulders_for("project", agent)
-        return self._authorized_create(shoulder, shldrs, foruser)
-
-    def _authorized_group_create(self, shoulder, agent, foruser=None):
-        shldrs = self._allowed_shoulders_for("group", agent)
-        return self._authorized_create(shoulder, shldrs, foruser)
-
-    def _allowed_shoulders_for(self, rectype, agent):
-        shldrcfg = self._cfg.get(f"allowed_{rectype}_shoulders", [])
-        if isinstance(shldrcfg, list):
-            shldrcfg = { "": shldrcfg }   # these are the "public" shoulders (anyone can create under)
-        defshldr = self._cfg.get(f"default_{rectype}_shoulder")
-        if defshldr:
-            shldrcfg.setdefault("", []).append(defshldr)
-
-        allowed4agent = set(shldrcfg[""])
-        for g in agent.groups:
-            if g in shldrcfg:
-                allowed4agent.update(shldrcfg[g])
-        return allowed4agent
-
-    def _authorized_create(self, shoulder, shoulders, foruser=None):
-        if foruser and foruser != self.user_id and self.user_id not in self._cfg.get("superusers", []) \
-           and self._who.agent_class != Agent.ADMIN:
-            # Sorry, if not superuser, can't create for another user
-            return False
-
-        # is the requested should among the ones allowed for user?
-        return shoulder in shoulders
-
-    def _authorized_localid_provider(self, shoulder, agent):
-        if agent.actor in self._cfg.get("superusers", []) or agent.agent_class == Agent.ADMIN:
-            return True
-
-        # does this Agent have permission to provide localid with given shoulder?
-        providers = self._cfg.get("localid_providers", {})
-        for g in self._who.groups:
-            if g in providers and shoulder in providers[g]:
-                return True
-        return False
-
-    def _mint_id(self, shoulder, localid=None):
+    def _mint_id(self, shoulder=None, localid=None):
         """
         create and register a new identifier that can be attached to a new project record
         :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
-                               how the identifier is formed.  
+                               how the identifier is formed.  If not provided, a default is chosen
+                               based on the requesting agent.
         :param str localid:    the requester-provided local identifier to combine with the shoulder 
                                prefix to create the new record identifier.  If None (as typical),
                                a new local idenfier will created according to the internal minting 
@@ -1121,13 +1076,20 @@ class DBClient(ABC):
         :raises NotAuthorized: if the current user is not allowed to specify a local identifier with 
                                the given shoulder.
         """
+        # determine shoulder if not provided
+        mintcfg = self._cfg.get("project_id_minting", {})
+        if not shoulder:
+            shoulder = self._get_default_shoulder(mintcfg, self._who)    # may raise NotAuthorized
+        elif not self._authorized_for_shoulder(mintcfg, shoulder, self._who):
+            raise NotAuthorized(str(self._who), f"create a record under the {shoulder}")
+
         locid = localid
         if not locid:
             locid = "{0:04}".format(self._next_recnum(shoulder))
         out = f"{shoulder}:{locid}"
 
         if localid:
-            if not self._authorized_localid_provider(shoulder, self._who):
+            if not self._authorized_localid_provider(mintcfg, shoulder, self._who):
                 raise NotAuthorized(self.user_id,
                                     message="Agent %s is not allowed to request a specific local ID" %
                                             str(self._who))
@@ -1135,6 +1097,37 @@ class DBClient(ABC):
                 raise AlreadyExists(f"ID {out} already exists")
 
         return out
+
+    def _get_default_shoulder(self, mintcfg, who):
+        shoulder = mintcfg.get("default_shoulder", {}).get(who.agent_class)
+        if not shoulder:
+            shoulder = mintcfg.get("default_shoulder", {}).get("public")
+        if not shoulder:
+#            self.log.debug("Unable to determine default shoulder: unrecognized agent class: %s",
+#                           who.agent_class)
+            raise NotAuthorized(str(who), "create record",
+                                "Agent class, %s, not recognized" % who.agent_class)
+        if not isinstance(shoulder, str):
+            raise ConfigurationException("dbio: default_shoulder: value not a str: "+str(shoulder))
+        return shoulder
+
+    def _authorized_for_shoulder(self, mintcfg, shoulder, who):
+        allowed_by_group = mintcfg.get("allowed_shoulders", {})
+        for g in who.groups:
+            if g in allowed_by_group and shoulder in allowed_by_group[g]:
+                return True
+        try:
+            return shoulder == self._get_default_shoulder(mintcfg, who)
+        except NotAuthorized:
+            return False
+
+    def _authorized_localid_provider(self, mintcfg, shoulder, agent):
+        # does this Agent have permission to provide localid with given shoulder?
+        providers = mintcfg.get("localid_providers", {})
+        for g in self._who.groups:
+            if g in providers and shoulder in providers[g]:
+                return True
+        return False
 
     def _parse_id(self, id):
         pair = id.rsplit(':', 1)
@@ -1510,7 +1503,9 @@ class DBClientFactory(ABC):
         the ones that control authorization--be provided via :py:method:`create_client` as these can 
         depend on the type of project being access (e.g. "dmp" vs. "dap").
 
-        :param dict          config:  the DBClient configuration
+        :param dict          config:  the DBClient configuration (see the
+                                      :py:mod:`dbio module documentation<nistoar.midas.dbio>` for 
+                                      a description of the configuration schema)
         :param PeoplService peopsvc:  a PeopleService to use to look up people in the organization.  If
                                       not provided, an attempt will be made to create one from the 
                                       configuration (via its ``people_service`` parameter). 

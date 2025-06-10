@@ -18,6 +18,16 @@ tmpdir = tempfile.TemporaryDirectory(prefix="_test_regpub.")
 testdir = Path(__file__).parents[0]
 nsddatadir = testdir.parents[2] / "nsd" / "data"
 
+try:
+    os.getlogin()
+    def getlogin():
+        return os.getlogin()
+except OSError as ex:
+    # this will happen if there is not controlling terminal
+    import pwd
+    def getlogin():
+        return pwd.getpwuid(os.getuid())[0]
+
 loghdlr = None
 rootlog = None
 def setUpModule():
@@ -47,7 +57,7 @@ class TestRegpubCmd(test.TestCase):
         self.cmd.load_subcommand(regpub)
 
     def tearDown(self):
-        os.environ['LOGNAME'] = os.getlogin()
+        os.environ['LOGNAME'] = getlogin()
         dapdir = os.path.join(tmpdir.name, "dbfiles")
         if os.path.isdir(dapdir):
             shutil.rmtree(dapdir)
@@ -82,7 +92,7 @@ class TestRegpubCmd(test.TestCase):
         args = self.cmd.parse_args("-q regpub mds2-88888".split())
         agent = regpub.get_agent(args, cfg)
         self.assertEqual(agent.vehicle, "midasadm")
-        self.assertEqual(agent.actor, os.getlogin())
+        self.assertEqual(agent.actor, getlogin())
         self.assertEqual(agent.actor_type, agent.USER)
         self.assertEqual(agent.groups, (agent.ADMIN,))
 
@@ -132,10 +142,10 @@ class TestRegpubCmd(test.TestCase):
         self.assertFalse(svc.exists("mds2:88888"))
 
         cfg['dbio']['factory'] = "inmen"   # typo
-        with self.assertRaises(cli.CommandFailure):
+        with self.assertRaises(cli.ConfigurationException):
             regpub.create_DAPService(who, args, cfg, log)
 
-    # @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
+    @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
     def test_create_DAPService_mongo(self):
         cfg = {
             'dbio': {
@@ -213,7 +223,19 @@ class TestRegpubCmd(test.TestCase):
         cfg = {
             'dbio': {
                 "factory": "fsbased",
-                "db_root_dir": root
+                "db_root_dir": root,
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "public": "mds3"
+                    },
+                    "allowed_shoulders": {
+                        "public": ["mds3"],
+                        "admin": ["mds2", "mds3"],
+                    },
+                    "localid_providers": {
+                        "admin": ["mds2"]
+                    }
+                }
             },
             'doi_naan': '10.88888',
             'resolver_url': os.environ['OAR_PDR_RESOLVER_URL']
@@ -255,7 +277,19 @@ class TestRegpubCmd(test.TestCase):
         cfg = {
             'dbio': {
                 "factory": "fsbased",
-                "db_root_dir": root
+                "db_root_dir": root,
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "public": "mds3"
+                    },
+                    "allowed_shoulders": {
+                        "public": ["mds3"],
+                        "admin": ["mds2", "mds3"],
+                    },
+                    "localid_providers": {
+                        "admin": ["mds2"]
+                    }
+                }
             },
             'doi_naan': '10.88888'
         }
@@ -286,7 +320,21 @@ class TestRegpubCmd(test.TestCase):
         self.assertEqual(len(data['acls']['read']), 2)
 
     def test_owner_from_contact_point(self):
-        cfg = { "factory": "files", "dir": str(nsddatadir) }
+        cfg = {
+            "factory": "files", "dir": str(nsddatadir),
+            "project_id_minting": {
+                "default_shoulder": {
+                    "public": "mds3"
+                },
+                "allowed_shoulders": {
+                    "public": ["mds3"],
+                    "admin": ["mds2", "mds3"],
+                },
+                "localid_providers": {
+                    "admin": ["mds2"]
+                }
+            }
+        }
         ps = nsd.create_people_service(cfg)
         self.assertTrue(ps)
         
@@ -325,7 +373,19 @@ class TestRegpubCmd(test.TestCase):
             'dbio': {
                 "factory": "fsbased",
                 "db_root_dir": root,
-                "people_service": { "factory": "files", "dir": str(nsddatadir) }
+                "people_service": { "factory": "files", "dir": str(nsddatadir) },
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "public": "mds3"
+                    },
+                    "allowed_shoulders": {
+                        "public": ["mds3"],
+                        "admin": ["mds2", "mds3"],
+                    },
+                    "localid_providers": {
+                        "admin": ["mds2"]
+                    }
+                }
             },
             'doi_naan': '10.88888'
         }

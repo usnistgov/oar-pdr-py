@@ -31,6 +31,9 @@ def tearDownModule():
     tmpdir.cleanup()
 
 nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
+# nistr.set_prop("userName", "Joe")
+# nistr.set_prop("userLastName", "NIST")
+# nistr.set_prop("email", "joe.nist@nist.gov")
 
 # test records
 testdir = pathlib.Path(__file__).parents[0]
@@ -41,17 +44,15 @@ class TestMDS3DAPService(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mdsy"
-                },
-                "default": {
-                    "default_shoulder": "mdsy"
-                }
-            },
             "dbio": {
-                "allowed_project_shoulders": ["mdsy", "spc1"],
-                "default_shoulder": "mdsy",
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "midas": "mdsy"
+                    },
+                    "allowed_shoulders": {
+                        "midas": ["mds2"]
+                    }
+                }
             },
             "assign_doi": "always",
             "doi_naan": "10.88888",
@@ -214,12 +215,12 @@ class TestMDS3DAPService(test.TestCase):
                                     "softwareLink": "https://github.com/usnistgov/goob" },
                                    dbid="mds2:1492")
 
-        self.svc.dbcli._cfg["localid_providers"] = {
+        self.svc.dbcli._cfg["project_id_minting"]["localid_providers"] = {
             self.svc.dbcli._who.agent_class: ["mds2"]
         }
-        # self.svc.dbcli._cfg["allowed_project_shoulders"].append("mds2")
-        self.assertEqual(self.svc.dbcli._cfg["localid_providers"].get("midas"), ["mds2"])
+        self.assertEqual(self.svc.dbcli._cfg["project_id_minting"]["localid_providers"].get("midas"), ["mds2"])
 
+        self.svc.dbcli._cfg['superusers'] = ["nstr1"]
         prec = self.svc.create_record("goob", {"title": "test"},
                                       {"creatorIsContact": "TRUE", "foruser": "ava1",
                                        "softwareLink": "https://github.com/usnistgov/goob" },

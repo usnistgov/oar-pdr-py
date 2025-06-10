@@ -9,7 +9,13 @@ from nistoar.pdr.utils.prov import Agent
 class TestACLs(test.TestCase):
 
     def setUp(self):
-        self.cfg = { "default_shoulder": "pdr0" }
+        self.cfg = {
+            "project_id_minting": {
+                "default_shoulder": {
+                    "public": "pdr0"
+                }
+            }
+        }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)

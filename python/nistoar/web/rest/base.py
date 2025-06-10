@@ -277,7 +277,7 @@ class Handler(object):
         
         meth_handler = 'do_'+meth
 
-        try:
+        try: 
             if not self.preauthorize():
                 return self.send_unauthorized()
 

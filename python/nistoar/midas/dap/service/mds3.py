@@ -371,7 +371,7 @@ class DAPService(ProjectService):
             else:
                 shoulder, localid = dbid.split(':', 1)
         else:
-            shoulder = self._get_id_shoulder(self.who)
+            shoulder = self._get_id_shoulder(self.who, meta)  # may return None (DBClient will set it)
 
         foruser = None
         if meta and meta.get("foruser"):
@@ -388,6 +388,7 @@ class DAPService(ProjectService):
 
         prec = to_DAPRec(self.dbcli.create_record(name, shoulder, foruser, localid), self._fmcli)
         nerd = None
+        shoulder = prec.id.split(':', 1)[0]
 
         # create the space in the file-manager
         if self._fmcli:
@@ -2298,7 +2299,7 @@ class DAPServiceFactory(ProjectServiceFactory):
     on behalf of a specific user.  The configuration parameters that can be provided to this factory 
     is the union of those supported by the following classes:
       * :py:class:`DAPService` (``assign_doi`` and ``doi_naan``)
-      * :py:class:`~nistoar.midas.dbio.project.ProjectService` (``clients`` and ``dbio``)
+      * :py:class:`~nistoar.midas.dbio.project.ProjectService` (``default_perms`` and ``dbio``)
     """
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, log: Logger=None,
