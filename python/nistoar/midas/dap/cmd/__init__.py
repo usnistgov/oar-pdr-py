@@ -34,7 +34,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 
                                                 interface into it 
     """
-    from . import regpub
+    from . import regpub, setstate
 
     subparser.description = description
 
