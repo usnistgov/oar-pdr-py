@@ -1,6 +1,6 @@
 """
 CLI command that will register a previously published DAP into the DBIO.  The record will be set
-in the published state.  
+to the "published" state.  
 """
 
 import logging, argparse, os, re
@@ -8,8 +8,6 @@ from logging import Logger
 from copy import deepcopy
 from pathlib import Path
 from collections.abc import Mapping
-from getpass import getuser
-from importlib import import_module
 from datetime import datetime
 
 import requests
@@ -20,10 +18,10 @@ from nistoar.pdr.utils.cli import CommandFailure, explain
 from nistoar.pdr.utils.io import read_nerd
 from nistoar.pdr.utils.prov import Agent, Action
 from nistoar.pdr.constants import ARK_PFX_PAT
-from nistoar.midas.dbio import (FSBasedDBClientFactory, MongoDBClientFactory, InMemoryDBClientFactory,
-                                NotEditable, NotAuthorized, AlreadyExists, ACLs, status, PUBLIC_GROUP)
-from nistoar.midas.dap.nerdstore import NERDResourceStorageFactory
+from nistoar.midas.dbio import NotEditable, NotAuthorized, AlreadyExists, ACLs, status, PUBLIC_GROUP
 from nistoar.nsd.service import PeopleService
+
+from . import create_DAPService, get_agent
 
 ARK_PFX_RE = re.compile(ARK_PFX_PAT)
 
@@ -33,7 +31,6 @@ description = \
 """create a DAP record based on a previously published DAP and load it into the DBIO.  
 The resulting record will be set into the "published" state.  Use options to set attributes
 of the record such as owner and permissions.
-
 
 """
 
@@ -140,7 +137,13 @@ def execute(args, config: Mapping=None, log: Logger=None):
         shoulder = config.get("default_shoulder")
         
     agent = get_agent(args, config)
-    svc = create_DAPService(agent, args, config, log)
+    try:
+        svc = create_DAPService(agent, args, config, log)
+    except ConfigurationException as ex:
+        raise CommandFailure(args.cmd, "Config error: "+str(ex), 6) from ex
+    except Exception as ex:
+        log.exception(ex)
+        raise CommandFailure(args.cmd, "Unable to create DAP service: "+str(ex), 1) from ex
 
     rec = None
     if svc.exists(dbid):
@@ -223,88 +226,6 @@ def execute(args, config: Mapping=None, log: Logger=None):
         raise CommandFailure(args.cmd, f"Unexpected authorization issue ({str(ex)})", 9)
 
         
-def get_agent(args, config: Mapping):
-    who = args.actor
-    utype = Agent.USER
-    if not who:
-        who = getuser()
-    if who in config.get("auto_users", []):
-        utype = Agent.AUTO
-    return Agent(args.vehicle, utype, who, Agent.ADMIN)
-
-def create_DAPService(who: Agent, args, config: Mapping, log: Logger):
-    # determine which DAPService implementation we're using
-    convention = config.get("convention", "mds3")
-    modname = f"nistoar.midas.dap.service.{convention}" if '.' not in convention else convention
-    mod = import_module(modname)
-    if not hasattr(mod, 'DAPServiceFactory'):
-        raise CommandFailure(args.cmd, f"Config error: No DAPServiceFactory found in {convention} module", 6)
-
-    dbiocfg = config.get("dbio", {})
-    dbtype = dbiocfg.get("factory")
-    if not dbtype:
-        raise CommandFailure(args.cmd, f"Config error: required dbio.factory param missing", 6)
-
-    elif dbtype == "fsbased":
-        wdir = args.workdir
-        if not wdir:
-            wdir = config.get("working_dir", ".")
-        dbdir = dbiocfg.get('db_root_dir')
-        if not dbdir:
-            # use a default under the working directory
-            dbdir = os.path.join(wdir, "dbfiles")
-        elif not os.path.isabs(dbdir):
-            # if relative, make it relative to the work directory
-            dbdir = os.path.join(wdir, dbdir)
-            if not os.path.exists(wdir):
-                raise CommandFailure(args.cmd, f"Config error: {wdir}: working directory does not exist", 6)
-            if not os.path.exists(dbdir):
-                os.makedirs(dbdir)
-        if not os.path.exists(dbdir):
-            os.mkdir(dbdir)
-        factory = FSBasedDBClientFactory(dbiocfg, dbdir)
-
-    elif dbtype == "mongo":
-        dburl = os.environ.get("OAR_MONGODB_URL")
-        if not dburl:
-            dburl = dbiocfg.get("db_url")
-        if not dburl:
-            # Build the DB URL from its pieces with env vars taking precedence over the config
-            port = ":%s" % os.environ.get("OAR_MONGODB_PORT", dbiocfg.get("port", "27017"))
-            user = os.environ.get("OAR_MONGODB_USER", dbiocfg.get("user"))
-            cred = ""
-            if user:
-                pasw = os.environ.get("OAR_MONGODB_PASS", dbiocfg.get("pw", user))
-                cred = "%s:%s@" % (user, pasw)
-            host = os.environ.get("OAR_MONGODB_HOST", dbiocfg.get("host", "localhost"))
-            dburl = "mongodb://%s%s%s/midas" % (cred, host, port)
-
-        factory = MongoDBClientFactory(config.get("dbio", {}), dburl)
-    
-    elif dbtype == "inmem":
-        factory = InMemoryDBClientFactory(config.get("dbio", {}))
-
-    else:
-        raise CommandFailure(args.cmd, f"Config error: unrecognized factory: {dbtype}", 6)
-
-    # nstore = InMemoryResourceStorage(logger=log.getChild("nerdstore"))
-    nscfg = config.get('nerdstorage', {})
-    if not nscfg.get("type"):
-        # We're using an in-memory nerdstore instance because we don't want to actually save 
-        # the nerdm data, but just get the summary
-        nscfg['type'] = "inmem"
-    nstore = NERDResourceStorageFactory().open_storage(nscfg, log.getChild("nerdstore"))
-
-    dapfact = mod.DAPServiceFactory(factory, config, log, nstore)
-    try:
-        return dapfact.create_service_for(who)
-    except Exception as ex:
-        excode = 1
-        if isinstance(ex, ConfigurationException):
-            excode = 6
-        raise CommandFailure(args.cmd, "Unable to create DAPService: "+str(ex), excode)
-
-
 def resolve_id(aipid: str, args, config: Mapping, resolverurl: str=None):
 
     if not resolverurl:

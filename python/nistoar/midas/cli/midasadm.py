@@ -6,12 +6,15 @@ See scripts/midasadm.py for the assembled midas admin CLI script using this modu
 import logging, os, sys
 from copy import deepcopy
 import traceback as tb
+from getpass import getuser
+from collections.abc import Mapping
 
 from nistoar.midas import MIDASException
 from nistoar.midas.dap import cmd as dap
 from nistoar.base import config as cfgmod
 from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils import cli
+from nistoar.pdr.utils.prov import Agent
 from nistoar.pdr import def_etc_dir
 
 description = "execute MIDAS administrative operations"
@@ -36,6 +39,15 @@ def main(cmdname, args):
     # args = midas.parse_args(args)
     midas.execute(args)
     return args
+
+def get_agent(args, config: Mapping):
+    who = args.actor
+    utype = Agent.USER
+    if not who:
+        who = getuser()
+    if who in config.get("auto_users", []):
+        utype = Agent.AUTO
+    return Agent(args.vehicle, utype, who, Agent.ADMIN)
 
 if __name__ == "__main__":
     args = None
