@@ -1,7 +1,6 @@
 """
-module for assembling a command-line interface to MIDAS administrative operations.  
-
-See scripts/midasadm.py for the assembled midas admin CLI script using this module.  
+midasadm command-line program for executing MIDAS administrative tasks.  Generally, this suite of 
+commands operates directly onto the MIDAS database rather than going through the REST API.  
 """
 import logging, os, sys
 from copy import deepcopy
@@ -17,7 +16,13 @@ from nistoar.pdr.utils import cli
 from nistoar.pdr.utils.prov import Agent
 from nistoar.pdr import def_etc_dir
 
-description = "execute MIDAS administrative operations"
+description = \
+"""execute MIDAS administrative operations
+
+The subcommands generally operate directly on the MIDAS database and related backend storage 
+rather than going through the REST interface.  This means that this interface generally has more 
+privileges and abilities than the REST interface.  
+"""
 epilog = None
 default_prog_name = "midasadm"
 default_conf_file = os.path.join(def_etc_dir, "midasadm_conf.yml")
