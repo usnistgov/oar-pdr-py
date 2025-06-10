@@ -1485,6 +1485,16 @@ class DBClient(ABC):
         """
         raise NotImplementedError()
 
+    def free(self):
+        """
+        free up resources used by this client.  
+
+        The client of this service can call this method when it is finished using it.  The implementation
+        should *not* disable the service, making the instance unusable for further use; it should just free
+        up resources as possible.  This implementation does notthing.
+        """
+        pass
+
 
 class DBClientFactory(ABC):
     """

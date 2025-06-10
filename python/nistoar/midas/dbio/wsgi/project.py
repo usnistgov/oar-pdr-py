@@ -86,6 +86,10 @@ class ProjectRecordHandler(DBIOHandler):
                                                    path, config, log)
         self.svc = service
 
+    def free(self):
+        self.svc.free()
+
+
 class ProjectHandler(ProjectRecordHandler):
     """
     handle access to the whole project record
