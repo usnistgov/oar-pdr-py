@@ -1,7 +1,7 @@
 import os, sys, logging, argparse, pdb, time, json, shutil, tempfile
 import unittest as test
 
-from nistoar.pdr import cli
+from nistoar.pdr.utils import cli
 from nistoar.pdr.cli.md.trans import latest
 from nistoar.pdr.exceptions import PDRException, ConfigurationException
 from nistoar.pdr import config as cfgmod
@@ -34,7 +34,7 @@ class TestLatestCmd(test.TestCase):
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory(prefix="_test_get.", dir=tmparch.name)
-        self.cmd = cli.PDRCLI()
+        self.cmd = cli.CLISuite("test")
         self.cmd.load_subcommand(latest)
 
         self.config = {

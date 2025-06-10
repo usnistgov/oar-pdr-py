@@ -8,7 +8,7 @@ from urllib.parse import urlparse, urljoin
 from nistoar.pdr.preserve.bagit import NISTBag
 from nistoar.pdr.utils import write_json
 from nistoar.pdr.exceptions import PDRException, ConfigurationException, StateException
-from nistoar.pdr.cli import PDRCommandFailure
+from nistoar.pdr.utils.cli import CommandFailure
 from nistoar.pdr.describe import MetadataClient, RMMServerError
 from nistoar.pdr.distrib import (RESTServiceClient, BagDistribClient,
                                  DistribServerError, DistribResourceNotFound)
@@ -111,11 +111,11 @@ def execute(args, config=None, log=None):
         except Exception as ex:
             msg = "Failure while writing out IDs: "+str(ex)
             log.exception(msg)
-            raise PDRCommandFailure(cmd, msg, 4)
+            raise CommandFailure(cmd, msg, 4)
         return
 
 
-    # raise PDRCommandFailure(cmd, "Halting for testing", 9)
+    # raise CommandFailure(cmd, "Halting for testing", 9)
 
     ser = DefaultSerializer(log.getChild("serializer"))
     distsvc = RESTServiceClient(args.distbase)
@@ -141,19 +141,19 @@ def execute(args, config=None, log=None):
                         log.exception("Unexpected error writing record from RMM: %s", str(ex))
                         errs.append(ex)
                     if len(errs) > 5:
-                        raise PDRCommandFailure(cmd, "Too many errors; aborting", 8)
+                        raise CommandFailure(cmd, "Too many errors; aborting", 11)
                 continue
             except DistribServerError as ex:
                 msg = "Distrib service error querying AIP %s: %s" % (aipid, str(ex))
                 log.error(msg)
                 errs.append(ex)
                 if len(errs) > 5:
-                    raise PDRCommandFailure(cmd, "Too many errors; aborting", 8)
+                    raise CommandFailure(cmd, "Too many errors; aborting", 11)
                 continue
             except Exception as ex:
                 msg = "Unexpected error while querying for AIPID %s: %s" % (aipid, str(ex))
                 log.exception(msg)
-                raise PDRCommandFailure(cmd, msg, 8)
+                raise CommandFailure(cmd, msg, 11)
 
             if args.latestonly:
                 versions.sort(key=Version, reverse=True)
@@ -193,7 +193,7 @@ def execute(args, config=None, log=None):
                         log.error(msg)
                     errs.append(ex)
                     if len(errs) > 5:
-                        raise PDRCommandFailure(cmd, "Too many errors; aborting", 8)
+                        raise CommandFailure(cmd, "Too many errors; aborting", 8)
                     continue
 
                 finally:
@@ -220,7 +220,7 @@ def get_all_aip_ids(rmm, cmd=None):
         return [r.get('aipid') or arkre.sub('', r.get('ediid'))
                 for r in rmm.search()]
     except RMMServerError as ex:
-        raise PDRCommandFailure(cmd, "Trouble accessing metadata service: "+str(ex), 5)
+        raise CommandFailure(cmd, "Trouble accessing metadata service: "+str(ex), 5)
 
 
 def _process_args(args, config, cmd, log=None):
@@ -231,12 +231,12 @@ def _process_args(args, config, cmd, log=None):
             with open(args.idfile) as fd:
                aipids.extend(read_ids_from_file(fd))
         except Exception as ex:
-            raise PDRCommandFailure(cmd, "Failed to read AIP IDs from file: %s: %s" % (args.idfile, str(ex)),4)
+            raise CommandFailure(cmd, "Failed to read AIP IDs from file: %s: %s" % (args.idfile, str(ex)),4)
     if args.aipids:
         aipids.extend(args.aipids)
     args.aipids = aipids
     if len(args.aipids) == 0:
-        raise PDRCommandFailure(cmd, "No AIP IDs provided", 2)
+        raise CommandFailure(cmd, "No AIP IDs provided", 2)
 
     if not args.outdir:
         if not args.outlist and (len(args.aipids) > 10 or 'ALL' in args.aipids):
@@ -248,15 +248,15 @@ def _process_args(args, config, cmd, log=None):
     elif not os.path.exists(args.outdir):
         parent = os.path.dirname(args.outdir)
         if parent and not os.path.exists(parent):
-            raise PDRCommandFailure(cmd, "Unable to create output directory, %s: parent not found"
-                                    % args.outdir, 4)
+            raise CommandFailure(cmd, "Unable to create output directory, %s: parent not found"
+                                 % args.outdir, 4)
         if log and args.verbose:
             log.info("Creating output directory, %s", args.outdir)
         try:
             os.mkdir(args.outdir)
         except OSError as ex:
-            raise PDRCommandFailure(cmd,
-                                    "Unable to create output directory, %s: %s" % (args.outdir, str(ex)), 4)
+            raise CommandFailure(cmd,
+                                 "Unable to create output directory, %s: %s" % (args.outdir, str(ex)), 4)
 
     if args.inclvers:
         args.inclvers = [v.replace('_', '.') for v in args.inclvers]

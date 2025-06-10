@@ -1,7 +1,7 @@
-import os, sys, logging, argparse, pdb, imp, time, json, shutil, tempfile
+import os, sys, logging, argparse, pdb, time, json, shutil, tempfile
 import unittest as test
 
-from nistoar.pdr import cli
+from nistoar.pdr.utils import cli
 from nistoar.pdr.cli.md.fix import dates
 from nistoar.pdr.exceptions import PDRException, ConfigurationException
 from nistoar.pdr import config as cfgmod
@@ -34,7 +34,7 @@ class TestDatesCmd(test.TestCase):
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory(prefix="_test_dates.", dir=tmparch.name)
-        self.cmd = cli.PDRCLI()
+        self.cmd = cli.CLISuite("test")
         self.cmd.load_subcommand(dates)
 
         self.config = {
@@ -66,7 +66,7 @@ class TestDatesCmd(test.TestCase):
         self.assertEqual(dates._parse_date(["1998-12-09T14:50:05.0"], {}, "g", None), "1998-12-09T14:50:05.0")
 
         for ds in "1998T12:10 2020-15-31 2020-07-32 1975-04-22T28 1975-04-22T28 1975-04-22T20:62".split():
-            with self.assertRaises(cli.PDRCommandFailure):
+            with self.assertRaises(cli.CommandFailure):
                 dates._parse_date([ds], {}, "g", None)
         
     def test_cmd(self):
@@ -97,7 +97,7 @@ class TestDatesCmd(test.TestCase):
         try:
             self.cmd.execute(cmdline.split(), {})
             self.fail("Failed to detect missing date type options")
-        except cli.PDRCommandFailure as ex:
+        except cli.CommandFailure as ex:
             self.assertIn("One of ", str(ex), "Unexpected error detected: "+str(ex))
         
         

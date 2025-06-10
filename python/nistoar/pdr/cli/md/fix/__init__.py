@@ -8,7 +8,7 @@ include:
 
 See also :py:module:`nistoar.pdr.describe.cmd` for the ``describe`` command.
 """
-from nistoar.pdr import cli
+from nistoar.pdr.utils import cli
 from . import dates
 from .._args import process_svcep_args, define_comm_md_opts
 from ..trans._comm import *
