@@ -11,7 +11,7 @@ The key features of the mds3 conventions are:
     properties) of the NERDm record.  
   * Conventions and heuristics are applied for setting default values for various NERDm 
     properties based on the potentially limited properties provided by the client during the 
-    editing process.  (These conventions and hueristics are implemented the in various 
+    editing process.  (These conventions and hueristics are implemented in various 
     ``_moderate_*`` functions in the :py:class:`DAPService` class.)
 
 Support for the web service frontend is provided via :py:class:`DAPApp` class, an implementation
