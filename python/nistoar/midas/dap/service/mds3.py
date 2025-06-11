@@ -24,7 +24,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence, Callable
 from typing import List, Union, Iterator
 from copy import deepcopy
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 from functools import reduce
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
@@ -98,6 +98,9 @@ LINK_DELIM = const.LINKCMP_EXTENSION.lstrip('/')
 AGG_DELIM = const.AGGCMP_EXTENSION.lstrip('/')
 RES_DELIM = const.RESONLY_EXTENSION.lstrip('/')
 EXTSCHPROP = "_extensionSchemas"
+
+NIST_THEMES = "https://data.nist.gov/od/dm/nist-themes/v1.1#"
+FORENSICS_THEMES = "https://data.nist.gov/od/dm/nist-themes-forensics/v1.0#"
 
 def random_id(prefix: str="", n: int=8):
     r = ''.join(random.choices(string.ascii_uppercase + string.digits, k=n))
@@ -291,6 +294,8 @@ class DAPService(ProjectService):
         self._formatbyext = None
 
         self._minnerdmver = minnerdmver
+
+        self._taxondir = self.cfg.get('taxonomy_dir', def_etc_dir)
 
     def _make_fm_client(self, fmcfg):
         return FileManager(fmcfg)
@@ -641,7 +646,7 @@ class DAPService(ProjectService):
                 out = nerd.get_res_data()
                 if part in out:
                     out = out[part]
-                elif part in "description @type contactPoint title rights disclaimer landingPage".split():
+                elif part in "description @type contactPoint title rights disclaimer landingPage theme topic".split():
                     raise ObjectNotFound(prec.id, part, "%s property not set yet" % part)
                 else:
                     raise PartNotAccessible(prec.id, part, "Accessing %s not supported" % part)
@@ -753,7 +758,7 @@ class DAPService(ProjectService):
                             return False
                         nerd.files.empty()
                         nerd.nonfiles.empty()
-                    elif part in "title rights disclaimer description landingPage keyword".split():
+                    elif part in "title rights disclaimer description landingPage keyword topic theme".split():
                         resmd = nerd.get_res_data()
                         if part not in resmd:
                             return False
@@ -1287,6 +1292,18 @@ class DAPService(ProjectService):
                 nerd.replace_res_data(res)
                 data = res[path]
 
+            elif path == "topic":
+                if not isinstance(data, list):
+                    err = "topic data is not a list"
+                    raise InvalidUpdate(err, id, path, errors=[err])
+                res = nerd.get_res_data()
+                old = res.get(path)
+                res[path] = self._moderate_topic(data, res, doval=doval, replace=replace)
+                provact.add_subaction(Action(subacttype, prec.id+"#data/topic", self.who, 
+                                             "updating topics", self._jsondiff(old, res['topic'])))
+                nerd.replace_res_data(res)
+                data = res[path]
+                
             # NOTE!!: Temporary support for updating theme
             elif path == "theme":
                 if not isinstance(data, (list, str)):
@@ -1855,6 +1872,95 @@ class DAPService(ProjectService):
 
         return out
 
+    def _moderate_topic(self, val: List[Mapping], resmd=None, doval=True, replace=True):
+        if val is None:
+            val = []
+        if not isinstance(val, Sequence) or isinstance(val, str):
+            raise InvalidUpdate("topic value is not a list of topic objects", sys=self)
+
+        def topic_in_list(topic, tlist):
+            for t in tlist:
+                if topic.get('scheme') == t.get('scheme') and \
+                   topic.get('tag') == t.get('tag'):
+                    return True
+            return False
+
+        #uniquify list
+        out = resmd.get("topic", []) if resmd and not replace else []
+        terms = {}
+        for v in val:
+            if not isinstance(v, Mapping):
+                raise InvalidUpdate("Not a topic object: "+str(v))
+            v = self._moderate_topic_item(v, terms, doval=doval)
+            if v and not topic_in_list(v, out):
+                out.append(v)
+
+        return out
+            
+
+    _recognized_taxons = {
+        NIST_THEMES:      "theme-taxonomy.json",
+        FORENSICS_THEMES: "forensics-taxonomy.json",
+        # CHIPS_THEMES: "chipsmetrology-taxonomy.json"
+    }
+    def _moderate_topic_item(self, val: Mapping, terms: Mapping, doval=True):
+        keep = "@id scheme tag".split()
+        out = OrderedDict(p for p in val.items() if p[0] in keep)
+
+        def topic_in_taxon(tag, taxon):
+            parentchild = [t.strip() for t in tag.rsplit(':', 1)]
+            if len(parentchild) == 1:
+                parentchild = [None, parentchild[0]]
+            for v in taxon.get('vocab', []):
+                if not v.get('deprecatedSince') and \
+                   v.get('parent') == parentchild[0] and v.get('term') == parentchild[1]:
+                    return True
+            return False
+
+        if '@id' in out:
+            # convert @id to scheme + tag, if possible
+            matched = []
+            if not out.get('scheme'):
+                matched = [s for s in self._recognized_taxons if out['@id'].startswith(s)]
+                if matched:
+                    out['scheme'] = matched[0].rstrip('#').rstrip('/')
+            elif out['@id'].startswith(out['scheme']+'#'):
+                matched = [out['scheme']]
+
+            if matched:
+                if not out.get('tag'):
+                    out['tag'] = unquote(out['@id'][len(matched[0]):])
+                    if '#' in out['tag']:
+                        out['tag'] = out['tag'].split('#', 1)[-1]
+            elif doval:
+                raise InvalidUpdate("topic from unrecognized taxonomy: "+out['@id'])
+
+            elif not out.get('tag') and '#' in out['@id']:
+                out['tag'] = unquote(out['@id'].split('#', 1)[-1])
+
+        elif not out.get('tag'):
+            out = {}    
+
+        if doval:
+            # validate
+            if not out.get('scheme') or not out.get('tag'):
+                # missing scheme or tag
+                t = out.get('tag') or out.get('@id') or out.get('scheme') or "(unspecified)"
+                raise InvalidUpdate("Unrecognized topic term: "+t, sys=self)
+            if not self._recognized_taxons.get(out['scheme']+'#'):
+                raise InvalidUpdate("Unrecognized topic scheme: "+out['scheme'], sys=self)
+            if out['scheme'] not in terms:
+                # read in taxonomy file to make sure tag is defined
+                terms[out['scheme']] = read_json(os.path.join(self._taxondir,
+                                                              self._recognized_taxons[out['scheme']+'#']))
+                     
+            if not topic_in_taxon(out['tag'], terms[out['scheme']]):
+                raise InvalidUpdate(f"term, {out['tag']}, not found in taxonomy, {out['scheme']}")
+
+        if out:
+            out['@type'] = "Concept"
+        return out
+
     def _moderate_landingPage(self, val, resmd=None, doval=True, replace=True):
         # replace is ignored
         if val is None:
@@ -2265,7 +2371,7 @@ class DAPService(ProjectService):
         resmd["@type"] = restypes
 
         errors = []
-        for prop in "contactPoint description keyword landingPage".split():
+        for prop in "contactPoint description keyword landingPage topic".split():
             if prop in resmd:
                 if resmd.get(prop) is None:
                     del resmd[prop]
