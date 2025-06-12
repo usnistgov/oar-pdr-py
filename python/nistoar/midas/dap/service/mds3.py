@@ -101,6 +101,7 @@ EXTSCHPROP = "_extensionSchemas"
 
 NIST_THEMES = "https://data.nist.gov/od/dm/nist-themes/v1.1#"
 FORENSICS_THEMES = "https://data.nist.gov/od/dm/nist-themes-forensics/v1.0#"
+CHIPS_THEMES = "https://data.nist.gov/od/dm/nist-themes-chips/v1.0#"
 
 def random_id(prefix: str="", n: int=8):
     r = ''.join(random.choices(string.ascii_uppercase + string.digits, k=n))

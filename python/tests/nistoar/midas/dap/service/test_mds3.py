@@ -69,8 +69,8 @@ class TestMDS3DAPService(test.TestCase):
                 "@id": mds3.NIST_ROR,
                 "title": "NIST"
             },
-#            "taxonomy_dir": modeldir
-            "taxonomy_dir": os.environ.get('OAR_ETC_DIR', def_etc_dir)
+            "taxonomy_dir": modeldir
+#            "taxonomy_dir": os.environ.get('OAR_ETC_DIR', def_etc_dir)
         }
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdsy": 2 }})
 
