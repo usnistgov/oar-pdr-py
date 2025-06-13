@@ -38,6 +38,8 @@ nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 testdir = pathlib.Path(__file__).parents[0]
 pdr2210 = testdir.parents[2] / 'pdr' / 'describe' / 'data' / 'pdr2210.json'
 ncnrexp0 = testdir.parents[2] / 'pdr' / 'publish' / 'data' / 'ncnrexp0.json'
+basedir = testdir.parents[5]
+modeldir = basedir / 'metadata' / 'model'
 
 class TestMDS3DAPApp(test.TestCase):
 
@@ -71,7 +73,8 @@ class TestMDS3DAPApp(test.TestCase):
 #                "type": "fsbased",
 #                "store_dir": os.path.join(tmpdir.name)
                 "type": "inmem",
-            }
+            },
+            "taxonomy_dir": modeldir
         }
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mds3": 0 }})
         self.nerdstore = InMemoryResourceStorage(self.cfg["nerdstorage"])

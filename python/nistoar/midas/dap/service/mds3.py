@@ -243,6 +243,10 @@ class DAPService(ProjectService):
         ``file_manager`` property set but the dictionary has a sibling ``file_manager`` property 
         (described above), that ``file_manager`` dictionary will be added to the ``nerdstorage``
         dictionary.  
+    ``taxonomy_dir``
+        (*str*) __optional__.  the path to a directory where taxonomy definition files can be 
+        found.  If not provided, it defaults to the etc directory.  This parameter is used primarily
+        within unit tests.  
 
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
