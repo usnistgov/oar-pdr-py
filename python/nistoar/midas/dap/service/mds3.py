@@ -300,7 +300,7 @@ class DAPService(ProjectService):
 
         self._minnerdmver = minnerdmver
 
-        self._taxondir = self.cfg.get('taxonomy_dir', def_etc_dir)
+        self._taxondir = self.cfg.get('taxonomy_dir', os.path.join(def_etc_dir, "schemas"))
 
     def _make_fm_client(self, fmcfg):
         return FileManager(fmcfg)
