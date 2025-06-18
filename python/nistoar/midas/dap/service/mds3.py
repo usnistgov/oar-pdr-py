@@ -2269,8 +2269,6 @@ class DAPService(ProjectService):
 
         dates = OrderedDict()
         dates['annotated'] = now
-        
-        
 
     def _finalize_version(self, prec: ProjectRecord, vers_inc_lev: int=None):
         ver = super()._finalize_version(prec, vers_inc_lev)
@@ -2282,8 +2280,144 @@ class DAPService(ProjectService):
         resmd["version"] = ver
         nerd.replace_res_data(resmd)
 
-        
-        
+    def _submit(self, prec: ProjectRecord) -> str:
+        """
+        Actually set the given record to the external review service (NPS) and update its status 
+        accordingly.  
+
+        :returns:  the label indicating its post-editing state
+                   :rtype: str
+        :raises NotSubmitable:  if the finalization process produced an invalid record because the record 
+                             contains invalid data or is missing required data.
+        :raises SubmissionFailed:  if, during actual submission (i.e. after finalization), an error 
+                             occurred preventing successful submission.  This error is typically 
+                             not due to anything the client did, but rather reflects a system problem
+                             (e.g. from a downstream service). 
+        """
+        if not self._extrevcli:
+            self.log.warning("No External Review system configured to handle DAP records!")
+
+        else:
+            try:
+                # reset permissions
+                self._set_review_permissions(prec)
+                
+            except FileManagerException as ex:
+                self.log.warning("Trouble updating file store permissions: %s", str(ex))
+
+            except Exception as ex:
+                self.exception("Trouble resetting permission for review: %s", str(ex))
+                
+
+            try:
+                self._extrevcli.submit(prec.id, version, revsummary)
+
+            except ExternalReviewClientException as ex:
+                # possibly notify
+                self.log.error("Failed to submit to external review system: %s", str(ex))
+            except Exception as ex:
+                # possibly notify
+                self.exception("Unexpected trouble submitting for review: %s", str(ex))
+                
+
+    def _set_review_permissions(self, prec: ProjectRecord, readers: List[str]=None):
+        """
+        update the permissions appropriate for the external review phase.  These generally 
+        means that the record becomes read-only for the people that had write access during the 
+        admin phase.  Additional users may have read-access.  
+
+        This implementation establishes a "publish" permission allowing curator-administrators 
+        to shepherd the record through the review process.  Write access is revoked for users 
+        that currently have it (saving who that is to an "_edit" permission).  Curators and 
+        reviewers will be given read access.
+        """
+        if readers is None:
+            readers = []
+
+        # record away who has write access
+        for perm in [ ACLs.WRITE, ACLs.DELETE, ACLs.ADMIN, ACLs.READ ]:
+            if prec.status.state == status.EDIT or prec.status.state == status.READY or \
+               len(list(prec.acls.iter_perm_granted("_"+perm))) == 0:
+                who = list(prec.acls.iter_perm_granted(perm))
+                prec.acls.revoke_perm_from_all("_"+perm)
+                prec.acls.grant_perm_to("_"+perm, *who)
+
+        # revoke update permissions in the file manager
+        if self._fmcli:
+            for who in prec.acls.iter_perm_granted(ACLs.WRITE):
+                try:
+                    self._fmcli.manage_permissions(who, prec.id, "Read")
+                except FileManagerException as ex:
+                    self.log.error("Failed to make file space writable again: %s", str(ex))
+
+        # revoke permissions that can change the record
+        prec.acls.revoke_perm_from_all(ACLs.WRITE)
+        prec.acls.revoke_perm_from_all(ACLs.DELETE)
+        prec.acls.revoke_perm_from_all(ACLs.ADMIN)
+
+        # give PUBLISH permission to reviewer IDs
+        if self.cfg.get("reviewer_ids"):
+            reviewers = self.cfg['reviewer_ids']
+            if isinstance(reviewers, str):
+                reviewers = [reviewers]
+            prec.acls.grant_perm_to(ACLs.PUBLISH, *reviewers)
+            prec.acls.grant_perm_to(ACLs.WRITE, *reviewers)
+            prec.acls.grant_perm_to(ACLs.ADMIN, *reviewers)
+            prec.acls.grant_perm_to(ACLs.READ, *(reviewers+readers))
+
+    def _unset_review_permissions(self, prec: ProjectRecord, for_review: bool=False):
+        """
+        return record permissions to their pre-review state, so that, for example, the authors
+        can update the record in response to review feedback.  
+        :param bool for_review:  True if the reset should be made appropriate for responding to 
+                                 reviewer feedback (which may keep the current read access in 
+                                 tact so that reviewers can still see the record).  If False,
+                                 fully reset to the permissions as if going either to a published 
+                                 state or a complete edit state (because publishing was canceled).
+        """
+        for perm in [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]:
+            who = list(prec.acls.iter_perm_granted("_"+perm))
+            prec.acls.revoke_perm_from_all(perm)               # take out the reviewers
+            prec.acls.grant_perm_to(perm, *who)                # restore the original editors
+            if not for_review:
+                prec.acls.revoke_perm_from_all("_"+perm)
+
+        # revoke update permissions in the file manager
+        if self._fmcli:
+            for who in prec.acls.iter_perm_granted(ACLs.WRITE):
+                try:
+                    self._fmcli.manage_permissions(who, prec.id, "Write")
+                except FileManagerException as ex:
+                    self.log.error("Failed to make file space writable again: %s", str(ex))
+
+        if not for_review:
+            # forget about the reviewers
+            prec.acls.revoke_perm_from_all(ACLs.PUBLISH)
+                       
+    def cancel_external_review(self, id: str, revsys: str = None, revid: str=None, infourl: str=None):
+        """
+        cancel the review process from a particular review system or for all systems.  If after 
+        canceling all reviews are either canceled or completed but is still in a SUBMITTED state, the 
+        record will be returned to the EDIT state.  
+        """
+        prec = super().cancel_external_review()   # may raise ObjectNotFound/NotAuthorized
+        if prec.status.state == status.SUBMITTED:
+            # change a SUBMITTED record back to full edit status (as if never submitted)
+            if all(r.get('phase') == "canceled" or r.get('phase') == "approved"
+                   for r in prec.status.to_dict().get(status._pubreview_p, {}).values()):
+                self._unset_review_permissions(prec)
+                prec.status.set_state(status.EDIT)
+                prec.save()
+
+        return prec
+
+    def _apply_external_review_updates(self, prec: ProjectRecord, pubrevmd: Mapping=None,
+                                       request_changes: bool=False) -> bool:
+        if request_changes:
+            self._set_review_permissions(prec)
+            prec.status.set_state(status.EDIT)
+            return True
+        return False
 
                 
 class DAPServiceFactory(ProjectServiceFactory):

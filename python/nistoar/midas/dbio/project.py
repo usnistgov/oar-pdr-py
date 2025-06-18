@@ -1043,7 +1043,7 @@ class ProjectService(MIDASSystem):
             stat.set_state(status.EDIT)
             stat.act(self.STATUS_ACTION_SUBMIT, ex.format_errors(), self.who.actor)
             self._try_save(_prec)
-            raise
+            raise SubmissionFailed("Invalid record could not be submitted: %s", str(ex))
 
         except Exception as ex:
             emsg = "Submit process failed due to an internal error"
@@ -1052,7 +1052,7 @@ class ProjectService(MIDASSystem):
             stat.set_state(status.EDIT)
             stat.act(self.STATUS_ACTION_SUBMIT, emsg, self.who.actor)
             self._try_save(_prec)
-            raise
+            raise SubmissionFailed("Submission action failed: %s", str(ex)) from ex
 
         else:
             if not message:
@@ -1062,7 +1062,8 @@ class ProjectService(MIDASSystem):
                     message = "Revision " + poststat
 
             # record provenance record
-            self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, message, {"name": "submit"}))
+            self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, message,
+                                            {"name": "submit"}))
 
             stat.set_state(poststat)
             stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg, self.who.actor)
@@ -1128,7 +1129,7 @@ class ProjectService(MIDASSystem):
         stat = _prec.status
 
         revmd = stat.pubreview(revsys, phase, revid, infourl, feedback, fbreplace, **extra_info)
-        if not self._apply_external_review_updates(_prec, revmd):
+        if self._apply_external_review_updates(_prec, revmd, request_changes):
             _prec.save()
 
         msg = "external review phase in progress"
@@ -1139,7 +1140,10 @@ class ProjectService(MIDASSystem):
         self.dbcli.record_action(Action(Action.COMMENT, _prec.id, self.who, msg))
         self.log.info("%s: %s", _prec.id, msg)
 
-    def _apply_external_review_updates(self, prec: ProjectRecord, pubrevmd: Mapping=None):
+        return _prec.status.state
+
+    def _apply_external_review_updates(self, prec: ProjectRecord, pubrevmd: Mapping=None,
+                                       request_changes: bool=False) -> bool:
         # apply any automated changes to the record according the given feedback
         # This exists as a specialization point.  return True if the record was saved 
         return False
@@ -1156,6 +1160,23 @@ class ProjectService(MIDASSystem):
         self.apply_external_review(id, revsys, "approved", revid, infourl, [])
         if publish:
             self.publish()
+
+    def cancel_external_review(self, id: str, revsys: str = None, revid: str=None, infourl: str=None):
+        """
+        cancel the review process from a particular review system or for all systems.  
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)   # may raise ObjectNotFound/NotAuthorized
+        if not revsys:
+            revsys = list(prec.status.to_dict().get(status._pubreview_p, {}).keys())
+        elif isinstance(revsys, str):
+            revsys = [ revsys ]
+
+        for sys in revsys:
+            self.apply_external_review(id, sys, "canceled", revid, infourl, feedback=[])
+
+        return prec
+                
+            
 
     def publish(self, id: str, _prec=None, **kwargs):
         """
