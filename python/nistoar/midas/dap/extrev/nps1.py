@@ -22,11 +22,16 @@ class NPSExternalReviewClient(ExternalReviewClient):
         DAP ID can be inserted.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, peopsvc: PeopleService=None):
         """
         initialize the client
+
+        :param dict config:  the configuration for this client
+        :param PeopleService peopsvc:  a PeopleService instance to use to resolve a submitter ID
+                             to a full description of the user (i.e. first and last names, email).
         """
         super(NPSExternalReviewClient, self).__init__(config)
+        self.ps = peopsvc  # may be None
 
         # get templates for the home page URL from config
         self._drafturl_tmpl = get.get("draft_url_template")
@@ -43,6 +48,8 @@ class NPSExternalReviewClient(ExternalReviewClient):
         following extra options:
         ``title``
              (*str*) the title assigned to the DAP (for display purposes)
+        ``description``
+             (*str*) the abstract for the DAP (for display purposes)
         ``pubid``
              (*str*) the identifier that will be assigned to the DAP once it is published
         ``instructions``
