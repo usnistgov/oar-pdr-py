@@ -281,6 +281,7 @@ class DAPService(ProjectService):
 
         self._mediatypes = None
         self._formatbyext = None
+        self._extrevcli = None
 
         self._minnerdmver = minnerdmver
 
