@@ -12,6 +12,7 @@ model and how to interact with the database.
 """
 import time
 import math
+import logging
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
 from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
@@ -21,10 +22,12 @@ from enum import Enum
 from datetime import datetime
 
 from nistoar.base.config import ConfigurationException
-from nistoar.pdr.utils.prov import Action
+from nistoar.pdr.utils.prov import Action, Agent
 from .. import MIDASException
 from .status import RecordStatus
+from .notifier import DBIOClientNotifier
 from nistoar.pdr.utils.prov import ANONYMOUS_USER
+from nistoar.pdr.utils.validate import ValidationResults, ALL
 from nistoar.nsd.service import PeopleService, create_people_service
 
 DAP_PROJECTS = "dap"
@@ -113,6 +116,9 @@ class ACLs:
         """
         remove all identities from the list having the given permission.  
         :param str perm_name:  the permission to be revoked from all identities
+        :param str perm_name:  the permission to be revoked from everyone
+        :param bool protect_owner:  if True, the owner will be left as the sole user with the given 
+                               permission.
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to grant the permission
         """
@@ -242,13 +248,14 @@ class ProtectedRecord(ABC):
     def owner(self, val):
         self.reassign(val)
 
-    def reassign(self, who: str):
+    def reassign(self, who: str, disown: bool=False):
         """
         transfer ownership to the given user.  To transfer ownership, the calling user must have 
         "admin" permission on this record.  Note that this will not remove any permissions assigned 
         to the former owner.
 
-        :param str who:   the identifier for the user to set as the owner of this record
+        :param str     who:  the identifier for the user to set as the owner of this record
+        :param bool disown:  if True, remove the previous owner from the various permissions
         :raises NotAuthorized:  if the calling user is not authorized to change the owner.  
         :raises InvalidUpdate:  if the target user identifier is not recognized or not legal
         """
@@ -259,9 +266,12 @@ class ProtectedRecord(ABC):
         if not self._validate_user_id(who):
             raise InvalidUpdate("Unable to update owner: invalid user ID: "+str(who))
 
+        oldowner = self._data['owner']
         self._data['owner'] = who
         for perm in ACLs.OWN:
             self.acls.grant_perm_to(perm, who)
+            if disown and oldowner != who:
+                self.acls.revoke_perm_from(perm, oldowner)
 
     def _validate_user_id(self, who: str):
         if not bool(who) or not isinstance(who, str):
@@ -401,6 +411,8 @@ class ProtectedRecord(ABC):
                          attached to the DBClient is assumed.
         """
         if not who:
+            if Agent.ADMIN in self._cli._who.groups:
+                return True
             who = self._cli.user_id
         if self.is_superuser(who):
             return True
@@ -685,17 +697,19 @@ class DBGroups(object):
         :raises AlreadyExists:  if the user has already defined a group with this name
         :raises NotAuthorized:  if the user is not authorized to create this group
         """
+        if self.name_exists(name, foruser or self._cli.user_id):
+            raise AlreadyExists(
+                "User {} has already defined a record with name={}".format(foruser, name))
+
+        if foruser and foruser != self._cli.user_id \
+           and self._cli.user_id not in self._cli._cfg.get("superusers", []) \
+           and self._cli._who.agent_class != Agent.ADMIN:
+            raise NotAuthorized(f"{str(self._cli._who)} is not allowed to create a group for another user")
         if not foruser:
             foruser = self._cli.user_id
-        if not self._cli._authorized_group_create(self._shldr, foruser):
-            raise NotAuthorized(self._cli.user_id, "create group")
-
-        if self.name_exists(name, foruser):
-            raise AlreadyExists(
-                "User {} has already defined a group with name={}".format(foruser, name))
 
         out = Group({
-            "id": self._mint_id(self._shldr, name, foruser),
+            "id": self._mint_id(self._shldr, name, foruser),   # may raise NotAuthorized
             "name": name,
             "owner": foruser,
             "members": [foruser],
@@ -716,6 +730,13 @@ class DBGroups(object):
         :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
                                how the identifier is formed.  
         """
+        # determine shoulder if not provided
+        mintcfg = self._cli._cfg.get("group_id_minting", {})
+        if not shoulder:
+            shoulder = self._cli._get_default_shoulder(mintcfg, self._cli._who)    # may raise NotAuthorized
+        elif not self._cli._authorized_for_shoulder(mintcfg, shoulder, self._cli._who):
+            raise NotAuthorized(str(self._cli._who), f"create a group under the {shoulder}")
+
         return "{}:{}:{}".format(shoulder, owner, name)
 
     def exists(self, gid: str) -> bool:
@@ -939,26 +960,34 @@ class DBClient(ABC):
          the only allowed shoulder will be the default, ``grp0``. 
     """
 
-    def __init__(self, config: Mapping, projcoll: str, nativeclient=None, foruser: str = ANONYMOUS,
-                 peopsvc: PeopleService = None):
+    def __init__(self, config: Mapping, projcoll: str, nativeclient=None,
+                 foruser: Union[Agent,str] = ANONYMOUS, peopsvc: PeopleService = None, 
+                 notifier: DBIOClientNotifier = None):
         """
         initialize the base client.
         :param dict  config:  the configuration data for the client
         :param str projcoll:  the type of project to connect with (i.e. the project collection name)
         :param nativeclient:  where applicable, the native client object to use to connect the back
                               end database.  The type and use of this client is implementation-specific
-        :param str  foruser:  the user identity to connect as.  This will control what records are 
-                              accessible via this instance's methods.
+        :param Agent|str foruser:  the user identity to connect as.  This will control what records are 
+                              accessible via this instance's methods.  If the value is a string, it is 
+                              assumed to be a login user name; it will be internally mapped to an 
+                              Agent instance.  
         :param PeopleService peopsvc:  a PeopleService to incorporate into this client
+        :param DBIOClientNotifier notifier:  a DBIOClientNotifier to use to alert DBIO clients about 
+                              updates to the DBIO data.
         """
         self._cfg = config
         self._native = nativeclient
         self._projcoll = projcoll
+        if isinstance(foruser, str):
+            foruser = Agent("dbio", Agent.USER, foruser, Agent.PUBLIC)
         self._who = foruser
         self._whogrps = None
 
         self._dbgroups = DBGroups(self)
         self._peopsvc = peopsvc
+        self.notifier = notifier
 
     @property
     def project(self) -> str:
@@ -972,7 +1001,7 @@ class DBClient(ABC):
         """
         the identifier of the user that this client is acting on behalf of
         """
-        return self._who
+        return self._who.actor
 
     @property
     def user_groups(self) -> frozenset:
@@ -997,12 +1026,18 @@ class DBClient(ABC):
         a member of.  This function will recache this list (resulting in queries to the backend 
         database).  
         """
-        self._whogrps = frozenset(self.groups.select_ids_for_user(self._who))
+        self._whogrps = frozenset(self.groups.select_ids_for_user(self.user_id))
 
-    def create_record(self, name: str, shoulder: str = None, foruser: str = None) -> ProjectRecord:
+    def create_record(self, name: str, shoulder: str = None,
+                      foruser: str = None, localid: str = None) -> ProjectRecord:
         """
-        create (and save) and return a new project record.  A new unique identifier should be assigned
-        to the record.
+        create (and save) and return a new project record.  
+
+        This function is responsible for assigning a new unique identifier to the 
+        newly created record; normally, this is done by combining the requested shoulder to a 
+        newly minted local identifier.  The requesting user must be authorized to create a 
+        record with the requested shoulder.  If authorized, the user may also requested a 
+        specific local identifier.
 
         :param str     name:  the mnemonic name (provided by the requesting user) to give to the 
                               record.
@@ -1011,59 +1046,100 @@ class DBClient(ABC):
                               to request the shoulder.)
         :param str  foruser:  the ID of the user that should be registered as the owner.  If not 
                               specified, the value of :py:property:`user_id` will be assumed.  In 
-                              this implementation, only a superuser can create a record for someone 
-                              else.
+                              this implementation, only a superuser (or an admin account) can create a 
+                              record for someone else.
+        :param str  localid:  Request a particular local identifier 
+        :raises NotAuthorized:  if the requesting user is not authorized to create a record with the 
+                              given ``shoulder`` (or ``localid``). 
+        :raises AlreadyExists:  if the user (``foruser``, if given, or the requesting user, otherwise)
+                              already has a record with the requested ``name`` or if a record already 
+                              exists with the requested ``shoulder``-``localid`` combination.  
         """
-        if not foruser:
-            foruser = self.user_id
-        if not shoulder:
-            shoulder = self._default_shoulder()
-        if not self._authorized_project_create(shoulder, foruser):
-            raise NotAuthorized(self.user_id, "create record")
-        if self.name_exists(name, foruser):
+        if self.name_exists(name, foruser or self.user_id):
             raise AlreadyExists(
                 "User {} has already defined a record with name={}".format(foruser, name))
 
-        rec = self._new_record_data(self._mint_id(shoulder))
+        if foruser and foruser != self.user_id and self.user_id not in self._cfg.get("superusers", []) \
+           and self._who.agent_class != Agent.ADMIN:
+            raise NotAuthorized(str(self._who), "create a record for another user")
+
+        rec = self._new_record_data(self._mint_id(shoulder, localid))
         rec['name'] = name
+        if foruser:
+            rec['owner'] = foruser
         rec = ProjectRecord(self._projcoll, rec, self)
         rec.save()
-        return rec
+        if self.notifier:
+            message = f"proj-create,{self._projcoll},{name}"
+            self.notifier.notify(message)
+        return rec 
 
-    def _default_shoulder(self):
-        out = self._cfg.get("default_shoulder")
-        if not out:
-            raise ConfigurationException(
-                "Missing required configuration parameter: default_shoulder")
-        return out
-
-    def _authorized_project_create(self, shoulder, who):
-        shldrs = set(self._cfg.get("allowed_project_shoulders", []))
-        defshldr = self._cfg.get("default_shoulder")
-        if defshldr:
-            shldrs.add(defshldr)
-        return self._authorized_create(shoulder, shldrs, who)
-
-    def _authorized_group_create(self, shoulder, who):
-        shldrs = set(self._cfg.get("allowed_group_shoulders", []))
-        defshldr = DEF_GROUPS_SHOULDER
-        if defshldr:
-            shldrs.add(defshldr)
-        return self._authorized_create(shoulder, shldrs, who)
-
-    def _authorized_create(self, shoulder, shoulders, who):
-        superus = self._cfg.get("superusers", []) + [AUTOADMIN]
-        if self._who and who != self._who and self._who not in superus:
-            return False
-        return shoulder in shoulders
-
-    def _mint_id(self, shoulder):
+    def _mint_id(self, shoulder=None, localid=None):
         """
         create and register a new identifier that can be attached to a new project record
         :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
-                               how the identifier is formed.  
+                               how the identifier is formed.  If not provided, a default is chosen
+                               based on the requesting agent.
+        :param str localid:    the requester-provided local identifier to combine with the shoulder 
+                               prefix to create the new record identifier.  If None (as typical),
+                               a new local idenfier will created according to the internal minting 
+                               rules.  
+        :raises AlreadExists:  if ``localid`` is provided but is already in use with the given shoulder
+        :raises NotAuthorized: if the current user is not allowed to specify a local identifier with 
+                               the given shoulder.
         """
-        return "{0}:{1:04}".format(shoulder, self._next_recnum(shoulder))
+        # determine shoulder if not provided
+        mintcfg = self._cfg.get("project_id_minting", {})
+        if not shoulder:
+            shoulder = self._get_default_shoulder(mintcfg, self._who)    # may raise NotAuthorized
+        elif not self._authorized_for_shoulder(mintcfg, shoulder, self._who):
+            raise NotAuthorized(str(self._who), f"create a record under the {shoulder}")
+
+        locid = localid
+        if not locid:
+            locid = "{0:04}".format(self._next_recnum(shoulder))
+        out = f"{shoulder}:{locid}"
+
+        if localid:
+            if not self._authorized_localid_provider(mintcfg, shoulder, self._who):
+                raise NotAuthorized(self.user_id,
+                                    message="Agent %s is not allowed to request a specific local ID" %
+                                            str(self._who))
+            if self.exists(out):
+                raise AlreadyExists(f"ID {out} already exists")
+
+        return out
+
+    def _get_default_shoulder(self, mintcfg, who):
+        shoulder = mintcfg.get("default_shoulder", {}).get(who.agent_class)
+        if not shoulder:
+            shoulder = mintcfg.get("default_shoulder", {}).get("public")
+        if not shoulder:
+#            self.log.debug("Unable to determine default shoulder: unrecognized agent class: %s",
+#                           who.agent_class)
+            raise NotAuthorized(str(who), "create record",
+                                "Agent class, %s, not recognized" % who.agent_class)
+        if not isinstance(shoulder, str):
+            raise ConfigurationException("dbio: default_shoulder: value not a str: "+str(shoulder))
+        return shoulder
+
+    def _authorized_for_shoulder(self, mintcfg, shoulder, who):
+        allowed_by_group = mintcfg.get("allowed_shoulders", {})
+        for g in who.groups:
+            if g in allowed_by_group and shoulder in allowed_by_group[g]:
+                return True
+        try:
+            return shoulder == self._get_default_shoulder(mintcfg, who)
+        except NotAuthorized:
+            return False
+
+    def _authorized_localid_provider(self, mintcfg, shoulder, agent):
+        # does this Agent have permission to provide localid with given shoulder?
+        providers = mintcfg.get("localid_providers", {})
+        for g in self._who.groups:
+            if g in providers and shoulder in providers[g]:
+                return True
+        return False
 
     def _parse_id(self, id):
         pair = id.rsplit(':', 1)
@@ -1425,13 +1501,23 @@ class DBClient(ABC):
         """
         raise NotImplementedError()
 
+    def free(self):
+        """
+        free up resources used by this client.  
+
+        The client of this service can call this method when it is finished using it.  The implementation
+        should *not* disable the service, making the instance unusable for further use; it should just free
+        up resources as possible.  This implementation does notthing.
+        """
+        pass
+
 
 class DBClientFactory(ABC):
     """
     an abstract class for creating client connections to the database
     """
 
-    def __init__(self, config, peopsvc: PeopleService = None):
+    def __init__(self, config, peopsvc: PeopleService = None, notifier: DBIOClientNotifier = None):
         """
         initialize the factory with its configuration.  The configuration provided here serves as 
         the default parameters for the cient as these can be overridden by the configuration parameters
@@ -1440,19 +1526,53 @@ class DBClientFactory(ABC):
         the ones that control authorization--be provided via :py:method:`create_client` as these can 
         depend on the type of project being access (e.g. "dmp" vs. "dap").
 
-        :param dict          config:  the DBClient configuration
+        :param dict          config:  the DBClient configuration (see the
+                                      :py:mod:`dbio module documentation<nistoar.midas.dbio>` for 
+                                      a description of the configuration schema)
         :param PeoplService peopsvc:  a PeopleService to use to look up people in the organization.  If
                                       not provided, an attempt will be made to create one from the 
                                       configuration (via its ``people_service`` parameter). 
+        :param DBIOClientNotifier notifier:  a DBIOClientNotifier to use for sending alerts to 
+                                      listeners about new records created via the DBIO.  If not 
+                                      provided, an attempt to create one will be made using the 
+                                      configuration (via its ``client_notifier`` parameter; see
+                                      :py:meth:`create_client_notifier`).
         """
         self._cfg = config
         self._peopsvc = peopsvc
+        self._notifier = notifier
 
     def create_people_service(self, config: Mapping = {}):
         """
-        create a PeopleService that a DBClient can use
+        create a PeopleService that a DBClient can use.  The configuration data provided here is 
+        typically the value of the ``people_service`` parameter (when that value is a dictionary).
         """
         return create_people_service(config)
+
+    def create_client_notifier(self, config: Mapping = {}):
+        """
+        create a DBIOClientNotifier using the given configuration.  The configuration data 
+        provided here is typically the value of the ``client_notifier`` from the DBIO configuration.
+        The following sub-parameters are supported:
+        
+        ``service_endpoint``
+             the WebSocket URL for the notification server to send messages to
+        ``broadcast_key``
+             the token to use in communications that identifies the DBIO to the server as 
+             a broadcaster of messages.
+
+        :param dict config:  the configuration used to create the notifier (see above)
+        """
+        if 'service_endpoint' not in config:
+            raise ConfigurationException("Missing required configuration parameter: "+
+                                         "client_notifier.service_endpoint")
+        return DBIOClientNotifier(config['service_endpoint'], config.get("broadcast_key", ""))
+
+    def _create_notifier_from_config(self, config: Mapping = {}):
+        ncfg = config.get('client_notifier')
+        if not ncfg:
+            return None
+        return self.create_client_notifier(ncfg)
 
     @abstractmethod
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = ANONYMOUS):

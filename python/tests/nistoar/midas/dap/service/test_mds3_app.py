@@ -38,6 +38,8 @@ nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 testdir = pathlib.Path(__file__).parents[0]
 pdr2210 = testdir.parents[2] / 'pdr' / 'describe' / 'data' / 'pdr2210.json'
 ncnrexp0 = testdir.parents[2] / 'pdr' / 'publish' / 'data' / 'ncnrexp0.json'
+basedir = testdir.parents[5]
+modeldir = basedir / 'metadata' / 'model'
 
 class TestMDS3DAPApp(test.TestCase):
 
@@ -54,18 +56,16 @@ class TestMDS3DAPApp(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mds3"
-                },
-                "default": {
-                    "default_shoulder": "mds3"
-                }
-            },
             "dbio": {
                 "superusers": [ "rlp" ],
-                "allowed_project_shoulders": ["mds3", "pdr1"],
-                "default_shoulder": "mds3"
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "midas": "mds3"
+                    },
+                    "allowed_shoulders": {
+                        "midas": ["mds3", "pdr1"]
+                    }
+                }
             },
             "assign_doi": "always",
             "doi_naan": "10.88888",
@@ -73,7 +73,8 @@ class TestMDS3DAPApp(test.TestCase):
 #                "type": "fsbased",
 #                "store_dir": os.path.join(tmpdir.name)
                 "type": "inmem",
-            }
+            },
+            "taxonomy_dir": modeldir
         }
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mds3": 0 }})
         self.nerdstore = InMemoryResourceStorage(self.cfg["nerdstorage"])
@@ -84,7 +85,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.rootpath = "/midas/dap/mds3"
 
     def create_record(self, name="goob", meta=None):
-        cli = self.dbfact.create_client(base.DAP_PROJECTS, self.cfg["dbio"], nistr.actor)
+        cli = self.dbfact.create_client(base.DAP_PROJECTS, self.cfg["dbio"], nistr)
         out = cli.create_record(name, "pdr1")
         if meta:
             out.meta = meta
@@ -545,6 +546,48 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['action'], '')
         self.assertNotIn('file_count', resp)  # file manager not engaged
 
+    def test_review(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({
+            "name": "Gurn's Opus",
+            "data": {"title": "Goobers!"},
+            "meta": {"willUpload": True }
+        }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        id = resp['id']
+
+        self.resp = []
+        path = id + '/status/todo'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectStatusHandler))
+        self.assertEqual(hdlr._path, "todo")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+
+        self.assertIn("req", resp)
+        self.assertIn("warn", resp)
+        self.assertIn("rec", resp)
+        self.assertEqual(len(resp['req']), 3)
+        self.assertEqual(len(resp['warn']), 3)
+        self.assertEqual(len(resp['rec']), 1)
+
+        
+
     def test_put_title(self):
         path = ""
         req = {
@@ -632,6 +675,166 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['data']['title'], 'My way')
         self.assertEqual(len(resp['data']['authors']), 0)
         
+    def test_topic(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Gurn's Opus" }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['id'], "mds3:0001")
+        self.assertEqual(resp['data'].get('theme',[]), [])
+        id = resp['id']
+
+        self.resp = []
+        path = id + '/data/topic'
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path
+        }
+        topics = [
+            {"@id": mds3.NIST_THEMES+"Chemistry:%20Thermochemical%20properties"},
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"}
+        ]
+        req['wsgi.input'] = StringIO(json.dumps(topics))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+
+        self.resp = []
+        req['REQUEST_METHOD'] = 'GET'
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+
+        self.resp = []
+        topics = [
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics"},
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"},
+            {"scheme": mds3.NIST_THEMES.rstrip('#'), "tag": "Bioscience"}
+        ]
+        req['REQUEST_METHOD'] = 'PATCH'
+        req['wsgi.input'] = StringIO(json.dumps(topics))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 4)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[2]['tag'], "Statistics")
+        self.assertEqual(out[2]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[3]['tag'], "Bioscience")
+        self.assertEqual(out[3]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+
+        # PATCH an empty list => no change
+        self.resp = []
+        req['wsgi.input'] = StringIO("[]")
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 4)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[2]['tag'], "Statistics")
+        self.assertEqual(out[2]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[3]['tag'], "Bioscience")
+        self.assertEqual(out[3]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+
+        self.resp = []
+        req['REQUEST_METHOD'] = 'DELETE'
+        del req['wsgi.input']
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+
+        self.resp = []
+        req['REQUEST_METHOD'] = 'GET'
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("404 ", self.resp[0])
+        
+        self.resp = []
+        req['REQUEST_METHOD'] = 'PUT'
+        topics = [
+            {"@id": mds3.NIST_THEMES+"Chemistry:%20Thermochemical%20properties"},
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"}
+        ]
+        req['wsgi.input'] = StringIO(json.dumps(topics))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 2)
+
+        # POST doesn't work
+        self.resp = []
+        req['REQUEST_METHOD'] = 'POST'
+        req['wsgi.input'] = StringIO(json.dumps({"@id": mds3.NIST_THEMES+"Physics"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("405 ", self.resp[0])
+
+        # empty the list by PUTing an empty list
+        self.resp = []
+        req['REQUEST_METHOD'] = 'PUT'
+        req['wsgi.input'] = StringIO("[]")
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 0)
+
+        req['REQUEST_METHOD'] = 'GET'
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 0)
         
 
         

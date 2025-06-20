@@ -21,4 +21,5 @@ ENV PYTHONPATH /dev/oar-pdr-py/python/dist/pdr/lib/python:/app/dist/pdr/lib/pyth
 ARG devuser=developer
 USER $devuser
 EXPOSE 9091
+EXPOSE 8765
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

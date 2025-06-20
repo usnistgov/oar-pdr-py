@@ -2,8 +2,8 @@ import os, sys, logging, argparse, pdb
 import unittest as test
 
 from nistoar.testing import *
-from nistoar.pdr import cli
-from nistoar.pdr.exceptions import PDRException, ConfigurationException
+from nistoar.pdr.utils import cli
+from nistoar.pdr.exceptions import StateException, ConfigurationException
 from nistoar.pdr import config as cfgmod
 
 tmpd = None
@@ -18,10 +18,10 @@ def tearDownModule():
 
 class TestModFunctions(test.TestCase):
 
-    def test_define_opts(self):
-        p = cli.define_opts()
-        self.assertEqual(p.prog, "pdr")
-        self.assertIn("PDR", p.description)
+    def test_define_prog_opts(self):
+        p = cli.define_prog_opts("admin", "exert superpowers")
+        self.assertEqual(p.prog, "admin")
+        self.assertIn("superpowers", p.description)
         self.assertIn("help specifically on CMD", p.epilog)
         
         args = p.parse_args([])
@@ -32,7 +32,7 @@ class TestModFunctions(test.TestCase):
         self.assertFalse(args.verbose)
         self.assertFalse(args.debug)
 
-        p = cli.define_opts("goob")
+        p = cli.define_prog_opts("goob")
         self.assertEqual(p.prog, "goob")
         args = p.parse_args([])
         self.assertEqual(args.workdir, "")
@@ -43,7 +43,7 @@ class TestModFunctions(test.TestCase):
         self.assertFalse(args.debug)
 
         parser = argparse.ArgumentParser("fred", None, "go to work", "good work")
-        p = cli.define_opts("goob", parser)
+        p = cli.define_prog_opts("goob", parser=parser)
         self.assertTrue(p is parser)
         self.assertEqual(p.prog, "fred")
         args = p.parse_args([])
@@ -54,15 +54,15 @@ class TestModFunctions(test.TestCase):
         self.assertFalse(args.verbose)
         self.assertFalse(args.debug)
 
-    def test_PDRComandFailure(self):
-        ex = cli.PDRCommandFailure("goob", "hey, don't do that!", 3)
+    def test_ComandFailure(self):
+        ex = cli.CommandFailure("goob", "hey, don't do that!", 3)
         self.assertEqual(ex.cmd, "goob")
         self.assertEqual(ex.stat, 3)
         self.assertIsNone(ex.cause)
         self.assertEqual(str(ex), "hey, don't do that!")
 
 
-class TestPDRCLI(test.TestCase):
+class TestCLISuite(test.TestCase):
 
     def resetLogfile(self):
         rootlog = logging.getLogger()
@@ -80,28 +80,26 @@ class TestPDRCLI(test.TestCase):
         self.resetLogfile()
 
     def test_ctor(self):
-        cmd = cli.PDRCLI()
+        cmd = cli.CLISuite("pdr")
         self.assertEqual(cmd.suitename, "pdr")
         self.assertIsNotNone(cmd.parser)
         self.assertEqual(cmd.parser.prog, "pdr")
         self.assertIsNotNone(cmd._subparser_src)
         self.assertEqual(cmd._cmds, {})
-        self.assertEqual(cmd._next_exit_offset, 0)  # Note: exit offsets are being deprecated
 
-        cmd = cli.PDRCLI("goob")
+        cmd = cli.CLISuite("goob")
         self.assertEqual(cmd.suitename, "goob")
         self.assertIsNotNone(cmd.parser)
         self.assertEqual(cmd.parser.prog, "goob")
         self.assertIsNotNone(cmd._subparser_src)
         self.assertEqual(cmd._cmds, {})
-        self.assertEqual(cmd._next_exit_offset, 0)  # Note: exit offsets are being deprecated
 
     def test_configure_log_defs(self):
-        p = cli.define_opts()
+        p = cli.define_prog_opts("pdr")
         args = p.parse_args("-q".split())
         cfg = {}
         
-        cmd = cli.PDRCLI()
+        cmd = cli.CLISuite("pdr")
         log = cmd.configure_log(args, cfg)
         self.logfile = cfgmod.global_logfile
         self.assertIsNotNone(log)
@@ -109,11 +107,11 @@ class TestPDRCLI(test.TestCase):
         self.assertEqual(self.logfile, os.path.join(os.getcwd(), "pdr.log"))
         
     def test_configure_log_defs2(self):
-        p = cli.define_opts()
+        p = cli.define_prog_opts("gurn")
         args = p.parse_args("-q".split())
         cfg = {}
         
-        cmd = cli.PDRCLI("gurn")
+        cmd = cli.CLISuite("gurn")
         log = cmd.configure_log(args, cfg)
         self.logfile = cfgmod.global_logfile
         self.assertIsNotNone(log)
@@ -121,11 +119,11 @@ class TestPDRCLI(test.TestCase):
         self.assertEqual(self.logfile, os.path.join(os.getcwd(), "gurn.log"))
         
     def test_configure_log_viaargs(self):
-        p = cli.define_opts()
+        p = cli.define_prog_opts("pdr")
         args = p.parse_args("-q -l goober.log".split())
         cfg = {}
         
-        cmd = cli.PDRCLI()
+        cmd = cli.CLISuite("pdr")
         log = cmd.configure_log(args, cfg)
         self.logfile = cfgmod.global_logfile
         self.assertIsNotNone(log)
@@ -133,11 +131,11 @@ class TestPDRCLI(test.TestCase):
         self.assertEqual(self.logfile, os.path.join(os.getcwd(), "goober.log"))
         
     def test_configure_log_viaargs2(self):
-        p = cli.define_opts()
+        p = cli.define_prog_opts("pdr")
         args = p.parse_args("-q -l /tmp/goober.log".split())
         cfg = {}
         
-        cmd = cli.PDRCLI()
+        cmd = cli.CLISuite("pdr")
         log = cmd.configure_log(args, cfg)
         self.logfile = cfgmod.global_logfile
         self.assertIsNotNone(log)
@@ -145,13 +143,13 @@ class TestPDRCLI(test.TestCase):
         self.assertEqual(self.logfile, "/tmp/goober.log")
         
     def test_configure_log_viaargs3(self):
-        p = cli.define_opts()
+        p = cli.define_prog_opts("pdr")
         args = p.parse_args("-q -l goober.log".split())
         cfg = {
             "logdir": tmpdir()
         }
         
-        cmd = cli.PDRCLI()
+        cmd = cli.CLISuite("pdr")
         log = cmd.configure_log(args, cfg)
         self.logfile = cfgmod.global_logfile
         self.assertIsNotNone(log)
@@ -159,13 +157,13 @@ class TestPDRCLI(test.TestCase):
         self.assertEqual(self.logfile, os.path.join(os.getcwd(), "goober.log"))
         
     def test_configure_log_viaconfig(self):
-        p = cli.define_opts()
+        p = cli.define_prog_opts("pdr")
         args = p.parse_args("-q".split())
         cfg = {
             "logfile": "gurn.log"
         }
         
-        cmd = cli.PDRCLI()
+        cmd = cli.CLISuite("pdr")
         log = cmd.configure_log(args, cfg)
         self.logfile = cfgmod.global_logfile
         self.assertIsNotNone(log)
@@ -173,14 +171,14 @@ class TestPDRCLI(test.TestCase):
         self.assertEqual(self.logfile, os.path.join(os.getcwd(), "gurn.log"))
         
     def test_configure_log_viaconfig2(self):
-        p = cli.define_opts()
+        p = cli.define_prog_opts("pdr")
         args = p.parse_args("-q".split())
         cfg = {
             "logfile": "gurn.log",
             "logdir": "/tmp"
         }
         
-        cmd = cli.PDRCLI()
+        cmd = cli.CLISuite("pdr")
         log = cmd.configure_log(args, cfg)
         self.logfile = cfgmod.global_logfile
         self.assertIsNotNone(log)
@@ -200,29 +198,23 @@ class TestPDRCLI(test.TestCase):
 
 
     def test_load(self):
-        cmd = cli.PDRCLI()
+        cmd = cli.CLISuite("pdr")
         tstmod = self.TestCmdMod()
 
         cmd.load_subcommand(tstmod)
         self.assertIn("mock", cmd._cmds)
-        self.assertTrue(cmd._cmds["mock"][0] is tstmod)
-        self.assertEqual(cmd._cmds["mock"][1], 0)   # Note: exit offsets are being deprecated
-        self.assertEqual(cmd._next_exit_offset, 0)  # Note: exit offsets are being deprecated
+        self.assertTrue(cmd._cmds["mock"] is tstmod)
 
         cmd.load_subcommand(tstmod, "gurn", 20)
         self.assertIn("mock", cmd._cmds)
         self.assertIn("gurn", cmd._cmds)
-        self.assertTrue(cmd._cmds["gurn"][0] is tstmod)
-        self.assertEqual(cmd._cmds["gurn"][1], 20)
-        self.assertEqual(cmd._next_exit_offset, 0)
+        self.assertTrue(cmd._cmds["gurn"] is tstmod)
 
         cmd.load_subcommand(tstmod, "foo")
         self.assertIn("mock", cmd._cmds)
         self.assertIn("gurn", cmd._cmds)
         self.assertIn("foo", cmd._cmds)
-        self.assertTrue(cmd._cmds["foo"][0] is tstmod)
-        self.assertEqual(cmd._cmds["foo"][1], 0)    # Note: exit offsets are being deprecated
-        self.assertEqual(cmd._next_exit_offset, 0)  # Note: exit offsets are being deprecated
+        self.assertTrue(cmd._cmds["foo"] is tstmod)
 
         cmd.execute("-q gurn cranston".split())
         self.assertEqual(tstmod.last_exec['args'].cmd, "gurn")
@@ -234,7 +226,7 @@ class TestPDRCLI(test.TestCase):
         self.assertIsNotNone(tstmod.last_exec['log'])
 
     def test_extract_config_for_cmd(self):
-        cmd = cli.PDRCLI()
+        cmd = cli.CLISuite("pdr")
         tstmod = self.TestCmdMod()
         
         config = {

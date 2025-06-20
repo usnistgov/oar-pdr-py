@@ -11,11 +11,11 @@ The key features of the mds3 conventions are:
     properties) of the NERDm record.  
   * Conventions and heuristics are applied for setting default values for various NERDm 
     properties based on the potentially limited properties provided by the client during the 
-    editing process.  (These conventions and hueristics are implemented the in various 
+    editing process.  (These conventions and hueristics are implemented in various 
     ``_moderate_*`` functions in the :py:class:`DAPService` class.)
 
 Support for the web service frontend is provided via :py:class:`DAPApp` class, an implementation
-of the WSGI-based :ref:class:`~nistoar.pdr.publish.service.wsgi.ServiceApp`.
+of the WSGI-based :ref:class:`~nistoar.web.rest.ServiceApp`.
 """
 import os, re, pkg_resources, random, string, time, math
 from datetime import datetime
@@ -24,7 +24,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence, Callable
 from typing import List, Union, Iterator
 from copy import deepcopy
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 from functools import reduce
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
@@ -32,12 +32,14 @@ from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, No
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
                                   ProjectSelectionHandler, ServiceApp)
-from ...dbio import status
+from ...dbio import status, ANONYMOUS
+from ..review import DAPReviewer, DAPNERDmReviewValidator
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
 from nistoar.pdr.utils import build_mime_type_map, read_json
 from nistoar.pdr.utils.prov import Agent, Action
+from nistoar.pdr.utils.validate import ValidationResults, ALL, REQ
 from nistoar.nsd import NSDServerError
 
 from . import validate
@@ -97,6 +99,10 @@ AGG_DELIM = const.AGGCMP_EXTENSION.lstrip('/')
 RES_DELIM = const.RESONLY_EXTENSION.lstrip('/')
 EXTSCHPROP = "_extensionSchemas"
 
+NIST_THEMES = "https://data.nist.gov/od/dm/nist-themes/v1.1#"
+FORENSICS_THEMES = "https://data.nist.gov/od/dm/nist-themes-forensics/v1.0#"
+CHIPS_THEMES = "https://data.nist.gov/od/dm/nist-themes-chips/v1.0#"
+
 def random_id(prefix: str="", n: int=8):
     r = ''.join(random.choices(string.ascii_uppercase + string.digits, k=n))
     return prefix+r
@@ -145,7 +151,7 @@ class DAPProjectRecord(ProjectRecord):
             return
         if not self._data.get('file_space', {}).get('creator'):
             if not who:
-                who = self._cli._who
+                who = self._cli.user_id
             try:
                 self._fmcli.get_record_space(self.id)
             except FileSpaceNotFound as ex:
@@ -231,6 +237,16 @@ class DAPService(ProjectService):
     ``default_responsible_org``
         a dictionary containing NERDm Affiliation metadata to be provided as the default to the 
         ``responsibleOrganization`` NERDm property. 
+    ``nerdstorage``
+        a dictionary configuring the :py:class:`~nistoar.midas.dap.nerdstore.NERDResourceStorage` 
+        to use to manage NERDm metadata.  Note that if this dictionary does not have a 
+        ``file_manager`` property set but the dictionary has a sibling ``file_manager`` property 
+        (described above), that ``file_manager`` dictionary will be added to the ``nerdstorage``
+        dictionary.  
+    ``taxonomy_dir``
+        (*str*) __optional__.  the path to a directory where taxonomy definition files can be 
+        found.  If not provided, it defaults to the etc directory.  This parameter is used primarily
+        within unit tests.  
 
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
@@ -285,6 +301,8 @@ class DAPService(ProjectService):
 
         self._minnerdmver = minnerdmver
 
+        self._taxondir = self.cfg.get('taxonomy_dir', os.path.join(def_etc_dir, "schemas"))
+
     def _make_fm_client(self, fmcfg):
         return FileManager(fmcfg)
 
@@ -333,22 +351,55 @@ class DAPService(ProjectService):
         """
         return to_DAPRec(super().get_record(id), self._fmcli)
 
-    def create_record(self, name, data=None, meta=None) -> ProjectRecord:
+    def create_record(self, name, data=None, meta=None, dbid: str=None) -> ProjectRecord:
         """
         create a new project record with the given name.  An ID will be assigned to the new record.
         :param str  name:  the mnuemonic name to assign to the record.  This name cannot match that
                            of any other record owned by the user. 
         :param dict data:  the initial data content to assign to the new record.  
         :param dict meta:  the initial metadata to assign to the new record.  
-        :raises NotAuthorized:  if the authenticated user is not authorized to create a record
-        :raises AlreadyExists:  if a record owned by the user already exists with the given name
+        :param str  dbid:  a requested identifier or ID shoulder to assign to the record; if the 
+                           value does not include a colon (``:``), it will be interpreted as the
+                           desired shoulder that will be attached an internally minted local 
+                           identifier; otherwise, the value will be taken as a full identifier. 
+                           If not provided (default), an identifier will be minted using the 
+                           default shoulder.
+        :raises NotAuthorized:  if the authenticated user is not authorized to create a record, or 
+                                when ``dbid`` is provided, the user is not authorized to create a 
+                                record with the specified shoulder or ID.
+        :raises AlreadyExists:  if a record owned by the user already exists with the given name or
+                                the given ``dbid``.
         :raises InvalidUpdate:  if the data given in either the ``data`` or ``meta`` parameters are
                                 invalid (i.e. is not compliant with schemas and restrictions asociated
                                 with this project type).
         """
-        shoulder = self._get_id_shoulder(self.who)
-        prec = to_DAPRec(self.dbcli.create_record(name, shoulder), self._fmcli)
+        localid = None
+        shoulder = None
+        if dbid:
+            if ':' not in dbid:
+                # interpret dbid to be a requested shoulder
+                shoulder = dbid
+            else:
+                shoulder, localid = dbid.split(':', 1)
+        else:
+            shoulder = self._get_id_shoulder(self.who, meta)  # may return None (DBClient will set it)
+
+        foruser = None
+        if meta and meta.get("foruser"):
+            # format of value: either "newuserid" or "olduserid:newuserid"
+            foruser = meta.get("foruser", "").split(":")
+            if not foruser or len(foruser) > 2:
+                foruser = None
+            else:
+                foruser = foruser[-1]
+                
+        if self.dbcli.user_id == ANONYMOUS:
+            # Do we need to be more careful in production by cancelling reassign request?
+            self.log.warning("A new DAP record requested for an anonymous user")
+
+        prec = to_DAPRec(self.dbcli.create_record(name, shoulder, foruser, localid), self._fmcli)
         nerd = None
+        shoulder = prec.id.split(':', 1)[0]
 
         # create the space in the file-manager
         if self._fmcli:
@@ -370,14 +421,14 @@ class DAPService(ProjectService):
                 schemaid = data["_schema"]
                 m = re.search(r'/v(\d+\.\d+(\.\d+)*)#?$', schemaid)
                 if schemaid.startswith(NERDM_SCH_ID_BASE) and m:
-                    ver = m.group(1).split('.')
+                    ver = [int(d) for d in m.group(1).split('.')]
                     for i in range(len(ver)):
                         if i >= len(self._minnerdmver):
                             break;
-                        if ver[i] < self._minnerdmver[1]:
+                        if ver[i] < self._minnerdmver[i]:
                             raise InvalidUpdate("Requested NERDm schema version, " + m.group(1) +
                                                 " does not meet minimum requirement of " +
-                                                ".".join(self._minnerdmver), sys=self)
+                                                ".".join([str(d) for d in self._minnerdmver]), sys=self)
                 else:
                     raise InvalidUpdate("Unsupported schema for NERDm schema requested: " + schemaid,
                                         sys=self)
@@ -601,14 +652,14 @@ class DAPService(ProjectService):
                 out = nerd.get_res_data()
                 if part in out:
                     out = out[part]
-                elif part in "description @type contactPoint title rights disclaimer landingPage".split():
+                elif part in "description @type contactPoint title rights disclaimer landingPage theme topic".split():
                     raise ObjectNotFound(prec.id, part, "%s property not set yet" % part)
                 else:
                     raise PartNotAccessible(prec.id, part, "Accessing %s not supported" % part)
 
         return out
 
-    def replace_data(self, id, newdata, part=None):
+    def replace_data(self, id, newdata, part=None, message="", _prec=None):
         """
         Replace the currently stored data content of a record with the given data.  It is expected that 
         the new data will be filtered/cleansed via an internal call to :py:method:`moderate_data`.  
@@ -617,6 +668,8 @@ class DAPService(ProjectService):
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
                              the given ``newdata`` is a value that should be set to the property pointed 
                              to by ``part``.  
+        :param str message:  an optional message that will be recorded as an explanation of the replacement.
+        :return:  the updated data (which may be slightly different from what was provided)
         :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to 
                              ``id``.  If this is not provided, the record will by fetched anew based on 
                              the ``id``.
@@ -629,7 +682,7 @@ class DAPService(ProjectService):
         :raises InvalidUpdate:  if the provided ``newdata`` represents an illegal or forbidden update or 
                              would otherwise result in invalid data content.
         """
-        return self._update_data(id, newdata, part, replace=True)
+        return self._update_data(id, newdata, part, replace=True, message=message, prec=_prec)
 
     def update_data(self, id, newdata, part=None, message="", _prec=None):
         """
@@ -640,6 +693,7 @@ class DAPService(ProjectService):
                              the given ``newdata`` is a value that should be set to the property pointed 
                              to by ``part``.  
         :param str message:  an optional message that will be recorded as an explanation of the update.
+        :return:  the updated data (which may be slightly different from what was provided)
         :raises ObjectNotFound:  if no record with the given ID exists or the ``part`` parameter points to 
                              an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
@@ -710,7 +764,7 @@ class DAPService(ProjectService):
                             return False
                         nerd.files.empty()
                         nerd.nonfiles.empty()
-                    elif part in "title rights disclaimer description landingPage keyword".split():
+                    elif part in "title rights disclaimer description landingPage keyword topic theme".split():
                         resmd = nerd.get_res_data()
                         if part not in resmd:
                             return False
@@ -1244,6 +1298,18 @@ class DAPService(ProjectService):
                 nerd.replace_res_data(res)
                 data = res[path]
 
+            elif path == "topic":
+                if not isinstance(data, list):
+                    err = "topic data is not a list"
+                    raise InvalidUpdate(err, id, path, errors=[err])
+                res = nerd.get_res_data()
+                old = res.get(path)
+                res[path] = self._moderate_topic(data, res, doval=doval, replace=replace)
+                provact.add_subaction(Action(subacttype, prec.id+"#data/topic", self.who, 
+                                             "updating topics", self._jsondiff(old, res['topic'])))
+                nerd.replace_res_data(res)
+                data = res[path]
+                
             # NOTE!!: Temporary support for updating theme
             elif path == "theme":
                 if not isinstance(data, (list, str)):
@@ -1732,16 +1798,29 @@ class DAPService(ProjectService):
         #         objlist.set(i, item)
         #     else:
         #         objlist.append(item)
-            
 
-            
-            
-        
-                        
 
-#################
 
-            
+    def review(self, id, want=ALL, _prec=None) -> ValidationResults:
+        """
+        Review the record with the given identifier for completeness and correctness, and return lists of 
+        suggestions for completing the record.  The recommendations come as a set of validation issues.
+        The issues of type ``REQ`` _must_ be corrected before finalization or the finalization 
+        will fail.  ``WARN`` issues technically do not have to be addressed, but they indicate
+        possible inconsistancies that are unintended by the client/author.  This method should
+        not update the record in any way and, thus, only requires read permission.
+        :param str      id:  the identifier of the record to finalize
+        :param int    want:  the categories of tests to apply and return (default: ALL)
+        :returns:  a set of required and recommended changes to make
+                   :rtype: ValidationResults
+        :raises ObjectNotFound:  if no record with the given ID exists
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the 
+                                 record given by `id`.  
+        """
+        prec = self.get_record(id)   # may raise exceptions
+        reviewer = DAPReviewer.create_reviewer(self._store, self.cfg.get("review",{}))
+        return reviewer.validate(prec, want)
+
     def validate_json(self, json, schemauri=None):
         """
         validate the given JSON data record against the give schema, raising an exception if it 
@@ -1797,6 +1876,95 @@ class DAPService(ProjectService):
             if v not in out:
                 out.append(self._moderate_text(v, resmd, doval=doval))
 
+        return out
+
+    def _moderate_topic(self, val: List[Mapping], resmd=None, doval=True, replace=True):
+        if val is None:
+            val = []
+        if not isinstance(val, Sequence) or isinstance(val, str):
+            raise InvalidUpdate("topic value is not a list of topic objects", sys=self)
+
+        def topic_in_list(topic, tlist):
+            for t in tlist:
+                if topic.get('scheme') == t.get('scheme') and \
+                   topic.get('tag') == t.get('tag'):
+                    return True
+            return False
+
+        #uniquify list
+        out = resmd.get("topic", []) if resmd and not replace else []
+        terms = {}
+        for v in val:
+            if not isinstance(v, Mapping):
+                raise InvalidUpdate("Not a topic object: "+str(v))
+            v = self._moderate_topic_item(v, terms, doval=doval)
+            if v and not topic_in_list(v, out):
+                out.append(v)
+
+        return out
+            
+
+    _recognized_taxons = {
+        NIST_THEMES:      "theme-taxonomy.json",
+        FORENSICS_THEMES: "forensics-taxonomy.json",
+        # CHIPS_THEMES: "chipsmetrology-taxonomy.json"
+    }
+    def _moderate_topic_item(self, val: Mapping, terms: Mapping, doval=True):
+        keep = "@id scheme tag".split()
+        out = OrderedDict(p for p in val.items() if p[0] in keep)
+
+        def topic_in_taxon(tag, taxon):
+            parentchild = [t.strip() for t in tag.rsplit(':', 1)]
+            if len(parentchild) == 1:
+                parentchild = [None, parentchild[0]]
+            for v in taxon.get('vocab', []):
+                if not v.get('deprecatedSince') and \
+                   v.get('parent') == parentchild[0] and v.get('term') == parentchild[1]:
+                    return True
+            return False
+
+        if '@id' in out:
+            # convert @id to scheme + tag, if possible
+            matched = []
+            if not out.get('scheme'):
+                matched = [s for s in self._recognized_taxons if out['@id'].startswith(s)]
+                if matched:
+                    out['scheme'] = matched[0].rstrip('#').rstrip('/')
+            elif out['@id'].startswith(out['scheme']+'#'):
+                matched = [out['scheme']]
+
+            if matched:
+                if not out.get('tag'):
+                    out['tag'] = unquote(out['@id'][len(matched[0]):])
+                    if '#' in out['tag']:
+                        out['tag'] = out['tag'].split('#', 1)[-1]
+            elif doval:
+                raise InvalidUpdate("topic from unrecognized taxonomy: "+out['@id'])
+
+            elif not out.get('tag') and '#' in out['@id']:
+                out['tag'] = unquote(out['@id'].split('#', 1)[-1])
+
+        elif not out.get('tag'):
+            out = {}    
+
+        if doval:
+            # validate
+            if not out.get('scheme') or not out.get('tag'):
+                # missing scheme or tag
+                t = out.get('tag') or out.get('@id') or out.get('scheme') or "(unspecified)"
+                raise InvalidUpdate("Unrecognized topic term: "+t, sys=self)
+            if not self._recognized_taxons.get(out['scheme']+'#'):
+                raise InvalidUpdate("Unrecognized topic scheme: "+out['scheme'], sys=self)
+            if out['scheme'] not in terms:
+                # read in taxonomy file to make sure tag is defined
+                terms[out['scheme']] = read_json(os.path.join(self._taxondir,
+                                                              self._recognized_taxons[out['scheme']+'#']))
+                     
+            if not topic_in_taxon(out['tag'], terms[out['scheme']]):
+                raise InvalidUpdate(f"term, {out['tag']}, not found in taxonomy, {out['scheme']}")
+
+        if out:
+            out['@type'] = "Concept"
         return out
 
     def _moderate_landingPage(self, val, resmd=None, doval=True, replace=True):
@@ -2209,7 +2377,7 @@ class DAPService(ProjectService):
         resmd["@type"] = restypes
 
         errors = []
-        for prop in "contactPoint description keyword landingPage".split():
+        for prop in "contactPoint description keyword landingPage topic".split():
             if prop in resmd:
                 if resmd.get(prop) is None:
                     del resmd[prop]
@@ -2420,14 +2588,14 @@ class DAPService(ProjectService):
             return True
         return False
 
-                
+
 class DAPServiceFactory(ProjectServiceFactory):
     """
     Factory for creating DAPService instances attached to a backend DB implementation and which act 
     on behalf of a specific user.  The configuration parameters that can be provided to this factory 
     is the union of those supported by the following classes:
       * :py:class:`DAPService` (``assign_doi`` and ``doi_naan``)
-      * :py:class:`~nistoar.midas.dbio.project.ProjectService` (``clients`` and ``dbio``)
+      * :py:class:`~nistoar.midas.dbio.project.ProjectService` (``default_perms`` and ``dbio``)
     """
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, log: Logger=None,
@@ -2468,7 +2636,10 @@ class DAPApp(MIDASProjectApp):
             project_coll = DAP_PROJECTS
         uselog = log.getChild(project_coll)
         if not service_factory:
-            nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), uselog)
+            # nerdstore = NERDResourceStorageFactory().open_storage(config.get("nerdstorage", {}), uselog)
+            # Let the DAPServiceFactory create its preferred nerdstore if we don't have a special one
+            # to inject
+            nerdstore = None
             service_factory = DAPServiceFactory(dbcli_factory, config, uselog, nerdstore, project_coll)
         super(DAPApp, self).__init__(service_factory, uselog, config)
         self._data_update_handler = DAPProjectDataHandler
@@ -2636,6 +2807,7 @@ class DAPProjectInfoHandler(ProjectInfoHandler):
                                         "Trouble communicating with file manager")
 
         return self.send_json(fssumm)
+        
 
 class DAPProjectSelectionHandler(ProjectSelectionHandler):
     """
@@ -2670,5 +2842,3 @@ class DAPProjectSelectionHandler(ProjectSelectionHandler):
         for rec in self._dbcli.select_constraint_records(filter, perms):
             yield to_DAPRec(rec, self._fmcli)
 
-
-    

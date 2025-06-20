@@ -35,14 +35,15 @@ from jsonpatch import JsonPatch
 
 Agent = NewType("Agent", object)
 PUBLIC_AGENT_CLASS = "public"
+ADMIN_AGENT_CLASS = "admin"
 INVALID_AGENT_CLASS = "invalid"
 ANONYMOUS_USER = "anonymous"
 
 class Agent(object):
     """
     a class describing an agent that can make some change on a data entity.  An agent's identifier has
-    two main parts: a _vehicle_--the software that requests or effects the change, and an 
-    _actor_--an authenticated identity, either human or functional--that authorizes the change.  
+    two main parts: a *vehicle*--the software that requests or effects the change, and an 
+    *actor*--an authenticated identity, either human or functional--that authorizes the change.  
     An Agent can also provide other information about the agent such as its origins and properties
     that can be used to assess authorization rights or record provenance.
 
@@ -54,12 +55,15 @@ class Agent(object):
     membership, via :py:meth:`attach_group` (or "detached" via :py:meth:`detach_group`).  
 
     The second property intended for supporting authorization is the :py:attr:`agent_class`.  The 
-    class represents a dynamic group that is typically assigned the agent based on the origins of 
-    the agent.  This is used the actor represents a functional identity used as part of an automated 
-    agent:  multiple functional actors can belong to the same agent_class, sharing a common set of 
-    permissions.  The :py:attr:`agent_class` name will always appear as the first group in the 
-    :py:attr:`groups` property.  The PDR publishing service, whose clients are typically other 
-    software agents, uses :py:attr:`agent_class` to control which clients can publish which SIPs.
+    class represents a dynamic group that is typically assigned to the agent based on the origins of 
+    the agent.  Like a group, it represents an identity enhancement that can alter the privileges afforded 
+    to the agent.  For example, an ordinary user with the class set to ``ADMIN_ACTOR_CLASS`` can gain 
+    administrative privileges.  This allows actions to be logged to show that an administrative 
+    action was taken by a particular user.  Similarly, the ``INVALID_ACTOR_CLASS`` may restrict 
+    the actor's privileges.  The :py:attr:`agent_class` name will always appear as 
+    the first group in the :py:attr:`groups` property.  The PDR publishing service, whose clients 
+    are typically other software agents, uses :py:attr:`agent_class` to control which clients can 
+    publish which SIPs.
 
     This class is intended to represent an Agent from the 
     `W3C PROV model <https://www.w3.org/TR/2013/NOTE-prov-primer-20130430/>`_.
@@ -68,6 +72,7 @@ class Agent(object):
     AUTO: str = "auto"  # for functional identities
     UNKN: str = ""
     PUBLIC: str = PUBLIC_AGENT_CLASS
+    ADMIN: str = ADMIN_AGENT_CLASS
     INVALID: str = INVALID_AGENT_CLASS
     ANONYMOUS: str = ANONYMOUS_USER
     default_class = PUBLIC_AGENT_CLASS
@@ -121,7 +126,7 @@ class Agent(object):
     @property
     def actor_type(self) -> str:
         """
-        return the category of the actor behind this change.  The type can be known even if the 
+        the category of the actor behind this change.  The type can be known even if the 
         specific identity of the actor is not.  Possible values include USER, representing real
         people, and AUTO, representing functional identities.  
         """
@@ -130,7 +135,7 @@ class Agent(object):
     @property
     def vehicle(self) -> str:
         """
-        return the name of the software compenent that established this Agent
+        the name of the software compenent that established this Agent
         """
         return self._vehicle
 
@@ -145,7 +150,7 @@ class Agent(object):
     @property
     def id(self) -> str:
         """
-        return an identifier for this agent, of the form _vehicle_/_actor_.  
+        an identifier for this agent, of the form *vehicle*/*actor*.  
         """
         return f"{self.vehicle}/{self.actor}"
 

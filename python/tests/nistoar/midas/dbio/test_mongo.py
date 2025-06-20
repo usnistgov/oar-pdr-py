@@ -7,6 +7,7 @@ from pymongo import MongoClient
 from nistoar.midas.dbio import mongo, base
 from nistoar.midas import dbio
 from nistoar.base.config import ConfigurationException
+from nistoar.nsd.service import MongoPeopleService
 
 dburl = None
 if os.environ.get('MONGO_TESTDB_URL'):
@@ -54,8 +55,11 @@ class TestInMemoryDBClientFactory(test.TestCase):
     def setUp(self):
         self.cfg = {"goob": "gurn"}
         self.fact = mongo.MongoDBClientFactory(self.cfg, dburl)
+        self.cli = None
 
     def tearDown(self):
+        if self.cli:
+            self.cli.disconnect()
         client = MongoClient(dburl)
         if not hasattr(client, 'get_database'):
             client.get_database = client.get_default_database
@@ -70,6 +74,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
             db.drop_collection(base.DRAFT_PROJECTS)
         if "nextnum" in db.list_collection_names():
             db.drop_collection("nextnum")
+        client.close()
 
     def test_ctor(self):
         self.assertEqual(self.fact._cfg, self.cfg)
@@ -79,13 +84,24 @@ class TestInMemoryDBClientFactory(test.TestCase):
             mongo.MongoDBClientFactory(self.cfg)
 
     def test_create_client(self):
-        cli = self.fact.create_client(base.DMP_PROJECTS, {}, "bob")
-        self.assertEqual(cli._cfg, self.fact._cfg)
-        self.assertEqual(cli._projcoll, base.DMP_PROJECTS)
-        self.assertEqual(cli._who, "bob")
-        self.assertIsNone(cli._whogrps)
-        self.assertIsNone(cli._native)
-        self.assertIsNotNone(cli._dbgroups)
+        self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, "bob")
+        self.assertEqual(self.cli._cfg, self.fact._cfg)
+        self.assertEqual(self.cli._projcoll, base.DMP_PROJECTS)
+        self.assertEqual(self.cli.user_id, "bob")
+        self.assertIsNone(self.cli._whogrps)
+        self.assertIsNone(self.cli._native)
+        self.assertIsNotNone(self.cli._dbgroups)
+        self.assertIsNone(self.cli._peopsvc)
+
+    def test_create_client_with_people_service(self):
+        self.cli = self.fact.create_client(base.DMP_PROJECTS,
+                                           {"factory": "mongo", "people_service": "embedded"}, "bob")
+        try:
+            self.assertIsNotNone(self.cli._peopsvc)
+            self.assertTrue(isinstance(self.cli._peopsvc, MongoPeopleService))
+        finally:
+            if self.cli._peopsvc and self.cli._peopsvc._cli:
+                self.cli._peopsvc._cli.close()
 
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
@@ -97,6 +113,8 @@ class TestMongoDBClient(test.TestCase):
         self.cli = mongo.MongoDBClient(dburl, self.cfg, base.DMP_PROJECTS, self.user)
 
     def tearDown(self):
+        if self.cli:
+            self.cli.disconnect()
         client = MongoClient(dburl)
         if not hasattr(client, 'get_database'):
             client.get_database = client.get_default_database
@@ -105,6 +123,7 @@ class TestMongoDBClient(test.TestCase):
                      "nextnum", "about", "prov_action_log", "history"]:
             if coll in db.list_collection_names():
                 db.drop_collection(coll)
+        client.close()
 
     def test_connect(self):
         self.assertEqual(self.cli._dburl, dburl)
@@ -113,6 +132,15 @@ class TestMongoDBClient(test.TestCase):
         self.assertIsNotNone(self.cli._native)
         self.assertIsNotNone(self.cli.native)
         self.cli.disconnect()
+        self.assertIsNone(self.cli._native)
+
+    def test_free(self):
+        self.assertEqual(self.cli._dburl, dburl)
+        self.assertIsNone(self.cli._native)
+        self.cli.connect()
+        self.assertIsNotNone(self.cli._native)
+        self.assertIsNotNone(self.cli.native)
+        self.cli.free()
         self.assertIsNone(self.cli._native)
 
     def test_auto_connect(self):
@@ -506,6 +534,8 @@ class TestMongoProjectRecord(test.TestCase):
                                       {"id": "pdr0:2222", "name": "brains", "owner": self.user}, self.cli)
 
     def tearDown(self):
+        if self.cli:
+            self.cli.disconnect()
         client = MongoClient(dburl)
         if not hasattr(client, 'get_database'):
             client.get_database = client.get_default_database
@@ -514,6 +544,7 @@ class TestMongoProjectRecord(test.TestCase):
                      "nextnum", "about"]:
             if coll in db.list_collection_names():
                 db.drop_collection(coll)
+        client.close()
 
     def test_save(self):
         self.assertEqual(self.rec.data, {})
@@ -556,13 +587,21 @@ class TestMongoProjectRecord(test.TestCase):
 class TestMongoDBGroups(test.TestCase):
 
     def setUp(self):
-        self.cfg = { "default_shoulder": "pdr0" }
+        self.cfg = {
+            "group_id_minting": {
+                "default_shoulder": {
+                    "public": "grp0"
+                }
+            }
+        }
         self.fact = mongo.MongoDBClientFactory(self.cfg, dburl)
         self.user = "nist0:ava1"
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
         self.dbg = self.cli.groups
 
     def tearDown(self):
+        if self.cli:
+            self.cli.disconnect()
         client = MongoClient(dburl)
         if not hasattr(client, 'get_database'):
             client.get_database = client.get_default_database
@@ -571,6 +610,7 @@ class TestMongoDBGroups(test.TestCase):
                      "nextnum", "about"]:
             if coll in db.list_collection_names():
                 db.drop_collection(coll)
+        client.close()
 
     def test_create_group(self):
         # group does not exist yet

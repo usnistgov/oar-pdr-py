@@ -33,8 +33,6 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
-
 # test records
 testdir = pathlib.Path(__file__).parents[0]
 pdr2210 = testdir.parents[2] / 'pdr' / 'describe' / 'data' / 'pdr2210.json'
@@ -79,13 +77,19 @@ class TestDAPProjectRecord(test.TestCase):
 
         self.cfg = {
             "dbio": {
-                "allowed_project_shoulders": ["mdsy", "spc1"],
-                "default_shoulder": "mdsy",
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "midas": "mdsy"
+                    },
+                    "allowed_shoulders": {
+                        "midas": ["mdsy", "spc1"]
+                    }
+                }
             }
         }
             
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdsy": 2 }})
-        dbcli = self.dbfact.create_client("dap", self.cfg.get("dbio", {}), "nistr")
+        dbcli = self.dbfact.create_client("dap", self.cfg.get("dbio", {}), nistr)
         rec = dbcli.create_record("goob")
         self.prec = mds3.DAPProjectRecord.from_dap_record(rec, self.fm)
 
@@ -117,7 +121,7 @@ class TestDAPProjectRecord(test.TestCase):
 
         self.prec.ensure_file_space()
         self.assertTrue(fs.get('id'))
-        self.assertEqual(fs.get('creator'), 'nistr')
+        self.assertEqual(fs.get('creator'), 'nstr1')
         self.assertFalse(fs.get('created'))
         self.assertEqual(fs.get('action'), '')
 
@@ -131,7 +135,7 @@ class TestDAPProjectRecord(test.TestCase):
         self.fm.get_record_space.side_effect = FileSpaceNotFound(self.prec.id)
         self.prec.ensure_file_space()
         self.assertTrue(fs.get('id'))
-        self.assertEqual(fs.get('creator'), 'nistr')
+        self.assertEqual(fs.get('creator'), 'nstr1')
         self.assertTrue(fs.get('created'))
         self.assertEqual(fs.get('action'), 'create')
 
@@ -145,17 +149,15 @@ class TestMDS3DAPServiceWithFM(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mdsy"
-                },
-                "default": {
-                    "default_shoulder": "mdsy"
-                }
-            },
             "dbio": {
-                "allowed_project_shoulders": ["mdsy", "spc1"],
-                "default_shoulder": "mdsy",
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "midas": "mdsy"
+                    },
+                    "allowed_shoulders": {
+                        "midas": ["mdsy", "spc1"]
+                    }
+                }
             },
             "assign_doi": "always",
             "doi_naan": "10.88888",

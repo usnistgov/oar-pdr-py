@@ -8,7 +8,21 @@ from nistoar.pdr.utils.prov import Action, Agent
 class TestDBClient(test.TestCase):
 
     def setUp(self):
-        self.cfg = { "default_shoulder": "pdr0", "allowed_project_shoulders": ["mds3"] }
+        self.cfg = {
+            "project_id_minting": {
+                "default_shoulder": {
+                    "public": "pdr0"
+                },
+                "allowed_shoulders": {
+                    "public": ["mds3", "go0", "ncnr5"]
+                }
+            },
+            "group_id_minting": {
+                "default_shoulder": {
+                    "public": "grp0"
+                }
+            },
+        }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
         self.cli = self.fact.create_client(base.DRAFT_PROJECTS, {}, self.user)
@@ -94,6 +108,22 @@ class TestDBClient(test.TestCase):
         self.assertTrue(not self.cli.exists("mds3:0001"))
         rec = self.cli.create_record("test", "mds3")
         self.assertEqual(rec.id, "mds3:0003")
+
+    def test_create_client_with_localid(self):
+        with self.assertRaises(base.NotAuthorized):
+            self.cli.create_record("test", "mdm1")
+
+        with self.assertRaises(base.NotAuthorized):
+            self.cli.create_record("test", "pdr0", localid="01000")
+
+        self.cli._cfg['project_id_minting']["localid_providers"] = {
+            self.cli._who.agent_class: ["pdr0"]
+        }
+        self.assertEqual(self.cli._cfg['project_id_minting']["localid_providers"].get("public"), ["pdr0"])
+
+        rec = self.cli.create_record("test", "pdr0", localid="01000")
+        self.assertEqual(rec.name, "test")
+        self.assertEqual(rec.id, "pdr0:01000")
 
     def test_get_record(self):
         with self.assertRaises(base.ObjectNotFound):

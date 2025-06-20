@@ -57,7 +57,7 @@ def execute(args, config=None, log=None):
 
     _process_args(args, config, cmd, log)
 
-    # may raise PDRCommandFailure
+    # may raise CommandFailure
     nerdm = _get_record_for_cmd(args, cmd, config, log)
 
     latest.update_to_latest_schema(nerdm, inplace=True)

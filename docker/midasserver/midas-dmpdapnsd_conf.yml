@@ -19,16 +19,14 @@ services:
          describedBy: "http://localhost:9091/docs/dapsvc-elements.html"
          href:        "http://localhost:9091/midas/dap"
 
-      clients: 
-         midas: 
-            default_shoulder: mds3
-         default: 
-            default_shoulder: mds3
-
       dbio: 
          superusers:                [ "rlp3" ]
-         allowed_project_shoulders: ["mdsx", "mds3", "mds0", "pdr0"]
-         default_shoulder:          mdsx
+         project_id_minting:
+           default_shoulder:
+             public:  "mds3" 
+           allowed_shoulders:
+             midas: ["mdsx", "mds3", "mds0", "pdr0"]
+             public: ["mds3"]
 
       include_headers:
          "Access-Control-Allow-Origin": "*"
@@ -62,19 +60,18 @@ services:
          describedBy: "http://localhost:9091/docs/dmpsvc-elements.html"
          href:        "http://localhost:9091/midas/dmp"
 
-      clients: 
-          midas: 
-             default_shoulder: mdm1
-          default: 
-             default_shoulder: mdm1
-
       default_perms:
           read: [ "grp0:public" ]
 
       dbio: 
          superusers:                [ "rlp3" ]
-         allowed_project_shoulders: ["mdm0", "mdm1"]
-         default_shoulder:          mdm1
+         project_id_minting:
+           default_shoulder:
+             midas:  "mdm1"
+             public: "mdm1"
+           allowed_shoulders:
+             midas:  ["mdm0", "mdm1"]
+             public: ["mdm0", "mdm1"]
 
       include_headers:
          "Access-Control-Allow-Origin": "*"
