@@ -45,7 +45,7 @@ class NSDSyncer:
             If not provided, a token will be retrieved using ``tokenService`` (if provided)
         ``tokenService``
             _dict_ (optional) a dictionary configuring use of a token retrieval service.  See 
-            :py:func:`get_nsd_token` for details on its contents.  If not provided, it will be
+            :py:func:`get_nsd_auth_token` for details on its contents.  If not provided, it will be
             assumed that a token is not required to access the NSD service.  
     """
 

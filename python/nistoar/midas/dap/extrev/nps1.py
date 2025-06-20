@@ -2,6 +2,7 @@
 An implementation of the ExternalReviewClient that talks to the NPS (version 1)
 """
 from nistoar.base.config import ConfigurationException
+from nistoar.nsd.service import PeopleService
 from . import *
 
 class NPSExternalReviewClient(ExternalReviewClient):
