@@ -1157,7 +1157,7 @@ class ProjectService(MIDASSystem):
         stat = _prec.status
 
         revmd = stat.pubreview(revsys, phase, revid, infourl, feedback, fbreplace, **extra_info)
-        if self._apply_external_review_updates(_prec, revmd, request_changes):
+        if not self._apply_external_review_updates(_prec, revmd, request_changes):
             _prec.save()
 
         msg = "external review phase in progress"
