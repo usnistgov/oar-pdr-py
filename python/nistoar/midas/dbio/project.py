@@ -1295,7 +1295,13 @@ class ProjectService(MIDASSystem):
         """
         free up resources used by this service.  
 
-<<<<<<< HEAD
+        The client of this service can call this method when it is finished using it.  The implementation
+        should *not* disable the service, making the instance unusable for further use; it should just free
+        up resources as possible.  This implementation calls the ``free()`` function on the underlying 
+        :py:class:`~nistoar.midas.dbio.base.DBClient` instance.
+        """
+        self.dbcli.free()
+                    
     def _publish(self, prec: ProjectRecord):
         """
         Actually launch the publishing process on the given record and update its state  
@@ -1354,16 +1360,6 @@ class ProjectService(MIDASSystem):
         self.log.info("Successfully published %s as %s version %s (into %s_latest collection)",
                       prec.id, recd['id'], recd['data'].get("@version", 0), self.dbcli.project)
         return endstate
-
-=======
-        The client of this service can call this method when it is finished using it.  The implementation
-        should *not* disable the service, making the instance unusable for further use; it should just free
-        up resources as possible.  This implementation calls the ``free()`` function on the underlying 
-        :py:class:`~nistoar.midas.dbio.base.DBClient` instance.
-        """
-        self.dbcli.free()
-                    
->>>>>>> usnistgov/integration
 
 class ProjectServiceFactory:
     """
