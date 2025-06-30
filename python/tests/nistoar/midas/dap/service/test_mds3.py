@@ -8,6 +8,7 @@ from nistoar.midas.dap.service import mds3
 from nistoar.pdr.utils import read_nerd, prov
 from nistoar.nerdm.constants import CORE_SCHEMA_URI
 from nistoar.pdr.utils.validate import ALL, REQ, WARN
+from nistoar.pdr import def_etc_dir
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_mds3.")
 loghdlr = None
@@ -31,27 +32,30 @@ def tearDownModule():
     tmpdir.cleanup()
 
 nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
+# nistr.set_prop("userName", "Joe")
+# nistr.set_prop("userLastName", "NIST")
+# nistr.set_prop("email", "joe.nist@nist.gov")
 
 # test records
 testdir = pathlib.Path(__file__).parents[0]
 pdr2210 = testdir.parents[2] / 'pdr' / 'describe' / 'data' / 'pdr2210.json'
 ncnrexp0 = testdir.parents[2] / 'pdr' / 'publish' / 'data' / 'ncnrexp0.json'
+basedir = testdir.parents[5]
+modeldir = basedir / 'metadata' / 'model'
 
 class TestMDS3DAPService(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mdsy"
-                },
-                "default": {
-                    "default_shoulder": "mdsy"
-                }
-            },
             "dbio": {
-                "allowed_project_shoulders": ["mdsy", "spc1"],
-                "default_shoulder": "mdsy",
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "midas": "mdsy"
+                    },
+                    "allowed_shoulders": {
+                        "midas": ["mds2"]
+                    }
+                }
             },
             "assign_doi": "always",
             "doi_naan": "10.88888",
@@ -64,7 +68,9 @@ class TestMDS3DAPService(test.TestCase):
                 "@type": "org:Organization",
                 "@id": mds3.NIST_ROR,
                 "title": "NIST"
-            }
+            },
+            "taxonomy_dir": modeldir
+#            "taxonomy_dir": os.environ.get('OAR_ETC_DIR', def_etc_dir)
         }
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdsy": 2 }})
 
@@ -203,6 +209,47 @@ class TestMDS3DAPService(test.TestCase):
                                                      "hasEmail": "mailto:gurn@thejerk.org"})
         self.assertTrue(isinstance(prec.data.get('responsibleOrganization'), list))
         self.assertEqual(prec.data['responsibleOrganization'][0], 'NIST')
+
+    def test_create_record_withdbid(self):
+        self.create_service()
+        self.assertTrue(not self.svc.dbcli.name_exists("gurn"))
+
+        with self.assertRaises(mds3.NotAuthorized):
+            self.svc.create_record("goob", {"title": "test"},
+                                   {"creatorIsContact": "TRUE",
+                                    "softwareLink": "https://github.com/usnistgov/goob" },
+                                   dbid="mds2:1492")
+
+        self.svc.dbcli._cfg["project_id_minting"]["localid_providers"] = {
+            self.svc.dbcli._who.agent_class: ["mds2"]
+        }
+        self.assertEqual(self.svc.dbcli._cfg["project_id_minting"]["localid_providers"].get("midas"), ["mds2"])
+
+        self.svc.dbcli._cfg['superusers'] = ["nstr1"]
+        prec = self.svc.create_record("goob", {"title": "test"},
+                                      {"creatorIsContact": "TRUE", "foruser": "ava1",
+                                       "softwareLink": "https://github.com/usnistgov/goob" },
+                                      "mds2:1492")
+        self.assertEqual(prec.name, "goob")
+        self.assertEqual(prec.id, "mds2:1492")
+        self.assertEqual(prec.owner, "ava1")
+        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
+                                     "softwareLink": "https://github.com/usnistgov/goob",
+                                     "agent_vehicle": "midas" })
+        self.assertEqual(prec.data['doi'], "doi:10.88888/mds2-1492")
+        self.assertEqual(prec.data['@id'], "ark:/88434/mds2-1492")
+        self.assertEqual(prec.data['nonfile_count'], 1)
+        self.assertIn('contactPoint', prec.data)
+        self.assertTrue(isinstance(prec.data.get('responsibleOrganization'), list))
+        self.assertEqual(prec.data['responsibleOrganization'][0], 'NIST')
+        nerd = self.svc._store.open(prec.id)
+        resmd = nerd.get_res_data()
+        links = nerd.nonfiles
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links.get(0)['accessURL'], prec.meta['softwareLink'])
+        self.assertTrue(isinstance(resmd.get('responsibleOrganization'), list))
+        self.assertEqual(len(resmd['responsibleOrganization']), 1)
+        self.assertEqual(resmd['responsibleOrganization'][0]['title'], 'NIST')
     
     def test_moderate_restype(self):
         self.create_service()
@@ -330,6 +377,178 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(self.svc._moderate_description(["goober", 5], doval=False), ["goober", 5])
         self.assertEqual(self.svc._moderate_description(["goober", "", "gurn"]), ["goober", "gurn"])
 
+    def test_moderate_topic_item(self):
+        self.create_service()
+
+        # no usable data
+        self.assertEqual(self.svc._moderate_topic_item({"goober": "gurn"}, {}, False), {})
+        with self.assertRaises(mds3.InvalidUpdate):
+            self.svc._moderate_topic_item({"goober": "gurn"}, {})
+
+        # unrecognized term URI
+        self.assertEqual(self.svc._moderate_topic_item({"@id": "http://goober/gurn"}, {}, False),
+                         {"@id": "http://goober/gurn", "@type": "Concept"})
+        with self.assertRaises(mds3.InvalidUpdate):
+            self.svc._moderate_topic_item({"@id": "http://goober/gurn"}, {})
+
+        # unrecognized scheme
+        self.assertEqual(self.svc._moderate_topic_item({"@id": "http://goober/gurn", "scheme":"http://goober/"},
+                                                  {}, False),
+                         {"@id": "http://goober/gurn", "scheme":"http://goober/", "@type": "Concept"})
+        with self.assertRaises(mds3.InvalidUpdate):
+            self.svc._moderate_topic_item({"@id": "http://goober/gurn", "scheme":"http://goober/"}, {})
+
+        # unrecognized tag
+        self.assertEqual(self.svc._moderate_topic_item({"@id": mds3.NIST_THEMES+"goober:%20gurn"}, {}, False),
+                         {"@id": mds3.NIST_THEMES+"goober:%20gurn", "@type": "Concept",
+                          "scheme": mds3.NIST_THEMES.rstrip('#'), "tag": "goober: gurn", })
+        taxon = {}
+        self.assertFalse(taxon)
+        with self.assertRaises(mds3.InvalidUpdate):
+            self.svc._moderate_topic_item({"@id": mds3.NIST_THEMES+"goober"}, taxon)
+        self.assertIn(mds3.NIST_THEMES.rstrip('#'), taxon)
+
+        # missing tag
+        self.assertEqual(self.svc._moderate_topic_item({"scheme": mds3.NIST_THEMES.rstrip('#')}, {}, False), {})
+        with self.assertRaises(mds3.InvalidUpdate):
+            self.svc._moderate_topic_item({"scheme": mds3.NIST_THEMES.rstrip('#')}, {})
+
+        # recognized id
+        self.assertEqual(self.svc._moderate_topic_item(
+            {"@id": mds3.NIST_THEMES+"Chemistry:%20Thermochemical%20properties"}, {}),
+            {"@id": mds3.NIST_THEMES+"Chemistry:%20Thermochemical%20properties",
+             "scheme": mds3.NIST_THEMES.rstrip('#'), "tag": "Chemistry: Thermochemical properties",
+             "@type": "Concept"}
+        )
+
+        # normal
+        taxon = {}
+        self.assertEqual(self.svc._moderate_topic_item(
+            {"scheme": mds3.NIST_THEMES.rstrip('#'), "tag": "Chemistry: Thermochemical properties"}, taxon),
+            {"scheme": mds3.NIST_THEMES.rstrip('#'), "tag": "Chemistry: Thermochemical properties",
+             "@type": "Concept"}                         
+        )
+        self.assertIn(mds3.NIST_THEMES.rstrip('#'), taxon)
+
+    def test_moderate_topic(self):
+        self.create_service()
+
+        self.assertEqual(self.svc._moderate_topic(None, {}), [])
+        self.assertEqual(self.svc._moderate_topic([], {}), [])
+        self.assertEqual(self.svc._moderate_topic([{}], {}, False), [])
+        with self.assertRaises(mds3.InvalidUpdate):
+            self.svc._moderate_topic([{}], {})
+        with self.assertRaises(mds3.InvalidUpdate):
+            self.svc._moderate_topic({}, {}, False)
+        with self.assertRaises(mds3.InvalidUpdate):
+            self.svc._moderate_topic("Statistics", {})
+        with self.assertRaises(mds3.InvalidUpdate):
+            self.svc._moderate_topic(["Statistics"], {})
+
+        intp = [
+            {"@id": mds3.NIST_THEMES+"Chemistry:%20Thermochemical%20properties"},
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"}
+        ]
+        out = self.svc._moderate_topic(intp, {})
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+
+        # insert an item that's already in there
+        intp = [
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"}
+        ]
+        out = self.svc._moderate_topic(intp, {'topic': out}, replace=False)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+
+        # insert an items that're not already in there
+        intp = [
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics"},
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"},
+            {"scheme": mds3.NIST_THEMES.rstrip('#'), "tag": "Bioscience"}
+        ]
+        out = self.svc._moderate_topic(intp, {'topic': out}, replace=False)
+        self.assertEqual(len(out), 4)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[2]['tag'], "Statistics")
+        self.assertEqual(out[2]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[3]['tag'], "Bioscience")
+        self.assertEqual(out[3]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+
+        # replace the topics
+        out = self.svc._moderate_topic(intp, {'topic': out}, replace=True)
+        self.assertEqual(len(out), 3)
+        self.assertEqual(out[0]['tag'], "Statistics")
+        self.assertEqual(out[0]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[2]['tag'], "Bioscience")
+        self.assertEqual(out[2]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        
+        out = self.svc._moderate_topic([], {'topic': out}, replace=True)
+        self.assertEqual(len(out), 0)
+        
+    def test_update_replace_topics(self):
+        rec = read_nerd(pdr2210)
+        self.assertFalse(rec.get('topic'))
+        self.create_service()
+        prec = self.svc.create_record("goob")
+        nerd = self.svc.get_nerdm_data(prec.id)
+        self.assertFalse(nerd.get('topic'))
+
+        intp = [
+            {"@id": mds3.NIST_THEMES+"Chemistry:%20Thermochemical%20properties"},
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"}
+        ]
+        self.svc.update_data(prec.id, intp, "topic")
+        nerd = self.svc.get_nerdm_data(prec.id)
+        out = nerd.get('topic')
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        
+        # insert topics that're not already in there
+        intp = [
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics"},
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"},
+            {"scheme": mds3.NIST_THEMES.rstrip('#'), "tag": "Bioscience"}
+        ]
+        self.svc.update_data(prec.id, intp, "topic")
+        nerd = self.svc.get_nerdm_data(prec.id)
+        out = nerd.get('topic')
+        self.assertEqual(len(out), 4)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[2]['tag'], "Statistics")
+        self.assertEqual(out[2]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[3]['tag'], "Bioscience")
+        self.assertEqual(out[3]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+
+        # replace topics
+        self.svc.replace_data(prec.id, intp, "topic")
+        nerd = self.svc.get_nerdm_data(prec.id)
+        out = nerd.get('topic')
+        self.assertEqual(len(out), 3)
+        self.assertEqual(out[0]['tag'], "Statistics")
+        self.assertEqual(out[0]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[2]['tag'], "Bioscience")
+        self.assertEqual(out[2]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+
     def test_moderate_contact(self):
         self.create_service()
 
@@ -398,6 +617,9 @@ class TestMDS3DAPService(test.TestCase):
                 "fn": "Edgar Allen Poe",
                 "hasEmail": "eap@dead.com"
             },
+            "topic": [
+                {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"}
+            ]
         }
         try:
             res = self.svc._moderate_res_data(upd, res, nerd)
@@ -410,6 +632,10 @@ class TestMDS3DAPService(test.TestCase):
         self.assertIn("contactPoint", res)
         self.assertEqual(res.get("contactPoint",{}).get("hasEmail"), "mailto:eap@dead.com")
         self.assertEqual(res.get("contactPoint",{}).get("@type"), "vcard:Contact")
+        self.assertIn("topic", res)
+        self.assertEqual(len(res.get("topic", [])), 1)
+        self.assertEqual(res["topic"][0].get("@type"), "Concept")
+        self.assertEqual(res["topic"][0].get("tag"), "Statistics: Uncertainty")
             
 
     def test_moderate_author(self):
@@ -930,7 +1156,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(set(nerd.keys()),
                          {"_schema", "@id", "doi", "_extensionSchemas", "@context", "@type",
                           "responsibleOrganization"})
-        
+
 
     def test_update(self):
         rec = read_nerd(pdr2210)

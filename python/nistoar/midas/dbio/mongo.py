@@ -67,6 +67,14 @@ class MongoDBClient(base.DBClient):
                 self._mngocli = None
                 self._native = None
 
+    def free(self):
+        """
+        free up resources used by this client.  
+
+        This implementation calls :py:meth:`disconnect`.
+        """
+        self.disconnect()
+
     @property
     def native(self):
         """

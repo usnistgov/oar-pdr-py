@@ -252,6 +252,15 @@ class Handler(object):
         status = "{0} {1}".format(str(self._code), self._msg)
         self._start(status, self._hdr.items(), None)
 
+    def free(self):
+        """
+        free up resources used by this handler.  
+
+        This method is called automatically after :py:meth:`handle` completes.  The default implementation
+        does nothing.  
+        """
+        pass
+
     def handle(self):
         """
         handle the request encapsulated in this Handler (at construction time).  
@@ -268,20 +277,23 @@ class Handler(object):
         
         meth_handler = 'do_'+meth
 
-        if not self.preauthorize():
-            return self.send_unauthorized()
+        try: 
+            if not self.preauthorize():
+                return self.send_unauthorized()
 
-        try:
-            if hasattr(self, meth_handler):
-                return getattr(self, meth_handler)(self._path)
-            elif self._meth == "HEAD":
-                return self.do_GET(self._path, ashead=True)
-            else:
-                return self.send_error(405, self._meth + " not supported on this resource")
-        except Exception as ex:
-            if self.log:
-                self.log.exception("Unexpected failure: "+str(ex))
-            return self.send_error(500, "Server failure")
+            try:
+                if hasattr(self, meth_handler):
+                    return getattr(self, meth_handler)(self._path)
+                elif self._meth == "HEAD":
+                    return self.do_GET(self._path, ashead=True)
+                else:
+                    return self.send_error(405, self._meth + " not supported on this resource")
+            except Exception as ex:
+                if self.log:
+                    self.log.exception("Unexpected failure: "+str(ex))
+                return self.send_error(500, "Server failure")
+        finally:
+            self.free()    
 
     def preauthorize(self):
         """

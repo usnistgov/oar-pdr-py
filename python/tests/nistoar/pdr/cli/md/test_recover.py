@@ -1,7 +1,7 @@
 import os, sys, logging, argparse, pdb, imp, time, json, shutil, tempfile
 import unittest as test
 
-from nistoar.pdr import cli
+from nistoar.pdr.utils import cli
 from nistoar.pdr.cli.md import recover
 from nistoar.pdr.exceptions import PDRException, ConfigurationException
 from nistoar.pdr import config as cfgmod
@@ -11,7 +11,7 @@ class TestRecoverCmd(test.TestCase):
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory(prefix="_test_recover")
-        self.cmd = cli.PDRCLI()
+        self.cmd = cli.CLISuite("test")
         self.cmd.load_subcommand(recover)
 
     def tearDown(self):
@@ -55,15 +55,15 @@ class TestRecoverCmd(test.TestCase):
         self.assertEqual(args.rmmbase, "https://oardev.nist.gov/rmm/")
 
         args = self.cmd.parse_args("recover -d . -U /goober/gurn pdr2222 ALL mds2-88888".split())
-        with self.assertRaises(cli.PDRCommandFailure):
+        with self.assertRaises(cli.CommandFailure):
             recover._process_args(args, {"nist_pdr_base": "https://testdata.nist.gov/"}, "recover")
         
         args = self.cmd.parse_args("recover -d . -R ftp://oardev.nist.gov/ pdr2222 ALL mds2-88888".split())
-        with self.assertRaises(cli.PDRCommandFailure):
+        with self.assertRaises(cli.CommandFailure):
             recover._process_args(args, {"nist_pdr_base": "https://testdata.nist.gov/"}, "recover")
 
         args = self.cmd.parse_args("recover".split())
-        with self.assertRaises(cli.PDRCommandFailure):
+        with self.assertRaises(cli.CommandFailure):
             recover._process_args(args, {"nist_pdr_base": "https://testdata.nist.gov/"}, "recover")
 
         idfile = os.path.join(str(self.tmpdir.name), "aipids.txt")

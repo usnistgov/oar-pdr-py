@@ -46,34 +46,17 @@ class ProjectService(MIDASSystem):
     to a particular user at construction time (as given by a :py:class:`~nistoar.pdr.utils.Agent`
     instance); thus, requests to this service are subject to internal Authorization checks.
 
-    This base service supports three parameters, ``dbio``, ``default_perms``, and ``clients``.  The 
-    optional ``dbio`` parameter will be passed to the :py:class:`~nistoar.midas.dbio.base.DBClientFactory`'s 
-    ``create_client()`` function to create the :py:class:`~nistoar.midas.dbio.base.DBClient`. 
+    This base service supports two parameters: ``dbio`` and ``default_perms``.  The ``dbio``
+    parameter will be passed to the :py:class:`~nistoar.midas.dbio.base.DBClientFactory`'s 
+    ``create_client()`` function to create the :py:class:`~nistoar.midas.dbio.base.DBClient`.  In 
+    principle, the ``dbio`` parameter is optional; however, this is usually where required 
+    :ref:`restrictions on ID minting<ref-id-minting>` are included.
 
     The optional ``default_perms`` is an object that sets the ACLs for newly created project records.  
     Its optional properties name the permisson types that defaults are to be set for, including "read", 
     "write", "admin", and "delete" but can also include other (non-standard) category names.  Each 
     property is a list of user identifiers that the should be given the particular type of permission.
     Typically, only virtual group identifiers (like "grp0:public") make sense.
-
-    The ``clients`` parameter is an object that places restrictions on the 
-    creation of records based on which group the user is part of.  The keys of the object
-    are user group names that are authorized to use this service, and whose values are themselves objects
-    that restrict the requests by that user group; for example:
-
-    .. code-block::
-
-       "clients": {
-           "midas": {
-               "default_shoulder": "mdm1"
-           },
-           "default": {
-               "default_shoulder": "mdm0"
-           }
-       }
-
-    The special group name "default" will (if present) be applied to users whose group does not match
-    any of the other names.  If not present the user will not be allowed to create new records.  
 
     This implementation only supports one parameter as part of the group configuration: ``default_shoulder``.
     This parameter gives the identifier shoulder that should be used the identifier for a new record 
@@ -105,14 +88,10 @@ class ProjectService(MIDASSystem):
 
         # set configuration, check values
         self.cfg = config
-        for param in "clients default_perms".split():
+        for param in "default_perms".split():
             if not isinstance(self.cfg.get(param,{}), Mapping):
                 raise ConfigurationException("%s: value is not a object as required: %s" %
                                              (param, type(self.cfg.get(param))))
-        for param,val in self.cfg.get('clients',{}).items():
-            if not isinstance(val, Mapping):
-                raise ConfigurationException("clients.%s: value is not a object as required: %s" %
-                                             (param, repr(val)))
         for param,val in self.cfg.get('default_perms',{}).items():
             if not isinstance(val, list) or not all(isinstance(p, str) for p in val):
                 raise ConfigurationException(
@@ -127,8 +106,7 @@ class ProjectService(MIDASSystem):
             log = getLogger(self.system_abbrev).getChild(self.subsystem_abbrev).getChild(project_type)
         self.log = log
 
-        user = who.actor if who else None
-        self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), user)
+        self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), self.who)
         if not self.dbcli.people_service:
             self.log.warning("No people service available for %s service", project_type)
 
@@ -139,17 +117,44 @@ class ProjectService(MIDASSystem):
         """
         return self.who
 
-    def create_record(self, name, data=None, meta=None) -> ProjectRecord:
+    def exists(self, id) -> bool:
+        """
+        return True if there exists a project record (of the type this service is configured for) 
+        with the given identifier.  
+
+        This implementation simply delegates the question to the internal DBClient instance.  
+        """
+        return self.dbcli.exists(id)
+
+    def create_record(self, name, data=None, meta=None, dbid: str=None) -> ProjectRecord:
         """
         create a new project record with the given name.  An ID will be assigned to the new record.
         :param str  name:  the mnuemonic name to assign to the record.  This name cannot match that
                            of any other record owned by the user. 
         :param dict data:  the initial data content to assign to the new record.  
         :param dict meta:  the initial metadata to assign to the new record.  
-        :raises NotAuthorized:  if the authenticated user is not authorized to create a record
-        :raises AlreadyExists:  if a record owned by the user already exists with the given name
+        :param str  dbid:  a requested identifier or ID shoulder to assign to the record; if the 
+                           value does not include a colon (``:``), it will be interpreted as the
+                           desired shoulder that will be attached an internally minted local 
+                           identifier; otherwise, the value will be taken as a full identifier. 
+                           If not provided (default), an identifier will be minted using the 
+                           default shoulder.
+        :raises NotAuthorized:  if the authenticated user is not authorized to create a record, or 
+                                when ``dbid`` is provided, the user is not authorized to create a 
+                                record with the specified shoulder or ID.
+        :raises AlreadyExists:  if a record owned by the user already exists with the given name or
+                                the given ``dbid``.
         """
-        shoulder = self._get_id_shoulder(self.who)
+        localid = None
+        shoulder = None
+        if dbid:
+            if ':' not in dbid:
+                # interpret dbid to be a requested shoulder
+                shoulder = dbid
+            else:
+                shoulder, localid = dbid.split(':', 1)
+        else:
+            shoulder = self._get_id_shoulder(self.who, meta)  # may return None (DBClient will set it)
 
         foruser = None
         if meta and meta.get("foruser"):
@@ -165,8 +170,9 @@ class ProjectService(MIDASSystem):
             # foruser = None
             self.log.warning("A new record requested for an anonymous user")
 
-        prec = self.dbcli.create_record(name, shoulder)
+        prec = self.dbcli.create_record(name, shoulder, localid=localid)
         self._set_default_perms(prec.acls)
+        shoulder = prec.id.split(':', 1)[0]
 
         prec.status._data["created_by"] = self.who.id  # don't do this: violates encapsulation
         if foruser:
@@ -210,7 +216,7 @@ class ProjectService(MIDASSystem):
         # TODO:  handling previously published records
         raise NotImplementedError()
 
-    def reassign_record(self, id, recipient: str):
+    def reassign_record(self, id, recipient: str, disown: bool=False):
         """
         reassign ownership of the record with the given recepient ID.  This is a wrapper around 
         :py:class:`~nistoar.midas.dbio.base.ProjectRecord`.reassign() that also logs the change.
@@ -228,7 +234,7 @@ class ProjectService(MIDASSystem):
         message = "from %s to %s" % (prec.owner, recipient)
         try:
             self.log.info("Reassigning ownership of %s %s", id, message)
-            prec.reassign(recipient)
+            prec.reassign(recipient, disown)
             prec.save()
             self._record_action(Action(Action.COMMENT, prec.id, self.who,
                                        f"Reassigned ownership {message}"))
@@ -268,27 +274,16 @@ class ProjectService(MIDASSystem):
             self.log.error("Failed to rename record %s to %s: %s", id, newname, str(ex))
             raise
 
-    def _get_id_shoulder(self, user: Agent):
+    def _get_id_shoulder(self, user: Agent, meta: Mapping):
         """
-        return an ID shoulder that is appropriate for the given user agent
-        :param Agent user:  the user agent that is creating a record, requiring a shoulder
-        :raises NotAuthorized: if an authorized shoulder appropriate for the user cannot be determined.
-        """
-        out = None
-        client_ctl = self.cfg.get('clients', {}).get(user.agent_class)
-        if client_ctl is None:
-            client_ctl = self.cfg.get('clients', {}).get("default")
-        if client_ctl is None:
-            self.log.debug("Unrecognized client group, %s", user.agent_class)
-            raise NotAuthorized(user.actor, "create record",
-                                "Client group, %s, not recognized" % user.agent_class)
+        return an ID shoulder that is appropriate for the given user agent and meta constraints.
 
-        out = client_ctl.get('default_shoulder')
-        if not out:
-            self.log.info("No default ID shoulder configured for client group, %s", user.agent_class)
-            raise NotAuthorized(user.actor, "create record",
-                                "No default shoulder defined for client group, "+user.agent_class)
-        return out
+        If None is returned, the shoulder should be determined by the DBClient.  This implementation
+        always returns None.
+        :param Agent user:  the user agent that is creating a record, requiring a shoulder
+        :param dict  meta:  the meta datas provided when creating record
+        """
+        return None
 
     def get_record(self, id) -> ProjectRecord:
         """
@@ -520,6 +515,7 @@ class ProjectService(MIDASSystem):
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
                              the given `newdata` is a value that should be set to the property pointed 
                              to by `part`.  
+        :param str message:  an optional message that will be recorded as an explanation of the replacement.
         :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to `id`.
                              If this is not provided, the record will by fetched anew based on the `id`.  
         :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
@@ -888,7 +884,7 @@ class ProjectService(MIDASSystem):
         (based on its form), it is returned unchanged.  
         """
         naan = self.cfg.get('ark_naan', ARK_NAAN)
-        m = re.match('^(\w+):([\w\-\/]+)$', recid)
+        m = re.match(r'^(\w+):([\w\-\/]+)$', recid)
         if m:
             return "ark:/%s/%s-%s" % (naan, m.group(1), m.group(2))
         return recid
@@ -963,7 +959,6 @@ class ProjectService(MIDASSystem):
         self.log.info("Submitted %s record %s (%s) for %s",
                       self.dbcli.project, _prec.id, _prec.name, self.who)
         return stat.clone()
-            
 
     def _submit(self, prec: ProjectRecord) -> str:
         """
@@ -983,7 +978,16 @@ class ProjectService(MIDASSystem):
         """
         pass
         
+    def free(self):
+        """
+        free up resources used by this service.  
 
+        The client of this service can call this method when it is finished using it.  The implementation
+        should *not* disable the service, making the instance unusable for further use; it should just free
+        up resources as possible.  This implementation calls the ``free()`` function on the underlying 
+        :py:class:`~nistoar.midas.dbio.base.DBClient` instance.
+        """
+        self.dbcli.free()
                     
 
 class ProjectServiceFactory:

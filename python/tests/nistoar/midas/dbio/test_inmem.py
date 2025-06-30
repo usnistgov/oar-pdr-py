@@ -49,11 +49,13 @@ class TestInMemoryDBClientFactory(test.TestCase):
         self.assertIsNone(self.fact._notifier)
 
     def test_create_client(self):
-        cli = self.fact.create_client(base.DMP_PROJECTS, {}, "ava1")
+        avauser = Agent("dbio", Agent.AUTO, "ava1", "test")
+        cli = self.fact.create_client(base.DMP_PROJECTS, {}, avauser)
         self.assertEqual(cli._db, self.fact._db)
         self.assertEqual(cli._cfg, self.fact._cfg)
         self.assertEqual(cli._projcoll, base.DMP_PROJECTS)
-        self.assertEqual(cli._who, "ava1")
+        self.assertEqual(cli.user_id, "ava1")
+        self.assertTrue(isinstance(cli._who, Agent))
         self.assertIsNone(cli._whogrps)
         self.assertIs(cli._native, self.fact._db)
         self.assertIsNotNone(cli._dbgroups)
@@ -66,10 +68,17 @@ class TestInMemoryDBClientFactory(test.TestCase):
 class TestInMemoryDBClient(test.TestCase):
 
     def setUp(self):
-        self.cfg = {"default_shoulder": "mds3"}
+        self.cfg = {
+            "project_id_minting": {
+                "default_shoulder": {
+                    "public": "pdr0"
+                }
+            }
+        }
         self.user = "nist0:ava1"
+        self.agent = Agent("dbio", Agent.AUTO, self.user, "test")
         self.cli = inmem.InMemoryDBClientFactory({}).create_client(
-            base.DMP_PROJECTS, self.cfg, self.user)
+            base.DMP_PROJECTS, self.cfg, self.agent)
         self.received_messages = []
 
     async def mock_websocket_server(self, websocket):
@@ -481,9 +490,9 @@ class TestInMemoryDBClient(test.TestCase):
 
     def test_record_action(self):
         rec = self.cli.create_record("mine1")
-        self.cli.record_action(Action(Action.CREATE, "mds3:0001", testuser, "created"))
-        self.cli.record_action(Action(Action.COMMENT, "mds3:0001", testuser, "i'm hungry"))
-        acts = self.cli._select_actions_for("mds3:0001")
+        self.cli.record_action(Action(Action.CREATE, "pdr0:0001", testuser, "created"))
+        self.cli.record_action(Action(Action.COMMENT, "pdr0:0001", testuser, "i'm hungry"))
+        acts = self.cli._select_actions_for("pdr0:0001")
         self.assertEqual(len(acts), 2)
         self.assertEqual(acts[0]['type'], Action.CREATE)
         self.assertEqual(acts[1]['type'], Action.COMMENT)

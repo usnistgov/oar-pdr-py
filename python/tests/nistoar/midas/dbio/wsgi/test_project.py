@@ -53,18 +53,17 @@ class TestMIDASProjectApp(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mdm1"
-                },
-                "default": {
-                    "default_shoulder": "mdm0"
-                }
-            },
             "dbio": {
                 "superusers": [ "rlp" ],
-                "allowed_project_shoulders": ["mdm1", "spc1"],
-                "default_shoulder": "mdm0"
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "midas": "mdm1",
+                        "public": "mdm0"
+                    },
+                    "allowed_shoulders": {
+                        "midas": ["mdm1"]
+                    }
+                }
             },
             "include_headers": {
                 "Access-Control-Allow-Origin": "*"
@@ -78,7 +77,7 @@ class TestMIDASProjectApp(test.TestCase):
         self.rootpath = "/midas/dmp/"
 
     def create_record(self, name="goob", meta=None):
-        cli = self.dbfact.create_client(base.DMP_PROJECTS, self.cfg["dbio"], nistr.actor)
+        cli = self.dbfact.create_client(base.DMP_PROJECTS, self.cfg["dbio"], nistr)
         out = cli.create_record(name, "mdm1")
         if meta:
             out.meta = meta

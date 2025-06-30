@@ -10,7 +10,7 @@ from nistoar.pdr.distrib import DistribServerError, DistribResourceNotFound
 from nistoar.pdr.constants import ARK_PFX_PAT
 from nistoar.pdr import config as cfgmod
 from ._comm import define_comm_trans_opts, process_svcep_args, define_comm_md_opts
-from ._comm import _get_record_for_cmd, _write_record_for_cmd, PDRCommandFailure
+from ._comm import _get_record_for_cmd, _write_record_for_cmd, CommandFailure
 
 _ark_pfx_re = re.compile(ARK_PFX_PAT)
 
@@ -70,7 +70,7 @@ def execute(args, config=None, log=None):
 
     _process_args(args, config, cmd, log)
 
-    # may raise PDRCommandFailure
+    # may raise CommandFailure
     rec = _get_record_for_cmd(args, cmd, config, log)
 
     defver = "1.0.0"
@@ -87,7 +87,7 @@ def execute(args, config=None, log=None):
         # write out as three files under a root directory
         _write_split_files(rec, args.outfile, args, cmd, config, log)
         
-        # raise PDRCommandFailure(cmd, "3-file output not yet implemented", 2)
+        # raise CommandFailure(cmd, "3-file output not yet implemented", 2)
     else:
         # write out as a single file
         if args.outbase and not args.outfile:
@@ -98,7 +98,7 @@ def execute(args, config=None, log=None):
                     args.outfile += "-v" + ver
             args.outfile += ".json"
             if os.path.exists(args.outfile):
-                raise PDRCommandFailure(cmd, "%s: already exists (won't overwrite)" % args.outfile)
+                raise CommandFailure(cmd, "%s: already exists (won't overwrite)" % args.outfile)
         _write_record_for_cmd(rec, args, cmd, config, log)
 
 def _process_args(args, config, cmd, log):
@@ -108,8 +108,8 @@ def _process_args(args, config, cmd, log):
 
 def _write_split_files(rec, rootdir, args, cmd, config, log):
     if not os.path.isdir(rootdir):
-        raise PDRCommandFailure(cmd, "Failed to write data to %s: does not exist as a directory" %
-                                rootdir)
+        raise CommandFailure(cmd, "Failed to write data to %s: does not exist as a directory" %
+                             rootdir)
 
     basen = args.outbase
     if not basen:
@@ -123,7 +123,7 @@ def _write_split_files(rec, rootdir, args, cmd, config, log):
             try:
                 os.mkdir(odir)
             except OSError as ex:
-                raise PDRCommandFailure(cmd, "%s: unable to create as dir: %s" % (odir, str(ex)))
+                raise CommandFailure(cmd, "%s: unable to create as dir: %s" % (odir, str(ex)))
 
         ofile = basen
         if part == "version" and rec['version'].get('version'):
@@ -139,10 +139,10 @@ def _write_split_files(rec, rootdir, args, cmd, config, log):
                 with open(ofile) as fd:
                     oldrec = json.load(fd)
             except Exception:
-                raise PDRCommandFailure(
+                raise CommandFailure(
                     cmd, "%s: file already exists with unexpected content (won't overwrite)")
             if 'releaseSet' in oldrec or 'record'in oldrec or 'title' not in oldrec:
-                raise PDRCommandFailure(
+                raise CommandFailure(
                     cmd, "%s: file already exists with unexpected content (won't overwrite)")
             if part != "version" and 'version' in oldrec and \
                nerdmutils.cmp_versions(oldrec['version'], rec[part].get('version', '1.0.0')) > 0:
@@ -156,5 +156,5 @@ def _write_split_files(rec, rootdir, args, cmd, config, log):
             with open(ofile, 'w') as fd:
                 json.dump(rec[part], fd, indent=4, separators=(',', ': '))
         except OSError as ex:
-            raise PDRCommandFailure(cmd, "Failed to write data to %s: %s" % (ofile, str(ex)))
+            raise CommandFailure(cmd, "Failed to write data to %s: %s" % (ofile, str(ex)))
 
