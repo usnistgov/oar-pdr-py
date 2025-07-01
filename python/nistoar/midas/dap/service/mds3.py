@@ -928,6 +928,8 @@ class DAPService(ProjectService):
             out["contactPoint"] = resmd["contactPoint"]
         if 'landingPage' in resmd:
             out["landingPage"] = resmd["landingPage"]
+        if 'version' in resmd:
+            out["version"] = resmd["version"]
         out["keywords"] = resmd.get("keyword", [])
         out["theme"] = list(set(resmd.get("theme", []) + [t.get('tag') for t in resmd.get('topic', [])]))
         if resmd.get('responsibleOrganization'):
@@ -2449,11 +2451,14 @@ class DAPService(ProjectService):
         resmd["version"] = ver
         nerd.replace_res_data(resmd)
 
-    def _submit(self, prec: ProjectRecord) -> str:
+    def _submit(self, prec: ProjectRecord, options: Mapping=None) -> str:
         """
         Actually set the given record to the external review service (NPS) and update its status 
         accordingly.  
 
+        :param ProjectRecord prec:  the project record to submit
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the submission process.
         :returns:  the label indicating its post-editing state
                    :rtype: str
         :raises NotSubmitable:  if the finalization process produced an invalid record because the record 
@@ -2465,28 +2470,34 @@ class DAPService(ProjectService):
         """
         if not self._extrevcli:
             self.log.warning("No External Review system configured to handle DAP records!")
+            return prec.status.state   # state is unchanged
 
-        else:
-            try:
-                # reset permissions
-                self._set_review_permissions(prec)
-                
-            except FileManagerException as ex:
-                self.log.warning("Trouble updating file store permissions: %s", str(ex))
 
-            except Exception as ex:
-                self.exception("Trouble resetting permission for review: %s", str(ex))
-                
+        try:
+            # reset permissions
+            self._set_review_permissions(prec)
+            
+        except FileManagerException as ex:
+            self.log.warning("Trouble updating file store permissions: %s", str(ex))
 
-            try:
-                self._extrevcli.submit(prec.id, version, revsummary)
+        except Exception as ex:
+            self.exception("Trouble resetting permission for review: %s", str(ex))
 
-            except ExternalReviewClientException as ex:
-                # possibly notify
-                self.log.error("Failed to submit to external review system: %s", str(ex))
-            except Exception as ex:
-                # possibly notify
-                self.exception("Unexpected trouble submitting for review: %s", str(ex))
+        try:
+            version = self.prec.data.get('version') or '1.0.0'
+            opts = dict(options) if options else {}
+            options["title"] = prec.data.get("title")
+            options["description"] = "\n\n".join(prec.data.get("description"))
+            if prec.meta.get("software_included"):
+                options["security_review"] = True
+            self._extrevcli.submit(prec.id, self.who.actor, version, **options)
+
+        except ExternalReviewClientException as ex:
+            # possibly notify
+            self.log.error("Failed to submit to external review system: %s", str(ex))
+        except Exception as ex:
+            # possibly notify
+            self.exception("Unexpected trouble submitting for review: %s", str(ex))
                 
 
     def _set_review_permissions(self, prec: ProjectRecord, readers: List[str]=None):

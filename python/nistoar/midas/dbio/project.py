@@ -939,6 +939,7 @@ class ProjectService(MIDASSystem):
     MAJOR_VERSION_LEV = 0
     MINOR_VERSION_LEV = 1
     TRIVIAL_VERSION_LEV = 2
+    NO_VERSION_LEV = 3
 
     def _apply_final_updates(self, prec: ProjectRecord, vers_inc_lev: int=None):
         # update the data content
@@ -985,12 +986,13 @@ class ProjectService(MIDASSystem):
             # assess the state of the revision to determine proper level
             vers_inc_lev = self.MINOR_VERSION_LEV
 
-        vers = OARVersion(prec.data.setdefault('@version', "1.0.0"))
-        if vers.is_draft():
-            vers.drop_suffix().increment_field(vers_inc_lev)
-            prec.date['@version'] = str(vers)
+        if vers_inc_lev != self.NO_VERSION_LEV:
+            vers = OARVersion(prec.data.setdefault('@version', "1.0.0"))
+            if vers.is_draft():
+                vers.drop_suffix().increment_field(vers_inc_lev)
+                prec.date['@version'] = str(vers)
 
-        return prec.data['@version']
+        return prec.data.get('@version', '0+')
 
     def _finalize_id(self, prec):
         """
@@ -1032,13 +1034,16 @@ class ProjectService(MIDASSystem):
         # Note: we'll need to expand the checks applied; just do a review for now
         return self.review(prec.id, REQ&WARN, prec)
 
-    def submit(self, id: str, message: str=None, _prec=None) -> status.RecordStatus:
+    def submit(self, id: str, message: str=None, _prec=None, options: Mapping=None) -> status.RecordStatus:
         """
         finalize (via :py:meth:`finalize`) the record and submit it for publishing.  After a successful 
         submission, it may not be possible to edit or revise the record until the submission process 
-        has been completed.  The record must be in the "edit" state prior to calling this method.
+        has been completed.  The record must be in the "edit" state or the "ready" state (i.e. having 
+        already been finalized) prior to calling this method.
         :param str      id:  the identifier of the record to submit
         :param str message:  a message summarizing the updates to the record
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the submission process.
         :returns:  a Project status instance providing the post-submission status
                    :rtype: RecordStatus
         :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
@@ -1063,7 +1068,7 @@ class ProjectService(MIDASSystem):
         # this record is ready for submission.  Send the record to its post-editing destination,
         # and update its status accordingly.
         try:
-            poststat = self._submit(_prec)
+            poststat = self._submit(_prec, options)
 
         except InvalidRecord as ex:
             emsg = "submit process failed: "+str(ex)
@@ -1104,7 +1109,7 @@ class ProjectService(MIDASSystem):
             self.log.info("Final status: %s", poststat)
         return stat.clone()
 
-    def _submit(self, prec: ProjectRecord) -> str:
+    def _submit(self, prec: ProjectRecord, options: Mapping=None) -> str:
         """
         Actually send the given record to its post-editing destination and update its status 
         accordingly.
@@ -1114,6 +1119,9 @@ class ProjectService(MIDASSystem):
         default implementation will simply copy the data contents of the record to another 
         collection.
 
+        :param ProjectRecord prec:  the project record to submit
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the submission process.
         :returns:  the label indicating its post-editing state
                    :rtype: str
         :raises NotSubmitable:  if the finalization process produced an invalid record because the record 
@@ -1302,7 +1310,7 @@ class ProjectService(MIDASSystem):
         """
         self.dbcli.free()
                     
-    def _publish(self, prec: ProjectRecord):
+    def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None):
         """
         Actually launch the publishing process on the given record and update its state  
         accordingly.
