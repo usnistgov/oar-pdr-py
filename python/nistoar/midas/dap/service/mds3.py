@@ -2406,6 +2406,13 @@ class DAPService(ProjectService):
             self.validate_json(resmd)
         return resmd
 
+    def _apply_final_updates(self, prec: ProjectRecord, vers_inc_lev: int=None):
+        if prec.data.get('version') and vers_inc_lev is None:
+            # If version is set, then, by default, don't increment version during finalization;
+            # save it for submission time
+            vers_inc_lev = self.NO_VERSION_LEV
+        return super()._apply_final_updates(prec, vers_inc_lev)
+
     def _finalize_data(self, prec) -> Union[int,None]:
         """
         update the data content for the record in preparation for submission.
@@ -2472,6 +2479,17 @@ class DAPService(ProjectService):
             self.log.warning("No External Review system configured to handle DAP records!")
             return prec.status.state   # state is unchanged
 
+        version = prec.data.get('version') or prec.data.get('@version') or '1.0.0'
+        opts = dict(options) if options else {}
+
+        verinc = None
+        needreview = bool(set(opts.get("changes")) & set(["add_files", "remove_files", "change_major"]))
+        if needreview:
+            verinc = self.MINOR_VERSION_LEV
+        vers = self._finalize_version(prec, verinc)
+
+        if not needreview:
+            return self._publish(prec, vers, opts.get('purpose'))
 
         try:
             # reset permissions
@@ -2484,8 +2502,6 @@ class DAPService(ProjectService):
             self.exception("Trouble resetting permission for review: %s", str(ex))
 
         try:
-            version = self.prec.data.get('version') or '1.0.0'
-            opts = dict(options) if options else {}
             options["title"] = prec.data.get("title")
             options["description"] = "\n\n".join(prec.data.get("description"))
             if prec.meta.get("software_included"):
@@ -2599,6 +2615,16 @@ class DAPService(ProjectService):
             return True
         return False
 
+    def _revise(self, prec: ProjectRecord):
+        # restore data to nerdstore
+
+        # populate file space
+        
+        for vprop in ["version", "@version"]:
+            if not prec.data.get(vprop, "").endswith('+'):
+                prec.data[vprop] = prec.data.get(vprop, "") + "+"
+        return prec
+        
 
 class DAPServiceFactory(ProjectServiceFactory):
     """

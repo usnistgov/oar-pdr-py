@@ -875,7 +875,11 @@ class ProjectStatusHandler(ProjectRecordHandler):
     """
     handle status requests and actions
     """
-    _requestable_actions = [ ProjectService.STATUS_ACTION_FINALIZE, ProjectService.STATUS_ACTION_SUBMIT ]
+    _requestable_actions = [
+        ProjectService.STATUS_ACTION_FINALIZE,
+        ProjectService.STATUS_ACTION_SUBMIT,
+        ProjectService.STATUS_ACTION_REVISE
+    ]
 
     def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
                  who: Agent, id: str, datapath: str="", config: dict=None, log: Logger=None):
@@ -996,6 +1000,8 @@ class ProjectStatusHandler(ProjectRecordHandler):
                 stat = self.svc.finalize(self._id, message)
             elif action == 'submit':
                 stat = self.svc.submit(self._id, message, options)
+            elif action == 'revise':
+                stat = self.svc.revise(self._id, message, options)
             else:
                 return self.send_error_resp(400, "Unrecognized action",
                                             "Unrecognized action requested")
