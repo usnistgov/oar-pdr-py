@@ -78,7 +78,7 @@ class NPSExternalReviewClient(ExternalReviewClient):
 
     def select_review_reason(self, changes: List[str] = None, version: str = None) -> str:
         """
-        Return the string to use as the review reason.
+        Return the string to use as the review reason
         """
         if not changes:
             return self._review_reasons["NEWREC"]
