@@ -278,7 +278,8 @@ def get_nsd_auth_token(tscfg: Mapping):
     payload = {
         "grant_type": "client_credentials",
         "client_id": tscfg['client_id'],
-        "client_secret": tscfg['secret']
+        "client_secret": tscfg['secret'],
+        "audience": tscfg.get('audience', None)
     }
     hdrs = {
         "accept": "application/json",
