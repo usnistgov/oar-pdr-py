@@ -18,7 +18,7 @@ from importlib import import_module
 
 from nistoar.pdr.utils import cli
 from nistoar.pdr.utils.prov import Agent
-from nistoar.midas.cli.midasadm import get_agent
+from nistoar.midas.cli import get_agent
 from nistoar.base.config import ConfigurationException
 from nistoar.midas.dap.nerdstore import NERDResourceStorageFactory
 from nistoar.midas.dbio import FSBasedDBClientFactory, MongoDBClientFactory, InMemoryDBClientFactory
