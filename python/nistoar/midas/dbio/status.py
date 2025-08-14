@@ -232,6 +232,19 @@ class RecordStatus:
             return "(not yet submitted)"
         return datetime.fromtimestamp(math.floor(self.submitted)).isoformat()
 
+    def get_review_from(self, revsys: str) -> Mapping:
+        """
+        return the review data from the given system
+        :param str revsys:  the name of the review system that is managing the review
+        :return:  the data describing the review state or None if the review from that system 
+                  has not yet been started.
+                  :rtype: Mapping
+        """
+        revs = self._data.get('external_review', {})
+        if not revs.get(revsys):
+            return None
+        return deepcopy(revs[revsys])
+
     def pubreview(self, revsys: str, phase: str, id: str=None, infourl: str=None, 
                   feedback: List[Mapping]=None, fbreplace: bool=True, **extra_info):
         """

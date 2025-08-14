@@ -34,6 +34,7 @@ from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectIn
                                   ProjectSelectionHandler, ServiceApp)
 from ...dbio import status, ANONYMOUS
 from ..review import DAPReviewer, DAPNERDmReviewValidator
+from ..extrev import ExternalReviewException
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
@@ -2477,13 +2478,14 @@ class DAPService(ProjectService):
         """
         if not self._extrevcli:
             self.log.warning("No External Review system configured to handle DAP records!")
-            return prec.status.state   # state is unchanged
 
         version = prec.data.get('version') or prec.data.get('@version') or '1.0.0'
         opts = dict(options) if options else {}
+        needreview = version == '1.0.0'
 
         verinc = None
-        needreview = bool(set(opts.get("changes")) & set(["add_files", "remove_files", "change_major"]))
+        if not needreview:
+            needreview = bool(set(opts.get("changes")) & set(["add_files", "remove_files", "change_major"]))
         if needreview:
             verinc = self.MINOR_VERSION_LEV
         vers = self._finalize_version(prec, verinc)
@@ -2501,19 +2503,24 @@ class DAPService(ProjectService):
         except Exception as ex:
             self.exception("Trouble resetting permission for review: %s", str(ex))
 
-        try:
-            options["title"] = prec.data.get("title")
-            options["description"] = "\n\n".join(prec.data.get("description"))
-            if prec.meta.get("software_included"):
-                options["security_review"] = True
-            self._extrevcli.submit(prec.id, self.who.actor, version, **options)
+        if self._extrevcli:
+            try:
+                opts["title"] = prec.data.get("title")
+                opts["description"] = "\n\n".join(prec.data.get("description", []))
+                if prec.meta.get("software_included"):
+                    options["security_review"] = True
+                self._extrevcli.submit(prec.id, self.who.actor, version, **opts)
 
-        except ExternalReviewClientException as ex:
-            # possibly notify
-            self.log.error("Failed to submit to external review system: %s", str(ex))
-        except Exception as ex:
-            # possibly notify
-            self.exception("Unexpected trouble submitting for review: %s", str(ex))
+            except ExternalReviewException as ex:
+                # possibly notify
+                self.log.error("Failed to submit to external review system: %s", str(ex))
+                return status.UNWELL
+            except Exception as ex:
+                # possibly notify
+                self.log.exception("Unexpected trouble submitting for review: %s", str(ex))
+                return status.UNWELL
+
+        return status.SUBMITTED
                 
 
     def _set_review_permissions(self, prec: ProjectRecord, readers: List[str]=None):
@@ -2596,7 +2603,7 @@ class DAPService(ProjectService):
         canceling all reviews are either canceled or completed but is still in a SUBMITTED state, the 
         record will be returned to the EDIT state.  
         """
-        prec = super().cancel_external_review()   # may raise ObjectNotFound/NotAuthorized
+        prec = super().cancel_external_review(id, revsys, revid, infourl) # m.r ObjectNotFound/NotAuthorized
         if prec.status.state == status.SUBMITTED:
             # change a SUBMITTED record back to full edit status (as if never submitted)
             if all(r.get('phase') == "canceled" or r.get('phase') == "approved"
@@ -2610,9 +2617,8 @@ class DAPService(ProjectService):
     def _apply_external_review_updates(self, prec: ProjectRecord, pubrevmd: Mapping=None,
                                        request_changes: bool=False) -> bool:
         if request_changes:
-            self._set_review_permissions(prec)
             prec.status.set_state(status.EDIT)
-            return True
+            self._set_review_permissions(prec)
         return False
 
     def _revise(self, prec: ProjectRecord):

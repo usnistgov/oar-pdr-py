@@ -28,7 +28,7 @@ class ExternalReviewClient(ABC):
         self.cfg = config or {}
 
     @abstractmethod
-    def submit(self, id: str, submitter: str, version: str=None, **options=None):
+    def submit(self, id: str, submitter: str, version: str=None, **options):
         """
         submit a specified DAP to this system for review.  The options supported depend on 
         the implementation (and implementations should ignore any option parameters that 

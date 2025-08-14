@@ -896,7 +896,8 @@ class ProjectService(MIDASSystem):
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
         stat = _prec.status
-        if _prec.status.state not in [status.EDIT, status.READY]:
+        nxtstate = _prec.status.state
+        if _prec.status.state not in [status.EDIT, status.READY, status.PROCESSING]:
             raise NotEditable(id, state=_prec.status.state)
 
         stat.set_state(status.PROCESSING)
@@ -930,7 +931,9 @@ class ProjectService(MIDASSystem):
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, defmsg, {"name": "finalize"}))
 
             if reset_state:
-                stat.set_state(status.READY)
+                nxtstate = status.READY
+            if nxtstate != status.PROCESSING:
+                stat.set_state(nxtstate)
             stat.act(self.STATUS_ACTION_FINALIZE, message or defmsg, self.who.actor)
             _prec.save()
 
@@ -1182,10 +1185,10 @@ class ProjectService(MIDASSystem):
     def _apply_external_review_updates(self, prec: ProjectRecord, pubrevmd: Mapping=None,
                                        request_changes: bool=False) -> bool:
         # apply any automated changes to the record according the given feedback
-        # This exists as a specialization point.  return True if the record was saved 
+        # This exists as a specialization point.  return True if the record was saved
         return False
 
-    def approve(self, id: str, revsys: str, revid: str=None, infourl: str=None, publish: bool=True):
+    def approve(self, id: str, revsys: str, revid: str=None, infourl: str=None, publish: bool=False):
         """
         mark this project as approved for publication by an external review system.  This will
         call :py:meth:`apply_external_review` with phase "approved".  If ``publish`` is ``True``
@@ -1196,7 +1199,7 @@ class ProjectService(MIDASSystem):
         """
         self.apply_external_review(id, revsys, "approved", revid, infourl, [])
         if publish:
-            self.publish()
+            self.publish(id)
 
     def cancel_external_review(self, id: str, revsys: str = None, revid: str=None, infourl: str=None):
         """
@@ -1243,7 +1246,7 @@ class ProjectService(MIDASSystem):
         if stat.state == status.EDIT:
             raise NotSubmitable(_prec.id, "Project has not been submitted for publication yet")
         if stat.state not in [status.SUBMITTED, status.ACCEPTED]:
-            raise NotSubmitable(_prec.id, "Project has not in a publishable state: "+stat.state)
+            raise NotSubmitable(_prec.id, "Project is not in a publishable state: "+stat.state)
 
         if stat.state != status.ACCEPTED:
             reviews = stat._data.get(status._pubreview_p)
@@ -1401,8 +1404,9 @@ class ProjectService(MIDASSystem):
 
         except Exception as ex:
             # TODO: back out version?
-            self.log.error("%s: Problem with default publication submission: %s", prec.id, str(ex))
-            raise SubmissionFailed(prec.id) from ex
+            msg = "%s: Problem with default publication submission: %s" % (prec.id, str(ex))
+            self.log.error(msg)
+            raise SubmissionFailed(prec.id, msg) from ex
 
         if endstate == status.PUBLISHED:
             base = self.cfg.get('published_resolver_ep', 'midas:')
@@ -1514,6 +1518,6 @@ class SubmissionFailed(DBIORecordException):
         """
         if not message:
             message = "%s: system error occurred while submitting record" % recid
-        super(DBIORecordException, self).__init__(recid, message, sys=sys)
+        super(SubmissionFailed, self).__init__(recid, message, sys=sys)
     
 
