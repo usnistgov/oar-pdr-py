@@ -45,10 +45,12 @@ class FSBasedDBClient(base.DBClient):
         self._ensure_collection(collname)
         recpath = self._root / collname / (id+".json")
         exists = recpath.exists()
+        if not exists and not recpath.parents[0].exists():
+            recpath.parents[0].mkdir(parents=True)
         try: 
             write_json(data, str(recpath))
         except Exception as ex:
-            raise DBIOException(id+": Unable to write DB record: "+str(ex))
+            raise base.DBIOException(id+": Unable to write DB record: "+str(ex))
         return not exists
 
     def _next_recnum(self, shoulder):
@@ -107,7 +109,7 @@ class FSBasedDBClient(base.DBClient):
                     # skip over corrupted records
                     continue
                 except IOError as ex:
-                    raise DBIOException(recf+": file locking error: "+str(ex))
+                    raise base.DBIOException(recf+": file locking error: "+str(ex))
 
                 if rec.get('deactivated') and not incl_deact:
                     continue

@@ -38,6 +38,7 @@ _STATUS_ACTION_SUBMIT   = "submit"
 _STATUS_ACTION_UPDATEPREP = "update-prep"
 _STATUS_ACTION_RESTORE  = "restore"
 _STATUS_ACTION_PUBLISH  = "publish"
+_STATUS_ACTION_REVISE   = "revise"
 
 DEF_PUBLISHED_SUFFIX = "_published"
 
@@ -73,6 +74,7 @@ class ProjectService(MIDASSystem):
     STATUS_ACTION_PUBLISH  = _STATUS_ACTION_PUBLISH
     STATUS_ACTION_UPDATEPREP = _STATUS_ACTION_UPDATEPREP
     STATUS_ACTION_RESTORE  = _STATUS_ACTION_RESTORE  
+    STATUS_ACTION_REVISE   = _STATUS_ACTION_REVISE
 
     def __init__(self, project_type: str, dbclient_factory: DBClientFactory, config: Mapping={},
                  who: Agent=None, log: Logger=None, _subsys=None, _subsysabbrev=None):
@@ -469,7 +471,7 @@ class ProjectService(MIDASSystem):
             self.log.info("%s: Preparing published record for revision", id)
             self._prep_for_update(_prec)   # this should change state to EDIT
         if _prec.status.state not in [status.EDIT, status.READY]:
-            raise NotEditable(id)
+            raise NotEditable(id, state=_prec.status.state)
 
         if not part:
             # updating data as a whole: merge given data into previously saved data
@@ -653,7 +655,7 @@ class ProjectService(MIDASSystem):
             self.log.info("%s: Preparing published record for revision", id)
             self._prep_for_update(_prec)   # this should change state to EDIT
         if _prec.status.state not in [status.EDIT, status.READY]:
-            raise NotEditable(id)
+            raise NotEditable(id, state=_prec.status.state)
 
         if not part:
             # this is a complete replacement; merge it with a starter record
@@ -789,7 +791,7 @@ class ProjectService(MIDASSystem):
             prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
         if prec.status.state not in [status.EDIT, status.READY]:
-            raise NotEditable(id)
+            raise NotEditable(id, state=prec.status.state)
 
         initdata = self._new_data_for(prec.id, prec.meta)
         if not part:
@@ -864,7 +866,7 @@ class ProjectService(MIDASSystem):
         stat = _prec.status
 
         if stat.state != status.EDIT:
-            raise NotEditable(id)
+            raise NotEditable(id, state=stat.state)
         stat.message = message
         _prec.save()
         self._record_action(Action(Action.COMMENT, _prec.id, self.who, message))
@@ -894,8 +896,9 @@ class ProjectService(MIDASSystem):
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
         stat = _prec.status
-        if _prec.status.state not in [status.EDIT, status.READY]:
-            raise NotEditable(id)
+        nxtstate = _prec.status.state
+        if _prec.status.state not in [status.EDIT, status.READY, status.PROCESSING]:
+            raise NotEditable(id, state=_prec.status.state)
 
         stat.set_state(status.PROCESSING)
         stat.act(self.STATUS_ACTION_FINALIZE, "in progress", self.who.actor)
@@ -928,7 +931,9 @@ class ProjectService(MIDASSystem):
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, defmsg, {"name": "finalize"}))
 
             if reset_state:
-                stat.set_state(status.READY)
+                nxtstate = status.READY
+            if nxtstate != status.PROCESSING:
+                stat.set_state(nxtstate)
             stat.act(self.STATUS_ACTION_FINALIZE, message or defmsg, self.who.actor)
             _prec.save()
 
@@ -939,6 +944,7 @@ class ProjectService(MIDASSystem):
     MAJOR_VERSION_LEV = 0
     MINOR_VERSION_LEV = 1
     TRIVIAL_VERSION_LEV = 2
+    NO_VERSION_LEV = -1
 
     def _apply_final_updates(self, prec: ProjectRecord, vers_inc_lev: int=None):
         # update the data content
@@ -986,7 +992,7 @@ class ProjectService(MIDASSystem):
             vers_inc_lev = self.MINOR_VERSION_LEV
 
         vers = OARVersion(prec.data.setdefault('@version', "1.0.0"))
-        if vers.is_draft():
+        if vers_inc_lev != self.NO_VERSION_LEV and vers.is_draft():
             vers.drop_suffix().increment_field(vers_inc_lev)
             prec.date['@version'] = str(vers)
 
@@ -1032,13 +1038,16 @@ class ProjectService(MIDASSystem):
         # Note: we'll need to expand the checks applied; just do a review for now
         return self.review(prec.id, REQ&WARN, prec)
 
-    def submit(self, id: str, message: str=None, _prec=None) -> status.RecordStatus:
+    def submit(self, id: str, message: str=None, options: Mapping=None, _prec=None) -> status.RecordStatus:
         """
         finalize (via :py:meth:`finalize`) the record and submit it for publishing.  After a successful 
         submission, it may not be possible to edit or revise the record until the submission process 
-        has been completed.  The record must be in the "edit" state prior to calling this method.
+        has been completed.  The record must be in the "edit" state or the "ready" state (i.e. having 
+        already been finalized) prior to calling this method.
         :param str      id:  the identifier of the record to submit
         :param str message:  a message summarizing the updates to the record
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the submission process.
         :returns:  a Project status instance providing the post-submission status
                    :rtype: RecordStatus
         :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
@@ -1063,7 +1072,7 @@ class ProjectService(MIDASSystem):
         # this record is ready for submission.  Send the record to its post-editing destination,
         # and update its status accordingly.
         try:
-            poststat = self._submit(_prec)
+            poststat = self._submit(_prec, options)
 
         except InvalidRecord as ex:
             emsg = "submit process failed: "+str(ex)
@@ -1104,7 +1113,7 @@ class ProjectService(MIDASSystem):
             self.log.info("Final status: %s", poststat)
         return stat.clone()
 
-    def _submit(self, prec: ProjectRecord) -> str:
+    def _submit(self, prec: ProjectRecord, options: Mapping=None) -> str:
         """
         Actually send the given record to its post-editing destination and update its status 
         accordingly.
@@ -1114,6 +1123,9 @@ class ProjectService(MIDASSystem):
         default implementation will simply copy the data contents of the record to another 
         collection.
 
+        :param ProjectRecord prec:  the project record to submit
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the submission process.
         :returns:  the label indicating its post-editing state
                    :rtype: str
         :raises NotSubmitable:  if the finalization process produced an invalid record because the record 
@@ -1157,7 +1169,7 @@ class ProjectService(MIDASSystem):
         stat = _prec.status
 
         revmd = stat.pubreview(revsys, phase, revid, infourl, feedback, fbreplace, **extra_info)
-        if self._apply_external_review_updates(_prec, revmd, request_changes):
+        if not self._apply_external_review_updates(_prec, revmd, request_changes):
             _prec.save()
 
         msg = "external review phase in progress"
@@ -1173,10 +1185,10 @@ class ProjectService(MIDASSystem):
     def _apply_external_review_updates(self, prec: ProjectRecord, pubrevmd: Mapping=None,
                                        request_changes: bool=False) -> bool:
         # apply any automated changes to the record according the given feedback
-        # This exists as a specialization point.  return True if the record was saved 
+        # This exists as a specialization point.  return True if the record was saved
         return False
 
-    def approve(self, id: str, revsys: str, revid: str=None, infourl: str=None, publish: bool=True):
+    def approve(self, id: str, revsys: str, revid: str=None, infourl: str=None, publish: bool=False):
         """
         mark this project as approved for publication by an external review system.  This will
         call :py:meth:`apply_external_review` with phase "approved".  If ``publish`` is ``True``
@@ -1187,7 +1199,7 @@ class ProjectService(MIDASSystem):
         """
         self.apply_external_review(id, revsys, "approved", revid, infourl, [])
         if publish:
-            self.publish()
+            self.publish(id)
 
     def cancel_external_review(self, id: str, revsys: str = None, revid: str=None, infourl: str=None):
         """
@@ -1203,8 +1215,6 @@ class ProjectService(MIDASSystem):
             self.apply_external_review(id, sys, "canceled", revid, infourl, feedback=[])
 
         return prec
-                
-            
 
     def publish(self, id: str, _prec=None, **kwargs):
         """
@@ -1236,7 +1246,7 @@ class ProjectService(MIDASSystem):
         if stat.state == status.EDIT:
             raise NotSubmitable(_prec.id, "Project has not been submitted for publication yet")
         if stat.state not in [status.SUBMITTED, status.ACCEPTED]:
-            raise NotSubmitable(_prec.id, "Project has not in a publishable state: "+stat.state)
+            raise NotSubmitable(_prec.id, "Project is not in a publishable state: "+stat.state)
 
         if stat.state != status.ACCEPTED:
             reviews = stat._data.get(status._pubreview_p)
@@ -1290,13 +1300,64 @@ class ProjectService(MIDASSystem):
 #        self.log.info("Submitted %s record %s (%s) for %s for final publication",
 #                      self.dbcli.project, _prec.id, _prec.name, self.who)
         return stat.clone()
+
+    def revise(self, id: str, message: str=None, options: Mapping=None, _prec = None):
+        """
+        reset an already-published record for revision.  If this record is already in the "edit" state,
+        this function will do nothing.  Otherwise, it must be in the "published" state when this 
+        method is called.  If the reset is successful, it will be changed to the "edit" state.  
+
+        This implementation assumes that the data associated with this record represents the last 
+        published version.  It marks the version as pending update (appended with a "+") and 
+        updates the record state.  The ``options`` parameter is ignored.
+
+        :param str      id:  the identifier of the published record to revise
+        :param str message:  a message to record with this action
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the reset process.
+        :return:  the project record
+                  :rtype: ProjectRecord
+        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+                             an undefined or unrecognized part of the data
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
+                             given by `id`.  
+        :raises NotEditable:  the requested record is in neither the "published" nor "edit" state.  
+        """
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)   # may raise ObjectNotFound/NotAuthorized
+        stat = _prec.status
+        if stat.state == status.EDIT:
+            return stat.status
+        if stat.state != status.PUBLISHED:
+            raise NotEditable(_prec.id, "Project not in published state; "+
+                                        "thus, it cannot be revised at this time", stat.state)
+
+        self._revise(_prec)
+        stat.set_state(status.EDIT)
+        if not message:
+            message = "Restored record for revision"
+        stat.act(self.STATUS_ACTION_REVISE, message)
+        _prec.save()
+
+        return _prec
+
+    def _revise(self, prec: ProjectRecord, options: Mapping=None):
+        if prec.data.get("@version"):
+            prec.data['@version'] = prec.data.get("@version", "") + "+"
+        return prec
         
     def free(self):
         """
         free up resources used by this service.  
 
-<<<<<<< HEAD
-    def _publish(self, prec: ProjectRecord):
+        The client of this service can call this method when it is finished using it.  The implementation
+        should *not* disable the service, making the instance unusable for further use; it should just free
+        up resources as possible.  This implementation calls the ``free()`` function on the underlying 
+        :py:class:`~nistoar.midas.dbio.base.DBClient` instance.
+        """
+        self.dbcli.free()
+                    
+    def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None):
         """
         Actually launch the publishing process on the given record and update its state  
         accordingly.
@@ -1343,8 +1404,9 @@ class ProjectService(MIDASSystem):
 
         except Exception as ex:
             # TODO: back out version?
-            self.log.error("%s: Problem with default publication submission: %s", prec.id, str(ex))
-            raise SubmissionFailed(prec.id) from ex
+            msg = "%s: Problem with default publication submission: %s" % (prec.id, str(ex))
+            self.log.error(msg)
+            raise SubmissionFailed(prec.id, msg) from ex
 
         if endstate == status.PUBLISHED:
             base = self.cfg.get('published_resolver_ep', 'midas:')
@@ -1354,16 +1416,6 @@ class ProjectService(MIDASSystem):
         self.log.info("Successfully published %s as %s version %s (into %s_latest collection)",
                       prec.id, recd['id'], recd['data'].get("@version", 0), self.dbcli.project)
         return endstate
-
-=======
-        The client of this service can call this method when it is finished using it.  The implementation
-        should *not* disable the service, making the instance unusable for further use; it should just free
-        up resources as possible.  This implementation calls the ``free()`` function on the underlying 
-        :py:class:`~nistoar.midas.dbio.base.DBClient` instance.
-        """
-        self.dbcli.free()
-                    
->>>>>>> usnistgov/integration
 
 class ProjectServiceFactory:
     """
@@ -1433,13 +1485,14 @@ class NotEditable(DBIORecordException):
     """
     An error indicating that a requested record cannot be updated because it is in an uneditable state.
     """
-    def __init__(self, recid, message=None, sys=None):
+    def __init__(self, recid, message=None, state=None, sys=None):
         """
         initialize the exception
         """
         if not message:
             message = "%s: not in an editable state" % recid
         super(NotEditable, self).__init__(recid, message, sys=sys)
+        self.state = state
     
 class NotSubmitable(InvalidRecord):
     """
@@ -1465,6 +1518,6 @@ class SubmissionFailed(DBIORecordException):
         """
         if not message:
             message = "%s: system error occurred while submitting record" % recid
-        super(DBIORecordException, self).__init__(recid, message, sys=sys)
+        super(SubmissionFailed, self).__init__(recid, message, sys=sys)
     
 

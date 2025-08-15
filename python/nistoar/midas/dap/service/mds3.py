@@ -34,6 +34,7 @@ from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectIn
                                   ProjectSelectionHandler, ServiceApp)
 from ...dbio import status, ANONYMOUS
 from ..review import DAPReviewer, DAPNERDmReviewValidator
+from ..extrev import ExternalReviewException
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
@@ -928,6 +929,8 @@ class DAPService(ProjectService):
             out["contactPoint"] = resmd["contactPoint"]
         if 'landingPage' in resmd:
             out["landingPage"] = resmd["landingPage"]
+        if 'version' in resmd:
+            out["version"] = resmd["version"]
         out["keywords"] = resmd.get("keyword", [])
         out["theme"] = list(set(resmd.get("theme", []) + [t.get('tag') for t in resmd.get('topic', [])]))
         if resmd.get('responsibleOrganization'):
@@ -2404,6 +2407,13 @@ class DAPService(ProjectService):
             self.validate_json(resmd)
         return resmd
 
+    def _apply_final_updates(self, prec: ProjectRecord, vers_inc_lev: int=None):
+        if prec.data.get('version') and vers_inc_lev is None:
+            # If version is set, then, by default, don't increment version during finalization;
+            # save it for submission time
+            vers_inc_lev = self.NO_VERSION_LEV
+        return super()._apply_final_updates(prec, vers_inc_lev)
+
     def _finalize_data(self, prec) -> Union[int,None]:
         """
         update the data content for the record in preparation for submission.
@@ -2449,11 +2459,14 @@ class DAPService(ProjectService):
         resmd["version"] = ver
         nerd.replace_res_data(resmd)
 
-    def _submit(self, prec: ProjectRecord) -> str:
+    def _submit(self, prec: ProjectRecord, options: Mapping=None) -> str:
         """
         Actually set the given record to the external review service (NPS) and update its status 
         accordingly.  
 
+        :param ProjectRecord prec:  the project record to submit
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the submission process.
         :returns:  the label indicating its post-editing state
                    :rtype: str
         :raises NotSubmitable:  if the finalization process produced an invalid record because the record 
@@ -2466,27 +2479,48 @@ class DAPService(ProjectService):
         if not self._extrevcli:
             self.log.warning("No External Review system configured to handle DAP records!")
 
-        else:
+        version = prec.data.get('version') or prec.data.get('@version') or '1.0.0'
+        opts = dict(options) if options else {}
+        needreview = version == '1.0.0'
+
+        verinc = None
+        if not needreview:
+            needreview = bool(set(opts.get("changes")) & set(["add_files", "remove_files", "change_major"]))
+        if needreview:
+            verinc = self.MINOR_VERSION_LEV
+        vers = self._finalize_version(prec, verinc)
+
+        if not needreview:
+            return self._publish(prec, vers, opts.get('purpose'))
+
+        try:
+            # reset permissions
+            self._set_review_permissions(prec)
+            
+        except FileManagerException as ex:
+            self.log.warning("Trouble updating file store permissions: %s", str(ex))
+
+        except Exception as ex:
+            self.exception("Trouble resetting permission for review: %s", str(ex))
+
+        if self._extrevcli:
             try:
-                # reset permissions
-                self._set_review_permissions(prec)
-                
-            except FileManagerException as ex:
-                self.log.warning("Trouble updating file store permissions: %s", str(ex))
+                opts["title"] = prec.data.get("title")
+                opts["description"] = "\n\n".join(prec.data.get("description", []))
+                if prec.meta.get("software_included"):
+                    options["security_review"] = True
+                self._extrevcli.submit(prec.id, self.who.actor, version, **opts)
 
-            except Exception as ex:
-                self.exception("Trouble resetting permission for review: %s", str(ex))
-                
-
-            try:
-                self._extrevcli.submit(prec.id, version, revsummary)
-
-            except ExternalReviewClientException as ex:
+            except ExternalReviewException as ex:
                 # possibly notify
                 self.log.error("Failed to submit to external review system: %s", str(ex))
+                return status.UNWELL
             except Exception as ex:
                 # possibly notify
-                self.exception("Unexpected trouble submitting for review: %s", str(ex))
+                self.log.exception("Unexpected trouble submitting for review: %s", str(ex))
+                return status.UNWELL
+
+        return status.SUBMITTED
                 
 
     def _set_review_permissions(self, prec: ProjectRecord, readers: List[str]=None):
@@ -2569,7 +2603,7 @@ class DAPService(ProjectService):
         canceling all reviews are either canceled or completed but is still in a SUBMITTED state, the 
         record will be returned to the EDIT state.  
         """
-        prec = super().cancel_external_review()   # may raise ObjectNotFound/NotAuthorized
+        prec = super().cancel_external_review(id, revsys, revid, infourl) # m.r ObjectNotFound/NotAuthorized
         if prec.status.state == status.SUBMITTED:
             # change a SUBMITTED record back to full edit status (as if never submitted)
             if all(r.get('phase') == "canceled" or r.get('phase') == "approved"
@@ -2583,11 +2617,20 @@ class DAPService(ProjectService):
     def _apply_external_review_updates(self, prec: ProjectRecord, pubrevmd: Mapping=None,
                                        request_changes: bool=False) -> bool:
         if request_changes:
-            self._set_review_permissions(prec)
             prec.status.set_state(status.EDIT)
-            return True
+            self._set_review_permissions(prec)
         return False
 
+    def _revise(self, prec: ProjectRecord):
+        # restore data to nerdstore
+
+        # populate file space
+        
+        for vprop in ["version", "@version"]:
+            if not prec.data.get(vprop, "").endswith('+'):
+                prec.data[vprop] = prec.data.get(vprop, "") + "+"
+        return prec
+        
 
 class DAPServiceFactory(ProjectServiceFactory):
     """
