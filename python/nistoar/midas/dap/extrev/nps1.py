@@ -3,6 +3,8 @@ An implementation of the ExternalReviewClient that talks to the NPS (version 1)
 """
 import json
 from typing import List, Dict, Any
+from collections import OrderedDict
+
 import requests
 
 from nistoar.base.config import ConfigurationException
@@ -28,6 +30,7 @@ class NPSExternalReviewClient(ExternalReviewClient):
         it is published.  The template should include one "%s" insert point where the public
         DAP ID can be inserted.
     """
+    system_name = "nps1"
 
     _review_reasons = {
         "NEWREC":  "New Record",
@@ -38,6 +41,16 @@ class NPSExternalReviewClient(ExternalReviewClient):
         "RMFILE":  "Distribution removal",
         "DEACT":   "Record deactivation",
     }
+
+    _changes = OrderedDict([    # ordered most major to most minor
+        ("deactivate",   "DEACT"),
+        ("change_major", "MAJDATA"),
+        ("remove_files", "RMFILE"),
+        ("add_files",    "NEWFILE"),
+        ("add_readmes",  "NEWFILE"),
+        ("change_minor", "MINDATA"),
+        ("metadata",     "MDUP")
+    ])
 
     def __init__(self, config, peopsvc: PeopleService=None):
         """
@@ -63,13 +76,11 @@ class NPSExternalReviewClient(ExternalReviewClient):
         if not self.nps_endpoint:
             raise ConfigurationException("Missing required config param: nps_endpoint")
 
-        # Okta token config (for API authentication)
-        self.token_service = self.cfg.get("tokenService")
-
     def _get_token(self):
-        if not self.token_service:
+        service_config = self.cfg.get("tokenService")
+        if not service_config:
             raise ConfigurationException("No tokenService config provided for NPS API auth.")
-        return get_nsd_auth_token(self.token_service)
+        return get_nsd_auth_token(service_config)
 
     def _build_urls(self, record_id, pubid=None):
         draft_url = self._drafturl_tmpl % record_id
@@ -81,9 +92,15 @@ class NPSExternalReviewClient(ExternalReviewClient):
         Return the string to use as the review reason
         """
         if not changes:
+            # There should be no changes listed if this is a new record
             return self._review_reasons["NEWREC"]
-        # Just use "Data change (major)" if not mapped, as before
-        # (Custom logic could go here if needed)
+
+        # choose the most extreme change provided in the changes list
+        for ch in self._changes:
+            if ch in changes:
+                return self._review_reasons.get(self._changes[ch], "MAJDATA")
+
+        # If none of the changes labels are recognized, assume a major change
         return self._review_reasons["MAJDATA"]
 
     def _prepare_reviewer(self, user, is_owner=False):

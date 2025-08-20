@@ -58,8 +58,20 @@ class TestNPSExternalReviewClient(test.TestCase):
     def test_select_review_reason(self):
         cli = NPSExternalReviewClient(GOOD_CFG)
         self.assertEqual(cli.select_review_reason([], None), "New Record")
-        self.assertEqual(cli.select_review_reason(None, None), "New Record")
+        self.assertEqual(cli.select_review_reason(None), "New Record")
         self.assertEqual(cli.select_review_reason(["foo"], None), "Data change (major)")
+        self.assertEqual(cli.select_review_reason(["foo", "metadata", "change_major", ""]),
+                         "Data change (major)")
+        self.assertEqual(cli.select_review_reason(["foo", "change_minor", "deactivate", ""]),
+                         "Record deactivation")
+        self.assertEqual(cli.select_review_reason(["metadata", "change_minor"]),
+                         "Data change (minor)")
+        self.assertEqual(cli.select_review_reason(["metadata", "add_files", "change_minor"]),
+                         "New file addition")
+        self.assertEqual(cli.select_review_reason(["metadata", "add_readmes", "change_minor"]),
+                         "New file addition")
+        self.assertEqual(cli.select_review_reason(["metadata"]),
+                         "Metadata Update")
 
     def test_build_urls(self):
         cli = NPSExternalReviewClient(GOOD_CFG)

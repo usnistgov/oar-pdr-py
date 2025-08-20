@@ -268,6 +268,11 @@ def get_nsd_auth_token(tscfg: Mapping):
          a previously issued client ID representing :py:mod:`nistoar.nsd` client
     ``secret``
          the associated client secret 
+
+    Also recognized but not required:
+
+    ``audience``
+         an identifier for the application audience that a token is required for.   
     """
     need = "service_endpoint client_id secret".split()
     missing = [p for p in need if not tscfg.get(p)]
@@ -278,9 +283,11 @@ def get_nsd_auth_token(tscfg: Mapping):
     payload = {
         "grant_type": "client_credentials",
         "client_id": tscfg['client_id'],
-        "client_secret": tscfg['secret'],
-        "audience": tscfg.get('audience', None)
+        "client_secret": tscfg['secret']
     }
+    if tscfg.get('audience'):
+        payload['audience'] = tscfg['audience']
+
     hdrs = {
         "accept": "application/json",
         "cache-control": "no-cache",

@@ -20,6 +20,7 @@ class ExternalReviewClient(ABC):
     """
     an interface for interacting with a remote DAP review system.  
     """
+    system_name = "unspecified"
 
     def __init__(self, config=None):
         """
