@@ -1044,6 +1044,7 @@ class ProjectService(MIDASSystem):
         submission, it may not be possible to edit or revise the record until the submission process 
         has been completed.  The record must be in the "edit" state or the "ready" state (i.e. having 
         already been finalized) prior to calling this method.
+
         :param str      id:  the identifier of the record to submit
         :param str message:  a message summarizing the updates to the record
         :param dict options:  a dictionary of parameters that provide implementation-specific control
@@ -1094,10 +1095,13 @@ class ProjectService(MIDASSystem):
 
         else:
             if not message:
+                did = "submitted"
+                if poststat != status.SUBMITTED:
+                    did += "and " + poststat
                 if _prec.data.get('@version', '1.0.0') == '1.0.0':
-                    message = "Initial version " + poststat
+                    message = "Initial version " + did
                 else:
-                    message = "Revision " + poststat
+                    message = "Revision " + did
 
             # record provenance record
             self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, message,
@@ -1135,7 +1139,9 @@ class ProjectService(MIDASSystem):
                              not due to anything the client did, but rather reflects a system problem
                              (e.g. from a downstream service). 
         """
-        return self._publish(prec)  # returned state will be PUBLISHED if successful
+        if self.cfg.get('auto_publish', True):
+            return self._publish(prec)  # returned state will be PUBLISHED if successful
+        return status.ACCEPTED
 
     def apply_external_review(self, id: str, revsys: str, phase: str, revid: str=None, 
                               infourl: str=None, feedback: List[Mapping]=None, 
@@ -1172,7 +1178,7 @@ class ProjectService(MIDASSystem):
         if not self._apply_external_review_updates(_prec, revmd, request_changes):
             _prec.save()
 
-        msg = "external review phase in progress"
+        msg = "external %s review phase in progress" % revsys
         if revmd.get('phase'):
             msg += ": "+revmd['phase']
         if revmd.get('feedback'):
@@ -1198,8 +1204,21 @@ class ProjectService(MIDASSystem):
         Generally, regular users are not authorized to call this function.
         """
         self.apply_external_review(id, revsys, "approved", revid, infourl, [])
-        if publish:
+
+        if publish and self._sufficiently_reviewed(id):
             self.publish(id)
+
+    def _sufficiently_reviewed(self, id):
+        """
+        return True if it appears that the record with the given identifier is sufficiently reviewed 
+        for allowing publishing to proceed.  
+
+        This default implementation returns True if there are no open reviews that are not in the
+        approved status.
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.READ)
+        revs = prec.status.get_review_phases()
+        return not any(r.get('phase', 'unknown') != 'approved' for r in revs)
 
     def cancel_external_review(self, id: str, revsys: str = None, revid: str=None, infourl: str=None):
         """

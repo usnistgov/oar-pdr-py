@@ -255,7 +255,7 @@ class DAPService(ProjectService):
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: Agent=None,
                  log: Logger=None, nerdstore: NERDResourceStorage=None, project_type=DAP_PROJECTS,
-                 minnerdmver=(0, 6), fmcli=None, nsdsvc=None):
+                 minnerdmver=(0, 6), fmcli=None, extrevcli=None):
         """
         create the service
         :param DBClientFactory dbclient_factory:  the factory to create the DBIO service client from
@@ -270,6 +270,9 @@ class DAPService(ProjectService):
                                    subclass constructors.
         :param FileManager fmcli:  The FileManager client to use; if None, one will be constructed 
                                    from the configuration.
+        :param ExternReviewClient extrevcli: An external review request client to use to submit records
+                                   for external review.  If None, no external review will be required
+                                   to publish records.  
         """
         super(DAPService, self).__init__(project_type, dbclient_factory, config, who, log,
                                          _subsys="Digital Asset Publication Authoring System",
@@ -298,7 +301,7 @@ class DAPService(ProjectService):
 
         self._mediatypes = None
         self._formatbyext = None
-        self._extrevcli = None
+        self._extrevcli = extrevcli
 
         self._minnerdmver = minnerdmver
 
@@ -2464,6 +2467,14 @@ class DAPService(ProjectService):
         Actually set the given record to the external review service (NPS) and update its status 
         accordingly.  
 
+        This implementation determines if an external review is needed based on the changes that 
+        have been indicated to have been made via the ``options`` argument (via the ``changes``
+        property).  If it is, the record will be submitted to the review system that has been 
+        configured in.  If review is not required and the ``auto_publish`` parameter is set to 
+        True, the returned state will be ``accepted``.  Otherwise, the returned state will be 
+        be ``submitted`` which will cause the record to await for an out-of-band call to the 
+        :py:meth:`publish` function.
+
         :param ProjectRecord prec:  the project record to submit
         :param dict options:  a dictionary of parameters that provide implementation-specific control
                          over the submission process.
@@ -2491,7 +2502,10 @@ class DAPService(ProjectService):
         vers = self._finalize_version(prec, verinc)
 
         if not needreview:
-            return self._publish(prec, vers, opts.get('purpose'))
+            if self.cfg.get("auto_publish", True):
+                return self._publish(prec, vers, opts.get('purpose'))
+            else:
+                return status.ACCEPTED
 
         try:
             # reset permissions
@@ -2620,6 +2634,29 @@ class DAPService(ProjectService):
             prec.status.set_state(status.EDIT)
             self._set_review_permissions(prec)
         return False
+
+    def _sufficiently_reviewed(self, id):
+        """
+        return True if it appears that the record with the given identifier is sufficiently reviewed 
+        for allowing publishing to proceed.  
+
+        This returns True if (1) there are no open reviews that are not yet approved, and (2) all 
+        reviews required by configuration have been opened (and approved).  
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.READ)
+        revs = prec.status.get_review_phases()
+
+        # ensure all opened reviews are now approved
+        if any(r.get('phase', 'unknown') != 'approved' for r in revs):
+            return False
+
+        # ensure all required reviews have been opened
+        if self._extrevcli:
+            required = [ self._extrevcli.system_name ]
+            names = list(revs.keys())
+            return not any(r not in names for r in required)
+
+        return True
 
     def _revise(self, prec: ProjectRecord):
         # restore data to nerdstore
