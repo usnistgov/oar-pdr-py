@@ -1140,7 +1140,7 @@ class ProjectService(MIDASSystem):
                              (e.g. from a downstream service). 
         """
         if self.cfg.get('auto_publish', True):
-            return self._publish(prec)  # returned state will be PUBLISHED if successful
+            return self._publish(prec)  # returned state will be PUBLISHED if completed
         return status.ACCEPTED
 
     def apply_external_review(self, id: str, revsys: str, phase: str, revid: str=None, 

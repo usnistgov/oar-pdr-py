@@ -34,7 +34,7 @@ from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectIn
                                   ProjectSelectionHandler, ServiceApp)
 from ...dbio import status, ANONYMOUS
 from ..review import DAPReviewer, DAPNERDmReviewValidator
-from ..extrev import ExternalReviewException
+from ..extrev import ExternalReviewException, create_external_review_client
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
@@ -2697,12 +2697,17 @@ class DAPServiceFactory(ProjectServiceFactory):
         self._nerdstore = nerdstore
         super(DAPServiceFactory, self).__init__(project_coll, dbclient_factory, config, log)
 
+    def _create_external_review_client(self, config: Mapping):
+        return create_external_review_client(config)
+
     def create_service_for(self, who: Agent=None):
         """
         create a service that acts on behalf of a specific user.  
         :param Agent who:    the user that wants access to a project
         """
-        return DAPService(self._dbclifact, self._cfg, who, self._log, self._nerdstore, self._prjtype)
+        revcli = self._create_external_review_client(self._cfg.get("external_review"))
+        return DAPService(self._dbclifact, self._cfg, who, self._log, self._nerdstore, self._prjtype,
+                          extrevcli=revcli)
 
     
 class DAPApp(MIDASProjectApp):
