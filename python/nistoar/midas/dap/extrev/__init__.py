@@ -5,16 +5,18 @@ review systems
 The :py:class:`~nistoar.midas.dap.extrev.base.ExternalReviewClient` base class defines 
 the interface.
 """
+from collections.abc import Mapping
+
 from .base import *
 from .nps1 import NPSExternalReviewClient
-# from .sim import SimulatedExternalReviewClient
+from .sim import SimulatedExternalReviewClient
 from nistoar.base.config import ConfigurationException
 
 __all__ = [ "ExternalReviewClient", "ExternalReviewException", "create_external_review_client" ]
 
 _client_classes = {
-    NPSExternalReviewClient.system_name:        NPSExternalReviewClient
-#   SimulatedExternalReviewClient.system_name:  SimulatedExternalReviewClient
+    NPSExternalReviewClient.system_name:        NPSExternalReviewClient,
+    SimulatedExternalReviewClient.system_name:  SimulatedExternalReviewClient
 }
 
 def create_external_review_client(config: Mapping) -> ExternalReviewClient:

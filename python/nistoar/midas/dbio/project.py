@@ -1145,7 +1145,7 @@ class ProjectService(MIDASSystem):
 
     def apply_external_review(self, id: str, revsys: str, phase: str, revid: str=None, 
                               infourl: str=None, feedback: List[Mapping]=None, 
-                              request_changes: bool=False, fbreplace: bool=True, **extra_info):
+                              request_changes: bool=False, fbreplace: bool=True, _prec=None, **extra_info):
         """
         register information about external review activity and possibly apply specific updates
         accordingly.  
@@ -1171,7 +1171,8 @@ class ProjectService(MIDASSystem):
                              feedback
         :param extra_info:   Other JSON-encodable properties that should be included in the registration.
         """
-        _prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)   # may raise ObjectNotFound/NotAuthorized
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)   # may raise ObjectNotFound/NotAuthorized
         stat = _prec.status
 
         revmd = stat.pubreview(revsys, phase, revid, infourl, feedback, fbreplace, **extra_info)
@@ -1203,12 +1204,18 @@ class ProjectService(MIDASSystem):
 
         Generally, regular users are not authorized to call this function.
         """
-        self.apply_external_review(id, revsys, "approved", revid, infourl, [])
+        prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)
+        self.apply_external_review(id, revsys, "approved", revid, infourl, [], _prec=prec)
 
-        if publish and self._sufficiently_reviewed(id):
-            self.publish(id)
+        if self._sufficiently_reviewed(id, _prec=prec):
+            self.log.info("%s: project is ready for publishing", id)
+            prec.status.set_state(status.ACCEPTED)
+            prec.save()
 
-    def _sufficiently_reviewed(self, id):
+            if publish:
+                self.publish(id)
+
+    def _sufficiently_reviewed(self, id, _prec=None):
         """
         return True if it appears that the record with the given identifier is sufficiently reviewed 
         for allowing publishing to proceed.  
@@ -1216,9 +1223,10 @@ class ProjectService(MIDASSystem):
         This default implementation returns True if there are no open reviews that are not in the
         approved status.
         """
-        prec = self.dbcli.get_record_for(id, ACLs.READ)
-        revs = prec.status.get_review_phases()
-        return not any(r.get('phase', 'unknown') != 'approved' for r in revs)
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.READ)
+        revs = _prec.status.get_review_phases()
+        return not any(phase != 'approved' for phase in revs.values())
 
     def cancel_external_review(self, id: str, revsys: str = None, revid: str=None, infourl: str=None):
         """

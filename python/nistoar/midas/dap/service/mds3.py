@@ -2511,11 +2511,11 @@ class DAPService(ProjectService):
             # reset permissions
             self._set_review_permissions(prec)
             
-        except FileManagerException as ex:
+        except FileSpaceException as ex:
             self.log.warning("Trouble updating file store permissions: %s", str(ex))
 
         except Exception as ex:
-            self.exception("Trouble resetting permission for review: %s", str(ex))
+            self.log.exception("Trouble resetting permission for review: %s", str(ex))
 
         if self._extrevcli:
             try:
@@ -2564,7 +2564,7 @@ class DAPService(ProjectService):
             for who in prec.acls.iter_perm_granted(ACLs.WRITE):
                 try:
                     self._fmcli.manage_permissions(who, prec.id, "Read")
-                except FileManagerException as ex:
+                except FileSpaceException as ex:
                     self.log.error("Failed to make file space writable again: %s", str(ex))
 
         # revoke permissions that can change the record
@@ -2577,7 +2577,7 @@ class DAPService(ProjectService):
             reviewers = self.cfg['reviewer_ids']
             if isinstance(reviewers, str):
                 reviewers = [reviewers]
-            prec.acls.grant_perm_to(ACLs.PUBLISH, *reviewers)
+            prec.acls.grant_perm_to(ACLs.PUBLISH, *reviewers, _on_trans=True)
             prec.acls.grant_perm_to(ACLs.WRITE, *reviewers)
             prec.acls.grant_perm_to(ACLs.ADMIN, *reviewers)
             prec.acls.grant_perm_to(ACLs.READ, *(reviewers+readers))
@@ -2604,7 +2604,7 @@ class DAPService(ProjectService):
             for who in prec.acls.iter_perm_granted(ACLs.WRITE):
                 try:
                     self._fmcli.manage_permissions(who, prec.id, "Write")
-                except FileManagerException as ex:
+                except FileSpaceException as ex:
                     self.log.error("Failed to make file space writable again: %s", str(ex))
 
         if not for_review:
@@ -2635,7 +2635,7 @@ class DAPService(ProjectService):
             self._set_review_permissions(prec)
         return False
 
-    def _sufficiently_reviewed(self, id):
+    def _sufficiently_reviewed(self, id, _prec=None):
         """
         return True if it appears that the record with the given identifier is sufficiently reviewed 
         for allowing publishing to proceed.  
@@ -2643,11 +2643,12 @@ class DAPService(ProjectService):
         This returns True if (1) there are no open reviews that are not yet approved, and (2) all 
         reviews required by configuration have been opened (and approved).  
         """
-        prec = self.dbcli.get_record_for(id, ACLs.READ)
-        revs = prec.status.get_review_phases()
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.READ)
+        revs = _prec.status.get_review_phases()
 
         # ensure all opened reviews are now approved
-        if any(r.get('phase', 'unknown') != 'approved' for r in revs):
+        if any(phase != 'approved' for phase in revs.values()):
             return False
 
         # ensure all required reviews have been opened
@@ -2706,8 +2707,11 @@ class DAPServiceFactory(ProjectServiceFactory):
         :param Agent who:    the user that wants access to a project
         """
         revcli = self._create_external_review_client(self._cfg.get("external_review"))
-        return DAPService(self._dbclifact, self._cfg, who, self._log, self._nerdstore, self._prjtype,
-                          extrevcli=revcli)
+        out = DAPService(self._dbclifact, self._cfg, who, self._log, self._nerdstore, self._prjtype,
+                         extrevcli=revcli)
+        if hasattr(revcli, 'projsvc') and not revcli.projsvc:
+            revcli.projsvc = out
+        return out
 
     
 class DAPApp(MIDASProjectApp):

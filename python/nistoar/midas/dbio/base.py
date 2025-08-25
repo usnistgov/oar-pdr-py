@@ -93,7 +93,7 @@ class ACLs:
         """
         return iter(self._perms.get(perm_name, []))
 
-    def grant_perm_to(self, perm_name, *ids):
+    def grant_perm_to(self, perm_name, *ids, _on_trans=False):
         """
         add the user or group identities to the list having the given permission.  
         :param str perm_name:  the permission to be granted
@@ -103,7 +103,7 @@ class ACLs:
         """
         if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli.user_id, "grant permission")
-        if perm_name == self.PUBLISH and not self._rec.is_superuser():
+        if perm_name == self.PUBLISH and not _on_trans and not self._rec.is_superuser():
             raise NotAuthorized(self._rec._cli.user_id, "grant permission")
 
         if perm_name not in self._perms:
