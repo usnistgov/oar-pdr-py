@@ -273,7 +273,7 @@ class TestReviewCmd(test.TestCase):
         args = self.cmd.parse_args("-q review mds3:0001 approve".split())
         self.cmd.execute(args, self.cfg)
         rec = svc.get_record("mds3:0001")
-        self.assertEqual(rec.status.state, status.SUBMITTED)
+        self.assertEqual(rec.status.state, status.ACCEPTED)
         rev = rec.status.get_review_from("testrev")
         self.assertIsNotNone(rev)
         self.assertEqual(rev.get('@id'), "mds3:0001")

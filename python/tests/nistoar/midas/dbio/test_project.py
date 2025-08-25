@@ -594,7 +594,7 @@ class TestProjectService(test.TestCase):
         self.project.approve(id, "nps", publish=False)
         prec = self.project.get_record(id)
         stat = prec.status
-        self.assertEqual(stat.state, "submitted")
+        self.assertEqual(stat.state, "accepted")
         sdata = stat.to_dict()
         self.assertIn("nps", sdata.get("external_review", {}))
         self.assertIn("elrs", sdata.get("external_review", {}))
