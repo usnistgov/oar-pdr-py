@@ -145,7 +145,7 @@ from copy import deepcopy
 import jwt
 
 from . import system
-from .dbio.base import DBClientFactory
+from .dbio.base import DBClientFactory, AUTOADMIN
 from .dbio.wsgi import project as prj, DBIOHandler
 from nistoar.web.rest import (ServiceApp, Handler, Agent, AuthenticatedWSGIApp,
                               authenticate_via_jwt)

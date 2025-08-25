@@ -16,8 +16,10 @@ def setUpModule():
     global loghdlr
     global rootlog
     rootlog = logging.getLogger()
+    rootlog.setLevel(logging.DEBUG)
     loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_wsgiapp.log"))
     loghdlr.setLevel(logging.DEBUG)
+    loghdlr.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     rootlog.addHandler(loghdlr)
 
 def tearDownModule():
@@ -812,6 +814,15 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(who.get_prop("email"), "fed@nist.gov")
         self.assertEqual(who.get_prop("OU"), "61")
 
+        token = jwt.encode({"sub": "dbio:admin", "userEmail": "fed@nist.gov", "OU": "61"},
+                           self.config['authentication']['key'], algorithm="HS256")
+        req['HTTP_AUTHORIZATION'] = "Bearer "+token
+        who = self.app.authenticate(req)
+        self.assertEqual(who.agent_class, "nist")
+        self.assertEqual(who.actor, "dbio:admin")
+        self.assertEqual(who.delegated, ("Unit testing agent",))
+        self.assertEqual(who.get_prop("email"), "fed@nist.gov")
+        self.assertEqual(who.get_prop("OU"), "61")
 
     def test_create_dmp(self):
         req = {

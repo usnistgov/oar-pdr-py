@@ -22,7 +22,7 @@ from nistoar.midas.dap.nerdstore import NERDResourceStorageFactory
 from . import create_DAPService, get_agent
 
 default_name = "setstate"
-help = "register a previously published DAP into the DBIO"
+help = "Update the state of a DAP"
 description = \
 """Update a DAP record to a given state.  Care should be taken with this command to ensure that the 
 new state is consistent with actual state of the record; for example, changing the state to "published"

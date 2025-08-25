@@ -305,6 +305,21 @@ class TestFSBasedDBClient(test.TestCase):
         self.assertEqual(data[0], {'recid': 'goob:gurn', 'foo': 'bar'})
         self.assertEqual(data[1], {'recid': 'goob:gurn', 'alice': 'bob'})
 
+    def test_client_for(self):
+        self.assertTrue(isinstance(self.cli, fsbased.FSBasedDBClient))
+
+        sib = self.cli.client_for(f"{base.DMP_PROJECTS}_best")
+        self.assertTrue(isinstance(sib, fsbased.FSBasedDBClient))
+        self.assertEqual(sib.project, f"{base.DMP_PROJECTS}_best")
+        self.assertEqual(sib.user_id, self.cli.user_id)
+        self.assertEqual(sib._root, self.cli._root)
+
+        sib = self.cli.client_for(f"{base.DMP_PROJECTS}_worst", "goob")
+        self.assertTrue(isinstance(sib, fsbased.FSBasedDBClient))
+        self.assertEqual(sib.project, f"{base.DMP_PROJECTS}_worst")
+        self.assertEqual(sib.user_id, "goob")
+        self.assertEqual(sib._root, self.cli._root)
+        
 
 
                          

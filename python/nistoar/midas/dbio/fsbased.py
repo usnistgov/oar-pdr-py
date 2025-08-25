@@ -45,10 +45,12 @@ class FSBasedDBClient(base.DBClient):
         self._ensure_collection(collname)
         recpath = self._root / collname / (id+".json")
         exists = recpath.exists()
+        if not exists and not recpath.parents[0].exists():
+            recpath.parents[0].mkdir(parents=True)
         try: 
             write_json(data, str(recpath))
         except Exception as ex:
-            raise DBIOException(id+": Unable to write DB record: "+str(ex))
+            raise base.DBIOException(id+": Unable to write DB record: "+str(ex))
         return not exists
 
     def _next_recnum(self, shoulder):
@@ -107,7 +109,7 @@ class FSBasedDBClient(base.DBClient):
                     # skip over corrupted records
                     continue
                 except IOError as ex:
-                    raise DBIOException(recf+": file locking error: "+str(ex))
+                    raise base.DBIOException(recf+": file locking error: "+str(ex))
 
                 if rec.get('deactivated') and not incl_deact:
                     continue
@@ -220,6 +222,19 @@ class FSBasedDBClient(base.DBClient):
             write_json(history, str(recpath))
         except Exception as ex:
             raise base.DBIOException(histrec['recid']+": Failed to write history entries: "+str(ex))
+
+    def client_for(self, projcoll: str, foruser: str = None):
+        """
+        create a new DBClient using the same backend as this one but attached to a different collection
+        (and possibly user).
+        :param str projcol:  the project collection name
+        :param str foruser:  the user this should be used on behalf of.  This controls what records the 
+                             client has access to.
+        """
+        if not foruser:
+            foruser = self.user_id
+        return self.__class__(str(self._root), self._cfg, projcoll, foruser)
+
 
 class FSBasedDBClientFactory(base.DBClientFactory):
     """

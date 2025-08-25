@@ -1283,6 +1283,23 @@ class TestMDS3DAPService(test.TestCase):
         res = nerd.get_res_data()
         self.assertEqual(res.get('landingPage'), "https://example.com/")
         
+    def test_finalize_authors(self):
+        self.create_service()
+        prec = self.svc.create_record("goob")
+        id = prec.id
+        self.svc.replace_authors(id, [
+            { "familyName": "Cranston", "givenName": "Gurn", "middleName": "J." },
+            { "fn": "Edgar Allen Poe", "affiliation": "NIST" },
+            { "familyName": "Grant", "givenName": "U.", "middleName": "S." }
+        ])
+        nerd = self.svc._store.open(id)
+
+        self.svc._finalize_authors(id, nerd)
+        nerd = self.svc._store.open(id)
+        self.assertEqual(nerd.authors.get(0).get('fn'), "Cranston, Gurn J.")
+        self.assertEqual(nerd.authors.get(1).get('fn'), "Edgar Allen Poe")
+        self.assertEqual(nerd.authors.get(2).get('fn'), "Grant, U. S.")
+
     def test_review(self):
         self.create_service()
         prec = self.svc.create_record("goob", {"title": "Goobers!"}, {"willUpload": True})
@@ -1299,6 +1316,47 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(res.count_passed(), 1)
         self.assertIn("1.2.1 title", [t.label for t in res.passed()])
         
+    def test_finalize_data(self):
+        self.create_service()
+        prec = self.svc.create_record("goob")
+        id = prec.id
+        self.svc.replace_authors(id, [
+            { "familyName": "Cranston", "givenName": "Gurn", "middleName": "J." },
+            { "fn": "Edgar Allen Poe", "affiliation": "NIST" },
+            { "familyName": "Grant", "givenName": "U.", "middleName": "S." }
+        ])
+
+        self.svc._finalize_data(prec)
+        nerd = self.svc._store.open(id)
+        self.assertEqual(nerd.authors.get(0).get('fn'), "Cranston, Gurn J.")
+        self.assertEqual(nerd.authors.get(1).get('fn'), "Edgar Allen Poe")
+        self.assertEqual(nerd.authors.get(2).get('fn'), "Grant, U. S.")
+        
+    def test_finalize(self):
+        self.create_service()
+        prec = self.svc.create_record("goob")
+        id = prec.id
+        self.svc.replace_authors(id, [
+            { "familyName": "Cranston", "givenName": "Gurn", "middleName": "J." },
+            { "fn": "Edgar Allen Poe", "affiliation": "NIST" },
+            { "familyName": "Grant", "givenName": "U.", "middleName": "S." }
+        ])
+
+        self.svc.finalize(prec.id)
+        nerd = self.svc._store.open(id)
+        self.assertEqual(nerd.authors.get(0).get('fn'), "Cranston, Gurn J.")
+        self.assertEqual(nerd.authors.get(1).get('fn'), "Edgar Allen Poe")
+        self.assertEqual(nerd.authors.get(2).get('fn'), "Grant, U. S.")
+        prec = self.svc.get_record(prec.id)
+        data = nerd.get_res_data()
+        self.assertEqual(prec.data.get('version'), "1.0.0")
+        self.assertEqual(prec.data.get('@version'), "1.0.0")
+        self.assertIsNone(data.get('@version'))
+        self.assertEqual(data.get('version'), "1.0.0")
+        self.assertEqual(prec.data.get('@id'), "ark:/88434/mdsy-0003")
+        self.assertEqual(data.get('@id'), "ark:/88434/mdsy-0003")
+        
+
 
                          
 if __name__ == '__main__':
