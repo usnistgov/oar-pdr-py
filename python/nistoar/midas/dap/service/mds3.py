@@ -2496,7 +2496,8 @@ class DAPService(ProjectService):
 
         verinc = None
         if not needreview:
-            needreview = bool(set(opts.get("changes")) & set(["add_files", "remove_files", "change_major"]))
+            needreview = bool(set(opts.get("changes", [])) &
+                              set(["add_files", "remove_files", "change_major"]))
         if needreview:
             verinc = self.MINOR_VERSION_LEV
         vers = self._finalize_version(prec, verinc)
