@@ -1351,7 +1351,7 @@ class ProjectService(MIDASSystem):
         :raises NotEditable:  the requested record is in neither the "published" nor "edit" state.  
         """
         if not _prec:
-            _prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)   # may raise ObjectNotFound/NotAuthorized
+            _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
         stat = _prec.status
         if stat.state == status.EDIT:
             return stat.status
