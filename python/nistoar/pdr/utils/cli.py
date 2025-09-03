@@ -327,7 +327,7 @@ class CLISuite(CommandSuite):
         """
         if args.conf:
             config = cfgmod.load_from_file(args.conf)
-        elif args.livesys:
+        elif args.livesys and self.config_svc_app_name:
             if not cfgmod.service:
                 raise CommandFailure(args.cmd,
                                         "Live system not detected; config service not availalbe", 5)
