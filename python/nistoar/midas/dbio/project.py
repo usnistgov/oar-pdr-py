@@ -994,7 +994,7 @@ class ProjectService(MIDASSystem):
         vers = OARVersion(prec.data.setdefault('@version', "1.0.0"))
         if vers_inc_lev != self.NO_VERSION_LEV and vers.is_draft():
             vers.drop_suffix().increment_field(vers_inc_lev)
-            prec.date['@version'] = str(vers)
+            prec.data['@version'] = str(vers)
 
         return prec.data['@version']
 
@@ -1045,10 +1045,13 @@ class ProjectService(MIDASSystem):
         has been completed.  The record must be in the "edit" state or the "ready" state (i.e. having 
         already been finalized) prior to calling this method.
 
+        Note: see code comments for tips in specializing this function.
+
         :param str      id:  the identifier of the record to submit
         :param str message:  a message summarizing the updates to the record
         :param dict options:  a dictionary of parameters that provide implementation-specific control
-                         over the submission process.
+                         over the submission process.  Note that the implementation is free to alter
+                         the contents of this dictionary.
         :returns:  a Project status instance providing the post-submission status
                    :rtype: RecordStatus
         :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
@@ -1063,24 +1066,34 @@ class ProjectService(MIDASSystem):
                              not due to anything the client did, but rather reflects a system problem
                              (e.g. from a downstream service). 
         """
+        # This function is structured to allow specialized versions to re-use common parts more
+        # flexibly.  In most cases, a subclass would override this function, calling the _submit__*
+        # functions, interspersed with specializing functionality.  The _submit__* functions can also
+        # be overridden, but usually only _submit__impl() is overridden to handle special implementation
+        # details.
+
         if not _prec:
             _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)   # may raise ObjectNotFound/NotAuthorized
-        stat = _prec.status
-        if stat.state not in [status.EDIT, status.READY]:
-            raise NotSubmitable(_prec.id, "Project not in submitable state: "+ stat.state)
-        self.finalize(id, message, _prec=_prec)  # may raise NotEditable
+
+        # Prepare for the actual submission:  Ensure current state is correct, finalize/validate record.
+        # May raise NotSubmitable, NotEditable
+        self._submit__prep(_prec, options)
 
         # this record is ready for submission.  Send the record to its post-editing destination,
-        # and update its status accordingly.
+        # and return the state that it should be set to.  Normally, this implementation function
+        # does not update the state of _prec nor saved the record.  If the returned state is None,
+        # this function (and its delegates) may assume that the state has already been set and
+        # saved.  If the implementation function fails, it should raise an exception; normally,
+        # clean up from an exception happens here.
         try:
-            poststat = self._submit(_prec, options)
+            poststate = self._submit__impl(_prec, options)
 
         except InvalidRecord as ex:
             emsg = "submit process failed: "+str(ex)
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": ex.errors}))
-            stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_SUBMIT, ex.format_errors(), self.who.actor)
+            _prec.status.set_state(status.EDIT)
+            _prec.status.act(self.STATUS_ACTION_SUBMIT, ex.format_errors(), self.who.actor)
             self._try_save(_prec)
             raise SubmissionFailed("Invalid record could not be submitted: %s", str(ex))
 
@@ -1088,36 +1101,21 @@ class ProjectService(MIDASSystem):
             emsg = "Submit process failed due to an internal error"
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": [emsg]}))
-            stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_SUBMIT, emsg, self.who.actor)
+            _prec.status.set_state(status.EDIT)
+            _prec.status.act(self.STATUS_ACTION_SUBMIT, emsg, self.who.actor)
             self._try_save(_prec)
             raise SubmissionFailed("Submission action failed: %s", str(ex)) from ex
 
-        else:
-            if not message:
-                did = "submitted"
-                if poststat != status.SUBMITTED:
-                    did += "and " + poststat
-                if _prec.data.get('@version', '1.0.0') == '1.0.0':
-                    message = "Initial version " + did
-                else:
-                    message = "Revision " + did
+        # Wrap up the submisstion process: record provenance info, set state and save the
+        # record, as needed.
+        statusdata = self._submit__wrapup(poststate, _prec, message, options)
 
-            # record provenance record
-            self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, message,
-                                            {"name": "submit"}))
+        # If there is anything that should be done automatically _after_ submitting (e.g.
+        # publishing), do it here.
 
-            stat.set_state(poststat)
-            stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg, self.who.actor)
-            _prec.save()
+        return statusdata
 
-        self.log.info("Submitted %s record %s (%s) for %s",
-                      self.dbcli.project, _prec.id, _prec.name, self.who)
-        if poststat != status.SUBMITTED:
-            self.log.info("Final status: %s", poststat)
-        return stat.clone()
-
-    def _submit(self, prec: ProjectRecord, options: Mapping=None) -> str:
+    def _submit__impl(self, prec: ProjectRecord, options: Mapping=None) -> str:
         """
         Actually send the given record to its post-editing destination and update its status 
         accordingly.
@@ -1142,6 +1140,41 @@ class ProjectService(MIDASSystem):
         if self.cfg.get('auto_publish', True):
             return self._publish(prec)  # returned state will be PUBLISHED if completed
         return status.ACCEPTED
+
+    def _submit__prep(self, prec: ProjectRecord, message: str= None, options: Mapping=None):
+        # Prep this record for submission:  Ensure current state is correct, finalize/validate record.
+        # :raises NotSubmitable:
+        stat = prec.status
+        if stat.state not in [status.EDIT, status.READY]:
+            raise NotSubmitable(prec.id, "Project not in submitable state: "+ stat.state)
+        self.finalize(id, message, _prec=prec)  # may raise NotEditable
+        
+    def _submit__wrapup(self, poststat: str, prec: ProjectRecord, message: str= None, options: Mapping=None):
+        # Wrap up the submisstion process: record provenance info, set state and save the
+        # record, as needed.
+        if poststat:
+            if not message:
+                did = "submitted"
+                if poststat != status.SUBMITTED:
+                    did += "and " + poststat
+                if prec.data.get('@version', '1.0.0') == '1.0.0':
+                    message = "Initial version " + did
+                else:
+                    message = "Revision " + did
+
+            # record provenance record
+            self.dbcli.record_action(Action(Action.PROCESS, prec.id, self.who, message,
+                                            {"name": "submit"}))
+
+            prec.status.set_state(poststat)
+            prec.status.act(self.STATUS_ACTION_SUBMIT, message or defmsg, self.who.actor)
+            prec.save()
+
+        self.log.info("Submitted %s record %s (%s) for %s",
+                      self.dbcli.project, prec.id, prec.name, self.who)
+        if poststat != status.SUBMITTED:
+            self.log.info("Final status: %s", poststat)
+        return prec.status.clone()
 
     def apply_external_review(self, id: str, revsys: str, phase: str, revid: str=None, 
                               infourl: str=None, feedback: List[Mapping]=None, 

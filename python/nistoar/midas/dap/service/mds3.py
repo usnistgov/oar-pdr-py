@@ -2461,8 +2461,85 @@ class DAPService(ProjectService):
         prec.data["version"] = ver
         resmd["version"] = ver
         nerd.replace_res_data(resmd)
+        return ver
 
-    def _submit(self, prec: ProjectRecord, options: Mapping=None) -> str:
+    def submit(self, id: str, message: str=None, options: Mapping=None, _prec=None) -> status.RecordStatus:
+        """
+        finalize (via :py:meth:`finalize`) the record and submit it for publishing.  After a successful 
+        submission, it may not be possible to edit or revise the record until the submission process 
+        has been completed.  The record must be in the "edit" state or the "ready" state (i.e. having 
+        already been finalized) prior to calling this method.
+
+        Note: see code comments for tips in specializing this function.
+
+        :param str      id:  the identifier of the record to submit
+        :param str message:  a message summarizing the updates to the record
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the submission process.
+        :returns:  a Project status instance providing the post-submission status
+                   :rtype: RecordStatus
+        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+                             an undefined or unrecognized part of the data
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
+                             given by `id`.  
+        :raises NotEditable:  the requested record is not in the edit state.  
+        :raises NotSubmitable:  if the finalization produces an invalid record because the record 
+                             contains invalid data or is missing required data.
+        :raises SubmissionFailed:  if, during actual submission (i.e. after finalization), an error 
+                             occurred preventing successful submission.  This error is typically 
+                             not due to anything the client did, but rather reflects a system problem
+                             (e.g. from a downstream service). 
+        """
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)   # may raise ObjectNotFound/NotAuthorized
+        if options is None:
+            options = {}
+
+        # See parent ProjectService implementation for details about what happens by default.
+        # In particular, the generic submission prep and wrap-up from the prep id carried out;
+        # however, an overridden version self._submit__impl() (see below) is called.  
+        statusdata = super().submit(id, message, options, _prec)
+
+        # We save actually sumbitting to the external review framework until after all our "paperwork"
+        # that is is part of submission is completed.  This avoids a run condition if the framework
+        # responds quickly.
+        if options.get('do_review') and not self._extrevcli:
+            options['do_review'] = False
+        if self._extrevcli and options.get('do_review'):
+            # refresh the record
+            _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)
+            version = _prec.data.get('version') or _prec.data.get('@version') or '1.0.0'
+            try:
+                options["title"] = _prec.data.get("title")
+                options["description"] = "\n\n".join(_prec.data.get("description", []))
+                if _prec.meta.get("software_included"):
+                    options["security_review"] = True
+                self._extrevcli.submit(_prec.id, self.who.actor, version, **options)
+
+                # refresh, in case the record has changed
+                _prec = self.dbcli.get_record_for(id, ACLs.READ)
+
+            except ExternalReviewException as ex:
+                message = "Failed to submit to external review system: %s", str(ex)
+                self.log.error(message)
+                # possibly notify
+                _prec.status.set_state(status.UNWELL)
+                _prec.status._data[status._message_p] = message
+                self._try_save(_prec)
+
+            except Exception as ex:
+                message = "Unexpected trouble submitting for review: %s", str(ex)
+                self.log.exception(message)
+                # possibly notify
+                _prec.status.set_state(status.UNWELL)
+                _prec.status._data[status._message_p] = message
+                self._try_save(_prec)
+
+            statusdata = _prec.status.clone()
+
+        return statusdata
+
+    def _submit__impl(self, prec: ProjectRecord, options: Mapping=None) -> str:
         """
         Actually set the given record to the external review service (NPS) and update its status 
         accordingly.  
@@ -2491,49 +2568,36 @@ class DAPService(ProjectService):
             self.log.warning("No External Review system configured to handle DAP records!")
 
         version = prec.data.get('version') or prec.data.get('@version') or '1.0.0'
-        opts = dict(options) if options else {}
         needreview = version == '1.0.0'
 
-        verinc = None
+        verinc = self.TRIVIAL_VERSION_LEV
         if not needreview:
-            needreview = bool(set(opts.get("changes", [])) &
+            needreview = bool(set(options.get("changes", [])) &
                               set(["add_files", "remove_files", "change_major"]))
         if needreview:
             verinc = self.MINOR_VERSION_LEV
+            options['do_review'] = True
         vers = self._finalize_version(prec, verinc)
 
         if not needreview:
             if self.cfg.get("auto_publish", True):
-                return self._publish(prec, vers, opts.get('purpose'))
+                return self._publish(prec, vers, options.get('purpose'))
             else:
                 return status.ACCEPTED
+        elif not self._extrevcli:
+            return status.ACCEPTED
 
         try:
             # reset permissions
             self._set_review_permissions(prec)
-            
+            prec.save()
+
         except FileSpaceException as ex:
             self.log.warning("Trouble updating file store permissions: %s", str(ex))
 
         except Exception as ex:
             self.log.exception("Trouble resetting permission for review: %s", str(ex))
-
-        if self._extrevcli:
-            try:
-                opts["title"] = prec.data.get("title")
-                opts["description"] = "\n\n".join(prec.data.get("description", []))
-                if prec.meta.get("software_included"):
-                    options["security_review"] = True
-                self._extrevcli.submit(prec.id, self.who.actor, version, **opts)
-
-            except ExternalReviewException as ex:
-                # possibly notify
-                self.log.error("Failed to submit to external review system: %s", str(ex))
-                return status.UNWELL
-            except Exception as ex:
-                # possibly notify
-                self.log.exception("Unexpected trouble submitting for review: %s", str(ex))
-                return status.UNWELL
+            raise
 
         return status.SUBMITTED
                 

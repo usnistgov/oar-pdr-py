@@ -35,7 +35,7 @@ class SimulatedExternalReviewClient(ExternalReviewClient):
         self.projs = {}
 
     def submit(self, id: str, submitter: str, version: str=None, **options):
-        if id in self.projs:
+        if id in self.projs and self.projs[id].get('phase','approved') != 'approved':
             raise ExternalReviewException(f"Already under review with the {self.system_name} review system")
 
         self.projs[id] = {
@@ -45,7 +45,10 @@ class SimulatedExternalReviewClient(ExternalReviewClient):
         }
 
         if self.autoapp:
-            self.approve(id)
+            extra = {}
+            if options.get('can_publish'):
+                extra['publish'] = True
+            self.approve(id, **extra)
 
     def approve(self, id, publish: bool=False):
         if id not in self.projs:

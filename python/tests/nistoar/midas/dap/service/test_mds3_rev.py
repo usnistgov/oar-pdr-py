@@ -1,5 +1,5 @@
 """
-exercise the external review with the DAPService
+exercise the external review through the DAPService
 """
 import os, json, pdb, logging, tempfile, pathlib
 import unittest as test
@@ -108,9 +108,10 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
 
     def test_submit(self):
         self.create_service()
-        self.revcli.autoapp = False
+        self.revcli.autoapp = False    # require explicit approval of reviews
         self.assertEqual(self.revcli.projs, {})
 
+        # set up record
         prec = self.svc.create_record("goob")
         id = prec.id
         self.svc.replace_authors(id, [
@@ -121,12 +122,14 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
         prec = self.svc.get_record(id)
         self.assertEqual(prec.status.state, status.EDIT)
 
+        # submit it; it should end up waiting for approval
         stat = self.svc.submit(id)
         self.assertEqual(stat.state, status.SUBMITTED)
         self.assertIn(id, self.revcli.projs)
         self.assertEqual(self.revcli.projs[id]['phase'], "requested")
         self.assertIsNone(stat.get_review_from("sim"))
 
+        # progress the review
         self.revcli.update(id, "group")
         self.assertEqual(self.revcli.projs[id]['phase'], "group")
         prec = self.svc.get_record(id)
@@ -136,6 +139,7 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
         self.assertEqual(prec.status.get_review_phases(), {"simulated": "group"})
         self.assertFalse(self.svc._sufficiently_reviewed(id))
 
+        # approved the record as final step in review; it should end up accepted but not published
         self.revcli.approve(id)
         self.assertEqual(self.revcli.projs[id]['phase'], "approved")
         prec = self.svc.get_record(id)
@@ -146,7 +150,119 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
         self.assertTrue(self.svc._sufficiently_reviewed(id))
         self.assertEqual(prec.status.state, status.ACCEPTED)
         
+    def test_submit_no_review(self):
+        self.create_service()
+        self.revcli.autoapp = False
+        self.assertEqual(self.revcli.projs, {})
+        self.svc._extrevcli = None    # globally disable reviews: submission = publish
 
+        # set up record
+        prec = self.svc.create_record("goob")
+        id = prec.id
+        self.svc.replace_authors(id, [
+            { "familyName": "Cranston", "givenName": "Gurn", "middleName": "J." },
+            { "fn": "Edgar Allen Poe", "affiliation": "NIST" },
+            { "familyName": "Grant", "givenName": "U.", "middleName": "S." }
+        ])
+        prec = self.svc.get_record(id)
+        self.assertEqual(prec.status.state, status.EDIT)
+
+        # submit it; with reviewing unavailable, it should be immediately be accepted (but not published)
+        stat = self.svc.submit(id)
+        self.assertEqual(stat.state, status.ACCEPTED)
+        
+    def test_submit_approve(self):
+        self.create_service()
+        self.revcli.autoapp = True   # automatically approve reviews
+        self.assertEqual(self.revcli.projs, {})
+
+        # set up record
+        prec = self.svc.create_record("goob")
+        id = prec.id
+        self.svc.replace_authors(id, [
+            { "familyName": "Cranston", "givenName": "Gurn", "middleName": "J." },
+            { "fn": "Edgar Allen Poe", "affiliation": "NIST" },
+            { "familyName": "Grant", "givenName": "U.", "middleName": "S." }
+        ])
+        prec = self.svc.get_record(id)
+        self.assertEqual(prec.status.state, status.EDIT)
+
+        # submit it for review; after automatic approval, it should get published
+        stat = self.svc.submit(id, options={'can_publish': True})
+        self.assertIn(id, self.revcli.projs)
+        self.assertEqual(self.revcli.projs[id]['phase'], "approved")
+        self.assertIsNone(stat.get_review_from("sim"))
+        self.assertEqual(stat.state, status.PUBLISHED)
+
+        
+    def test_submit_revise(self):
+        self.create_service()
+        self.revcli.autoapp = False    # require explicit approval of reviews
+        self.assertEqual(self.revcli.projs, {})
+
+        # set up record
+        prec = self.svc.create_record("goob")
+        id = prec.id
+        self.svc.replace_authors(id, [
+            { "familyName": "Cranston", "givenName": "Gurn", "middleName": "J." },
+            { "fn": "Edgar Allen Poe", "affiliation": "NIST" },
+            { "familyName": "Grant", "givenName": "U.", "middleName": "S." }
+        ])
+        prec = self.svc.get_record(id)
+        self.assertEqual(prec.status.state, status.EDIT)
+
+        # submit the initial version.  Review is required, so explicitly approve it
+        stat = self.svc.submit(id)
+        self.revcli.approve(id)
+        prec = self.svc.get_record(id)
+        self.assertEqual(prec.status.state, status.ACCEPTED)
+
+        # publish the initial version
+        stat = self.svc.publish(id)
+        self.assertIsNone(stat.get_review_from("sim"))
+        self.assertEqual(stat.state, status.PUBLISHED)
+        self.assertEqual(prec.data['version'], "1.0.0")
+
+        # now start a revision
+        prec = self.svc.revise(id)
+        self.assertEqual(prec.status.state, status.EDIT)
+        self.assertEqual(prec.data['version'], "1.0.0+")
+
+        # submit it with minor changes; it should get automatically published
+        revopts = {
+            "changes": [ "metadata_update" ],
+            "purpose": "testing revision"
+        }
+        stat = self.svc.submit(id, "tested revision", revopts)
+        self.assertEqual(stat.state, status.PUBLISHED)
+        prec = self.svc.get_record(id)
+        self.assertEqual(prec.data.get('@version'), '1.0.1')
+        self.assertEqual(prec.data.get('version'), '1.0.1')
+
+        # revise it again...
+        prec = self.svc.revise(id)
+        self.assertEqual(prec.status.state, status.EDIT)
+        self.assertEqual(prec.data['version'], "1.0.1+")
+
+        # ...and submit it with a review-requiring change
+        revopts = {
+            "changes": [ "metadata_update", "add_files" ],
+            "purpose": "testing revision again"
+        }
+        stat = self.svc.submit(id, "tested revision", revopts)
+        self.assertEqual(stat.state, status.SUBMITTED)
+        
+        # Approve the change, triggering publication
+        self.revcli.approve(id)
+        prec = self.svc.get_record(id)
+        self.assertEqual(prec.data.get('@version'), '1.1.0')
+        self.assertEqual(prec.data.get('version'), '1.1.0')
+
+        
+        
+
+
+        
                          
 if __name__ == '__main__':
     test.main()

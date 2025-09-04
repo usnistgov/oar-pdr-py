@@ -534,7 +534,7 @@ class _AuthDelegate(ProtectedRecord):
     def __init__(self, forrec: ProtectedRecord):
         usedata = {
             "id": forrec.id,
-            "ownder": forrec.owner,
+            "owner": forrec.owner,
             "acls": deepcopy(forrec._data["acls"])
         }
         super(_AuthDelegate, self).__init__(_AUTHDEL, usedata, forrec._cli)
