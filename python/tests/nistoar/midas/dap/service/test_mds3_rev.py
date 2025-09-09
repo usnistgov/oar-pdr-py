@@ -150,11 +150,33 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
         self.assertTrue(self.svc._sufficiently_reviewed(id))
         self.assertEqual(prec.status.state, status.ACCEPTED)
         
-    def test_submit_no_review(self):
+    def test_submit_offline_review(self):
+        # wait around for review to happen with no notification
         self.create_service()
         self.revcli.autoapp = False
         self.assertEqual(self.revcli.projs, {})
-        self.svc._extrevcli = None    # globally disable reviews: submission = publish
+        self.svc._extrevcli = None    # no connected review system
+
+        # set up record
+        prec = self.svc.create_record("goob")
+        id = prec.id
+        self.svc.replace_authors(id, [
+            { "familyName": "Cranston", "givenName": "Gurn", "middleName": "J." },
+            { "fn": "Edgar Allen Poe", "affiliation": "NIST" },
+            { "familyName": "Grant", "givenName": "U.", "middleName": "S." }
+        ])
+        prec = self.svc.get_record(id)
+        self.assertEqual(prec.status.state, status.EDIT)
+
+        # submit it; with reviewing unavailable, it should be immediately be accepted (but not published)
+        stat = self.svc.submit(id)
+        self.assertEqual(stat.state, status.SUBMITTED)
+        
+    def test_submit_no_review(self):
+        self.cfg['disable_review'] = True
+        self.create_service()
+        self.revcli.autoapp = False
+        self.assertEqual(self.revcli.projs, {})
 
         # set up record
         prec = self.svc.create_record("goob")

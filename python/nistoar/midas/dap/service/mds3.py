@@ -248,6 +248,12 @@ class DAPService(ProjectService):
         (*str*) __optional__.  the path to a directory where taxonomy definition files can be 
         found.  If not provided, it defaults to the etc directory.  This parameter is used primarily
         within unit tests.  
+    ``disable_review``
+        (*bool*) __optional__.  If True, external reviews will be disabled allowing a record to be 
+        immediately accepted for publishing.  Default: False.
+    ``auto_publish``
+        (*bool*) __optional__.  If True and an external review is not required, the record will be 
+        immediately published upon submission.  
 
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
@@ -2584,7 +2590,8 @@ class DAPService(ProjectService):
                 return self._publish(prec, vers, options.get('purpose'))
             else:
                 return status.ACCEPTED
-        elif not self._extrevcli:
+        elif self.cfg.get('disable_review'):
+            options['do_review'] = False
             return status.ACCEPTED
 
         try:
