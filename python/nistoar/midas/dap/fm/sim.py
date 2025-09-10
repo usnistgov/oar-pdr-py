@@ -14,8 +14,8 @@ from nistoar.midas.dap.fm import service as svc
 from nistoar.base.config import ConfigurationException
 
 class SimNextcloudApi(NextcloudApi):
-    PERMFILE = "_perms.json"
-    USERFILE = "_users.json"
+    PERMFILE = "#perms.json"
+    USERFILE = "#users.json"
 
     def __init__(self, datadir, config={}):
         if not isinstance(datadir, Path):

@@ -120,13 +120,13 @@ class MIDASFileManagerServiceTest(test.TestCase):
         self.assertTrue((rootdir/id/id).is_dir())
         self.assertTrue((rootdir/id/(id+"-sys")).is_dir())
         self.assertTrue((rootdir/id/id/'TRASH').is_dir())
-        self.assertTrue((rootdir/id/id/'EXCLUDE').is_dir())
+        self.assertTrue((rootdir/id/id/'HIDE').is_dir())
 
         self.cli.wdcli.is_directory("/".join((id, id, 'TRASH',)))
         self.assertEqual(sp.id, id)
         self.assertTrue(sp.resource_exists(id))
         self.assertTrue(sp.resource_exists(id+"-sys"))
-        self.assertTrue(sp.resource_exists(id+"/EXCLUDE"))
+        self.assertTrue(sp.resource_exists(id+"/HIDE"))
         self.assertTrue(sp.resource_exists(id+"/TRASH"))
 
         self.assertEqual(sp.creator, 'ava1')
@@ -139,13 +139,13 @@ class MIDASFileManagerServiceTest(test.TestCase):
         self.assertEqual(sp.id, id)
         self.assertTrue(sp.resource_exists(id))
         self.assertTrue(sp.resource_exists(id+"-sys"))
-        self.assertTrue(sp.resource_exists(id+"/EXCLUDE"))
+        self.assertTrue(sp.resource_exists(id+"/HIDE"))
         self.assertTrue(sp.resource_exists(id+"/TRASH"))
 
         self.cli.delete_space(id)
         self.assertTrue(not sp.resource_exists(id))
         self.assertTrue(not sp.resource_exists(id+"-sys"))
-        self.assertTrue(not sp.resource_exists(id+"/EXCLUDE"))
+        self.assertTrue(not sp.resource_exists(id+"/HIDE"))
         self.assertTrue(not sp.resource_exists(id+"/TRASH"))
         self.assertTrue(not self.cli.space_exists(id))
         with self.assertRaises(FileManagerResourceNotFound):
@@ -164,7 +164,7 @@ class MIDASFileManagerServiceTest(test.TestCase):
 
         self.assertEqual(sp.root_davpath, id)
         self.assertEqual(sp.uploads_davpath, '/'.join((id,id,)))
-        self.assertEqual(sp.exclude_davpath, '/'.join((id,id,"EXCLUDE",)))
+        self.assertEqual(sp.hide_davpath, '/'.join((id,id,"HIDE",)))
         self.assertEqual(sp.trash_davpath, '/'.join((id,id,"TRASH",)))
         self.assertEqual(sp.system_davpath, '/'.join((id,id+"-sys",)))
 

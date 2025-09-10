@@ -147,15 +147,16 @@ class MIDASFileManagerClientTest(test.TestCase):
         # add some files
         uplfldr = os.path.join(fmdatadir, spid, spid)
         shutil.copytree(sampdatadir/'simplesip', uplfldr, dirs_exist_ok=True)
+        os.rename(os.path.join(uplfldr, '_nerdm.json'), os.path.join(uplfldr, '#nerdm.json'))
         self.assertTrue(os.path.isdir(os.path.join(uplfldr, 'trial3')))
-        self.assertTrue(os.path.isfile(os.path.join(uplfldr, '_nerdm.json')))
+        self.assertTrue(os.path.isfile(os.path.join(uplfldr, '#nerdm.json')))
         
 #        time.sleep(0.25)
         screp = self.cli.start_scan(spid)
         self.assertTrue(isinstance(screp, Mapping))
         self.assertIn('scan_id', screp)
         self.assertEqual(screp['space_id'], spid)
-        self.assertEqual(len(screp['contents']), 4)
+        self.assertEqual(len(screp['contents']), 5)
         self.assertNotEqual(screp['scan_id'], scid)
         scid = screp['scan_id']
 
@@ -165,9 +166,9 @@ class MIDASFileManagerClientTest(test.TestCase):
         self.assertIn('scan_id', screp)
         self.assertEqual(screp['space_id'], spid)
         self.assertEqual(screp['scan_id'], scid)
-        self.assertEqual(len(screp['contents']), 4)
+        self.assertEqual(len(screp['contents']), 5)
         files = [f for f in screp['contents'] if f['resource_type'] == 'file']
-        self.assertTrue(not any(os.path.basename(f['path']).startswith('_') for f in files))
+        self.assertTrue(not any(os.path.basename(f['path']).startswith('#') for f in files))
         self.assertIn('size', files[0])
         self.assertIn('checksum', files[0])
         

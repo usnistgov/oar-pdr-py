@@ -96,7 +96,7 @@ class BasicScannerTest(test.TestCase):
         names = [f['path'] for f in files]
         self.assertIn("junk", names)
         self.assertNotIn(".junk", names)
-        self.assertIn("EXCLUDE", names)
+        self.assertIn("HIDE", names)
         self.assertIn("TRASH", names)
         self.assertIn("TRASH/oops", names)
         self.assertEqual(len(files), 4)
@@ -107,19 +107,19 @@ class BasicScannerTest(test.TestCase):
         self.assertEqual(len(files), 1)
 
         self.scanner = BasicScanner(self.sp, "fred",
-                                    [re.compile(r"^\."), re.compile(r"^_"), re.compile(r"^TRASH")])
+                                    [re.compile(r"^\."), re.compile(r"^#"), re.compile(r"^TRASH")])
         files = self.scanner.init_scannable_content()
         names = [f['path'] for f in files]
         self.assertIn("junk", names)
         self.assertNotIn(".junk", names)
-        self.assertIn("EXCLUDE", names)
+        self.assertIn("HIDE", names)
         self.assertNotIn("TRASH", names)
         self.assertNotIn("TRASH/oops", names)
         self.assertEqual(len(files), 2)
 
     def test_fast_slow(self):
         self._set_scan_queue()
-        skip = [ re.compile(r"^\."), re.compile(r"^_"), re.compile(r"^EXCLUDE$") ]
+        skip = [ re.compile(r"^\."), re.compile(r"^#"), re.compile(r"^HIDE$") ]
         self.scanner = BasicScanner(self.sp, "fred", skip)
         self.assertIs(self.scanner.sp, self.sp)
         self.assertEqual(self.scanner.scanid, "fred")

@@ -189,7 +189,7 @@ class MIDASFileManagerService:
         self.wdcli.ensure_directory(space.root_davpath)
         self.wdcli.ensure_directory(space.system_davpath)
         self.wdcli.ensure_directory(space.uploads_davpath)
-        self.wdcli.ensure_directory(space.exclude_davpath)
+        self.wdcli.ensure_directory(space.hide_davpath)
         self.wdcli.ensure_directory(space.trash_davpath)
 
         # share space with user (may raise exception)
@@ -295,7 +295,7 @@ class FMSpace:
     an encapsulation of a file space in the file manager.  
     """
     trash_folder = "TRASH"
-    exclude_folder = "EXCLUDE"
+    hide_folder  = "HIDE"
     summary_file_name = "space_summary.json"
 
     PERM_NONE   = PERM_NONE
@@ -358,12 +358,12 @@ class FMSpace:
         return f"{self.id}"
 
     @property
-    def exclude_davpath(self):
+    def hide_davpath(self):
         """
-        the resource path to the user's uploads exclude folder.  This path is used to access the 
+        the resource path to the user's uploads hide folder.  This path is used to access the 
         folder via the WebDAV API.
         """
-        return "/".join([self.uploads_davpath, self.exclude_folder])
+        return "/".join([self.uploads_davpath, self.hide_folder])
 
     @property
     def trash_davpath(self):

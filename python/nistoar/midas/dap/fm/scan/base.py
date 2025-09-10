@@ -337,7 +337,7 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
         """
         a factory function for creating the scanner assuming the "excludes" rules for skipping 
         certain files.  In addition to the basic skip rules (skipping files that start with "."
-        or "_"), it skips folders with names "TRASH" or "EXCLUDE".
+        or "_"), it skips folders with names "TRASH" or "HIDE".
         """
         if not log:
             log = logging.getLogger(f"scan.{space.id}")
@@ -345,11 +345,11 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
 
 basic_skip_patterns = [
     re.compile(r"^\."),       # hidden files
-    re.compile(r"^_")         # anything starting with an underscore ("_")
+    re.compile(r"^#")         # anything starting with an underscore ("#")
 ]
 exclude_folders_skip_patterns = basic_skip_patterns + [
     re.compile(r"^TRASH$"),   # trash folders
-    re.compile(r"^EXCLUDE$")  # exclude folders
+    re.compile(r"^HIDE$")     # hide folders
 ]
 
 # see .basic for BasicScanner, a minimal extension of UserSpaceScannerBase
