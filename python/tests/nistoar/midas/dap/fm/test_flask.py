@@ -175,17 +175,19 @@ class TestFlaskApp(test.TestCase):
 
         # add some files
         shutil.copytree(fdatadir/'simplesip', sp.root_dir/sp.uploads_folder, dirs_exist_ok=True)
+        os.rename(os.path.join(sp.root_dir/sp.uploads_folder, '_nerdm.json'),
+                  os.path.join(sp.root_dir/sp.uploads_folder, '#nerdm.json'))
         self.assertTrue((sp.root_dir/sp.uploads_folder/'trial3').is_dir())
-        self.assertTrue((sp.root_dir/sp.uploads_folder/'_nerdm.json').is_file())
+        self.assertTrue((sp.root_dir/sp.uploads_folder/'#nerdm.json').is_file())
 
         # rescan
         resp = self.client.post("/mfm1/spaces/"+spid+"/scans", headers=self.authhdrs)
         rep = resp.json
         scid = rep['scan_id']
         self.assertEqual(rep['space_id'], spid)
-        self.assertEqual(len(rep['contents']), 4)
+        self.assertEqual(len(rep['contents']), 5)
         files = [f for f in rep['contents'] if f['resource_type'] == 'file']
-        self.assertTrue(not any(os.path.basename(f['path']).startswith('_') for f in files))
+        self.assertTrue(not any(os.path.basename(f['path']).startswith('#') for f in files))
         self.assertIn('size', files[0])
         self.assertNotIn('checksum', files[0])  # not in fast result
 
@@ -196,9 +198,9 @@ class TestFlaskApp(test.TestCase):
         rep = resp.json
         self.assertEqual(rep['scan_id'], scid)
         self.assertEqual(rep['space_id'], spid)
-        self.assertEqual(len(rep['contents']), 4)
+        self.assertEqual(len(rep['contents']), 5)
         files = [f for f in rep['contents'] if f['resource_type'] == 'file']
-        self.assertTrue(not any(os.path.basename(f['path']).startswith('_') for f in files))
+        self.assertTrue(not any(os.path.basename(f['path']).startswith('#') for f in files))
         self.assertIn('size', files[0])
         self.assertIn('checksum', files[0])
 
