@@ -34,6 +34,7 @@ from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectIn
                                   ProjectSelectionHandler, ServiceApp)
 from ...dbio import status, ANONYMOUS
 from ..review import DAPReviewer, DAPNERDmReviewValidator
+from ..extrev import ExternalReviewException, create_external_review_client
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nerdm import constants as nerdconst, utils as nerdutils
 from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
@@ -247,6 +248,12 @@ class DAPService(ProjectService):
         (*str*) __optional__.  the path to a directory where taxonomy definition files can be 
         found.  If not provided, it defaults to the etc directory.  This parameter is used primarily
         within unit tests.  
+    ``disable_review``
+        (*bool*) __optional__.  If True, external reviews will be disabled allowing a record to be 
+        immediately accepted for publishing.  Default: False.
+    ``auto_publish``
+        (*bool*) __optional__.  If True and an external review is not required, the record will be 
+        immediately published upon submission.  
 
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
@@ -254,7 +261,7 @@ class DAPService(ProjectService):
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: Agent=None,
                  log: Logger=None, nerdstore: NERDResourceStorage=None, project_type=DAP_PROJECTS,
-                 minnerdmver=(0, 6), fmcli=None, nsdsvc=None):
+                 minnerdmver=(0, 6), fmcli=None, extrevcli=None):
         """
         create the service
         :param DBClientFactory dbclient_factory:  the factory to create the DBIO service client from
@@ -269,6 +276,9 @@ class DAPService(ProjectService):
                                    subclass constructors.
         :param FileManager fmcli:  The FileManager client to use; if None, one will be constructed 
                                    from the configuration.
+        :param ExternReviewClient extrevcli: An external review request client to use to submit records
+                                   for external review.  If None, no external review will be required
+                                   to publish records.  
         """
         super(DAPService, self).__init__(project_type, dbclient_factory, config, who, log,
                                          _subsys="Digital Asset Publication Authoring System",
@@ -297,6 +307,7 @@ class DAPService(ProjectService):
 
         self._mediatypes = None
         self._formatbyext = None
+        self._extrevcli = extrevcli
 
         self._minnerdmver = minnerdmver
 
@@ -927,6 +938,8 @@ class DAPService(ProjectService):
             out["contactPoint"] = resmd["contactPoint"]
         if 'landingPage' in resmd:
             out["landingPage"] = resmd["landingPage"]
+        if 'version' in resmd:
+            out["version"] = resmd["version"]
         out["keywords"] = resmd.get("keyword", [])
         out["theme"] = list(set(resmd.get("theme", []) + [t.get('tag') for t in resmd.get('topic', [])]))
         if resmd.get('responsibleOrganization'):
@@ -2403,6 +2416,331 @@ class DAPService(ProjectService):
             self.validate_json(resmd)
         return resmd
 
+    def _apply_final_updates(self, prec: ProjectRecord, vers_inc_lev: int=None):
+        if prec.data.get('version') and vers_inc_lev is None:
+            # If version is set, then, by default, don't increment version during finalization;
+            # save it for submission time
+            vers_inc_lev = self.NO_VERSION_LEV
+        return super()._apply_final_updates(prec, vers_inc_lev)
+
+    def _finalize_data(self, prec) -> Union[int,None]:
+        """
+        update the data content for the record in preparation for submission.
+        """
+        nerd = self._store.open(prec.id)
+        self._finalize_authors(prec, nerd)
+
+        # should sub-IDs be normalized in some way?
+
+        return None
+
+    def _finalize_authors(self, prec, nerd):
+        """
+        make sure all authors have their ``fn`` property set
+        """
+        for id in nerd.authors.ids:
+            auth = nerd.authors.get(id)
+            if not auth.get('fn') and auth.get('familyName'):
+                auth['fn'] = auth['familyName']
+                if auth.get('givenName'):
+                    auth['fn'] += ", %s" % auth['givenName']
+                if auth.get('middleName'):
+                    auth['fn'] += " %s" % auth['middleName']
+            nerd.authors.set(id, auth)
+
+    def _finalize_dates(self, prec, nerd):
+        """
+        update all the NERDm date stamps
+        """
+        firstpub = not bool(prec.status.published_as)
+        now = datetime.fromtimestamp(time.time()).isoformat()
+
+        dates = OrderedDict()
+        dates['annotated'] = now
+
+    def _finalize_version(self, prec: ProjectRecord, vers_inc_lev: int=None):
+        ver = super()._finalize_version(prec, vers_inc_lev)
+        nerd = self._store.open(prec.id)
+        resmd = nerd.get_res_data()
+        
+        # set NERDm version
+        prec.data["version"] = ver
+        resmd["version"] = ver
+        nerd.replace_res_data(resmd)
+        return ver
+
+    def submit(self, id: str, message: str=None, options: Mapping=None, _prec=None) -> status.RecordStatus:
+        """
+        finalize (via :py:meth:`finalize`) the record and submit it for publishing.  After a successful 
+        submission, it may not be possible to edit or revise the record until the submission process 
+        has been completed.  The record must be in the "edit" state or the "ready" state (i.e. having 
+        already been finalized) prior to calling this method.
+
+        Note: see code comments for tips in specializing this function.
+
+        :param str      id:  the identifier of the record to submit
+        :param str message:  a message summarizing the updates to the record
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the submission process.
+        :returns:  a Project status instance providing the post-submission status
+                   :rtype: RecordStatus
+        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+                             an undefined or unrecognized part of the data
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
+                             given by `id`.  
+        :raises NotEditable:  the requested record is not in the edit state.  
+        :raises NotSubmitable:  if the finalization produces an invalid record because the record 
+                             contains invalid data or is missing required data.
+        :raises SubmissionFailed:  if, during actual submission (i.e. after finalization), an error 
+                             occurred preventing successful submission.  This error is typically 
+                             not due to anything the client did, but rather reflects a system problem
+                             (e.g. from a downstream service). 
+        """
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)   # may raise ObjectNotFound/NotAuthorized
+        if options is None:
+            options = {}
+
+        # See parent ProjectService implementation for details about what happens by default.
+        # In particular, the generic submission prep and wrap-up from the prep id carried out;
+        # however, an overridden version self._submit__impl() (see below) is called.  
+        statusdata = super().submit(id, message, options, _prec)
+
+        # We save actually sumbitting to the external review framework until after all our "paperwork"
+        # that is is part of submission is completed.  This avoids a run condition if the framework
+        # responds quickly.
+        if options.get('do_review') and not self._extrevcli:
+            options['do_review'] = False
+        if self._extrevcli and options.get('do_review'):
+            # refresh the record
+            _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)
+            version = _prec.data.get('version') or _prec.data.get('@version') or '1.0.0'
+            try:
+                options["title"] = _prec.data.get("title")
+                options["description"] = "\n\n".join(_prec.data.get("description", []))
+                if _prec.meta.get("software_included"):
+                    options["security_review"] = True
+                self._extrevcli.submit(_prec.id, self.who.actor, version, **options)
+
+                # refresh, in case the record has changed
+                _prec = self.dbcli.get_record_for(id, ACLs.READ)
+
+            except ExternalReviewException as ex:
+                message = "Failed to submit to external review system: %s", str(ex)
+                self.log.error(message)
+                # possibly notify
+                _prec.status.set_state(status.UNWELL)
+                _prec.status._data[status._message_p] = message
+                self._try_save(_prec)
+
+            except Exception as ex:
+                message = "Unexpected trouble submitting for review: %s", str(ex)
+                self.log.exception(message)
+                # possibly notify
+                _prec.status.set_state(status.UNWELL)
+                _prec.status._data[status._message_p] = message
+                self._try_save(_prec)
+
+            statusdata = _prec.status.clone()
+
+        return statusdata
+
+    def _submit__impl(self, prec: ProjectRecord, options: Mapping=None) -> str:
+        """
+        Actually set the given record to the external review service (NPS) and update its status 
+        accordingly.  
+
+        This implementation determines if an external review is needed based on the changes that 
+        have been indicated to have been made via the ``options`` argument (via the ``changes``
+        property).  If it is, the record will be submitted to the review system that has been 
+        configured in.  If review is not required and the ``auto_publish`` parameter is set to 
+        True, the returned state will be ``accepted``.  Otherwise, the returned state will be 
+        be ``submitted`` which will cause the record to await for an out-of-band call to the 
+        :py:meth:`publish` function.
+
+        :param ProjectRecord prec:  the project record to submit
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the submission process.
+        :returns:  the label indicating its post-editing state
+                   :rtype: str
+        :raises NotSubmitable:  if the finalization process produced an invalid record because the record 
+                             contains invalid data or is missing required data.
+        :raises SubmissionFailed:  if, during actual submission (i.e. after finalization), an error 
+                             occurred preventing successful submission.  This error is typically 
+                             not due to anything the client did, but rather reflects a system problem
+                             (e.g. from a downstream service). 
+        """
+        if not self._extrevcli:
+            self.log.warning("No External Review system configured to handle DAP records!")
+
+        version = prec.data.get('version') or prec.data.get('@version') or '1.0.0'
+        needreview = version == '1.0.0'
+
+        verinc = self.TRIVIAL_VERSION_LEV
+        if not needreview:
+            needreview = bool(set(options.get("changes", [])) &
+                              set(["add_files", "remove_files", "change_major"]))
+        if needreview:
+            verinc = self.MINOR_VERSION_LEV
+            options['do_review'] = True
+        vers = self._finalize_version(prec, verinc)
+
+        if not needreview:
+            if self.cfg.get("auto_publish", True):
+                return self._publish(prec, vers, options.get('purpose'))
+            else:
+                return status.ACCEPTED
+        elif self.cfg.get('disable_review'):
+            options['do_review'] = False
+            return status.ACCEPTED
+
+        try:
+            # reset permissions
+            self._set_review_permissions(prec)
+            prec.save()
+
+        except FileSpaceException as ex:
+            self.log.warning("Trouble updating file store permissions: %s", str(ex))
+
+        except Exception as ex:
+            self.log.exception("Trouble resetting permission for review: %s", str(ex))
+            raise
+
+        return status.SUBMITTED
+                
+
+    def _set_review_permissions(self, prec: ProjectRecord, readers: List[str]=None):
+        """
+        update the permissions appropriate for the external review phase.  These generally 
+        means that the record becomes read-only for the people that had write access during the 
+        admin phase.  Additional users may have read-access.  
+
+        This implementation establishes a "publish" permission allowing curator-administrators 
+        to shepherd the record through the review process.  Write access is revoked for users 
+        that currently have it (saving who that is to an "_edit" permission).  Curators and 
+        reviewers will be given read access.
+        """
+        if readers is None:
+            readers = []
+
+        # record away who has write access
+        for perm in [ ACLs.WRITE, ACLs.DELETE, ACLs.ADMIN, ACLs.READ ]:
+            if prec.status.state == status.EDIT or prec.status.state == status.READY or \
+               len(list(prec.acls.iter_perm_granted("_"+perm))) == 0:
+                who = list(prec.acls.iter_perm_granted(perm))
+                prec.acls.revoke_perm_from_all("_"+perm)
+                prec.acls.grant_perm_to("_"+perm, *who)
+
+        # revoke update permissions in the file manager
+        if self._fmcli:
+            for who in prec.acls.iter_perm_granted(ACLs.WRITE):
+                try:
+                    self._fmcli.manage_permissions(who, prec.id, "Read")
+                except FileSpaceException as ex:
+                    self.log.error("Failed to make file space writable again: %s", str(ex))
+
+        # revoke permissions that can change the record
+        prec.acls.revoke_perm_from_all(ACLs.WRITE)
+        prec.acls.revoke_perm_from_all(ACLs.DELETE)
+        prec.acls.revoke_perm_from_all(ACLs.ADMIN)
+
+        # give PUBLISH permission to reviewer IDs
+        if self.cfg.get("reviewer_ids"):
+            reviewers = self.cfg['reviewer_ids']
+            if isinstance(reviewers, str):
+                reviewers = [reviewers]
+            prec.acls.grant_perm_to(ACLs.PUBLISH, *reviewers, _on_trans=True)
+            prec.acls.grant_perm_to(ACLs.WRITE, *reviewers)
+            prec.acls.grant_perm_to(ACLs.ADMIN, *reviewers)
+            prec.acls.grant_perm_to(ACLs.READ, *(reviewers+readers))
+
+    def _unset_review_permissions(self, prec: ProjectRecord, for_review: bool=False):
+        """
+        return record permissions to their pre-review state, so that, for example, the authors
+        can update the record in response to review feedback.  
+        :param bool for_review:  True if the reset should be made appropriate for responding to 
+                                 reviewer feedback (which may keep the current read access in 
+                                 tact so that reviewers can still see the record).  If False,
+                                 fully reset to the permissions as if going either to a published 
+                                 state or a complete edit state (because publishing was canceled).
+        """
+        for perm in [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]:
+            who = list(prec.acls.iter_perm_granted("_"+perm))
+            prec.acls.revoke_perm_from_all(perm)               # take out the reviewers
+            prec.acls.grant_perm_to(perm, *who)                # restore the original editors
+            if not for_review:
+                prec.acls.revoke_perm_from_all("_"+perm)
+
+        # revoke update permissions in the file manager
+        if self._fmcli:
+            for who in prec.acls.iter_perm_granted(ACLs.WRITE):
+                try:
+                    self._fmcli.manage_permissions(who, prec.id, "Write")
+                except FileSpaceException as ex:
+                    self.log.error("Failed to make file space writable again: %s", str(ex))
+
+        if not for_review:
+            # forget about the reviewers
+            prec.acls.revoke_perm_from_all(ACLs.PUBLISH)
+                       
+    def cancel_external_review(self, id: str, revsys: str = None, revid: str=None, infourl: str=None):
+        """
+        cancel the review process from a particular review system or for all systems.  If after 
+        canceling all reviews are either canceled or completed but is still in a SUBMITTED state, the 
+        record will be returned to the EDIT state.  
+        """
+        prec = super().cancel_external_review(id, revsys, revid, infourl) # m.r ObjectNotFound/NotAuthorized
+        if prec.status.state == status.SUBMITTED:
+            # change a SUBMITTED record back to full edit status (as if never submitted)
+            if all(r.get('phase') == "canceled" or r.get('phase') == "approved"
+                   for r in prec.status.to_dict().get(status._pubreview_p, {}).values()):
+                self._unset_review_permissions(prec)
+                prec.status.set_state(status.EDIT)
+                prec.save()
+
+        return prec
+
+    def _apply_external_review_updates(self, prec: ProjectRecord, pubrevmd: Mapping=None,
+                                       request_changes: bool=False) -> bool:
+        if request_changes:
+            prec.status.set_state(status.EDIT)
+            self._set_review_permissions(prec)
+        return False
+
+    def _sufficiently_reviewed(self, id, _prec=None):
+        """
+        return True if it appears that the record with the given identifier is sufficiently reviewed 
+        for allowing publishing to proceed.  
+
+        This returns True if (1) there are no open reviews that are not yet approved, and (2) all 
+        reviews required by configuration have been opened (and approved).  
+        """
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.READ)
+        revs = _prec.status.get_review_phases()
+
+        # ensure all opened reviews are now approved
+        if any(phase != 'approved' for phase in revs.values()):
+            return False
+
+        # ensure all required reviews have been opened
+        if self._extrevcli:
+            required = [ self._extrevcli.system_name ]
+            names = list(revs.keys())
+            return not any(r not in names for r in required)
+
+        return True
+
+    def _revise(self, prec: ProjectRecord):
+        # restore data to nerdstore
+
+        # populate file space
+        
+        for vprop in ["version", "@version"]:
+            if not prec.data.get(vprop, "").endswith('+'):
+                prec.data[vprop] = prec.data.get(vprop, "") + "+"
+        return prec
+        
 
 class DAPServiceFactory(ProjectServiceFactory):
     """
@@ -2432,12 +2770,20 @@ class DAPServiceFactory(ProjectServiceFactory):
         self._nerdstore = nerdstore
         super(DAPServiceFactory, self).__init__(project_coll, dbclient_factory, config, log)
 
+    def _create_external_review_client(self, config: Mapping):
+        return create_external_review_client(config)
+
     def create_service_for(self, who: Agent=None):
         """
         create a service that acts on behalf of a specific user.  
         :param Agent who:    the user that wants access to a project
         """
-        return DAPService(self._dbclifact, self._cfg, who, self._log, self._nerdstore, self._prjtype)
+        revcli = self._create_external_review_client(self._cfg.get("external_review"))
+        out = DAPService(self._dbclifact, self._cfg, who, self._log, self._nerdstore, self._prjtype,
+                         extrevcli=revcli)
+        if hasattr(revcli, 'projsvc') and not revcli.projsvc:
+            revcli.projsvc = out
+        return out
 
     
 class DAPApp(MIDASProjectApp):

@@ -875,7 +875,11 @@ class ProjectStatusHandler(ProjectRecordHandler):
     """
     handle status requests and actions
     """
-    _requestable_actions = [ ProjectService.STATUS_ACTION_FINALIZE, ProjectService.STATUS_ACTION_SUBMIT ]
+    _requestable_actions = [
+        ProjectService.STATUS_ACTION_FINALIZE,
+        ProjectService.STATUS_ACTION_SUBMIT,
+        ProjectService.STATUS_ACTION_REVISE
+    ]
 
     def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
                  who: Agent, id: str, datapath: str="", config: dict=None, log: Logger=None):
@@ -957,10 +961,14 @@ class ProjectStatusHandler(ProjectRecordHandler):
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
+        if not isinstance(req.get('action_options'), (Mapping, type(None))):
+            return self.send_error_resp(400, "Bad Input",
+                                        "Bad value for action_options property: not a dictionary")
+        
         if not req.get('action'):
             return self.send_error_resp(400, "Invalid input: missing action property"
                                         "Input record is missing required action property")
-        return self._apply_action(req['action'], req.get('message'))
+        return self._apply_action(req['action'], req.get('message'), req.get('action_options'))
 
     def do_PATCH(self, path):
         """
@@ -975,10 +983,14 @@ class ProjectStatusHandler(ProjectRecordHandler):
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
-        # if action is not set, the message will just get updated.
-        return self._apply_action(req.get('action'), req.get('message'))
+        if not isinstance(req.get('action_options'), (Mapping, type(None))):
+            return self.send_error_resp(400, "Bad Input",
+                                        "Bad value for action_options property: not a dictionary")
         
-    def _apply_action(self, action, message=None):
+        # if action is not set, the message will just get updated.
+        return self._apply_action(req.get('action'), req.get('message'), req.get('action_options'))
+        
+    def _apply_action(self, action: str, message: str=None, options: Mapping=None):
         if action:
             action = action.lower()
         try:
@@ -987,7 +999,9 @@ class ProjectStatusHandler(ProjectRecordHandler):
             elif action == 'finalize':
                 stat = self.svc.finalize(self._id, message)
             elif action == 'submit':
-                stat = self.svc.submit(self._id, message)
+                stat = self.svc.submit(self._id, message, options)
+            elif action == 'revise':
+                stat = self.svc.revise(self._id, message, options)
             else:
                 return self.send_error_resp(400, "Unrecognized action",
                                             "Unrecognized action requested")

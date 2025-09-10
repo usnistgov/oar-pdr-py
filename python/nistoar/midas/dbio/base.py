@@ -44,6 +44,7 @@ DEF_GROUPS_SHOULDER = "grp0"
 # all users are implicitly part of this group
 PUBLIC_GROUP = DEF_GROUPS_SHOULDER + ":public"    # all users are implicitly part of this group
 ANONYMOUS = ANONYMOUS_USER
+AUTOADMIN = "dbio:admin"     # a superuser identity that should only be used by internal dbio code
 
 __all__ = ["DBClient", "DBClientFactory", "ProjectRecord", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP",
            "ANONYMOUS", "DAP_PROJECTS", "DMP_PROJECTS", "ObjectNotFound", "NotAuthorized", "AlreadyExists",
@@ -70,6 +71,7 @@ class ACLs:
     ADMIN = 'admin'
     DELETE = 'delete'
     OWN = (READ, WRITE, ADMIN, DELETE,)
+    PUBLISH = 'publish'
 
     def __init__(self, forrec: ProtectedRecord, acldata: MutableMapping = None):
         """
@@ -91,7 +93,7 @@ class ACLs:
         """
         return iter(self._perms.get(perm_name, []))
 
-    def grant_perm_to(self, perm_name, *ids):
+    def grant_perm_to(self, perm_name, *ids, _on_trans=False):
         """
         add the user or group identities to the list having the given permission.  
         :param str perm_name:  the permission to be granted
@@ -100,6 +102,8 @@ class ACLs:
                                authorized to grant this permission
         """
         if not self._rec.authorized(self.ADMIN):
+            raise NotAuthorized(self._rec._cli.user_id, "grant permission")
+        if perm_name == self.PUBLISH and not _on_trans and not self._rec.is_superuser():
             raise NotAuthorized(self._rec._cli.user_id, "grant permission")
 
         if perm_name not in self._perms:
@@ -110,15 +114,17 @@ class ACLs:
 
     def revoke_perm_from_all(self, perm_name, protect_owner: bool=True):
         """
-        remove all identities from the given permission.  For each given identity 
-        that does not currently have the permission, nothing is done.  
+        remove all identities from the list having the given permission.  
+        :param str perm_name:  the permission to be revoked from all identities
         :param str perm_name:  the permission to be revoked from everyone
         :param bool protect_owner:  if True, the owner will be left as the sole user with the given 
                                permission.
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
-                               authorized to grant this permission
+                               authorized to grant the permission
         """
         if not self._rec.authorized(self.ADMIN):
+            raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
+        if perm_name == self.PUBLISH and not self._rec.is_superuser():
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
 
         empty = []
@@ -145,6 +151,8 @@ class ACLs:
         """
         if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
+        if perm_name == self.PUBLISH and not self._rec.is_superuser():
+            raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
 
         if perm_name not in self._perms:
             return
@@ -165,7 +173,7 @@ class ACLs:
         This should be considered lowlevel; consider using :py:method:`authorized` instead which resolves 
         a users membership.  
         """
-        return len(set(self._perms[perm_name]).intersection(ids)) > 0
+        return len(set(self._perms.get(perm_name, [])).intersection(ids)) > 0
 
     def __str__(self):
         return "<ACLs: {}>".format(str(self._perms))
@@ -406,7 +414,7 @@ class ProtectedRecord(ABC):
             if Agent.ADMIN in self._cli._who.groups:
                 return True
             who = self._cli.user_id
-        if who in self._cli._cfg.get("superusers", []):
+        if self.is_superuser(who):
             return True
 
         if isinstance(perm, str):
@@ -422,6 +430,10 @@ class ProtectedRecord(ABC):
                 return False
         return True
 
+    def is_superuser(self, who: str=None):
+        if not who:
+            who = self._cli.user_id
+        return who in (self._cli._cfg.get("superusers", []) + [AUTOADMIN])
 
     def searched(self, cst: CST):
         """
@@ -522,7 +534,7 @@ class _AuthDelegate(ProtectedRecord):
     def __init__(self, forrec: ProtectedRecord):
         usedata = {
             "id": forrec.id,
-            "ownder": forrec.owner,
+            "owner": forrec.owner,
             "acls": deepcopy(forrec._data["acls"])
         }
         super(_AuthDelegate, self).__init__(_AUTHDEL, usedata, forrec._cli)
@@ -1150,7 +1162,7 @@ class DBClient(ABC):
 
     def _new_record_data(self, id):
         """
-        return a dictionary containing data that will constitue a new ProjectRecord with the given 
+        return a dictionary containing data that will constitute a new ProjectRecord with the given 
         identifier assigned to it.  Generally, this record should not be committed yet.
         """
         return {"id": id, "status": {"created_by": self.user_id}}
@@ -1178,9 +1190,9 @@ class DBClient(ABC):
         except StopIteration:
             return False
 
-    def get_record_by_name(self, name: str, owner: str = None) -> Group:
+    def get_record_by_name(self, name: str, owner: str = None) -> ProjectRecord:
         """
-        return the group assigned the given name by its owner.  This assumes that the given owner 
+        return the project record assigned the given name by its owner.  This assumes that the given owner 
         has created only one group with the given name.  
         """
         if not owner:
@@ -1475,6 +1487,17 @@ class DBClient(ABC):
     def _save_history(self, histrec):
         """
         save the given history record to the history collection
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def client_for(self, projcoll: str, foruser: str = None):
+        """
+        create a new DBClient using the same backend as this one but attached to a different collection
+        (and possibly user).
+        :param str projcol:  the project collection name
+        :param str foruser:  the user this should be used on behalf of.  This controls what records the 
+                             client has access to.
         """
         raise NotImplementedError()
 
