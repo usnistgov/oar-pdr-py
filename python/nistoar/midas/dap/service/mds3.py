@@ -28,7 +28,7 @@ from urllib.parse import urlparse, unquote
 from functools import reduce
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
-                     InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable,
+                     InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable, DBIORecordException,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
                                   ProjectSelectionHandler, ServiceApp)
@@ -2617,7 +2617,7 @@ class DAPService(ProjectService):
 
         This implementation establishes a "publish" permission allowing curator-administrators 
         to shepherd the record through the review process.  Write access is revoked for users 
-        that currently have it (saving who that is to an "_edit" permission).  Curators and 
+        that currently have it (saving who that is to an "_write" permission).  Curators and 
         reviewers will be given read access.
         """
         if readers is None:
@@ -2704,7 +2704,7 @@ class DAPService(ProjectService):
                                        request_changes: bool=False) -> bool:
         if request_changes:
             prec.status.set_state(status.EDIT)
-            self._set_review_permissions(prec)
+            self._unset_review_permissions(prec, for_review=True)
         return False
 
     def _sufficiently_reviewed(self, id, _prec=None):
@@ -2731,6 +2731,26 @@ class DAPService(ProjectService):
 
         return True
 
+    def publish(self, id: str, _prec=None, **kwargs):
+        # will replace this with submitting to publication service
+        stat = super().publish(id, _prec, **kwargs)
+
+        prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)
+        if prec.status.state == status.PUBLISHED:
+            self._unset_review_permissions(prec)
+            try:
+                prec.save()
+            except Exception as ex:
+                self.log.error("Failed to save project record while publishing, %s: %s", prec.id, str(ex))
+                if isinstance(ex, DBIOException):
+                    raise
+                raise DBIORecordException(prec.id,
+                                          "Failed to save record (id=%s) which publishing: %s: %s" %
+                                          (prec.id, type(ex).__name__, str(ex)))
+            stat = prec.status.clone()
+
+        return stat
+        
     def _revise(self, prec: ProjectRecord):
         # restore data to nerdstore
 
