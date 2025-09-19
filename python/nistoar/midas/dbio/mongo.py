@@ -346,6 +346,8 @@ class MongoDBClientFactory(base.DBClientFactory):
         self._dburl = dburl
 
         pscfg = self._cfg.get("people_service", {})
+        if pscfg == 'embedded':
+            pscfg = {"facory": "mongo"}
         if pscfg.get("factory") == "mongo" and not pscfg.get("db_url"):
             # default people service db url is same as DBIO's.
             pscfg["db_url"] = self._dburl
