@@ -345,6 +345,11 @@ class MongoDBClientFactory(base.DBClientFactory):
                              dburl)
         self._dburl = dburl
 
+        pscfg = self._cfg.get("people_service", {})
+        if pscfg.get("factory") == "mongo" and not pscfg.get("db_url"):
+            # default people service db url is same as DBIO's.
+            pscfg["db_url"] = self._dburl
+
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
         cfg = merge_config(config, deepcopy(self._cfg))
 
