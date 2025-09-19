@@ -312,6 +312,8 @@ class DAPService(ProjectService):
         self._minnerdmver = minnerdmver
 
         self._taxondir = self.cfg.get('taxonomy_dir', os.path.join(def_etc_dir, "schemas"))
+#        if 'auto_publish' not in self.cfg:
+#            self.cfg['auto_publish'] = False
 
     def _make_fm_client(self, fmcfg):
         return FileManager(fmcfg)
@@ -2597,7 +2599,7 @@ class DAPService(ProjectService):
         try:
             # reset permissions
             self._set_review_permissions(prec)
-            prec.save()
+            # don't save until submission process is complete
 
         except FileSpaceException as ex:
             self.log.warning("Trouble updating file store permissions: %s", str(ex))
@@ -2637,7 +2639,7 @@ class DAPService(ProjectService):
                 try:
                     self._fmcli.manage_permissions(who, prec.id, "Read")
                 except FileSpaceException as ex:
-                    self.log.error("Failed to make file space writable again: %s", str(ex))
+                    self.log.error("Failed to write-protect file space: %s", str(ex))
 
         # revoke permissions that can change the record
         prec.acls.revoke_perm_from_all(ACLs.WRITE)
