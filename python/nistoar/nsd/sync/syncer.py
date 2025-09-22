@@ -45,7 +45,7 @@ class NSDSyncer:
             If not provided, a token will be retrieved using ``tokenService`` (if provided)
         ``tokenService``
             _dict_ (optional) a dictionary configuring use of a token retrieval service.  See 
-            :py:func:`get_nsd_token` for details on its contents.  If not provided, it will be
+            :py:func:`get_nsd_auth_token` for details on its contents.  If not provided, it will be
             assumed that a token is not required to access the NSD service.  
     """
 
@@ -268,6 +268,11 @@ def get_nsd_auth_token(tscfg: Mapping):
          a previously issued client ID representing :py:mod:`nistoar.nsd` client
     ``secret``
          the associated client secret 
+
+    Also recognized but not required:
+
+    ``audience``
+         an identifier for the application audience that a token is required for.   
     """
     need = "service_endpoint client_id secret".split()
     missing = [p for p in need if not tscfg.get(p)]
@@ -280,6 +285,9 @@ def get_nsd_auth_token(tscfg: Mapping):
         "client_id": tscfg['client_id'],
         "client_secret": tscfg['secret']
     }
+    if tscfg.get('audience'):
+        payload['audience'] = tscfg['audience']
+
     hdrs = {
         "accept": "application/json",
         "cache-control": "no-cache",

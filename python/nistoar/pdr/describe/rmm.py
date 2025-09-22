@@ -24,7 +24,7 @@ class MetadataClient(object):
     """
     COLL_LATEST   = "records"
     COLL_VERSIONS = "versions"
-    COLL_RELEASES = "releaseSets"
+    COLL_RELEASES = "releasesets"
 
     def __init__(self, baseurl: str):
         self.baseurl = baseurl

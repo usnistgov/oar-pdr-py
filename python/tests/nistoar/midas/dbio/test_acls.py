@@ -28,6 +28,7 @@ class TestACLs(test.TestCase):
         self.assertIn(ACLs.WRITE, self.acls._perms)
         self.assertIn(ACLs.ADMIN, self.acls._perms)
         self.assertIn(ACLs.DELETE, self.acls._perms)
+        self.assertNotIn(ACLs.PUBLISH, self.acls._perms)
         self.assertEqual(self.acls._perms[ACLs.READ], [self.user])
         self.assertEqual(self.acls._perms[ACLs.WRITE], [self.user])
         self.assertEqual(self.acls._perms[ACLs.ADMIN], [self.user])
@@ -60,6 +61,11 @@ class TestACLs(test.TestCase):
         self.assertEqual(list(self.acls.iter_perm_granted(ACLs.ADMIN)), [self.user])
         self.acls.revoke_perm_from(ACLs.ADMIN, "alice", self.user, protect_owner=False)
         self.assertEqual(list(self.acls.iter_perm_granted(ACLs.ADMIN)), [])
+
+        with self.assertRaises(base.NotAuthorized):
+            self.acls.grant_perm_to(ACLs.PUBLISH, "alice")
+        self.acls._rec._cli._cfg['superusers'] = [self.user]
+        self.acls.grant_perm_to(ACLs.PUBLISH, "alice")
 
     def test_grant_revoke_perm_from_all(self):
         self.acls.grant_perm_to(ACLs.READ, "alice")

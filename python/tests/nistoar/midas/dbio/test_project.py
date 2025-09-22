@@ -1,8 +1,9 @@
-import os, json, pdb, logging, tempfile
+import os, json, pdb, logging, tempfile, re
 import unittest as test
+from collections.abc import Mapping
 
 from nistoar.midas.dbio import inmem, base
-from nistoar.midas.dbio import project
+from nistoar.midas.dbio import project, status
 from nistoar.pdr.utils import prov
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_project.")
@@ -12,8 +13,10 @@ def setUpModule():
     global loghdlr
     global rootlog
     rootlog = logging.getLogger()
+    rootlog.setLevel(logging.DEBUG)
     loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_pdp.log"))
     loghdlr.setLevel(logging.DEBUG)
+    loghdlr.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     rootlog.addHandler(loghdlr)
 
 def tearDownModule():
@@ -180,6 +183,81 @@ class TestProjectService(test.TestCase):
         self.assertEqual(prec.meta, {"foruser": "harry", "agent_vehicle": 'midas'})
         self.assertEqual(prec.status.created_by, "midas/nstr1")
 
+    def test_delete_new_record(self):
+        self.create_service()
+        prec = self.project.create_record("gurn", {"color": "red"}, {"temper": "dark"})
+        prec = self.project.get_record(prec.id)
+        self.assertIsNone(prec.status.published_as)  # never been published
+
+        dprec = self.project.delete_record(prec.id)
+        self.assertIsNone(dprec)
+        with self.assertRaises(project.ObjectNotFound):
+            self.project.get_record(prec.id)
+
+    def test_restore_last_published_data(self):
+        self.create_service()
+        prec = self.project.create_record("gurn", {"color": "red"}, {"temper": "dark"})
+        with self.assertRaises(ValueError):
+            self.project._restore_last_published_data(prec)
+
+        recd = prec.to_dict()
+        recd['id'] = "ark:/88434/" + re.sub(r':', '-', prec.id)
+        recd['name'] = recd['id']
+        prec.status.publish(recd['id'], "1.0.0")
+        prec.save()
+
+        pubcli = self.project.dbcli.client_for(self.project.dbcli.project + "_latest")
+        pubrec = project.ProjectRecord(pubcli.project, recd, pubcli)
+        pubrec.status.set_state(status.SUBMITTED)
+        pubrec.save()
+        pubrec = pubcli.get_record_for(recd['id'])
+        self.assertEqual(pubrec.id, recd['id'])
+        self.assertTrue(pubrec.id.startswith("ark:/"))
+
+        self.project.update_data(prec.id, {"title": "Now."})
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data.get('color'), "red")
+        self.assertEqual(prec.data.get('title'), "Now.")
+        self.assertEqual(prec.status.state, status.EDIT)
+
+        self.project._restore_last_published_data(prec)
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data.get('color'), "red")
+        self.assertIsNone(prec.data.get('title'))
+        self.assertEqual(prec.status.state, status.SUBMITTED)
+
+    def test_delete_revision(self):
+        self.create_service()
+        prec = self.project.create_record("gurn", {"color": "red"}, {"temper": "dark"})
+        with self.assertRaises(ValueError):
+            self.project._restore_last_published_data(prec)
+
+        recd = prec.to_dict()
+        recd['id'] = "ark:/88434/" + re.sub(r':', '-', prec.id)
+        recd['name'] = recd['id']
+        prec.status.publish(recd['id'], "1.0.0")
+        prec.save()
+
+        pubcli = self.project.dbcli.client_for(self.project.dbcli.project + "_latest")
+        pubrec = project.ProjectRecord(pubcli.project, recd, pubcli)
+        pubrec.status.set_state(status.PUBLISHED)
+        pubrec.save()
+        pubrec = pubcli.get_record_for(recd['id'])
+        self.assertEqual(pubrec.id, recd['id'])
+        self.assertTrue(pubrec.id.startswith("ark:/"))
+
+        self.project.update_data(prec.id, {"title": "Now."})
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data.get('color'), "red")
+        self.assertEqual(prec.data.get('title'), "Now.")
+        self.assertEqual(prec.status.state, status.EDIT)
+
+        self.project.delete_record(prec.id)
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data.get('color'), "red")
+        self.assertIsNone(prec.data.get('title'))
+        self.assertEqual(prec.status.state, status.PUBLISHED)
+
     def test_get_data(self):
         self.create_service()
         self.assertTrue(not self.project.dbcli.name_exists("gurn"))
@@ -202,8 +280,7 @@ class TestProjectService(test.TestCase):
             self.project.get_data(prec.id, "pos/desc/b")
         with self.assertRaises(project.ObjectNotFound):
             self.project.get_data("goober")
-        
-        
+
 
     def test_update_replace_data(self):
         self.create_service()
@@ -270,6 +347,63 @@ class TestProjectService(test.TestCase):
 
         self.assertEqual(len(self.project.dbcli._db.get(base.PROV_ACT_LOG, {}).get(prec.id,[])), 6)
 
+    def test_prep_for_update(self):
+        self.create_service()
+        self.assertTrue(not self.project.dbcli.name_exists("goob"))
+        
+        prec = self.project.create_record("goob")
+        prec.status.set_state(status.PUBLISHED)
+
+        self.project._prep_for_update(prec, "Boom!", False)
+        self.assertEqual(prec.status.state, status.PUBLISHED)
+        self.assertEqual(prec.status.action, "update-prep")
+        self.assertEqual(prec.status.message, "Boom!")
+
+        # status was saved
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.PUBLISHED)
+        self.assertEqual(prec.status.action, "update-prep")
+        self.assertEqual(prec.status.message, "Boom!")
+
+        self.project._prep_for_update(prec)
+        self.assertEqual(prec.status.state, status.EDIT)
+        self.assertEqual(prec.status.action, "update-prep")
+        self.assertNotEqual(prec.status.message, "Boom!")
+        
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.EDIT)
+        self.assertEqual(prec.status.action, "update-prep")
+        self.assertNotEqual(prec.status.message, "Boom!")
+
+
+    def test_revise(self):
+        # tests call to preparation after publication via update_data() or replace_data().
+
+        self.create_service()
+        self.assertTrue(not self.project.dbcli.name_exists("goob"))
+        
+        prec = self.project.create_record("goob")
+        prec.status.set_state(status.PUBLISHED)
+        prec.save()
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.PUBLISHED)
+
+        self.project.update_data(prec.id, {"title": "Hello"})
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.EDIT)
+        self.assertEqual(prec.status.action, "update")
+
+        prec.status.set_state(status.PUBLISHED)
+        prec.save()
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.PUBLISHED)
+
+        self.project.replace_data(prec.id, {"title": "Goodbye"})
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.status.state, status.EDIT)
+        self.assertEqual(prec.status.action, "update")
+
+
     def test_clear_data(self):
         self.create_service()
         prec = self.project.create_record("goob")
@@ -301,10 +435,16 @@ class TestProjectService(test.TestCase):
         prec = self.project.create_record("goob")
         self.assertEqual(prec.status.state, "edit")
         self.assertIn("created", prec.status.message)
+        self.assertNotIn("@version", prec.data)
+        self.assertNotIn("@id", prec.data)
+        
         data = self.project.update_data(prec.id, {"color": "red", "pos": {"x": 23, "y": 12, "grid": "A"}})
         self.project.finalize(prec.id)
         stat = self.project.get_status(prec.id)
         self.assertEqual(stat.state, "ready")
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data.get("@version"), "1.0.0")
+        self.assertEqual(prec.data.get("@id"), "ark:/88434/mdm1-0003")
         self.assertTrue(stat.message.startswith("draft is ready for submission as "))
 
         prec = self.project.get_record(prec.id)
@@ -313,6 +453,39 @@ class TestProjectService(test.TestCase):
         with self.assertRaises(project.NotEditable):
             self.project.finalize(prec.id)
         
+    def test_submit(self):
+        self.create_service()
+        prec = self.project.create_record("goob")
+        self.assertEqual(prec.status.state, "edit")
+        self.assertIn("created", prec.status.message)
+        self.assertNotIn("@version", prec.data)
+        self.assertNotIn("@id", prec.data)
+        
+        self.project.submit(prec.id)
+        prec = self.project.get_record(prec.id)
+        self.assertEqual(prec.data.get("@version"), "1.0.0")
+        self.assertEqual(prec.data.get("@id"), "ark:/88434/mdm1-0003")
+        self.assertEqual(prec.status.state, "published")
+
+        pubcli = self.project.dbcli.client_for(self.project.dbcli.project+"_latest")
+        pubrec = pubcli.get_record_for(prec.data["@id"])
+        self.assertEqual(pubrec.id, prec.data["@id"])
+        self.assertEqual(pubrec.data.get('@version'), "1.0.0")
+        self.assertEqual(pubrec.acls._perms['delete'], [])
+        self.assertEqual(pubrec.acls._perms['write'], [])
+        self.assertEqual(pubrec.acls._perms['admin'], [])
+        self.assertEqual(pubrec.acls._perms['read'], ["grp0:public"])
+
+        pubcli = self.project.dbcli.client_for(self.project.dbcli.project+"_version")
+        vid = prec.data["@id"] + "/pdr:v/" + prec.data["@version"]
+        pubrec = pubcli.get_record_for(vid)
+        self.assertEqual(pubrec.id, vid)
+        self.assertEqual(pubrec.data.get('@version'), "1.0.0")
+        self.assertEqual(pubrec.acls._perms['delete'], [])
+        self.assertEqual(pubrec.acls._perms['write'], [])
+        self.assertEqual(pubrec.acls._perms['admin'], [])
+        self.assertEqual(pubrec.acls._perms['read'], ["grp0:public"])
+
     def test_default_review(self):
         self.create_service()
         prec = self.project.create_record("goob")
@@ -320,8 +493,163 @@ class TestProjectService(test.TestCase):
         
         with self.assertRaises(project.ObjectNotFound):
             self.project.review("goober")
+        
+    def test_apply_external_review(self):
+        self.create_service()
+        prec = self.project.create_record("goob")
+        self.assertEqual(prec.status.state, "edit")
+        self.assertIn("created", prec.status.message)
+        self.assertNotIn("@version", prec.data)
+        self.assertNotIn("@id", prec.data)
 
+        id = prec.id
+        with self.assertRaises(project.NotAuthorized):
+            self.project.apply_external_review(id, "nps", "group-leader-review", id, "/od/id/"+id)
 
+        self.project.dbcli._cfg['superusers'] = ['nstr1']
+        prec = self.project.get_record(id)
+        prec.acls.grant_perm_to(base.ACLs.PUBLISH, 'nstr1')
+        prec.save()
+        self.project.dbcli._cfg['superusers'] = []
+        
+        with self.assertRaises(project.NotSubmitable):
+            self.project.publish(id)  # not submitted yet
+
+        self.project.apply_external_review(id, "nps", "group-leader-review", id, "/od/id/"+id)
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "edit")
+        sdata = stat.to_dict()
+        self.assertIn("nps", sdata.get("external_review", {}))
+        self.assertNotIn("elrs", sdata.get("external_review", {}))
+        rdata = sdata.get("external_review", {}).get("nps")
+        self.assertTrue(isinstance(rdata, Mapping))
+        self.assertEqual(rdata['phase'], "group-leader-review")
+        self.assertEqual(rdata['@id'], id)
+        self.assertEqual(rdata['info_at'], "/od/id/"+id)
+        self.assertNotIn('feedback', rdata)
+        self.assertNotIn('gurn', rdata)
+
+        fb = {
+            "reviewer": "jerry",
+            "type": "warn",
+            "description": "this looks like dangerous gnostic data"
+        }
+        self.project.apply_external_review(id, "elrs", "tech", feedback=[fb], gurn="burn")
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "edit")
+        sdata = stat.to_dict()
+        self.assertIn("nps", sdata.get("external_review", {}))
+        self.assertIn("elrs", sdata.get("external_review", {}))
+        rdata = sdata.get("external_review", {}).get("elrs")
+        self.assertTrue(isinstance(rdata, Mapping))
+        self.assertEqual(rdata['phase'], "tech")
+        self.assertNotIn('@id', rdata)
+        self.assertNotIn('info_at', rdata)
+        self.assertIn('feedback', rdata)
+        self.assertEqual(len(rdata['feedback']), 1)
+        self.assertEqual(rdata['feedback'][0], fb)
+        self.assertIn('gurn', rdata)
+
+        self.assertLess(prec.status.submitted, 0)
+        prec.status.set_state(status.SUBMITTED)
+        self.assertGreater(prec.status.submitted, 0)
+        prec.save()
+
+        self.project.apply_external_review(id, "elrs", "tech", id, feedback=[])
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "submitted")
+        sdata = stat.to_dict()
+        self.assertIn("nps", sdata.get("external_review", {}))
+        self.assertIn("elrs", sdata.get("external_review", {}))
+        rdata = sdata.get("external_review", {}).get("elrs")
+        self.assertTrue(isinstance(rdata, Mapping))
+        self.assertEqual(rdata['phase'], "tech")
+        self.assertEqual(rdata['@id'], id)
+        self.assertNotIn('info_at', rdata)
+        self.assertIn('feedback', rdata)
+        self.assertEqual(len(rdata['feedback']), 0)
+        self.assertIn('gurn', rdata)
+
+        with self.assertRaises(project.NotSubmitable):
+            self.project.publish(id)
+
+        self.project.approve(id, "elrs", publish=False)
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "submitted")
+        sdata = stat.to_dict()
+        self.assertIn("nps", sdata.get("external_review", {}))
+        self.assertIn("elrs", sdata.get("external_review", {}))
+        rdata = sdata.get("external_review", {}).get("elrs")
+        self.assertEqual(rdata.get('phase'), "approved")
+        rdata = sdata.get("external_review", {}).get("nps")
+        self.assertNotEqual(rdata.get('phase'), "approved")
+        
+        with self.assertRaises(project.NotSubmitable):
+            self.project.publish(id)
+
+        self.project.approve(id, "nps", publish=False)
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "accepted")
+        sdata = stat.to_dict()
+        self.assertIn("nps", sdata.get("external_review", {}))
+        self.assertIn("elrs", sdata.get("external_review", {}))
+        rdata = sdata.get("external_review", {}).get("elrs")
+        self.assertEqual(rdata.get('phase'), "approved")
+        rdata = sdata.get("external_review", {}).get("nps")
+        self.assertEqual(rdata.get('phase'), "approved")
+
+        self.project.publish(id)
+        prec = self.project.get_record(id)
+        stat = prec.status
+        self.assertEqual(stat.state, "published")
+
+    def test_publish(self):
+        self.create_service()
+        prec = self.project.create_record("goob")
+        self.assertEqual(prec.status.state, "edit")
+        self.assertIn("created", prec.status.message)
+        self.assertNotIn("@version", prec.data)
+        self.assertNotIn("@id", prec.data)
+        id = prec.id
+        
+        with self.assertRaises(project.NotAuthorized):
+            self.project.publish(id)  
+
+        self.project.dbcli._cfg['superusers'] = ['nstr1']
+        prec = self.project.get_record(id)
+        prec.acls.grant_perm_to(base.ACLs.PUBLISH, 'nstr1')
+        prec.save()
+        self.project.dbcli._cfg['superusers'] = []
+        
+        with self.assertRaises(project.NotSubmitable):
+            self.project.publish(id)  # not submitted yet
+        prec = self.project.get_record(id)
+        self.assertLess(prec.status.submitted, 0)
+
+        prec.status.set_state(status.INPRESS)
+        prec.save()
+        with self.assertRaises(project.NotSubmitable):
+            self.project.publish(id)  # in press already
+
+        prec.status.set_state(status.SUBMITTED)
+        prec.save()
+        prec = self.project.get_record(id)
+        self.assertGreater(prec.status.submitted, 0)
+        self.assertLess(prec.status.published, 0)
+
+        self.project.publish(id)
+        prec = self.project.get_record(id)
+        self.assertGreater(prec.status.submitted, 0)
+        self.assertGreater(prec.status.published, 0)
+        
+        
+        
+        
 class TestProjectServiceFactory(test.TestCase):
 
     def setUp(self):
@@ -368,7 +696,6 @@ class TestProjectServiceFactory(test.TestCase):
         prec = svc.create_record("goob")
         self.assertEqual(prec._coll, "dmp")
     
-
     
 
 

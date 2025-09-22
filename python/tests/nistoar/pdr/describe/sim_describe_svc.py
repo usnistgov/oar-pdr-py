@@ -4,6 +4,11 @@ from collections import OrderedDict
 from io import TextIOWrapper
 from wsgiref.headers import Headers
 
+from nistoar.pdr.describe.rmm import MetadataClient as rmm
+releasesets = rmm.COLL_RELEASES
+versions = rmm.COLL_VERSIONS
+records = rmm.COLL_LATEST
+
 testdir = os.path.dirname(os.path.abspath(__file__))
 def_archdir = os.path.join(testdir, 'data', 'rmm-test-archive')
 
@@ -39,12 +44,12 @@ class SimArchive(object):
         return lu
 
     def loadall(self):
-        self.records = self.loadlu("records")
-        self.versions = self.loadlu("versions")
-        self.releaseSets = self.loadlu("releaseSets")
+        self.records = self.loadlu(rmm.COLL_LATEST)
+        self.versions = self.loadlu(rmm.COLL_VERSIONS)
+        self.releasesets = self.loadlu(rmm.COLL_RELEASES)
 
     def add_rec(self, coll, data):
-        if coll not in "records versions releaseSets".split():
+        if coll not in [records, versions, releasesets]:
             raise ValueError("Unsupported collection: "+coll)
 
         aipid = self.pfxre.sub('', data.get('ediid', data.get('@id', ''))).rstrip('/')
@@ -71,12 +76,12 @@ class SimArchive(object):
             return json.load(fd, object_pairs_hook=OrderedDict)
         
     def pdrid2aipid(self, coll, ediid):
-        if coll not in "records versions releaseSets".split():
+        if coll not in [records, versions, releasesets]:
             raise ValueError("Bad collection name: " + coll)
         return getattr(self, coll).get(ediid)
 
     def aipids(self, coll="records"):
-        if coll not in "records versions releaseSets".split():
+        if coll not in [records, versions, releasesets]:
             raise ValueError("Bad collection name: " + coll)
         return [f[:-5] for f in os.listdir(os.path.join(self.dir, coll)) if f.endswith(".json")]
 
@@ -165,7 +170,7 @@ class SimRMMHandler(object):
 
         return self.send_error(201, "Accepted")
 
-    _collections = "records versions releaseSets".split()
+    _collections = [records, versions, releasesets]
     def do_GET(self, path, params=None):
         if path:
             path = path.rstrip('/')
