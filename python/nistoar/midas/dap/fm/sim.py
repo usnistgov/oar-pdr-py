@@ -229,8 +229,16 @@ class SimFMWebDAVClient(FMWebDAVClient):
             target = self.rootdir/file
             if target.is_file():
                 target.unlink()
+        def upsync(local_path, remote_path):
+            src = Path(local_path)
+            if not src.is_dir():
+                shutil.copy(src, self.rootdir/remote_path)
+                return reqresp
+            shutil.copytree(src, self.rootdir/remote_path, dirs_exist_ok=True)
+            return reqresp
         self.wdcli.upload_to = upto
         self.wdcli.clean = delfile
+        self.wdcli.upload_sync = upsync
     
 
     def is_directory(self, path):

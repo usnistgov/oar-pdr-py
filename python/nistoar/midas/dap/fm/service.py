@@ -17,7 +17,7 @@ from copy import deepcopy
 from pathlib import Path
 from collections import OrderedDict
 from collections.abc import Mapping
-from typing import List
+from typing import List, NewType
 from urllib.parse import urljoin
 
 import requests
@@ -27,6 +27,10 @@ from .clients import NextcloudApi, FMWebDAVClient
 from .exceptions import *
 from nistoar.base.config import merge_config, ConfigurationException
 from nistoar.pdr.utils import read_json, write_json
+from nistoar.pdr import def_etc_dir
+
+# forward declare
+FMSpace = NewType('FMSpace', object)
 
 class MIDASFileManagerService:
     """
@@ -199,7 +203,40 @@ class MIDASFileManagerService:
             space.set_permissions_for(space.uploads_folder, foruser, PERM_ALL)
 
         space._set_creator(foruser)  # side-effect: sets the uploads directory file id
+
+        # preload the space with files
+        self._preload(space, foruser)
+        
         return space
+
+    def _preload(self, space: FMSpace, foruser: str):
+        srcdir = self.cfg.get('preload_uploads_src')
+        if not srcdir:
+            srcdir = os.path.join(def_etc_dir, "fm", "preload", "uploads")
+        if not os.path.isdir(srcdir):
+            self.log.warn("MIDASFileManagerService: Preload source dir not found: %s; skipping preload",
+                          srcdir)
+            return
+        if not srcdir.endswith('/'):
+            srcdir += '/'
+
+        try:
+            if not self.wdcli.wdcli:
+                self.wdcli.authenticate()
+            resp = self.wdcli.wdcli.upload_sync(local_path=srcdir, remote_path=space.uploads_davpath+'/')
+
+#            if resp and (resp.status_code < 200 or resp.status_code >= 300):
+#                msg = "Unexpected response during upload of '%s' to system_davpath: %s (%s)" % \
+#                      (filename, resp.reason, resp.status_code)
+#                raise UnexpectedFileManagerResponse(msg, code=resp.status_code)
+
+            self.log.debug('Uploaded preload files from %s', srcdir)
+
+        except WebDavException as e:
+            msg = "Failed to preload uploads dir with files from %s: %s" % (srcdir, str(e))
+            raise FileManagerServerError(msg) from e
+        
+            
 
     def space_exists(self, id: str) -> bool:
         """
@@ -606,7 +643,7 @@ class FMSpace:
             response = wdcli.wdcli.upload_to(json.dumps(md, indent=4).encode('utf-8'),
                                              self.system_davpath+'/'+filename)
 
-            if response.status_code < 200 or response.status_code >= 300:
+            if response and (response.status_code < 200 or response.status_code >= 300):
                 msg = "Unexpected response during upload of '%s' to system_davpath: %s (%s)" % \
                       (filename, response.reason, response.status_code)
                 raise UnexpectedFileManagerResponse(msg, code=response.status_code)
