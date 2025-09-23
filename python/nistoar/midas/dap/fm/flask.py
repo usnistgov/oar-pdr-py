@@ -1,7 +1,33 @@
 """
-A WSGI application providing the MIDAS-application layer to the file manager, implemented with Flask
+A WSGI application providing the MIDAS-application layer to the file manager, implemented 
+with Flask
+
+The :py:func:`create_app` function instantiates the WSGI application that can be provided
+to a WSGI server (e.g. uWSGI).  This function requires a configuration dictionary and 
+looks for the following configuration parameters:
+
+``name``
+   (str) _optional_.  a name to the flask app; it is also used as the root name of 
+   the default logger.
+
+``flask``
+   (dict) _required_.  The paramters specific to the flask-specific; this includes 
+   ``secret_key`` and ``debug``.
+
+``service``
+   (dict) _required_.  The parameters for configuring the underlying 
+   ``MIDASFileManagerService``;
+
+``allowed_service_users``
+   (list or str) _optional_.  a list of client identities that are authorized to 
+   use this service.  When x509 certificates are used to authenticate, the client's 
+   CN must appear in this list.
+
+``debug``
+   (bool) _optional_.  If True, debugging will be turned onin the Flask infrastructure.
 """
 import logging
+from logging import Logger
 from functools import wraps
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -87,11 +113,15 @@ class NoAuthNeededAuthHandler(AllowedBaseAuthHandler):
 auth = DelegatedX509AuthHandler(['admin'])
 # auth = NoAuthNeededAuthHandler('admin')
 
-def create_app(config: Mapping, fmsvc: fmservice.MIDASFileManagerService=None):
+def create_app(config: Mapping, fmsvc: fmservice.MIDASFileManagerService=None, 
+               log: Logger=None):
     """
     create the Flask application
 
     :param dict config:  the configuration data for the app
+    :param log  Logger:  the logger to use (optional)
+    :param fmsvc MIDASFileManagerService:  the file-manager service to use; if not
+             provided, one will be created
     """
     missing = []
     for param in "flask service".split():
@@ -104,13 +134,11 @@ def create_app(config: Mapping, fmsvc: fmservice.MIDASFileManagerService=None):
         raise ConfigurationException("Missing required config parameters: " +
                                      ", ".join(missing))
     if not isinstance(config.get('allowed_service_endpoints', []), list):
-        raise ConfigurationException("Config param, allowed_service_endpoints, not a str: " +
+        raise ConfigurationException("Config param, allowed_service_endpoints, not a list: " +
                                      str(type(config.get('allowed_service_endpoints'))))
-    if not isinstance(config.get('allowed_users', []), list):
-        raise ConfigurationException("Config param, allowed_service_users, not a str: " +
+    if not isinstance(config.get('allowed_service_users', []), list):
+        raise ConfigurationException("Config param, allowed_service_users, not a list: " +
                                      str(type(config.get('allowed_service_users'))))
-
-    configure_log(config=config)
 
     if config.get('debug'):
         config['flask']['DEBUG'] = True
@@ -119,7 +147,9 @@ def create_app(config: Mapping, fmsvc: fmservice.MIDASFileManagerService=None):
 
     app = Flask(__name__)
     app.name = config.get('name', 'midasfm')
-    app.logger = logging.getLogger(app.name)
+    if not log:
+        log = logging.getLogger(app.name)
+    app.logger = log
     app.config.update(config)
     if config.get('allowed_service_users'):
         auth.allowed_users = config['allowed_service_users']
@@ -128,7 +158,7 @@ def create_app(config: Mapping, fmsvc: fmservice.MIDASFileManagerService=None):
         fmsvc = fmservice.MIDASFileManagerService(config.get('service', {}), app.logger)
     app.service = fmsvc
 
-    app.register_blueprint(SpacesBlueprint(), url_prefix='/mfm1')
+    app.register_blueprint(SpacesBlueprint(), url_prefix=config.get('endpoint_path', '/mfm1'))
 
     return app
 

@@ -40,7 +40,7 @@ class FileManager:
         self.authcfg = config.get('auth', {})
         self.token = None
 
-    def _get_token(self):
+    def _get_token(self, token_ep: str, req_headers: Mapping = {}, **kwargs):
         """
         retrieve an authentication token via a means prescribed in the instance configuration.
         If this client is not configured for this type of configuration, None is returned.
@@ -116,10 +116,12 @@ class FileManager:
             return output
 
         except requests.exceptions.JSONDecodeError as ex:
-            raise UnexpectedFileManagerResponse("Expected JSON response; got "+resp.text)
+            raise UnexpectedFileManagerResponse("Expected JSON response; got "+
+                                                resp.text) from ex
             
         except requests.RequestException as ex:
-            raise FileManagerCommError("Failed to connect to remote file manager service: "+str(ex))
+            raise FileManagerCommError("Failed to connect to remote file manager service: "+
+                                       str(ex)) from ex
 
     def create_space(self, id: str, foruser: str) -> Mapping:
         """
