@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from .base import PeopleService
 from .mongo import MongoPeopleService
 from .. import NSDClientError, NSDException, NSDResourceNotFound
+from nistoar.base.config import ConfigurationException
 
 def create_people_service(config):
     """
