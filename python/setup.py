@@ -17,7 +17,7 @@ CLASSIFIERS = [
 
 SCRIPTS = [
     'pdr.py', 'pdrhealthcheck.py',
-    'resolver-uwsgi.py', 'pdp-uwsgi.py', 'midas-uwsgi.py'
+    'resolver-uwsgi.py', 'pdp-uwsgi.py', 'midas-uwsgi.py', 'fm-uwsgi.py'
 ]
 
 TESTSCRIPTS = [
