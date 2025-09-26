@@ -158,6 +158,23 @@ class FileManagerResourceNotFound(FileManagerClientError):
                 message += f": {ep}"
         super(FileManagerResourceNotFound, self).__init__(message, code, ep, resptext)
 
+class FileSpaceNotFound(FileManagerResourceNotFound):
+    """
+    an error indicating that the requested file space (the root folder setup for file uploads)
+    does not exist.  This typically exception captures a 404 response.
+    """
+
+    def __init__(self, id: str=None, message: str=None):
+        """
+        create the exception
+        :param str id:       the space identifier
+        :param str message:  an explanation of the cause of the error
+        """
+        if not message:
+            message = f"{id}: " if id else ''
+            message += "file space not found"
+        super(FileSpaceNotFound, self).__init__(id, message)
+
 class FileManagerUserUnauthorized(FileManagerClientError):
     """
     an error indicating that the user represented by the supplied credentials is not authorized 

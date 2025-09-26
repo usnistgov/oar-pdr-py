@@ -46,7 +46,7 @@ from nistoar.nsd import NSDServerError
 from . import validate
 from .. import nerdstore
 from ..nerdstore import NERDResource, NERDResourceStorage, NERDResourceStorageFactory, NERDStorageException
-from ..fm import FileManager, FileSpaceNotFound, FileSpaceException
+from ..fm import FileManager, FileManagerResourceNotFound, FileManagerException
 
 ASSIGN_DOI_NEVER   = 'never'
 ASSIGN_DOI_ALWAYS  = 'always'
@@ -153,45 +153,25 @@ class DAPProjectRecord(ProjectRecord):
         if not self._data.get('file_space', {}).get('creator'):
             if not who:
                 who = self._cli.user_id
+            self._data.setdefault('file_space', {})
             try:
-                self._fmcli.get_record_space(self.id)
-            except FileSpaceNotFound as ex:
+                self._data['file_space'].update(self._fmcli.summarize_space(self.id))
+            except FileManagerResourceNotFound as ex:
                 try:
+                    self._data['file_space'] = self._fmcli.create_space(who, self.id)
                     self._data['file_space']['action'] = "create"
-                    self._fmcli.create_record_space(who, self.id)
                     self._data['file_space']['created'] = \
                         datetime.fromtimestamp(math.floor(time.time())).isoformat()
                     self._data['file_space']['creator'] = who
+                    self._data['file_space'].setdefault('id', self.id)
 
-                except FileSpaceException as ex:
+                except FileManagerException as ex:
                     self.log.error("Problem creating file space: %s", str(ex))
                     self._data['file_space']['message'] = "Failed to create file space"
                     raise
             else:
-                self._data['file_space']['creator'] = who
-                self._data['file_space']['id'] = self.id  # the ID of the space is the same as the rec
-
-    def determine_uploads_url(self):
-        """
-        return the expected URL for the browser-based view of a record space's uploads directory.
-        """
-        fs = self.file_space
-        if self._fmcli and fs and fs.get('uploads_dir_id'):
-            return f"{self._fmcli.web_base}/{fs['uploads_dir_id']}?dir=/{self.id}/{self.id}"
-        else:
-            return f"/{self.id}/{self.id}"
-
-    def to_dict(self):
-        out = super().to_dict()
-        if self._fmcli and out.get('file_space') and out['file_space'].get('id'):
-
-            out['file_space']['location'] = self.determine_uploads_url()
-
-            if self._fmcli.cfg.get('dav_base_url'):
-                out['file_space']['uploads_dav_url'] = \
-                    '/'.join([self._fmcli.cfg['dav_base_url'].rstrip('/'),
-                              out['file_space'].get('id'), out['file_space'].get('id')])
-        return out
+                self._data['file_space'].setdefault('creator', who)
+                self._data['file_space'].setdefault('id', self.id)
 
 
 to_DAPRec = DAPProjectRecord.from_dap_record
@@ -1523,7 +1503,7 @@ class DAPService(ProjectService):
         :param str id:  the ID for the DAP project to sync
         :raises ObjectNotFound:  if the project with the given ID does not exist
         :raises NotAuthorized:   if the user does not write permission to make this update
-        :raises FileSpaceException:  if syncing failed for an unexpected reason
+        :raises FileManagerException:  if syncing failed for an unexpected reason
         """
         if not self._fmcli:
             return {}
@@ -1539,7 +1519,7 @@ class DAPService(ProjectService):
                     # a scan is still in progress, so just get the latests updates; don't start a new scan
                     prec.file_space.update(files.update_metadata())
                 else:
-                    prec.file_space.update(files.update_hierarchy())  # may raise FileSpaceException
+                    prec.file_space.update(files.update_hierarchy())  # may raise FileManagerException
                 prec.save()
         return prec.to_dict().get('file_space', {})
             
@@ -2601,7 +2581,7 @@ class DAPService(ProjectService):
             self._set_review_permissions(prec)
             # don't save until submission process is complete
 
-        except FileSpaceException as ex:
+        except FileManagerException as ex:
             self.log.warning("Trouble updating file store permissions: %s", str(ex))
 
         except Exception as ex:
@@ -2637,8 +2617,8 @@ class DAPService(ProjectService):
         if self._fmcli:
             for who in prec.acls.iter_perm_granted(ACLs.WRITE):
                 try:
-                    self._fmcli.manage_permissions(who, prec.id, "Read")
-                except FileSpaceException as ex:
+                    self._fmcli.set_space_permissions(prec.id, { who: "Read" })
+                except FileManagerException as ex:
                     self.log.error("Failed to write-protect file space: %s", str(ex))
 
         # revoke permissions that can change the record
@@ -2677,8 +2657,8 @@ class DAPService(ProjectService):
         if self._fmcli:
             for who in prec.acls.iter_perm_granted(ACLs.WRITE):
                 try:
-                    self._fmcli.manage_permissions(who, prec.id, "Write")
-                except FileSpaceException as ex:
+                    self._fmcli.set_space_permissions(prec.id, { who: "Write" })
+                except FileManagerException as ex:
                     self.log.error("Failed to make file space writable again: %s", str(ex))
 
         if not for_review:
@@ -2984,7 +2964,7 @@ class DAPProjectInfoHandler(ProjectInfoHandler):
             return self.send_error_resp(404, "ID not found")
         except NotEditable as ex:
             return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit or ready")
-        except (FileSpaceException, NERDStorageException) as ex:
+        except (FileManagerException, NERDStorageException) as ex:
             self.log.error("Trouble communicating with file manager: %s", str(ex))
             return self.send_error_resp(500, "File manager service error",
                                         "Trouble communicating with file manager")

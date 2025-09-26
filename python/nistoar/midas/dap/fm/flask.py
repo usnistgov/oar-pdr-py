@@ -392,7 +392,7 @@ class SpaceScanReportResource(Resource):
     @auth.authorization_required
     def delete(self, spaceid, scanid):
         """
-        test for the existence of the identified space
+        delete the report for the scan having the given identifier.  
         """
         svc = current_app.service
         try:

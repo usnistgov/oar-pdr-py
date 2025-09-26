@@ -16,7 +16,7 @@ daptestdir = Path(__file__).parents[1] / 'data'
 def load_simple():
     return read_json(sipnerd)
 
-def read_scan(id=None):
+def read_scan(id=None, *kw):
     return read_json(daptestdir/"scan-report.json")
 
 def read_scan_reply(id=None):
@@ -55,8 +55,8 @@ class TestFMFSFileComps(test.TestCase):
         self.fm = None
         with patch('nistoar.midas.dap.fm.FileManager') as mock:
             self.fm = mock.return_value
-            self.fm.post_scan_files.return_value = ack
-            self.fm.get_scan_files.return_value = read_scan()
+            self.fm.start_scan.return_value = ack
+            self.fm.get_scan.side_effect = read_scan
             self.fm.get_uploads_directory.return_value = {
                 "fileid": "130",
                 "type": "folder",
@@ -89,7 +89,7 @@ class TestFMFSFileComps(test.TestCase):
         self.assertIsNone(self.cmps.last_scan_id)
         self.cmps.last_scan_id = self.scanid
         scan = self.cmps._get_file_scan()
-        self.fm.scan_files.assert_not_called()
+        self.fm.start_scan.assert_not_called()
         self.assertEqual(scan['scan_id'], self.scanid)
         self.assertIn('contents', scan)
         self.assertEqual(len(scan['contents']), 8)
@@ -103,8 +103,8 @@ class TestFMFSFileComps(test.TestCase):
         self.assertIsNone(self.cmps.last_scan_id)
         scan = self.cmps._scan_files()
         self.assertEqual(self.cmps.last_scan_id, self.scanid)
-        self.fm.delete_scan_files.assert_not_called()
-        self.fm.post_scan_files.assert_called()
+        self.fm.delete_scan.assert_not_called()
+        self.fm.start_scan.assert_called()
         self.assertEqual(scan['scan_id'], self.scanid)
         self.assertIn('contents', scan)
         self.assertEqual(len(scan['contents']), 8)
@@ -567,7 +567,7 @@ class TestFMFSFileComps(test.TestCase):
         self.cmps._fmsumf.unlink()
         write_json(summ, self.cmps._fmsumf)
         self.assertEqual(self.cmps.count, 0)
-        self.fm.get_scan_files.return_value = read_scan()
+        #self.fm.get_scan.return_value = read_scan()
 
         self.cmps = fmfs.FMFSFileComps(inmem.InMemoryResource("pdr0:0001"), self.outdir.name, self.fm)
         self.assertEqual(self.cmps.count, 0)

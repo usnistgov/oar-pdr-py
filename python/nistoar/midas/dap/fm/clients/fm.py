@@ -210,6 +210,12 @@ class FileManager:
         """
         return self._handle_request("GET", spaceid+"/scans/"+scanid)
 
+    def delete_scan(self, spaceid: str, scanid: str):
+        """
+        delete the scan report for a particular identied scan.
+        """
+        return self._handle_request("DELETE", spaceid+"/scans/"+scanid)
+
     def start_scan(self, spaceid: str):
         """
         request a new scan to commence asynchronously.  This function will return an initial scan 

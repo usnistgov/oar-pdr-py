@@ -468,6 +468,10 @@ class FMSpace:
             out = deepcopy(_NO_FM_SUMMARY)
             out['uploads_dir_id'] = self.uploads_file_id
             out['id'] = self.id
+            out['location'] = self._make_gui_url(self.uploads_file_id)
+            davurlep = self.svc.wdcli.cfg.get('service_endpoint')
+            if davurlep:
+                out['uploads_dav_url'] = '/'.join([davurlep, self.id, self.id])
             self._cache_fm_summary(out)
         return out
 
@@ -478,11 +482,11 @@ class FMSpace:
         ``file_count``
             the number of files currently found in the space's uploads folder (as a result of 
             the last scan).  A negative value indicates the count is unknown (because the scan
-            has not happened yet.
+            has not happened yet).
         ``folder_count``
             the number of sub-folders currently found in the space's uploads folder (as a result of 
             the last scan).  A negative value indicates the count is unknown (because the scan
-            has not happened yet.
+            has not happened yet).
         ``usage``
             the total number of bytes stored as files under the uploads folder
         ``syncing``
@@ -494,6 +498,10 @@ class FMSpace:
             the ISO-formatted date of the last file scan
         ``uploads_dir_id``
             the nextcloud file identifier for the uploads directory (see :py:prop:`uploads_file_id`
+        ``location``
+            the URL for the browser-based (Nextcloud) interface to the uploads directory
+        ``uploads_dav_url``
+            the URL for WebDAV interface to the uploads directory
         """
         out = self._load_summary()
         try:
