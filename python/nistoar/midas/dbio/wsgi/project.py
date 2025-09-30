@@ -556,7 +556,8 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         if not perms:
             perms = dbio.ACLs.OWN
         
-        if path == "ids":
+        # Check if this is the :ids interface type (passed from constructor)
+        if path == ":ids":  # Changed from "ids" to ":ids"
             # Handle retrieval of multiple records by IDs
             ids = params.get('ids', []) if qstr else []
             if not ids:
