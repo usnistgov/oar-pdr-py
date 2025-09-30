@@ -1247,7 +1247,7 @@ class DBClient(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def select_records_by_ids(self, ids: Sequence[str], perms) -> Iterator[ProjectRecord]:
+    def select_records_by_ids(self, ids: Sequence[str], perm: Permissions = ACLs.OWN) -> Iterator[ProjectRecord]:
         """
         return an iterator of project records for which the given user has at least one of the given
         permissions

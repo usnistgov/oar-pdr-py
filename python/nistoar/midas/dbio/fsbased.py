@@ -155,6 +155,9 @@ class FSBasedDBClient(base.DBClient):
                         yield rec
                         break
 
+    def select_records_by_ids(self, ids, perm: base.Permissions = base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+        raise NotImplementedError()
+
     def adv_select_records(self, perm: base.Permissions = base.ACLs.OWN,
                            **cst) -> Iterator[base.ProjectRecord]:
         raise NotImplementedError()
