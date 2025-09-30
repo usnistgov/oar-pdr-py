@@ -526,7 +526,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         submit a search query in a project specific way.  This method is provided as a 
         hook to subclasses that may need to specialize the search strategy or manipulate the results.  
         This implementation passes the query directly to the generic DBClient instance.
-        :return:  a generator that iterates through the matched records
+        :return:  a generator that iterates through the records corresponding to the provided ids.
         """
         return self._dbcli.select_records_by_ids(ids, perms)
 

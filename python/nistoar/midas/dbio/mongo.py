@@ -219,8 +219,23 @@ class MongoDBClient(base.DBClient):
 
         except Exception as ex:
             raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
-        
-    
+
+    def select_records_by_ids(self, ids: List[str], perms) -> Iterator[base.ProjectRecord]:
+        if isinstance(perms, str):
+            perms = [perms]
+        if isinstance(perms, (list, tuple)):
+            perms = set(perms)
+
+        idents = [self.user_id] + list(self.user_groups)
+
+        try:
+            coll = self.native[self._projcoll]
+            for rec in coll.find({"id": {"$in": ids}, "acls": {"$in": idents}}):
+                yield base.ProjectRecord(self._projcoll, rec, self)
+
+        except Exception as ex:
+            raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
+
     def adv_select_records(self, filter: dict,
                            perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
         
