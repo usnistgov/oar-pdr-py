@@ -3,7 +3,7 @@ setuptools<66.0.0
 json-spec
 jsonschema==2.4.0
 requests
-pytest==4.6.5
+pytest==8.4.2
 filelock
 crossrefapi
 pyyaml
