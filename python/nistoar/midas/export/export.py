@@ -28,6 +28,8 @@ def run(input_data: List, output_format: str, output_directory: Path, template_d
         result = export(input_data[i], output_format, output_directory, template_dir, template_name, _index=i)
         results.append(result)
 
+    return results
+
 
 def export(input_item: Any, output_format: str, output_directory: Path, template_dir: str = None, template_name: str = None, _index: int = 0):
     """
@@ -45,7 +47,10 @@ def export(input_item: Any, output_format: str, output_directory: Path, template
 
     """
     # Normalize input in a format the exporters understand
-    input_type, payload, output_filename = normalize_input(input_item, index=_index)
+    info = normalize_input(input_item, index=_index)
+    input_type = info['input_type']
+    payload = info['payload']
+    output_filename = info['output_filename']
 
     # Select the right exporter
     output_format_key = (output_format or "").strip().lower()

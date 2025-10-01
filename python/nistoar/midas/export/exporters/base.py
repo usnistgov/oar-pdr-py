@@ -32,7 +32,7 @@ class Exporter(ABC):
             output_filename: Base name for the output file (without extension).
             template_name: Optional template filename the exporter uses.
 
-        Returns: A dictionary.
+        Returns: dict with at least: format, filename, mimetype, file_extension, and either bytes or text.
 
         """
         raise NotImplementedError

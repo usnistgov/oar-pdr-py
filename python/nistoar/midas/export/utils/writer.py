@@ -5,7 +5,7 @@ from pathlib import Path
 
 def write_file(output_directory: Path, result: Dict):
     """
-    Write one rendered output file to `output_directory` and return the absolute path as a string.
+    Write one rendered output file to `output_directory` and return the path as a string.
 
     Args:
         output_directory:

@@ -26,11 +26,11 @@ class MarkdownExporter(Exporter):
             case "json":
                 return self.render_json(payload, output_filename, template_name)
 
-        raise TypeError("PDFExporter.render: unsupported payload type.")
+        raise TypeError("MarkdownExporter.render: unsupported payload type.")
 
     def render_json(self, json_payload: Any, output_filename: str, template_name: str):
         """
         Render a single JSON input into a single Markdown output
         """
         # This exporter expects a mapping-like payload (DMPS style).
-        return NotImplementedError
+        raise NotImplementedError()

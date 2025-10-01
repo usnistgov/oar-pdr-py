@@ -56,7 +56,7 @@ def normalize_input(item: Any, index: int):
     Item must be either:
         - a dict with the keys `input_type` and `source`
         - a loaded json
-        - path string ending with `.json`
+        - path ending with `.json`
 
     Args:
         item:
