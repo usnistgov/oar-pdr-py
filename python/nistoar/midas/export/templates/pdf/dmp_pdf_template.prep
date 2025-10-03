@@ -340,7 +340,7 @@
       {{script}}
         data_size = ''
         if 'dataSize' in record and type(record['dataSize']) is str:
-          data_size = record['dataSize'] +  + record['dataSizeDescription']
+          data_size = record['dataSize'] + record['dataSizeDescription']
         
         if 'sizeUnit' in record and type(record['sizeUnit']) is str:
           data_size += ' ' + record['sizeUnit']

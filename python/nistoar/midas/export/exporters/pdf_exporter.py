@@ -43,7 +43,7 @@ class PDFExporter(Exporter):
         template_filename = template_name or DEFAULT_PDF_TEMPLATE
 
         # Preppy wants the module base path (without .prep extension)
-        template_path = self.resolve_template_path("pdf", template_filename).with_suffix("")
+        template_path = self.resolve_template_path("pdf", template_filename)
         preppy_template = preppy.getModule(str(template_path))
 
         # Load template and parse

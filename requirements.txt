@@ -21,4 +21,4 @@ pyjwt
 psutil
 ejsonschema @ https://github.com/usnistgov/ejsonschema/archive/master.zip
 pynoid @ https://github.com/RayPlante/pynoid/archive/master.zip
-multibag @ https://github.com/usnistgov/multibag-py/archive/0.3.zip
+multibag @ https://github.com/usnistgov/multibag-py/archive/0.6.zip
