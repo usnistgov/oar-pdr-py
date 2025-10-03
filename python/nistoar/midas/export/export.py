@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List, Optional
 from pathlib import Path
 
-from utils.loader import normalize_input
-from utils.writer import write_file
-from exporters.pdf_exporter import PDFExporter
-from exporters.markdown_exporter import MarkdownExporter
+from .utils.loader import normalize_input
+from .utils.writer import write_file
+from .exporters.pdf_exporter import PDFExporter
+from .exporters.markdown_exporter import MarkdownExporter
 
 
 def run(input_data: List, output_format: str, output_directory: Path, template_dir: str = None, template_name: str = None):
@@ -24,6 +24,8 @@ def run(input_data: List, output_format: str, output_directory: Path, template_d
 
     """
     results = []
+    if not input_data:
+        raise ValueError("No inputs provided. Pass at least one input item.")
     for i in range(len(input_data)):
         result = export(input_data[i], output_format, output_directory, template_dir, template_name, _index=i)
         results.append(result)

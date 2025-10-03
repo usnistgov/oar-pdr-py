@@ -27,9 +27,9 @@ class PDFExporterTest(test.TestCase):
         self.assertEqual(result["file_extension"], ".pdf")
         self.assertEqual(result["bytes"], b"%PDF-sample%")
 
-        # Ensure preppy called with module base (without .prep)
+        # Ensure preppy was called with the .prep filename (full path is fine)
         args, _ = mock_get_module.call_args
-        self.assertTrue(str(args[0]).endswith("dmp_pdf_template"))
+        self.assertTrue(str(args[0]).endswith("dmp_pdf_template.prep"))
 
     def test_render_json_type_error_on_non_mapping(self):
         exporter = PDFExporter()
