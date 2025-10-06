@@ -356,6 +356,42 @@ class TestMongoDBClient(test.TestCase):
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
         self.assertEqual(recs[1].id, id)
 
+    def test_select_records_by_ids(self):
+        # Inject some data into the database
+        id1 = "pdr0:0002"
+        rec1 = base.ProjectRecord(base.DMP_PROJECTS, {"id": id1, "name": "test 1"}, self.cli)
+        self.cli.native[base.DMP_PROJECTS].insert_one(rec1.to_dict())
+
+        id2 = "pdr0:0006"
+        rec2 = base.ProjectRecord(base.DMP_PROJECTS, {"id": id2, "name": "test 2"}, self.cli)
+        self.cli.native[base.DMP_PROJECTS].insert_one(rec2.to_dict())
+
+        id3 = "pdr0:0003"
+        rec3 = base.ProjectRecord(base.DMP_PROJECTS, {"id": id3, "name": "test3"}, self.cli)
+        self.cli.native[base.DMP_PROJECTS].insert_one(rec3.to_dict())
+
+        # Add a record with a different owner (should not be returned for this user)
+        rec4 = base.ProjectRecord(base.DMP_PROJECTS, {"id": "pdr0:0014", "name": "test5", "owner": "not_self"}, self.cli)
+        self.cli.native[base.DMP_PROJECTS].insert_one(rec4.to_dict())
+
+        # Test selecting by a subset of IDs
+        ids = [id1, id3, "pdr0:0014"]
+        recs = list(self.cli.select_records_by_ids(ids, base.ACLs.READ))
+        rec_ids = [r.id for r in recs]
+        self.assertIn(id1, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn("pdr0:0014", rec_ids)  # not owned by self.user
+
+        # Test selecting with a single ID
+        recs = list(self.cli.select_records_by_ids([id2], base.ACLs.READ))
+        self.assertEqual(len(recs), 1)
+        self.assertEqual(recs[0].id, id2)
+
+        # Test selecting with no matching IDs
+        recs = list(self.cli.select_records_by_ids(["nonexistent"], base.ACLs.READ))
+        self.assertEqual(len(recs), 0)
+    
+
     def test_adv_select_records(self):
 
         self.cli.native[base.DMP_PROJECTS].create_index([("$**", "text")], weights={"name": 2})

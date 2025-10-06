@@ -520,6 +520,26 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         :return:  a generator that iterates through the matched records
         """
         return self._dbcli.select_records(perms, **constraints)
+    
+    def _select_records_by_ids(self, ids: Sequence[str], perms) -> Iterator[ProjectRecord]:
+        """
+        submit a search query in a project specific way.  This method is provided as a 
+        hook to subclasses that may need to specialize the search strategy or manipulate the results.  
+        This implementation passes the query directly to the generic DBClient instance.
+        :return:  a generator that iterates through the records corresponding to the provided ids.
+        """
+        return self._dbcli.select_records_by_ids(ids, perms)
+
+    def _sort_and_format_records(self, records: Iterator[ProjectRecord]) -> list:
+        """
+        Helper method to sort records by permission and convert to dictionaries.
+        :param records: Iterator of ProjectRecord objects
+        :return: List of record dictionaries sorted by permission
+        """
+        sortd = SortByPerm()
+        for rec in records:
+            sortd.add_record(rec)
+        return [rec.to_dict() for rec in sortd.sorted()]
 
     def do_GET(self, path, ashead=False):
         """
@@ -535,13 +555,26 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             perms = params.get('perm')
         if not perms:
             perms = dbio.ACLs.OWN
+        
+        # Check if this is the :ids interface type (passed from constructor)
+        if path == ":ids":  # Changed from "ids" to ":ids"
+            # Handle retrieval of multiple records by IDs
+            ids = params.get('ids', []) if qstr else []
+            if not ids:
+                return self.send_error_resp(400, "Missing ids parameter", 
+                                        "Query parameter 'ids' is required for ids endpoint")
+            
+            # If ids is a single string, split it by comma
+            if len(ids) == 1 and ',' in ids[0]:
+                ids = [id.strip() for id in ids[0].split(',')]
+            
+            records = self._select_records_by_ids(ids, perms)
+            out = self._sort_and_format_records(records)
+            return self.send_json(out, ashead=ashead)
 
-        # sort the results by the best permission type permitted
-        sortd = SortByPerm()
-        for rec in self._select_records(perms):
-            sortd.add_record(rec)
-        out = [rec.to_dict() for rec in sortd.sorted()]
-
+        # Default: select all records accessible to the user
+        records = self._select_records(perms)
+        out = self._sort_and_format_records(records)
         return self.send_json(out, ashead=ashead)
 
     def do_POST(self, path):
