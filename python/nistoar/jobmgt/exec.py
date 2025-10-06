@@ -91,9 +91,6 @@ def main(args):
         # send logging messages to stdout?
         if opts.logout:
             h = logging.StreamHandler(sys.stdout)
-#            fmt = '{"name":"%(name)s","created":"%(created)s","level":%(levelno)s,"msg":"%(message)s",' + \
-#                   '"lineno":"%(lineno)d","pathname":"%(pathname)s"}'
-#            fmtr = logging.Formatter(fmt)
             h.setFormatter(JsonFormatter(reserved_attrs=_JF_RESERVED))
             h.setLevel(logging.DEBUG)
             logging.getLogger().addHandler(h)
