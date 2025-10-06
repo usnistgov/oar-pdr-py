@@ -3,7 +3,8 @@
     "scan_id": "914e479a-e344-4152-a340-f62947d7adbd",
     "scan_time": 1705612136.8156767,
     "scan_datetime": "2024-01-18T21:08:56.815677",
-    "user_dir": "/shared/data/oar_api/files/mds3-0012/mds3-0012",
+    "uploads_dir": "/shared/data/oar_api/files/mds3-0012/mds3-0012",
+    "scan_root_dir": "/shared/data/oar_api/files/mds3-0012/mds3-0012",
     "fm_system_path": "mds3-0012/mds3-0012-sys",
     "status": "successful",
     "contents": [

@@ -74,7 +74,7 @@ elif 'oar_config_service' in uwsgi.opt:
 elif config.service:
     config.service.wait_until_up(int(os.environ.get('OAR_CONFIG_TIMEOUT', 10)),
                                  True, sys.stderr)
-    cfg = config.service.get(os.environ.get('OAR_CONFIG_APP', 'nsd'))
+    cfg = config.service.get(os.environ.get('OAR_CONFIG_APP', 'midas-fm'))
 
 else:
     raise config.ConfigurationException("fm: nist-oar configuration not provided")

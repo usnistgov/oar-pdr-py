@@ -69,7 +69,10 @@ class AuthHandler(ABC):
 
     def authorization_required(self, f):
         def wrapper(*args, **kw):
-            if self.authorize(self.authenticate()):
+            who = self.authenticate()
+            if not who:
+                return make_error_response("Not authenticated", 401)
+            if self.authorize(who):
                 return f(*args, **kw)
             return make_error_response("Not authorized", 401)
         return wrapper
@@ -79,7 +82,10 @@ class AllowedBaseAuthHandler(AuthHandler):
         self.allowed = allowed_users
 
     def authorize(self, clientid):
-        return clientid in self.allowed
+        out = clientid in self.allowed
+        if not out:
+            logging.debug("authorization failed: %s not in %s", clientid, self.allowed)
+        return out
 
 
 class DelegatedX509AuthHandler(AllowedBaseAuthHandler):
@@ -93,6 +99,8 @@ class DelegatedX509AuthHandler(AllowedBaseAuthHandler):
         return the identifer for the authenticated user if the user successfully authenticated.
         In this implementation, the identifier returned is the Common Name (CN) of the user
         """
+#        logging.debug("verify=%s as %s",
+#                      request.headers.get("X_CLIENT_VERIFY"), request.headers.get("X_CLIENT_CN"))
         if request.headers.get("X_CLIENT_VERIFY") != "SUCCESS":
             return None
         return request.headers.get("X_CLIENT_CN")
@@ -152,7 +160,8 @@ def create_app(config: Mapping, fmsvc: fmservice.MIDASFileManagerService=None,
     app.logger = log
     app.config.update(config)
     if config.get('allowed_service_users'):
-        auth.allowed_users = config['allowed_service_users']
+        auth.allowed = config['allowed_service_users']
+    log.debug("Allowed service users: %s", str(auth.allowed))
 
     if not fmsvc:
         fmsvc = fmservice.MIDASFileManagerService(config.get('service', {}), app.logger)
@@ -258,7 +267,7 @@ class SpaceResource(Resource):
         except FileManagerResourceNotFound as ex:
             return not_found("Requested space not found", "summarizing a space")
         except Exception as ex:
-            self.log.exception(ex)
+            current_app.logger.exception(ex)
             return server_error(intent="summarizing a space")
 
     @auth.authorization_required
@@ -272,7 +281,7 @@ class SpaceResource(Resource):
                 return "", 404
             return "", 200
         except Exception as ex:
-            self.log.exception(ex)
+            current_app.logger.exception(ex)
             return "", 500
 
     @auth.authorization_required
@@ -288,7 +297,7 @@ class SpaceResource(Resource):
         except FileManagerResourceNotFound as ex:
             return not_found("Requested space not found", "deleting a space")
         except Exception as ex:
-            self.log.exception(ex)
+            current_app.logger.exception(ex)
             return "", 500
 
     @auth.authorization_required
@@ -353,10 +362,10 @@ class SpaceScansResource(Resource):
         except FileManagerResourceNotFound as ex:
             return not_found("Requested space not found", "requesting space scanning")
         except FileManagerScanException as ex:
-            self.log.error(str(ex))
+            current_app.logger.error(str(ex))
             return server_error()
         except Exception as ex:
-            self.log.exception(ex)
+            current_app.logger.exception(ex)
             return server_error()
 
 class SpaceScanReportResource(Resource):
@@ -383,10 +392,10 @@ class SpaceScanReportResource(Resource):
         except FileNotFoundError as ex:
             return not_found("Scan report not found (may have been purged)", "requesting scan report")
         except FileManagerScanException as ex:
-            self.log.error(str(ex))
+            current_app.logger.error(str(ex))
             return server_error()
         except Exception as ex:
-            self.log.exception(ex)
+            current_app.logger.exception(ex)
             return server_error()
 
     @auth.authorization_required
@@ -402,7 +411,7 @@ class SpaceScanReportResource(Resource):
         except FileManagerResourceNotFound as ex:
             return not_found("Requested space not found", "deleting a scan report")
         except Exception as ex:
-            self.log.exception(ex)
+            current_app.logger.exception(ex)
             return "", 500
 
 class SpacePermsResource(Resource):
@@ -424,10 +433,10 @@ class SpacePermsResource(Resource):
         except FileManagerResourceNotFound as ex:
             return not_found("Requested space not found", "requesting scan report")
         except FileManagerScanException as ex:
-            self.log.error(str(ex))
+            current_app.logger.error(str(ex))
             return server_error()
         except Exception as ex:
-            self.log.exception(ex)
+            current_app.logger.exception(ex)
             return server_error()
             
         # convert numeric permissions to strings
@@ -462,10 +471,10 @@ class SpacePermsResource(Resource):
         except FileManagerResourceNotFound as ex:
             return not_found("Requested space not found", "request scan report")
         except FileManagerScanException as ex:
-            self.log.error(str(ex))
+            current_app.logger.error(str(ex))
             return server_error()
         except Exception as ex:
-            self.log.exception(ex)
+            current_app.logger.exception(ex)
             return server_error()
                 
         return self.get(id)

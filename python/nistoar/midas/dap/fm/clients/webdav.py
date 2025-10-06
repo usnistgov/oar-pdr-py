@@ -40,7 +40,7 @@ def get_webdav_password(ep: str, certpath: str, keypath: str, capath: str=None,
     :raises FileManagerServiceException:  if an error occurs during retrieval; see the 
                           :py:mod:`~nistoar.midas.dap.fm.exceptions` module for the list of 
                           possible subclass exceptions that can be thrown.  In particular,
-                          :py:class:`~nistoar.midas.dap.fm.exceptions.FileManagerClientException`
+                          :py:class:`~nistoar.midas.dap.fm.exceptions.FileManagerClientError`
                           will be raised if the client certificate (given by ``certpath``) is 
                           not verifiable.
     :raises ValueError:   if the certificate or key files can not be read.
@@ -65,13 +65,17 @@ def get_webdav_password(ep: str, certpath: str, keypath: str, capath: str=None,
         elif response.status_code == 405 or response.status_code == 401:
             if not err_msg:
                 err_msg = "ensure client credentials are correct"
-            raise FileManagerClientException("File manager WebDAV Authentication failed (%d); %s" %
-                                             (response.status_code, err_msg), response.status)
+            raise FileManagerClientError("File manager WebDAV Authentication failed (%d); %s" %
+                                         (response.status_code, err_msg), response.status)
         elif response.status_code >= 400:
             if not err_msg:
                 err_msg = response.reason
             raise FileManagerClientError("File manager access failure, %s (programmer error?): %s"
                                           % (response.status_code, err_msg), response.status_code, ep)
+
+        if '/json' not in response.headers['content-type']:
+            err_msg = "WebDav authentication request failure on %:\n  non-JSON response type: %s"
+            raise FileManagerClientError(err_msg % (ep, response.headers['content-type']))
 
         temp_password_data = response.json()
         pwd = temp_password_data.get('temporary_password')
@@ -117,9 +121,10 @@ class FMWebDAVClient:
         _str_ (optional).  the path to a CA certificate bundle which should be used to verify 
         the WebDAV's site certificate.
     ``public_prefix``
-        _str_ (optional).  the root path that is part of the service endpoint that is part of a
-        proxy web server's routing.  This is needed to properly parse PROPFIND responses as they 
-        will not include this path when listing resource URLs being described.
+        _str_ (optional).  the root path of the service endpoint that is part of a proxy web 
+        server's routing.  This may be needed (depending on the WebDAV server configuration) 
+        to properly parse PROPFIND responses if they do will not include this path when listing 
+        resource URLs being described.
     ``authentication``
         _dict_ (required).  the data required to authenticated to the WebDAV service (see below).
 
@@ -138,7 +143,7 @@ class FMWebDAVClient:
         generic layer API.
     ``user``
         _str_ (optional).  the user name of the identity to authenticate to the WebDAV service as.
-        If ``password`` is not provided, it must match the CN (common name) of the identity in the 
+        If ``pass`` is not provided, it must match the CN (common name) of the identity in the 
         certificate given via ``client_cert_path``.  
     ``pass``
         _str_ (optional).  the password to authenticate with.  If provided, ``client_cert_path`` is 
@@ -254,7 +259,10 @@ class FMWebDAVClient:
         if not self.wdcli:
             self.authenticate()
 
-        return self.wdcli.is_dir(path)
+        try:
+            return self.wdcli.is_dir(path)
+        except wd3c.RemoteResourceNotFound:
+            return False
 
     def is_file(self, path):
         """Check if arg path leads to a file, returns bool accordingly"""

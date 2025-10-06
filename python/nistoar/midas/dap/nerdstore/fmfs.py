@@ -11,7 +11,7 @@ from json import JSONDecodeError
 from .fsbased import *
 from .base import (DATAFILE_TYPE, SUBCOLL_TYPE, DOWNLOADABLEFILE_TYPE,
                    RemoteStorageException, NERDStorageException, ObjectNotFound)
-from ..fm import FileManager, FileManagerException
+from ..fm import FileManager, FileManagerException, FileManagerResourceNotFound
 from nistoar.nerdm.constants import core_schema_base, schema_versions
 from nistoar.pdr.preserve.bagit.builder import (NERD_DEF, NERDM_CONTEXT, BagBuilder)
 
@@ -266,16 +266,16 @@ class FMFSFileComps(FSBasedFileComps):
 
         if 'contents' not in resp or not isinstance(resp['contents'], list):
             raise StorageFormatException("Unexpected response in scan data: missing 'contents' property")
-        if not resp.get('user_dir'):
+        if not resp.get('uploads_dir'):
             # property needs to at least contain /
-            raise StorageFormatException("Unexpected response in scan data: missing 'user_dir' property")
+            raise StorageFormatException("Unexpected response in scan data: missing 'uploads_dir' property")
 
         return resp
 
     def _update_files_from_scan(self, scanmd):
         # consume the result of a file scanning to cache the organization of files locally
         topchildren = []
-        basepath = scanmd.get("user_dir")
+        basepath = scanmd.get("uploads_dir")
         if not basepath.endswith(os.sep):
             basepath += os.sep    # because file paths may be absolute (and OS(this) == OS(fm))
 
@@ -322,10 +322,12 @@ class FMFSFileComps(FSBasedFileComps):
             if not entry.get('fileid'):
                 failed += 1
                 problems.add("missing file id")
+                self._res.log.debug("missing id; keys: %s", str(list(entry.keys())))
                 continue
             if not entry.get('path'):
                 failed += 1
-                problems.add("missing file id")
+                problems.add("missing file path")
+                self._res.log.debug("missing path; keys: %s", str(list(entry.keys())))
                 continue
 
             if entry['path'].startswith(basepath):

@@ -194,3 +194,18 @@ class FileManagerUserUnauthorized(FileManagerClientError):
             if ep:
                 message += f": {ep}"
         super(FileManagerUserUnauthorized, self).__init__(message, code, ep, resptext)
+
+class FileManagerScanException(FileManagerException):
+    """
+    an exception indicating a problem while starting or running a scanning operation
+    in a file space.  
+    """
+    def __init__(self, message: str, space_id: str=None, scan_id: str=None):
+        self.space_id = space_id
+        self.scan_id = scan_id
+        if space_id:
+            scid = scan_id if scan_id else ""
+            message += f" [{space_id}:{scid}]"
+        super(FileManagerScanException, self).__init__(message)
+
+

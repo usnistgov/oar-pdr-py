@@ -18,19 +18,44 @@ class FileManager:
     Application Layer REST API that provides file management capabilities.
     It offers methods to authenticate, manage records, scan files, and handle
     permissions.
+
+    This client looks for the following parameters in the configuration passed in at 
+    construction time:
+
+    ``dap_app_base_url`` 
+         (str) _required_.  the base URL to the MIDAS-DAP application layer API
+    ``auth``
+         (dict) _required_.  a dictionary containing authentication/authorization parameters 
+         (see below).
+
+    Authentication to the MIDAS-DAP application layer depends on the parameters provided in
+    the ``auth`` config dictionary.  X.509 authentication is enabled (and should be 
+    used when ``dap_app_base_url`` points to a public endpoint) if the following parameters are 
+    provided:
+
+    ``client_cert``
+         (str) a file path to the client X.509 certificate (in PEM format) to use to authenticate 
+         the service endpoint.  
+    ``client_key``
+         (str) a file path to the private key to the client certficate
+
+    A username and password will be used to authenticate the client if the following parameters 
+    appear (and the ``client_*`` do not):
+
+    ``user``
+         (str) the user name for the identity to authenticate in as
+    ``pw``
+         (str) _optional_.  the associated password to use.  
+
+    This authentication method is only recommended when connecting to the service via a private 
+    network, especially if a password is _not_ provided.  
     """
 
-    def __init__(self, config):
+    def __init__(self, config: Mapping):
         """
         Initializes the File Manager with configuration details.
 
-        Args:
-        - config (dict): A configuration dictionary with keys:
-            - base_url (str): The base URL for the API.
-            - auth.user (str): The username for authentication (Nextcloud instance superuser).
-            - auth.password (str): The password for authentication (Nextcloud instance superuser password).
-          The config may contain other keys that can provide other information to users of this 
-          client via its cfg attribute
+        :param dict config:  the configuration dictionary to use
         """
         self.cfg = config
         self.base_url = self.cfg.get('dap_app_base_url').rstrip('/')

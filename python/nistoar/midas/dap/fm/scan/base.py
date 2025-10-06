@@ -24,7 +24,7 @@ from ..clients import helpers, NextcloudApi, FMWebDAVClient
 from nistoar.midas.dbio import ObjectNotFound
 from ..service import FMSpace
 from ..exceptions import (FileManagerException, UnexpectedFileManagerResponse, FileManagerResourceNotFound,
-                          FileManagerClientError, FileManagerServerError)
+                          FileManagerClientError, FileManagerServerError, FileManagerScanException)
 
 from webdav3.exceptions import WebDavException
 
@@ -195,20 +195,6 @@ class UserSpaceScanner(ABC):
                   :rtype: dict
         """
         raise NotImplementedError()
-
-class FileManagerScanException(FileManagerException):
-    """
-    an exception indicating a problem while starting or running a scanning operation
-    in a file space.  
-    """
-    def __init__(self, message: str, space_id: str=None, scan_id: str=None):
-        self.space_id = space_id
-        self.scan_id = scan_id
-        if space_id:
-            scid = scan_id if scan_id else ""
-            message += f" [{space_id}:{scid}]"
-        super(FileManagerScanException, self).__init__(message)
-
 
 class UserSpaceScannerBase(UserSpaceScanner, ABC):
     """
@@ -421,7 +407,8 @@ class UserSpaceScanDriver:
             'scan_id': scan_id,
             'scan_time': launch_time,
             'scan_datetime':  datetime.datetime.fromtimestamp(launch_time).isoformat(),
-            'root_folder_path': str(self.space.root_dir/scfolder),
+            'uploads_dir': str(self.space.root_dir/self.space.uploads_folder),
+            'scan_root_dir': str(self.space.root_dir/scfolder),
             'fm_folder_path': scfolder,
             'contents': []
         }
@@ -429,7 +416,7 @@ class UserSpaceScanDriver:
     def _create_scan_id(self):
         return "%04x" % randint(0, 65536)
 
-    def launch_scan(self, folder=None):
+    def launch_scan(self, folder=None) -> str:
         """
         start the file scanning process of the user's upload space.  This executes the fast scan,
         saves the results, and then launches the asynchronous slow scan.  
@@ -437,6 +424,8 @@ class UserSpaceScanDriver:
                             uploads folder will be scanned
         :raises FileManagerException: if an error occurs while prepping scan or during the fast
                             scan phase.  
+        :return: the identifier for the launched scan
+                 :rtype: str
         """
         scan_id = self._create_scan_id()
         scan_md = self._init_scan_md(scan_id, folder, time.time())

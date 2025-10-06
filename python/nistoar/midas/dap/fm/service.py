@@ -390,7 +390,7 @@ class FMSpace:
     @property
     def uploads_folder(self):
         """
-        the resource path to the system folder for the space relative to the :py:prop:`root_davpath`.
+        the resource path to the uploads folder for the space relative to the :py:prop:`root_davpath`.
         """
         return f"{self.id}"
 

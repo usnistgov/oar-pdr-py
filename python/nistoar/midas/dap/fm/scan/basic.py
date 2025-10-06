@@ -119,7 +119,7 @@ class BasicScanner(UserSpaceScannerBase):
             if 'getetag' in ncmd:
                 filemd['etag'] = ncmd['getetag']
             if 'size' in ncmd and filemd['resource_type'] == 'file':
-                filemd['size'] = ncmd['size']
+                filemd['size'] = int(ncmd['size'])
 
         except FileManagerResourceNotFound as ex:
             # either this file is not registered yet or it has been deleted
