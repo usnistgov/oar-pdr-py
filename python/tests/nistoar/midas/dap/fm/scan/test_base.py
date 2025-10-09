@@ -15,10 +15,12 @@ from nistoar import jobmgt
 from nistoar.midas.dap.fm.scan import base as scan, simjobexec, BasicScanner, BasicScannerFactory
 
 execdir = Path(__file__).parents[0]
-datadir = execdir.parents[1] / 'data'
+datadir = execdir.parents[0] / 'data'
 certpath = datadir / 'clientAdmin.crt'
 keypath = datadir / 'clientAdmin.key'
 capath = datadir / 'serverCa.crt'
+scandatadir = execdir.parents[1] / 'data'
+testscanrep = scandatadir / 'scan-report.json'
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_fm_service.")
 rootdir = Path(os.path.join(tmpdir.name, "fmdata"))
@@ -90,6 +92,13 @@ class BasicScannerTest(test.TestCase):
         if os.path.exists(jobdir):
             shutil.rmtree(jobdir)
 
+    def test_init_scannable_content_with_prevscan(self):
+        self.scanner = BasicScanner(self.sp, "fred", scan.basic_skip_patterns)
+        shutil.copyfile(testscanrep, self.scanner.system_dir / scan.GOOD_SCAN_FILE)
+        shutil.copyfile(testscanrep, self.scanner.user_dir / "ngc7793-HIm0.fits")
+        files = self.scanner.init_scannable_content()
+        self.assertTrue(any('fileid' in md for md in files))
+
     def test_init_scannable_content(self):
         self.scanner = BasicScanner(self.sp, "fred", scan.basic_skip_patterns)
         files = self.scanner.init_scannable_content()
@@ -131,7 +140,7 @@ class BasicScannerTest(test.TestCase):
         content['contents'] = self.scanner.init_scannable_content()
         self.assertEqual(content['scan_id'], "fred")
         self.assertEqual(content['space_id'], self.sp.id)
-        self.assertEqual(content['fm_folder_path'], self.sp.id)
+        self.assertEqual(content['fm_space_path'], '/'.join([self.sp.id,self.sp.id]))
         self.assertGreater(content['scan_time'], 0)
         self.assertEqual(len(content['contents']), 3)
         self.assertEqual(content['contents'][0]['path'], "junk")
@@ -146,7 +155,7 @@ class BasicScannerTest(test.TestCase):
         c = self.scanner.fast_scan(content)
         self.assertEqual(c['scan_id'], "fred")
         self.assertEqual(c['space_id'], self.sp.id)
-        self.assertEqual(c['fm_folder_path'], self.sp.id)
+        self.assertEqual(c['fm_space_path'], '/'.join([self.sp.id,self.sp.id]))
         self.assertEqual(len(c['contents']), 3)
         self.assertEqual(c['contents'][0]['path'], "TRASH")
         self.assertEqual(c['contents'][1]['path'], "TRASH/oops")
@@ -165,7 +174,7 @@ class BasicScannerTest(test.TestCase):
         c = self.scanner.slow_scan(c)
         self.assertEqual(c['scan_id'], "fred")
         self.assertEqual(c['space_id'], self.sp.id)
-        self.assertEqual(c['fm_folder_path'], self.sp.id)
+        self.assertEqual(c['fm_space_path'], '/'.join([self.sp.id,self.sp.id]))
         self.assertEqual(len(c['contents']), 3)
         self.assertEqual(c['contents'][0]['path'], "TRASH")
         self.assertEqual(c['contents'][1]['path'], "TRASH/oops")
@@ -203,7 +212,7 @@ class BasicScannerTest(test.TestCase):
             c = json.load(fd)
         self.assertEqual(c['scan_id'], "fred")
         self.assertEqual(c['space_id'], self.sp.id)
-        self.assertEqual(c['fm_folder_path'], self.sp.id)
+        self.assertEqual(c['fm_space_path'], '/'.join([self.sp.id,self.sp.id]))
         self.assertEqual(len(c['contents']), 3)
         self.assertEqual(c['contents'][0]['path'], "TRASH")
         self.assertEqual(c['contents'][1]['path'], "TRASH/oops")
@@ -233,7 +242,7 @@ class BasicScannerTest(test.TestCase):
 
         self.assertEqual(rep['scan_id'], scanid)
         self.assertEqual(rep['space_id'], self.sp.id)
-        self.assertEqual(rep['fm_folder_path'], self.sp.id)
+        self.assertEqual(rep['fm_space_path'], '/'.join([self.sp.id,self.sp.id]))
         self.assertEqual(len(rep['contents']), 1)
         self.assertEqual(rep['contents'][0]['path'], "junk")
         self.assertEqual(rep['contents'][0]['size'], 5)
@@ -242,6 +251,8 @@ class BasicScannerTest(test.TestCase):
         self.assertIn('checksum', rep['contents'][0])
         self.assertGreater(rep['contents'][0]['last_checksum_date'], rep['contents'][0]['ctime'])
 
+        scanfile = self.sp.root_dir/self.sp.system_folder/f"lastgoodscan.json"
+        self.assertTrue(scanfile.is_file())
 
 
 

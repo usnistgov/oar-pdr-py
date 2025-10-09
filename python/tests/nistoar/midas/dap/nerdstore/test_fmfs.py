@@ -149,7 +149,7 @@ class TestFMFSFileComps(test.TestCase):
         fmd['title'] = "The End"
         self.cmps.set_file_at(fmd)
         scan = read_scan()
-        scan['contents'][-1]['path'] = re.sub(r'/previews/', '/', scan['contents'][-1]['path'])
+        scan['contents'][-1]['path'] = re.sub(r'previews/', '', scan['contents'][-1]['path'])
         id = scan['contents'][-1]['fileid']
         stat = self.cmps._update_files_from_scan(scan)
         self.assertEqual(stat['file_count'], 7)

@@ -150,7 +150,7 @@ class DAPProjectRecord(ProjectRecord):
         """
         if not self._fmcli:
             return
-        if not self._data.get('file_space', {}).get('creator'):
+        if not self._data.get('file_space', {}).get('location'):
             if not who:
                 who = self._cli.user_id
             self._data.setdefault('file_space', {})

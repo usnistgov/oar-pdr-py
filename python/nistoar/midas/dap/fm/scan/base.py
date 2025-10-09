@@ -12,14 +12,15 @@ import threading
 import time
 import re
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
-from typing import List, Callable, Union
+from collections import OrderedDict
+from typing import List, Callable, Union, Mapping
 from logging import Logger
 from random import randint
 from pathlib import Path
 
 from nistoar.jobmgt import JobQueue
 from nistoar.base import config as cfgmod
+from nistoar.pdr.utils import read_json
 from ..clients import helpers, NextcloudApi, FMWebDAVClient
 from nistoar.midas.dbio import ObjectNotFound
 from ..service import FMSpace
@@ -31,6 +32,7 @@ from webdav3.exceptions import WebDavException
 # Global dictionary to keep track of scanning job statuses
 scans_states = {}
 
+GOOD_SCAN_FILE = "lastgoodscan.json"
 
 class UserSpaceScanner(ABC):
     """
@@ -63,6 +65,9 @@ class UserSpaceScanner(ABC):
         str -- the file path of the user space from the file-manager perspective.  This is the
         path that a user would see as the location within the file-manager (nextcloud)
         application for the user's upload directory.
+    ``scan_root``
+        str -- the path to the directory that was scanned relative to the value of ``fm_space_path``.
+        If the full space path was scanned, this value will be an empty string
     ``contents``
         list -- an array of objects in which each object describes a file or subfolder within
         the user space.  (See file metadata properties below.)
@@ -83,8 +88,8 @@ class UserSpaceScanner(ABC):
     ``fileid``
         str -- an identifier assigned by nextcloud for the file being described.
     ``path``
-        str -- the path to the file or folder being described.  [This path will be the full
-        path to the file and will start with the value of ``fm_space_path`` (defined above).]
+        str -- the path to the file or folder being described.  This path will be relative to 
+        location indicated by the value of ``fm_space_path`` (defined above).
     ``resource_type``
         str -- the type of this resource.  Allowed values are: "file", "collection"
     ``last_modified``
@@ -136,7 +141,7 @@ class UserSpaceScanner(ABC):
         folders (e.g. ``TRASH``) or having a certain naming patterns (e.g. beginning with a ".").  
 
         :param str folder:  the folder (relative to the user's uploads folder) to list the files 
-                            under.  This list will all files in the name folder along with all in 
+                            under.  This will list all files in the named folder along with all in 
                             its descendent folders.  If None (or an empty string), the uploads 
                             directory will be assumed as the root of the list.  This folder will 
                             _not_ be included in the list.  
@@ -200,7 +205,9 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
     """
     a partial implementation of the :py:meth:`UserSpaceScanner` that can be used as a
     base class for full implementations.  See :py:mod:`~nistoar.midas.dap.fm.scan.basic.BasicScanner`
-    for the simplest scanner implementation extending this class.
+    for the simplest scanner implementation extending this class.  This implementation is based on the 
+    assumption that this scanner has direct access to the file system containing the folder to be 
+    scanned.
     """
 
     def __init__(self, space: FMSpace, scan_id: str, skip_pats=[], log: Logger=None):
@@ -250,7 +257,24 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
         """
         return self.sp.root_dir / self.sp.system_folder
 
+    def _load_last_scan(self):
+        lastscan = self.system_dir / GOOD_SCAN_FILE
+        if not lastscan.is_file():
+            return {}
+
+        scan = read_json(lastscan)
+
+        out = OrderedDict()
+        for fmd in scan.get('contents', []):
+            if fmd.get('path'):
+                out[fmd['path']] = fmd
+
+        return out
+
     def init_scannable_content(self, folder=None):
+
+        # load up data from last successful scan which has file ids cached
+        lastfileprops = self._load_last_scan()
 
         scanroot = self.user_dir
         if folder:
@@ -261,19 +285,26 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
         base = scanroot
         try:
             for base, dirs, files in os.walk(scanroot):
+                upath = base[len(str(self.user_dir))+1:]
 
                 for f in files:
                     # ignore any file matching any of the skip patterns
                     if not any(p.search(f) for p in self.skipre):
-                        out.append({'path': os.path.join(base[len(str(self.user_dir))+1:], f),
-                                    'resource_type': "file"})
+                        path = os.path.join(upath, f)
+                        if path in lastfileprops and lastfileprops[path].get('resource_type') == "file":
+                            out.append(lastfileprops[path])
+                        else:
+                            out.append({'path': path, 'resource_type': "file"})
 
                 for i in range(len(dirs)):
                     d = dirs.pop(0)
-                    # ignor any directory matching any of the skip patterns and prevent further descending
+                    # ignore any directory matching any of the skip patterns and prevent further descending
                     if not any(p.search(d) for p in self.skipre):
-                        out.append({'path': os.path.join(base[len(str(self.user_dir))+1:], d),
-                                    'resource_type': "collection"})
+                        path = os.path.join(upath, d)
+                        if path in lastfileprops and lastfileprops[path].get('resource_type')=="collection":
+                            out.append(lastfileprops[path])
+                        else:
+                            out.append({'path': path, 'resource_type': "collection"})
                         dirs.append(d)
 
         except IOError as ex:
@@ -395,6 +426,8 @@ class UserSpaceScanDriver:
     def _init_scan_md(self, scan_id, folder=None, launch_time=None):
         iscomplete = True
         scfolder = self.space.uploads_folder
+        if folder is None:
+            folder = ''
         if folder:
             iscomplete = False
             scfolder += '/' + folder
@@ -407,9 +440,10 @@ class UserSpaceScanDriver:
             'scan_id': scan_id,
             'scan_time': launch_time,
             'scan_datetime':  datetime.datetime.fromtimestamp(launch_time).isoformat(),
+            'fm_space_path': self.space.uploads_davpath,
+            'scan_root': folder,
             'uploads_dir': str(self.space.root_dir/self.space.uploads_folder),
             'scan_root_dir': str(self.space.root_dir/scfolder),
-            'fm_folder_path': scfolder,
             'contents': []
         }
 

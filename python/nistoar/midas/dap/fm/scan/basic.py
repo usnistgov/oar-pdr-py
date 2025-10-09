@@ -28,6 +28,19 @@ class BasicScanner(UserSpaceScannerBase):
         This implementation makes sure that each file currently exists and captures basic filesystem
         metadata for it (size, last modified time, etc.).
         """
+        spaceroot = content_md.get('fm_space_path', self.sp.uploads_davpath)
+        scanroot = spaceroot
+        if content_md.get("scan_root"):
+            scanroot = '/'.join([scanroot, content_md["scan_root"]])
+
+        if self.sp.svc.cfg.get('external_uploads_allowed'):
+            # make sure all files are registered with nextcloud
+            self.ensure_registered(scanroot)
+
+        # get the fileid property for the files in the target directory as a starter (without them
+        # the DAP service can't register them).
+        fileprops = self.sp.svc.wdcli.list_folder_info(scanroot)
+
         totals = {'': 0}
         if content_md.get('contents'):
             # sort alphabetically; this puts top files first and folders ahead of their members
@@ -50,8 +63,14 @@ class BasicScanner(UserSpaceScannerBase):
                 except Exception as ex:
                     fmd['scan_errors'].append("Failed to stat file: "+str(ex))
 
-                if fmd:
-                    content_md['contents'].append(fmd)
+                davpath = '/'.join([spaceroot, fmd['path']])
+                if davpath in fileprops:
+                    props = fileprops[davpath]
+                    for prop in "fileid etag content_type".split():
+                        if props.get(prop):
+                            fmd[prop] = props[prop]
+
+                content_md['contents'].append(fmd)
 
                 # total up sizes
                 if fmd['resource_type'] == 'file':
@@ -64,7 +83,7 @@ class BasicScanner(UserSpaceScannerBase):
 
         # record total sizes
         content_md['accumulated_size'] = totals['']
-        for fmd in content_md['contents']:
+        for fmd in content_md.get('contents', []):
             if fmd['resource_type'] == "collection" and fmd['path'] in totals:
                 fmd['accumulated_size'] = totals[fmd['path']]
 
@@ -80,14 +99,15 @@ class BasicScanner(UserSpaceScannerBase):
         This implementation will fetch nextcloud metadata and calculate checksums
         """
         # make sure all files are registered with nextcloud
-        scanroot = content_md.get('fm_folder_path', self.sp.uploads_davpath)
-        self.ensure_registered(scanroot)
+        if not self.sp.svc.cfg.get('external_uploads_allowed'):
+            scanroot = content_md.get('fm_space_path', self.sp.uploads_davpath)
+            self.ensure_registered(scanroot)
 
         update_files_lim = 10
         update_size_lim = 10000000 # 10 MB
         size_left = update_size_lim
         files_left = update_files_lim
-        for fmd in content_md.get('contents'):
+        for fmd in content_md.get('contents', []):
             self.slow_scan_file(fmd)
 
             # update the report (only after processing a certain number of files/bytes)
@@ -109,15 +129,15 @@ class BasicScanner(UserSpaceScannerBase):
         examine the specified file and update its metadata accordingly.  This is called by 
         :py:meth:`slow_scan` on each file in the scan report object.  
         """
+        etag = filemd.get('etag')
+        
         # fetch the Nextcloud metadata for the entry (especially need fileid)
         davpath = '/'.join([self.sp.uploads_davpath] + filemd['path'].split('/'))
         try:
             
             ncmd = self.sp.svc.wdcli.get_resource_info(davpath)
-            skip = "name type getetag size resource_type".split()
+            skip = "path urlpath type size resource_type".split()
             filemd.update(i for i in ncmd.items() if i[0] not in skip)
-            if 'getetag' in ncmd:
-                filemd['etag'] = ncmd['getetag']
             if 'size' in ncmd and filemd['resource_type'] == 'file':
                 filemd['size'] = int(ncmd['size'])
 
@@ -127,9 +147,14 @@ class BasicScanner(UserSpaceScannerBase):
         except Exception as ex:
             filemd['scan_errors'].append(f"Failed to stat file, {filemd['path']}: {str(ex)}")
 
-        # calculate the checksum
-        fpath = self.user_dir/filemd['path']
-        if fpath.is_file():
+        # calculate the checksum if needed; leverage etag to see if file has changed
+        fpath = filemd['path']
+        if fpath.startswith(self.sp.uploads_davpath):  # and it better
+            fpath = fpath[len(self.sp.uploads_davpath)+1:]
+        fpath = self.user_dir/fpath
+        if fpath.is_file() and (not etag or etag != filemd.get("etag") or not filemd.get("checksum")):
+            self.log.debug("%s: calculating checksum: %s v. %s, %s", filemd['path'], 
+                           str(etag), filemd.get("etag","x"), filemd.get("checksum", "x"))
             try:
                 filemd['checksum'] = checksum_of(fpath)
                 filemd['last_checksum_date'] = time.time()

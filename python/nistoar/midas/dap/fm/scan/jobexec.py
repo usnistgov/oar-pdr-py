@@ -22,9 +22,10 @@ from logging import Logger
 
 from ..service import FMSpace, MIDASFileManagerService
 from ..exceptions import FileManagerException
-from .base import FileManagerScanException
+from .base import FileManagerScanException, GOOD_SCAN_FILE
 from nistoar.base.config import ConfigurationException
 from nistoar.jobmgt import FatalError
+from nistoar.pdr.utils import write_json
 
 def make_space(spaceid: str, config: Mapping, log: Logger=None):
     """
@@ -137,4 +138,12 @@ def process(dataid: str, config: Mapping, args: List[str], log=None, _make_space
     except Exception as ex:
         log.exception(ex)
         raise FatalError("Unexpected slow_scan failure: "+str(ex), 1) from ex
+
+    if scanmd.get('in_progress') is False and not scanmd.get('scan_root'):
+        # cache a full, successful scan
+        try:
+            write_json(scanmd, space.root_dir / space.system_folder / GOOD_SCAN_FILE)
+        except Exception as ex:
+            log.warning("Problem caching final scan data: %s", str(ex))
+
 

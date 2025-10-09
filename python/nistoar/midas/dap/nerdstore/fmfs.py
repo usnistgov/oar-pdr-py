@@ -275,9 +275,6 @@ class FMFSFileComps(FSBasedFileComps):
     def _update_files_from_scan(self, scanmd):
         # consume the result of a file scanning to cache the organization of files locally
         topchildren = []
-        basepath = scanmd.get("uploads_dir")
-        if not basepath.endswith(os.sep):
-            basepath += os.sep    # because file paths may be absolute (and OS(this) == OS(fm))
 
         def new_folder_md(id, fpath):
             return OrderedDict([
@@ -319,23 +316,19 @@ class FMFSFileComps(FSBasedFileComps):
         reqfolders = set()  # the folders required as implied by the paths
         total_size = 0
         for entry in scanmd.get("contents", []):
-            if not entry.get('fileid'):
-                failed += 1
-                problems.add("missing file id")
-                self._res.log.debug("missing id; keys: %s", str(list(entry.keys())))
-                continue
             if not entry.get('path'):
                 failed += 1
                 problems.add("missing file path")
                 self._res.log.debug("missing path; keys: %s", str(list(entry.keys())))
                 continue
-
-            if entry['path'].startswith(basepath):
-                entry['path'] = entry['path'][len(basepath):].rstrip(os.sep)
-            elif entry['path'].startswith(os.sep):
-                failed += 1
-                problems.add("disallowed basepath")
+            if not entry.get('fileid'):
+                # failed += 1
+                # problems.add("missing file id")  # not a prob, just skip
+                self._res.log.debug("%s missing id; keys: %s", entry.get('path', 'file'),
+                                    str(list(entry.keys())))
                 continue
+
+            entry['path'] = entry['path'].strip(os.sep)
 
             # determine all the parent folders implied by this file path
             reqfolders.update([str(d) for d in Path(entry['path']).parents if str(d) != '.'])

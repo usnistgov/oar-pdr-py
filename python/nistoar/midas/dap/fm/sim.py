@@ -236,10 +236,16 @@ class SimFMWebDAVClient(FMWebDAVClient):
                 return reqresp
             shutil.copytree(src, self.rootdir/remote_path, dirs_exist_ok=True)
             return reqresp
+        def propfind(action, *args, **kw):
+            out = Mock()
+            if action == "list" or action == "info":
+                out.content = PROPFIND
+                out.text = PROPFIND
+            return out
         self.wdcli.upload_to = upto
         self.wdcli.clean = delfile
         self.wdcli.upload_sync = upsync
-    
+        self.wdcli.execute_request = propfind
 
     def is_directory(self, path):
         target = self.rootdir/path
@@ -269,7 +275,7 @@ class SimFMWebDAVClient(FMWebDAVClient):
         if not target.exists():
             raise FileManagerResourceNotFound(path, "Unable to get resource info: Remote resource does not exist")
         stat = target.stat()
-        out = { "name": '/'+str(path), "fileid": "100", "size": stat.st_size, "permissions": "RGDNVCK",
+        out = { "path": '/'+str(path), "fileid": "100", "size": stat.st_size, "permissions": "RGDNVCK",
                 "created": datetime.fromtimestamp(stat.st_ctime).isoformat() }
         if target.is_dir():
             out['type'] = "folder"
@@ -299,3 +305,39 @@ def SimMIDASFileManagerService(config, log=None):
 
     return svc.MIDASFileManagerService(config, log, nccli, wdcli)
 
+PROPFIND = """<?xml version="1.0" ?>
+<d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
+	<d:response>
+		<d:href>/remote.php/dav/files/oar_api/mds3-0012/mds3-0012/</d:href>
+		<d:propstat>
+			<d:prop>
+				<d:resourcetype>
+					<d:collection/>
+				</d:resourcetype>
+				<d:creationdate>1970-01-01T00:00:00+00:00</d:creationdate>
+				<d:getlastmodified>Thu, 18 Jan 2024 21:08:09 GMT</d:getlastmodified>
+				<oc:fileid>192</oc:fileid>
+				<oc:size>4997166</oc:size>
+				<oc:permissions>RGDNVCK</oc:permissions>
+			</d:prop>
+			<d:status>HTTP/1.1 200 OK</d:status>
+		</d:propstat>
+	</d:response>
+	<d:response>
+		<d:href>/remote.php/dav/files/oar_api/mds3-0012/mds3-0012/data.csv</d:href>
+		<d:propstat>
+			<d:prop>
+				<d:resourcetype>
+					<d:file/>
+				</d:resourcetype>
+				<d:creationdate>1970-01-01T00:00:00+00:00</d:creationdate>
+				<d:getlastmodified>Thu, 18 Jan 2024 21:08:09 GMT</d:getlastmodified>
+				<oc:fileid>193</oc:fileid>
+				<oc:size>4997166</oc:size>
+				<oc:permissions>RGDNVCK</oc:permissions>
+			</d:prop>
+			<d:status>HTTP/1.1 200 OK</d:status>
+		</d:propstat>
+	</d:response>
+</d:multistatus>
+"""
