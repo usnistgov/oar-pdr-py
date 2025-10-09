@@ -10,13 +10,13 @@ Nextcloud's (NIST-enhanced) generic layer provides a special endpoint for retrie
 with requires X.509 client certificate authentication.  The 
 """
 import logging, os, re
-import xml.etree.ElementTree as ET
 from datetime import datetime
-from urllib.parse import urlparse, urlunparse, urljoin
+from urllib.parse import urlparse, urlunparse, urljoin, unquote, urlsplit
 from collections import OrderedDict
-from collections.abc import Mapping
+from typing import Mapping, List
 
 from webdav3 import client as wd3c
+from webdav3.client import etree
 import OpenSSL
 import requests
 
@@ -302,6 +302,43 @@ class FMWebDAVClient:
                 raise FileManagerClientError("Unable to create directory: "+str(ex)) from ex
             else:
                 raise FileManagerServerError("Failed to create directory: "+str(ex)) from ex
+
+    def list_folder_info(self, path):
+        """
+        retrieve resource info for a resource (file or directory) with the given path
+        """
+        if not self.wdcli:
+            self.authenticate()
+
+        if not path:
+            path = "/"
+        elif not path.startswith('/'):
+            path = "/"+path
+
+        try:
+            resp = self.wdcli.execute_request("list", path, info_request)  # default Depth: 1
+        except (wd3c.NoConnection, wd3c.ConnectionException) as ex:
+            raise FileManagerCommError("Failed to get resource info: "+str(ex), ep=path) from ex
+        except wd3c.NotEnoughSpace as ex:
+            raise FileManagerServerError("Failed to get resource info: "+str(ex), ep=path) from ex
+        except wd3c.RemoteResourceNotFound as ex:
+            raise FileManagerResourceNotFound(path, "Unable to get resource info: "+str(ex)) from ex
+        except wd3c.ResponseErrorCode as ex:
+            if ex.code < 500:
+                raise FileManagerClientError("Unable to get resource info: "+str(ex), ep=path) from ex
+            else:
+                raise FileManagerServerError("Failed to get resource info: "+str(ex), ep=path) from ex
+            
+        base = self.cfg['service_endpoint']
+        if self.cfg.get('public_prefix'):
+            base = urljoin(self.cfg['public_prefix'], urlparse(base).path.lstrip('/'))
+
+        try:
+            return parse_propfind_info(resp.text, base)
+        except wd3c.RemoteResourceNotFound as ex:
+            raise FileManagerResourceNotFound(path, str(ex)) from ex
+        except etree.XMLSyntaxError as ex:
+            raise FileSpaceServerError("Server returned unparseable XML") from ex
             
     def get_resource_info(self, path):
         """
@@ -335,7 +372,7 @@ class FMWebDAVClient:
             base = urljoin(self.cfg['public_prefix'], urlparse(base).path.lstrip('/'))
 
         try:
-            return parse_propfind(resp.text, path, base)
+            return parse_propfind_for(resp.text, path, base)
         except wd3c.RemoteResourceNotFound as ex:
             raise FileManagerResourceNotFound(path, str(ex)) from ex
         except etree.XMLSyntaxError as ex:
@@ -381,6 +418,9 @@ def propfind_resp_to_dict(respel):
     """
     convert a propfind response etree element into a dictionary of properties
     """
+    href_el = next(iter(respel.findall(".//{DAV:}href")), None)
+    path = unquote(urlsplit(href_el.text).path) if href_el is not None else None
+
     dav_props = {
         '{DAV:}creationdate':    "created",
         '{DAV:}getlastmodified': "modified",
@@ -399,6 +439,8 @@ def propfind_resp_to_dict(respel):
     props = props[0]
 
     out = OrderedDict()
+    if path:
+        out['urlpath'] = path
     for child in props:
         if child.tag in dav_props:
             name = dav_props[child.tag]
@@ -416,7 +458,53 @@ def propfind_resp_to_dict(respel):
 
     return out
 
-def parse_propfind(content, reqpath, davbase):
+def parse_propfind_info(content, davbase):
+    """
+    Extract the properties in a PROPFIND XML response into a dictionary where each key is 
+    a file paths and the value is a dictionary of properties for that file.
+    :param str content:  the XML response message to parse
+    :param str davbase:  the base WebDAV endpoint URL path; the file paths appearing as keys in the 
+                         response will be relative to this base endpoint path.  
+    """
+    if davbase:
+        davbase = urlparse(davbase).path.strip('/')
+    davbase = f"/{davbase}/" if davbase else "/"
+
+    out = OrderedDict()
+    entries = extract_propfind_responses(content)
+    for respel in entries:
+        info = propfind_resp_to_dict(respel)
+        path = info.get('urlpath')
+        if path and path.startswith(davbase):
+            path = path[len(davbase):].rstrip('/')
+        else:
+            # unexpected
+            continue
+        info['path'] = path
+        out[path] = info
+        
+    return out
+
+def extract_propfind_responses(content) -> List:
+    """
+    return a list of the response elements found in the given propfind request response
+    :param str content:  the XML response message to parse
+    """
+    # adapted from webdavclient3's WebDavXmlUtils.parse_get_list_info_response()
+    out = []
+    try:
+        tree = etree.fromstring(content)
+        for resp in tree.findall(".//{DAV:}response"):
+            href_el = next(iter(resp.findall(".//{DAV:}href")), None)
+            if href_el is not None:
+                out.append(resp)
+
+    except etree.XMLSyntaxError as ex:
+        raise FileSpaceServerError("Server returned unparseable XML") from ex
+
+    return out
+
+def parse_propfind_for(content, reqpath, davbase):
     """
     Extract the properties in a PROPFIND XML response into a dictionary
     :param str content:  the XML response message to parse
@@ -426,8 +514,9 @@ def parse_propfind(content, reqpath, davbase):
     path = f"/{reqpath.strip('/')}/"
     respel = wd3c.WebDavXmlUtils.extract_response_for_path(content, path, davbase)
     out = propfind_resp_to_dict(respel)
-    out['name'] = reqpath
-    if out['name'].startswith(davbase):
-        out['name'] = out['name'][len(davbase):]
+    out['path'] = out['urlpath']
+    davbase = urlparse(davbase).path
+    if out['path'].startswith(davbase):
+        out['path'] = out['path'][len(davbase):].strip('/')
     return out
 

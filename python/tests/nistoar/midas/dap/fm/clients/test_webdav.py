@@ -1,6 +1,7 @@
 import json
 import unittest as test
 from unittest.mock import patch, Mock, create_autospec
+from typing import Mapping
 from pathlib import Path
 from copy import deepcopy
 import requests
@@ -66,6 +67,7 @@ class FMWebDAVClientTest(test.TestCase):
     def test_get_webdav_password(self, mock_request):
         mock_resp = Mock()
         mock_resp.status_code = 200
+        mock_resp.headers = {'content-type': 'application/json'}
         mock_resp.text = '{"temporary_password": "goober"}'
         def mock_json():
             return json.loads(mock_resp.text)
@@ -82,6 +84,7 @@ class FMWebDAVClientTest(test.TestCase):
         def mock_json():
             return json.loads(mock_resp.text)
         mock_resp.json = mock_json
+        mock_resp.headers = {'content-type': 'application/json'}
         mock_request.return_value = mock_resp
 
         config = {
@@ -120,19 +123,53 @@ class FMWebDAVClientTest(test.TestCase):
     def test_has_info_request(self):
         self.assertIn("propfind", fmwd.info_request)
 
-    def test_parse_propfind(self):
+    def test_parse_propfind_info(self):
         with open(pfrespfile) as fd:
             xmlstr = fd.read()
         path = "mds3-0012/mds3-0012"
         baseurl = "https://goober/remote.php/dav/files/oar_api"
 
-        props = fmwd.parse_propfind(xmlstr, path, baseurl)
+        files = fmwd.parse_propfind_info(xmlstr, baseurl)
+
+        self.assertTrue(isinstance(files, Mapping))
+        self.assertEqual(len(files), 2)
+
+        self.assertIn("mds3-0012/mds3-0012", files)
+        props = files["mds3-0012/mds3-0012"]
+        self.assertEqual(props.get('path'), "mds3-0012/mds3-0012")
+        self.assertEqual(props.get('fileid'), "192")
+        self.assertEqual(props.get('size'), "4997166")
+        self.assertEqual(props.get('permissions'), "RGDNVCK")
+        self.assertIn("created", props)
+        self.assertIn("modified", props)
+        self.assertIn("urlpath", props)
+        self.assertTrue(props['urlpath'].rstrip('/').endswith(props['path']))
+
+        self.assertIn("mds3-0012/mds3-0012/data.csv", files)
+        props = files["mds3-0012/mds3-0012/data.csv"]
+        self.assertEqual(props.get('path'), "mds3-0012/mds3-0012/data.csv")
+        self.assertEqual(props.get('fileid'), "193")
+        self.assertEqual(props.get('size'), "4997166")
+        self.assertEqual(props.get('permissions'), "RGDNVCK")
+        self.assertIn("created", props)
+        self.assertIn("modified", props)
+        self.assertIn("urlpath", props)
+        self.assertTrue(props['urlpath'].rstrip('/').endswith(props['path']))
+
+    def test_parse_propfind_for(self):
+        with open(pfrespfile) as fd:
+            xmlstr = fd.read()
+        path = "mds3-0012/mds3-0012"
+        baseurl = "https://goober/remote.php/dav/files/oar_api"
+
+        props = fmwd.parse_propfind_for(xmlstr, path, baseurl)
         self.assertEqual(props.get('type'), "folder")
         self.assertEqual(props.get('fileid'), "192")
         self.assertEqual(props.get('size'), "4997166")
         self.assertEqual(props.get('permissions'), "RGDNVCK")
         self.assertIn("created", props)
         self.assertIn("modified", props)
+        self.assertEqual(props.get('path'), path)
         
     def test_get_resource_info(self):
         with open(pfrespfile) as fd:
