@@ -158,7 +158,7 @@ class DAPProjectRecord(ProjectRecord):
                 self._data['file_space'].update(self._fmcli.summarize_space(self.id))
             except FileManagerResourceNotFound as ex:
                 try:
-                    self._data['file_space'] = self._fmcli.create_space(who, self.id)
+                    self._data['file_space'] = self._fmcli.create_space(self.id, who)
                     self._data['file_space']['action'] = "create"
                     self._data['file_space']['created'] = \
                         datetime.fromtimestamp(math.floor(time.time())).isoformat()
