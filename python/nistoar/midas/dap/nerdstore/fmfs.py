@@ -334,7 +334,7 @@ class FMFSFileComps(FSBasedFileComps):
             reqfolders.update([str(d) for d in Path(entry['path']).parents if str(d) != '.'])
 
             id = entry['fileid']    # Note: nextcloud ids are numbers
-            if entry.get('resource_type') == "folder":
+            if entry.get('resource_type') == "collection":
                 scfolders[id] = entry
             else:
                 scfiles[id] = entry
@@ -362,7 +362,7 @@ class FMFSFileComps(FSBasedFileComps):
                 scfolders[id] = {
                     "fileid": id,
                     "path": fpath,
-                    "resource_type": "folder"
+                    "resource_type": "collection"
                 }
 
         # Remove existing file metadata for files/folders not refered to in the scan
