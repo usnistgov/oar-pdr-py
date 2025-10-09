@@ -223,7 +223,11 @@ class MIDASFileManagerService:
         try:
             if not self.wdcli.wdcli:
                 self.wdcli.authenticate()
-            resp = self.wdcli.wdcli.upload_sync(local_path=srcdir, remote_path=space.uploads_davpath+'/')
+            for file in os.listdir(srcdir):
+                if file.startswith('.'):
+                    continue
+                resp = self.wdcli.wdcli.upload_sync(local_path=os.path.join(srcdir, file),
+                                                    remote_path='/'.join([space.uploads_davpath, file]))
 
 #            if resp and (resp.status_code < 200 or resp.status_code >= 300):
 #                msg = "Unexpected response during upload of '%s' to system_davpath: %s (%s)" % \

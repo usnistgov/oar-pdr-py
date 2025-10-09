@@ -174,7 +174,7 @@ class MIDASFileManagerServiceTest(test.TestCase):
         info = sp.get_resource_info(id+"-sys")
         self.assertIn('size', info)
         self.assertIn('fileid', info)
-        self.assertEqual(info['name'], f"/{id}/{id}-sys")
+        self.assertEqual(info['path'], f"/{id}/{id}-sys")
 
         self.assertEqual(sp.get_permissions_for(id, 'ava1'), fm.PERM_ALL)
         self.assertEqual(sp.get_permissions_for(id, 'gurn'), fm.PERM_NONE)
