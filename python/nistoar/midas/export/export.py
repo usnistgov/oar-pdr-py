@@ -9,7 +9,7 @@ from .exporters.pdf_exporter import PDFExporter
 from .exporters.markdown_exporter import MarkdownExporter
 
 
-def run(input_data: List, output_format: str, output_directory: Path, template_dir: str = None, template_name: str = None):
+def run(input_data: Iterable[Any], output_format: str, output_directory: Path, template_dir: str = None, template_name: str = None):
     """ Wrapper that handles 1 to N inputs. The initial format of the inputs, the template (if any) used for rendering,
      the output format and the output directory must be the same for all inputs.
 
@@ -26,8 +26,8 @@ def run(input_data: List, output_format: str, output_directory: Path, template_d
     results = []
     if not input_data:
         raise ValueError("No inputs provided. Pass at least one input item.")
-    for i in range(len(input_data)):
-        result = export(input_data[i], output_format, output_directory, template_dir, template_name, _index=i)
+    for i, item in enumerate(input_data):
+        result = export(item, output_format, output_directory, template_dir, template_name, _index=i)
         results.append(result)
 
     return results

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections.abc import Mapping as MappingABC
 
 from pathlib import Path
 from typing import Any
@@ -31,7 +32,7 @@ def _load_json_source(source: Any):
 
 def _set_filename_output(item: Any, index: int):
     """
-    Item is either a path to a file or a loaded json,
+    Item is either a path to a file or a loaded json or a project record,
     otherwise the output filename is defined with a fallback.
 
     Args:
@@ -45,9 +46,46 @@ def _set_filename_output(item: Any, index: int):
         return str(item["output_filename"])
     if isinstance(item, Path):
         return Path(item).stem
+    if _is_project_record(item):
+        name = _name_from_project_record(item)
+        if name is not None:
+            return name
     # fallback
     random_key = secrets.token_hex(nbytes=4)
     return f"record_{random_key}_{index}"
+
+
+def _is_project_record(obj: Any):
+    """ Check if argument is a Project Record and return a boolean
+
+    Args:
+        obj:
+
+    Returns:
+
+    """
+    # obj has .data that are mappings
+    return (
+        hasattr(obj, "data") and isinstance(getattr(obj, "data"), MappingABC)
+    )
+
+
+def _name_from_project_record(rec: Any):
+    """ Return project record name, fallback to the ID if present
+
+    Args:
+        rec:
+
+    Returns:
+
+    """
+    name = getattr(rec, "name", None)
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    rec_id = getattr(rec, "id", None)
+    if isinstance(rec_id, str) and rec_id.strip():
+        return rec_id.strip()
+    return None
 
 
 def normalize_input(item: Any, index: int):
@@ -57,6 +95,7 @@ def normalize_input(item: Any, index: int):
         - a dict with the keys `input_type` and `source`
         - a loaded json
         - path ending with `.json`
+        - a ProjectRecord object
 
     Args:
         item:
@@ -94,6 +133,18 @@ def normalize_input(item: Any, index: int):
             'input_type': "json",
             'payload': _load_json_source(item),
             'output_filename': _set_filename_output(item, index),
+        }
+
+    # Case 4: ProjectRecord
+    if _is_project_record(item):
+        # Build a mapping that contains a 'data' key for the template
+        payload = {
+            "data": dict(item.data)
+        }
+        return {
+            "input_type": "json",
+            "payload": payload,
+            "output_filename": _set_filename_output(item, index),
         }
 
     # Unsupported

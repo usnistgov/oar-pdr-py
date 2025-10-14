@@ -1,6 +1,8 @@
 import json
 import unittest as test
 from pathlib import Path
+from collections.abc import Mapping
+
 
 from nistoar.midas.export.utils.loader import _load_json_source, _set_filename_output, normalize_input
 
@@ -59,6 +61,49 @@ class LoaderTest(test.TestCase):
     def test_normalize_input_unsupported(self):
         with self.assertRaises(TypeError):
             normalize_input(42, 0)
+
+
+class _FakeProjectRecord:
+    """ Object has .data (Mapping) and optionally .name (str) and/or .id (str)
+    """
+    def __init__(self, data=None, name=None, rec_id=None):
+        self.data = data or {"title": "Demo"}
+        if name is not None:
+            self.name = name
+        if rec_id is not None:
+            self.id = rec_id
+
+
+def _is_mapping(obj):
+    return isinstance(obj, Mapping)
+
+
+class LoaderProjectRecordTest(test.TestCase):
+    def test_normalize_input_project_record_uses_name(self):
+        rec = _FakeProjectRecord(name="nice_name")
+        info = normalize_input(rec, 0)
+        self.assertEqual(info["input_type"], "json")
+        self.assertEqual(info["output_filename"], "nice_name")
+        self.assertIn("data", info["payload"])
+        self.assertTrue(_is_mapping(info["payload"]["data"]))
+
+    def test_normalize_input_project_record_uses_id_if_no_name(self):
+        rec = _FakeProjectRecord(rec_id="abc123")
+        info = normalize_input(rec, 1)
+        self.assertEqual(info["input_type"], "json")
+        self.assertEqual(info["output_filename"], "abc123")
+
+    def test_normalize_input_project_record_fallback_random(self):
+        # No name, no id so fallback
+        rec = _FakeProjectRecord()
+        if hasattr(rec, "name"):
+            delattr(rec, "name")
+        if hasattr(rec, "id"):
+            delattr(rec, "id")
+
+        info = normalize_input(rec, 7)
+        self.assertRegex(info["output_filename"], r"^record_[0-9a-f]{8}_7$")
+        self.assertIn("data", info["payload"])
 
 
 if __name__ == "__main__":
