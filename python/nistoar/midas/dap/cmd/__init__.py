@@ -10,6 +10,7 @@ include
   - ``regpub``:   register a previously published DAP into the DBIO
   - ``prepupd``:  prepare a previously published DAP for editing
   - ``setstate``: update the state of a DAP record
+  - ``review``:   submit feedback to a DAP record on behalf of an external reviewer
 """
 import os, argparse
 from collections.abc import Mapping
@@ -34,7 +35,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 
                                                 interface into it 
     """
-    from . import regpub, setstate
+    from . import regpub, setstate, review
 
     subparser.description = description
 
@@ -43,6 +44,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     out = cli.CommandSuite(as_cmd, subparser)
     out.load_subcommand(regpub)
     out.load_subcommand(setstate)
+    out.load_subcommand(review)
 
     return out
 

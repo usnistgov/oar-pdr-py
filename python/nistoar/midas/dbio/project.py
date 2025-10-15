@@ -98,12 +98,12 @@ class ProjectService(MIDASSystem):
         self.cfg = config
         for param in "default_perms".split():
             if not isinstance(self.cfg.get(param,{}), Mapping):
-                raise ConfigurationException("%s: value is not a object as required: %s" %
+                raise ConfigurationException("ProjectService: %s: value is not an object as required: %s" %
                                              (param, type(self.cfg.get(param))))
         for param,val in self.cfg.get('default_perms',{}).items():
             if not isinstance(val, list) or not all(isinstance(p, str) for p in val):
                 raise ConfigurationException(
-                    "default_perms.%s: value is not a list of strings as required: %s" %
+                    "ProjectService: default_perms.%s: value is not a list of strings as required: %s" %
                     (param, repr(val))
                 )
         
@@ -1075,9 +1075,15 @@ class ProjectService(MIDASSystem):
         if not _prec:
             _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)   # may raise ObjectNotFound/NotAuthorized
 
+        self.log.info("%s: submitting %s for review/publication", _prec.id, self.dbcli.project)
+
         # Prepare for the actual submission:  Ensure current state is correct, finalize/validate record.
         # May raise NotSubmitable, NotEditable
-        self._submit__prep(_prec, options)
+        try:
+            self._submit__prep(_prec, options)
+        except Exception as ex:
+            self.log.error("%s: Submission prep failed: %s", _prec.id, str(ex))
+            raise
 
         # this record is ready for submission.  Send the record to its post-editing destination,
         # and return the state that it should be set to.  Normally, this implementation function
@@ -1090,6 +1096,7 @@ class ProjectService(MIDASSystem):
 
         except InvalidRecord as ex:
             emsg = "submit process failed: "+str(ex)
+            self.log.error(emsg)
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": ex.errors}))
             _prec.status.set_state(status.EDIT)
@@ -1099,6 +1106,7 @@ class ProjectService(MIDASSystem):
 
         except Exception as ex:
             emsg = "Submit process failed due to an internal error"
+            self.log.error(emsg)
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": [emsg]}))
             _prec.status.set_state(status.EDIT)
@@ -1108,7 +1116,11 @@ class ProjectService(MIDASSystem):
 
         # Wrap up the submisstion process: record provenance info, set state and save the
         # record, as needed.
-        statusdata = self._submit__wrapup(poststate, _prec, message, options)
+        try: 
+            statusdata = self._submit__wrapup(poststate, _prec, message, options)
+        except Exception as ex:
+            self.log.error("%s: Submission wrap-up failed: %s", _prec.id, str(ex))
+            raise            
 
         # If there is anything that should be done automatically _after_ submitting (e.g.
         # publishing), do it here.
@@ -1168,7 +1180,12 @@ class ProjectService(MIDASSystem):
 
             prec.status.set_state(poststat)
             prec.status.act(self.STATUS_ACTION_SUBMIT, message or defmsg, self.who.actor)
-            prec.save()
+            try:
+                prec.save()
+            except Exception as ex:
+                self.log.error("%s: Failed to save record state for submission (%s): %s",
+                               _prec.id, poststat, str(ex))
+                raise
 
         self.log.info("Submitted %s record %s (%s) for %s",
                       self.dbcli.project, prec.id, prec.name, self.who)
@@ -1355,7 +1372,14 @@ class ProjectService(MIDASSystem):
 
             stat.set_state(poststat)
             stat.act(self.STATUS_ACTION_PUBLISH, message, self.who.actor)
-            _prec.save()
+            try:
+                _prec.save()
+            except Exception as ex:
+                self.log.error("%s: Failed to save record state for publishing (%s): %s",
+                               _prec.id, poststat, str(ex))
+                raise
+
+            self.log.info(message)
 
 #        self.log.info("Submitted %s record %s (%s) for %s for final publication",
 #                      self.dbcli.project, _prec.id, _prec.name, self.who)
@@ -1397,8 +1421,14 @@ class ProjectService(MIDASSystem):
         if not message:
             message = "Restored record for revision"
         stat.act(self.STATUS_ACTION_REVISE, message)
-        _prec.save()
+        try:
+            _prec.save()
+        except Exception as ex:
+            self.log.error("%s: unable to save record state after revision setup (%s): %s",
+                           _prec.id, status.EDIT, str(ex))
+            raise
 
+        self.log.info("%s: set for revising", _prec.id)
         return _prec
 
     def _revise(self, prec: ProjectRecord, options: Mapping=None):
