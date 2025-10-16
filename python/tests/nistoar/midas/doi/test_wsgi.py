@@ -105,7 +105,7 @@ class TestDOI2NERDmHandler(test.TestCase):
                 "email": "datasupport@nist.gov"
             }
         }
-        self.resolver = DOIResolver.from_config(self.cfg)
+        self.resolver = DOIResolver.from_config(self.cfg['doi_resolver'])
         self.resolver.to_reference = Mock(return_value=sampleref)
         self.resolver.to_authors = Mock(return_value=sampleauths)
         self.resp = []
@@ -212,7 +212,139 @@ class TestDOI2NERDmHandler(test.TestCase):
         err = self.body2data(body)
         self.assertIn('oar:message', err)
 
+    def test_send_authors(self):
+        doi = "10.88888/goober"
+        path = f"authors/{doi}/"
+        req = {
+            "REQUEST_METHOD": "GET",
+            "PATH_INFO": path
+        }
+        hdlr = doim.DOI2NERDmHandler(self.resolver, path, req, self.start, log=rootlog)
+        body = hdlr.send_authors(doi)
+        self.assertIn("200 ", self.resp[0])
+        auths = self.body2data(body)
+        self.assertEqual(len(auths), 4)
+        self.assertIn('fn', auths[0])
 
+        def donotfind(*args, **kw):
+            raise DOIDoesNotExist(doi)
+        self.resolver.to_authors = Mock(side_effect=donotfind)
+        self.resp = []
+        with self.assertRaises(DOIDoesNotExist):
+            hdlr.send_authors(doi)
+
+    def test_do_GET_authors(self):
+        doi = "10.88888/goober"
+        path = "authors/"+doi
+        req = {
+            "REQUEST_METHOD": "GET",
+            "PATH_INFO": path
+        }
+        hdlr = doim.DOI2NERDmHandler(self.resolver, path, req, self.start, log=rootlog)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        auths = self.body2data(body)
+        self.assertEqual(len(auths), 4)
+        self.assertIn('fn', auths[0])
+
+        self.resp = []
+        path = "authors/doi:"+doi
+        hdlr = doim.DOI2NERDmHandler(self.resolver, path, req, self.start, log=rootlog)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        auths2 = self.body2data(body)
+        self.assertEqual(auths, auths2)
+
+        def doesnotexist(*args, **kw):
+            raise DOIDoesNotExist(doi)
+        self.resp = []
+        self.resolver.to_authors = Mock(side_effect=doesnotexist)
+        path = "authors/https://doi.org/"+doi
+        hdlr = doim.DOI2NERDmHandler(self.resolver, path, req, self.start, log=rootlog)
+        body = hdlr.handle()
+        self.assertIn("404 ", self.resp[0])
+        err = self.body2data(body)
+        self.assertIn('oar:message', err)
+
+        def failure(*args, **kw):
+            raise DOIResolverError()
+        self.resp = []
+        self.resolver.to_authors = Mock(side_effect=failure)
+        path = "authors/http://dx.doi.org/"+doi
+        hdlr = doim.DOI2NERDmHandler(self.resolver, path, req, self.start, log=rootlog)
+        body = hdlr.handle()
+        self.assertIn("503 ", self.resp[0])
+        err = self.body2data(body)
+        self.assertIn('oar:message', err)
+
+class TestDOI2NERDmApp(test.TestCase):
+
+    def start(self, status, headers=None, extup=None):
+        self.resp.append(status)
+        for head in headers:
+            self.resp.append("{0}: {1}".format(head[0], head[1]))
+
+    def body2data(self, body):
+        return json.loads("\n".join(self.tostr(body)), object_pairs_hook=OrderedDict)
+
+    def tostr(self, resplist):
+        return [e.decode() for e in resplist]
+
+    def setUp(self):
+        res._client_info = None
+        self.cfg = {
+            "doi_resolver": {
+                "app_name": "NIST Public Data Repository: pubserver (oar-pdr)",
+                "app_version": "1.5+",
+                "app_url": "https://data.nist.gov/",
+                "email": "datasupport@nist.gov"
+            }
+        }
+        self.app = doim.DOI2NERDmApp(rootlog, self.cfg)
+        self.resp = []
+
+    def test_ctor(self):
+        self.assertTrue(self.app._doires)
+
+    def test_create_handler(self):
+        doi = "10.88888/goober"
+        path = "authors/"+doi
+        req = {
+            "REQUEST_METHOD": "GET",
+            "PATH_INFO": path
+        }
+        hdlr = self.app.create_handler(req, self.start, path)
+        self.assertTrue(isinstance(hdlr, doim.DOI2NERDmHandler))
+
+    def test_GET_ref_baddoi(self):
+        doi = "ark:/18434/mds2-2525"
+        path = "ref/"+doi
+        req = {
+            "REQUEST_METHOD": "GET",
+            "PATH_INFO": path
+        }
+        body = self.app(req, self.start)
+        self.assertIn("400 ", self.resp[0])
+
+    @test.skipIf("doi" not in os.environ.get("OAR_TEST_INCLUDE",""),
+                 "kindly skipping doi service checks")
+    def test_GET_ref(self):
+        doi = "doi:10.18434/mds2-2525"
+        path = "ref/"+doi
+        req = {
+            "REQUEST_METHOD": "GET",
+            "PATH_INFO": path
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2data(body)
+        self.assertEqual(resp['@id'], "doi:10.18434/mds2-2525")
+        self.assertIn('title', resp)
+        self.assertIn('citation', resp)
+
+
+        
+        
         
 
 

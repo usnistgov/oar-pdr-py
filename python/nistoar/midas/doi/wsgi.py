@@ -106,6 +106,10 @@ class DOI2NERDmHandler(HandlerWithJSON):
             # should be "ref" but we can allow for synonyms; see outtype check above
             return self.send_reference(doi)
                                   
+        except DOIDoesNotExist as ex:
+            return self.send_error_obj(404, "DOI Not Found", "DOI appears not to be registered",
+                                       ashead=ashead)
+            
         except DOIClientException as ex:
             self.log.error("Problem using DOI resolver (prog error?) %s: %s",
                            doi, str(ex))
@@ -131,7 +135,7 @@ class DOI2NERDmApp(ServiceApp):
             raise ConfigurationException("DOI2NERDmApp: missing required parameter: doi_resolver")
         self._doires = DOIResolver.from_config(self.cfg["doi_resolver"])
 
-    def create_handler(self, env: dict, start_resp: Callable, path: str, who: Agent) -> Handler:
+    def create_handler(self, env: dict, start_resp: Callable, path: str, who: Agent=None) -> Handler:
         """
         return a handler instance to handle a particular request to a path
         :param Mapping env:  the WSGI environment containing the request
