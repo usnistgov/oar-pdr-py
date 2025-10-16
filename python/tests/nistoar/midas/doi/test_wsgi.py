@@ -277,6 +277,18 @@ class TestDOI2NERDmHandler(test.TestCase):
         err = self.body2data(body)
         self.assertIn('oar:message', err)
 
+    def test_do_GET_unauth(self):
+        doi = "10.88888/goober"
+        path = "ref/"+doi
+        req = {
+            "REQUEST_METHOD": "GET",
+            "PATH_INFO": path
+        }
+        hdlr = doim.DOI2NERDmHandler(self.resolver, path, req, self.start, log=rootlog,
+                                     config={"require_authenticated": True})
+        body = hdlr.handle()
+        self.assertIn("401 ", self.resp[0])
+
 class TestDOI2NERDmApp(test.TestCase):
 
     def start(self, status, headers=None, extup=None):

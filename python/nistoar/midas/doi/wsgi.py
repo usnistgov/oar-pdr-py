@@ -25,11 +25,13 @@ _doi_baseurl_pat = re.compile("^https?://(dx\.)?doi\.org/")
 
 class DOI2NERDmHandler(HandlerWithJSON):
     """
-    a base handler for converting DOIs to NERDm metadata
+    the main handler for converting DOIs to NERDm metadata.  
+
+    It expects a path that starts with "ref/" or "authors/" (followed by a DOI).
     """
     def __init__(self, doiresolver, path: str, wsgienv: dict, start_resp: Callable, who=None, 
-                 log: Logger=None, app=None):
-        super(DOI2NERDmHandler, self).__init__(path, wsgienv, start_resp, who, {}, log, app)
+                 log: Logger=None, config: Mapping={}, app=None):
+        super(DOI2NERDmHandler, self).__init__(path, wsgienv, start_resp, who, config, log, app)
         self._doires = doiresolver
 
     def send_reference(self, doi, ashead=False):
@@ -70,6 +72,12 @@ class DOI2NERDmHandler(HandlerWithJSON):
         auths = self._doires.to_authors(doi)
         return self.send_json(auths, ashead=ashead)
 
+    def authenticated(self) -> bool:
+        """
+        Return True if the user's identity has been determined/authenticated.
+        """
+        return self.who and self.who.actor_type != self.who.UNKN
+
     def do_GET(self, path, ashead=False):
         """
         Convert a DOI to the requested NERDm object
@@ -78,6 +86,9 @@ class DOI2NERDmHandler(HandlerWithJSON):
             return self.send_error_obj(405, "Method Not Allowed"
                                        "GET request must include a NERDm type, authors or ref",
                                        ashead=ashead)
+
+        if self.cfg.get('require_authenticated') and not self.authenticated():
+            return self.send_unauthorized()
 
         parts = path.strip('/').split('/', 1)
         path = parts[1] if len(parts) > 1 else ""
@@ -148,7 +159,7 @@ class DOI2NERDmApp(ServiceApp):
         if not path:
             return Ready(path, env, start_resp, who, log=self.log, app=self)
 
-        return DOI2NERDmHandler(self._doires, path, env, start_resp, who, self.log, self)
+        return DOI2NERDmHandler(self._doires, path, env, start_resp, who, self.log, self.cfg, self)
 
 
 DOIServiceApp = DOI2NERDmApp
