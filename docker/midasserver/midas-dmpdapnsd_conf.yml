@@ -112,3 +112,23 @@ services:
                 describedBy: "http://localhost:9091/docs/nsdsvc-elements.html"
                 href:        "http://localhost:9091/midas/nsd/oar1"
                 version:     oar1
+
+   doi:
+      about:
+         message:     "DOI Service is available"
+         title:       "DOI Conversion Service"
+         describedBy: "http://localhost:9091/docs/doisvc-elements.html"
+         href:        "http://localhost:9091/midas/doi"
+      default_convention: 2nerdm
+      doi_resolver:
+        app_name: "NIST Public Data Repository: pubserver (oar-pdr)"
+        app_version: "1.5+"
+        app_url: "https://data.nist.gov/"
+        email: "datasupport@nist.gov"
+      conventions:
+         "2nerdm":
+            about: 
+                title:       "NIST Staff Directory Indexing API (version 1)"
+                describedBy: "http://localhost:9091/docs/doisvc-elements.html"
+                href:        "http://localhost:9091/midas/doi/2nerdm"
+                version:     "2nerdm"

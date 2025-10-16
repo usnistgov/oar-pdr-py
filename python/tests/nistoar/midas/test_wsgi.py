@@ -725,6 +725,7 @@ class TestMIDASApp(test.TestCase):
 midasserverdir = Path(__file__).parents[4] / 'docker' / 'midasserver'
 midasserverconf = midasserverdir / 'midas-dmpdap_conf.yml'
 nsdserverconf = midasserverdir / 'midas-dmpdapnsd_conf.yml'
+doiserverconf = midasserverconf
 
 class TestMIDASServer(test.TestCase):
     # This tests midas wsgi app with the configuration provided in docker/midasserver
@@ -770,6 +771,7 @@ class TestMIDASServer(test.TestCase):
         self.assertIn("dmp/mdm1", self.app.subapps)
         self.assertIn("dap/mdsx", self.app.subapps)
         self.assertIn("dap/mds3", self.app.subapps)
+        self.assertIn("doi/2nerdm", self.app.subapps)
 
         self.assertEqual(self.app.subapps["dmp/mdm1"].svcfact._prjtype, "dmp")
         self.assertEqual(self.app.subapps["dap/mdsx"].svcfact._prjtype, "dap")
@@ -1268,6 +1270,22 @@ class TestMIDASServer(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         data = self.body2dict(body)
         self.assertEqual(data.get('components',[]), [])
+
+    @test.skipIf("doi" not in os.environ.get("OAR_TEST_INCLUDE",""),
+                 "kindly skipping doi service checks")
+    def test_doi2nerdm_ref(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/doi/2nerdm/ref/10.18434/mds2-2525'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['@id'], "doi:10.18434/mds2-2525")
+        self.assertIn('title', data)
+        self.assertIn('citation', data)
+
+        
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
 class TestMIDASNSDServer(test.TestCase):

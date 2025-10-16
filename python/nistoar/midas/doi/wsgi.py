@@ -149,3 +149,6 @@ class DOI2NERDmApp(ServiceApp):
             return Ready(path, env, start_resp, who, log=self.log, app=self)
 
         return DOI2NERDmHandler(self._doires, path, env, start_resp, who, self.log, self)
+
+
+DOIServiceApp = DOI2NERDmApp
