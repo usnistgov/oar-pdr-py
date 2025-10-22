@@ -1,6 +1,6 @@
 # How To Use This Space To Manage Your Files
 
-The folder containing the file is the space where you can upload and organize files that will be part of your data publication.
+The folder containing this file is the space where you can upload and organize files that will be part of your data publication.
 
 ### Quick Guide
 
