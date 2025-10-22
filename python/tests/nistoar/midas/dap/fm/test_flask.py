@@ -72,8 +72,8 @@ class TestFlaskApp(test.TestCase):
             }
         }
 
-        nccli = sim.SimNextcloudApi(rootdir, self.config.get('generic_api',{}))
-        wdcli = sim.SimFMWebDAVClient(rootdir, self.config.get('webdav',{}))
+        nccli = sim.SimNextcloudApi(rootdir, self.config['service'].get('generic_api',{}))
+        wdcli = sim.SimFMWebDAVClient(rootdir, self.config['service'].get('webdav',{}))
         self.svc = fm.MIDASFileManagerService(self.config['service'], nccli=nccli, wdcli=wdcli)
 
         self.app = fmflask.create_app(self.config, self.svc)

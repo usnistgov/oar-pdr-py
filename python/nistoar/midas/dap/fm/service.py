@@ -171,9 +171,7 @@ class MIDASFileManagerService:
 
         return NextcloudApi(cfg, self.log.getChild('generic'))
 
-        
-
-    def create_space_for(self, id: str, foruser: str):
+    def create_space_for(self, id: str, foruser: str) -> FMSpace:
         """
         create and set up the file space for a DAP record with the given ID.  
 
@@ -182,9 +180,13 @@ class MIDASFileManagerService:
                              not known to nextcloud, it will be created.
         :rtype:  FMSpace
         """
-        space = FMSpace(id, self)
         if self.space_exists(id):
             raise FileManagerOpConflict(f"{id}: space already exists")
+
+        return self._ensure_space_for(id, foruser)
+
+    def _ensure_space_for(self, id: str, foruser: str) -> FMSpace:
+        space = FMSpace(id, self)
 
         # create the user if necessary (may raise exception)
         self.ensure_user(foruser)
@@ -226,6 +228,7 @@ class MIDASFileManagerService:
             for file in os.listdir(srcdir):
                 if file.startswith('.'):
                     continue
+
                 resp = self.wdcli.wdcli.upload_sync(local_path=os.path.join(srcdir, file),
                                                     remote_path='/'.join([space.uploads_davpath, file]))
 
@@ -335,8 +338,8 @@ class FMSpace:
     """
     an encapsulation of a file space in the file manager.  
     """
-    trash_folder = "TRASH"
-    hide_folder  = "HIDE"
+    trash_folder = "#TRASH"
+    hide_folder  = "#HIDE"
     summary_file_name = "space_summary.json"
 
     PERM_NONE   = PERM_NONE
