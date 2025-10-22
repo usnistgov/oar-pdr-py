@@ -498,6 +498,20 @@ class TestMIDASApp(test.TestCase):
                         "describedBy": "https://midas3.nist.gov/midas/apidocs/pyu",
                         "href": "http://midas3.nist.gov/midas/pyu"
                     }
+                },
+                "export": {
+                    "about": {
+                        "message": "Export Service is available",
+                        "title": "Export API",
+                        "describedBy": "https://midas3.nist.gov/midas/apidocs/export",
+                        "href": "http://midas3.nist.gov/midas/export"
+                    },
+                    "default_convention": "v1",
+                    "conventions": {
+                        "v1": {
+                            "type": "export/v1"
+                        }
+                    }
                 }
             }
         }
@@ -536,7 +550,7 @@ class TestMIDASApp(test.TestCase):
         self.assertIn("services", data)
         self.assertIn("dmp", list(data['services'].keys()))
         self.assertIn("dap", list(data['services'].keys()))
-        self.assertEqual(len(data["services"]), 2)
+        self.assertEqual(len(data["services"]), 3)
         self.assertNotIn("versions", data)
         
     def test_about_dmp(self):
@@ -721,6 +735,38 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["id"], "mds3:0001")
         self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "drafts")
+
+    def test_export_about(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/export/'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data["message"], "Export Service is available")
+        self.assertIn("versions", data)
+        self.assertIn("def", data["versions"])
+
+    def test_export_post(self):
+        from unittest.mock import patch
+        with patch('nistoar.midas.export.wsgi.wsgi.run_export', return_value=[{"ok": True, "fmt": "pdf"}]):
+            req = {
+                'REQUEST_METHOD': 'POST',
+                'PATH_INFO': '/midas/export/v1',
+                'wsgi.input': StringIO(json.dumps({
+                    "output_format": "pdf",
+                    "inputs": [{"id": "x"}],
+                    "output_dir": "/tmp/out"
+                }))
+            }
+            self.resp = []
+            body = self.app(req, self.start)
+            self.assertIn("200 ", self.resp[0])
+            data = self.body2dict(body)
+            self.assertTrue(data["ok"])
+            self.assertEqual(data["fmt"], "pdf")
+
 
 midasserverdir = Path(__file__).parents[4] / 'docker' / 'midasserver'
 midasserverconf = midasserverdir / 'midas-dmpdap_conf.yml'
