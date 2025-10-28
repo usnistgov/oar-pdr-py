@@ -72,7 +72,9 @@ class NextcloudApi:
             self.base_url += '/'
         self.authkw = self._prep_auth(config.get("authentication"))
 
-        if config.get("ca_bundle"):
+        if not config.get('site_cert_verify', True):
+            self.authkw['verify'] = False
+        elif config.get("ca_bundle"):
             self.authkw['verify'] = config['ca_bundle']
 
     def _prep_auth(self, authcfg):

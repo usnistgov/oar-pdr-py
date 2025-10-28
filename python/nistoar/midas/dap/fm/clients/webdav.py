@@ -188,7 +188,10 @@ class FMWebDAVClient:
         self.wdcli = None
         if self._wdcopts['webdav_password']:
             self.wdcli = wd3c.Client(self._wdcopts)
-            self.wdcli.verify = self.cfg.get('ca_bundle', True)
+            if not self.cfg.get('site_cert_verify', True):
+                self.wdcli.verify = False
+            else:
+                self.wdcli.verify = self.cfg.get('ca_bundle', True)
 
     def _add_auth_opts(self, authcfg, wd3opts):
         if not authcfg:
@@ -239,7 +242,11 @@ class FMWebDAVClient:
 
         certpath = authcfg.get('client_cert_path')
         keypath = authcfg.get('client_key_path')
-        capath = self.cfg.get('ca_bundle')
+        if not authcfg.get('site_cert_verify', True):
+            # do not attempt to verify site certificate
+            capath = False
+        else:
+            capath = self.cfg.get('ca_bundle')
         if not certpath or not keypath:
             raise ConfigurationException("FMWebDAVClient.authenticate() requires config params: "+
                                          "client_cert_path, client_key_path")
@@ -278,7 +285,7 @@ class FMWebDAVClient:
         try:
             return self.wdcli.check(path)
         except (wd3c.NoConnection, wd3c.ConnectionException) as ex:
-            raise FileManagerCommError("Failed to create directory: "+str(ex)) from ex
+            raise FileManagerCommError("Failed to check directory: "+str(ex)) from ex
 
         # Note wdcli.check() will return False if any error code > 400 is returned (not ideal)
 
