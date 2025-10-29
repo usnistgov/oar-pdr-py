@@ -166,7 +166,7 @@ class DBIORestorer(ProjectRestorer):
         :rtype: DBIORestorer
         :raises ValueError:  if locurl does not comply with the proper URL form
         """
-        pat = re.compile("^dbio_store:([\w\-]+)/(\w[\w\/\-\+=:]+)$")
+        pat = re.compile("^dbio_store:([\w\-]+)/(\w[\w\/\.\-\+=:,]+)$")
         m = pat.match(locurl)
         if not m:
             if not locurl.startswith("dbio_store"):
