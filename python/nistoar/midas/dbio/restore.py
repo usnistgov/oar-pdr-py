@@ -302,8 +302,28 @@ class URLRestorer(ProjectRestorer):
         return cls(locurl, log=log)
         
         
-        
+def default_factory(locurl: str, dbcli: DBClient,
+                    config: Mapping={}, log: Logger=None) -> ProjectRestorer:
+    """
+    return a ProjectRestorer instance based on the given archive location URL.  
 
-        
+    :param str locurl:  the ``archived_at`` URL for the published project record to restore.  
+                        This URL must be of a type supported by this factory--that is, it 
+                        begins with "dbio_store:", "http:", or "https:".  
+    :param DBClient dbcli:  the DBClient for the draft project record that will be restored;
+                        In this implementation, this is ignored and can, thus, can be None.
+    :param dict config: The configuration for the restorer; in this implementation, this is 
+                        ignored.
+    :param Logger log:  a Logger to use for messages; if not provided, a default will be used
+                        if needed
+    :rtype: ProjectRestorer
+    :raises ValueError:  if locurl is of a type not supported by this factory
+    """
+    if locurl.startswith("dbio_store:"):
+        return DBIORestorer.from_archived_at(locurl, dbcli, config, log)
 
-        
+    elif locurl.startswith("https://") or locurl.startswith("http://"):
+        return URLRestorer.from_archived_at(locurl, dbcli, config, log)
+
+    raise ValueError("Not a supported archive URL: "+locurl)
+

@@ -32,7 +32,7 @@ from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, No
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
                                   ProjectSelectionHandler, ServiceApp)
-from ...dbio import status, ANONYMOUS
+from ...dbio import status, ANONYMOUS, restore
 from ..review import DAPReviewer, DAPNERDmReviewValidator
 from ..extrev import ExternalReviewException, create_external_review_client
 from nistoar.base.config import ConfigurationException, merge_config
@@ -166,7 +166,7 @@ class DAPProjectRecord(ProjectRecord):
                     self._data['file_space'].setdefault('id', self.id)
 
                 except FileManagerException as ex:
-                    self.log.error("Problem creating file space: %s", str(ex))
+                    # self.log.error("Problem creating file space: %s", str(ex))
                     self._data['file_space']['message'] = "Failed to create file space"
                     raise
             else:
@@ -394,10 +394,10 @@ class DAPService(ProjectService):
         shoulder = prec.id.split(':', 1)[0]
 
         # create the space in the file-manager
-        if self._fmcli:
-            prec.ensure_file_space(self.who.actor)
-                
         try:
+            if self._fmcli:
+                prec.ensure_file_space(self.who.actor)
+                
             if meta:
                 meta = self._moderate_metadata(meta, shoulder)
                 if prec.meta:
@@ -2735,6 +2735,8 @@ class DAPService(ProjectService):
         
     def _revise(self, prec: ProjectRecord):
         # restore data to nerdstore
+        provact = Action(Action.PUT, self.who, f"Creating Revision based on last published version")
+        self._restore_last_published_data(prec, provact)
 
         # populate file space
         
@@ -2742,6 +2744,20 @@ class DAPService(ProjectService):
             if not prec.data.get(vprop, "").endswith('+'):
                 prec.data[vprop] = prec.data.get(vprop, "") + "+"
         return prec
+
+    _restorer_factory = staticmethod(dap_restore_factory)
+
+def dap_restore_factory(locurl: str, dbcli: DBClient,
+                        config: Mapping={}, log: Logger=None) -> restore.ProjectRestorer:
+    """
+    a ProjectRestorer factory function that knows about DAP restorers (namely, for "aip:" URLs)
+    """
+    if locurl.startswith("aip:"):
+        from ..restore import AIPRestorer
+        return AIPRestorer.from_archived_at(locurl, dbcli, config, log)
+
+    else:
+        return restore.default_factory(locurl, dbcli, config, log)
         
 
 class DAPServiceFactory(ProjectServiceFactory):

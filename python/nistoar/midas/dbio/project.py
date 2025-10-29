@@ -21,7 +21,7 @@ import jsonpatch
 from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, PUBLIC_GROUP, ANONYMOUS, AUTOADMIN,
                    RecordStatus, AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException,
                    InvalidUpdate, InvalidRecord)
-from . import status
+from . import status, restore
 from .. import MIDASException, MIDASSystem
 from nistoar.pdr.utils.prov import Agent, Action
 from nistoar.pdr.utils.validate import ValidationResults, ALL, REQ, WARN
@@ -117,6 +117,8 @@ class ProjectService(MIDASSystem):
         self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), self.who)
         if not self.dbcli.people_service:
             self.log.warning("No people service available for %s service", project_type)
+        self._DEF_LATEST_COLL = f"{self.dbcli.project}_latest"
+        self._DEF_VERSION_COLL = f"{self.dbcli.project}_version"
 
     @property
     def user(self) -> Agent:
@@ -260,31 +262,26 @@ class ProjectService(MIDASSystem):
             raise ValueError("_restore_last_published_data(): project record is missing "
                              "published_as property")
 
-        if prec.status.archived_at:
-            self.log.warning("%s: archived_at property is set but will be ignored; assuming default")
-        archived_at = f"dbio_store:{self.dbcli.project}_latest/{self._arkify_recid(prec.id)}"
+#        if prec.status.archived_at:
+#            self.log.warning("%s: archived_at property is set but will be ignored; assuming default")
+#        archived_at = f"dbio_store:{self._DEF_LATEST_COLL}/{self._arkify_recid(prec.id)}"
 
         # setup prov action
         defmsg = "Restored draft to last published version"
         provact = Action(Action.PROCESS, prec.id, self.who,
-                         f"restored data to last published ({archived_at})",
+                         f"restored data to last published ({prec.status.archived_at})",
                          {"name": "restore_last_published"})
         if foract:
             foract.add_subaction(provact)
 
         try:
             # Create restorer from archived_at URL
-            # TODO: this will be replaced with the use of a factory that processes the archived_at URL
-            pubclient = self.dbcli.client_for(f"{self.dbcli.project}_latest")
-            # restorer = DBIOStoreRestorer(dbclient, self._arkify_recid(prec.id))
-            # prec.data = restorer.get_data()
-
-            # Restore data and set into project record
-            pubrec = pubclient.get_record_for(self._arkify_recid(prec.id), ACLs.READ)
-            prec.data = pubrec.data
+            pubclient = self.dbcli.client_for(self._DEF_LATEST_COLL)
+            restorer = self._get_restorer_for(prec)
+            restorer.restore(prec, dofree=True)
 
             if reset_state:
-                prec.status.set_state(pubrec.status.state)
+                prec.status.set_state(status.PUBLISHED)
             prec.status.act(self.STATUS_ACTION_RESTORE, message or defmsg)
             prec.save()
             
@@ -296,6 +293,29 @@ class ProjectService(MIDASSystem):
         finally:
             if not foract:
                 self._record_action(provact)
+
+    _restorer_factory = staticmethod(restore.default_factory)
+    def _get_restorer_for(self, prec):
+        # ensure that this record has been published before; published_as should have a legit value
+        pubid = prec.status.published_as
+        if not pubid:
+            raise DBIORecordException(prec.id, "Unable to restore to last published state: " +
+                                      "project record appears unpublished (missing published_as property)")
+        pubid = re.sub(r'/pdr:v/\S+$', '', pubid)  # drop the version extension, if included
+
+        publoc = prec.status.archived_at
+        if not publoc:
+            # assume default archiving location
+            publoc = f"dbio_store:{self._DEF_LATEST_COLL}/{pubid}"
+
+        try:
+            return self._restorer_factory(publoc, prec._cli, self.cfg.get("restore"),
+                                          self.log.getChild("restorer"))
+        except DBIOException:
+            raise
+        except Exception as ex:
+            raise DBIORecordException(prec.id, "Unable to restore to last published state: " +
+                                      "Failed to interpret archived_at URL: "+str(ex)) from ex
 
     def reassign_record(self, id, recipient: str, disown: bool=False):
         """
@@ -1446,7 +1466,7 @@ class ProjectService(MIDASSystem):
         :py:class:`~nistoar.midas.dbio.base.DBClient` instance.
         """
         self.dbcli.free()
-                    
+
     def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None):
         """
         Actually launch the publishing process on the given record and update its state  
@@ -1467,11 +1487,12 @@ class ProjectService(MIDASSystem):
         """
         endstate = status.PUBLISHED    # or could be status.SUBMITTED
         try:
-            latestcli = self.dbcli.client_for(f"{self.dbcli.project}_latest", AUTOADMIN)
-            versioncli = self.dbcli.client_for(f"{self.dbcli.project}_version", AUTOADMIN)
+            latestcli = self.dbcli.client_for(self._DEF_LATEST_COLL, AUTOADMIN)
+            versioncli = self.dbcli.client_for(self._DEF_VERSION_COLL, AUTOADMIN)
 
             recd = prec.to_dict()
-            recd['id'] = self._arkify_recid(prec.id)
+            pubid = self._arkify_recid(prec.id)
+            recd['id'] = pubid
             latest = ProjectRecord(latestcli.project, deepcopy(recd), latestcli)
             recd['id'] += "/pdr:v/" + recd['data'].get("@version", "0")
             version = ProjectRecord(versioncli.project, deepcopy(recd), versioncli)
@@ -1499,12 +1520,12 @@ class ProjectService(MIDASSystem):
             raise SubmissionFailed(prec.id, msg) from ex
 
         if endstate == status.PUBLISHED:
-            base = self.cfg.get('published_resolver_ep', 'midas:')
-            prec.status.publish(recd['id'], recd['data'].get("@version", "0"),
-                                f"{base}{self.dbcli.project}_latest/{recd['id']}")
+#            base = self.cfg.get('published_resolver_ep', 'midas:')
+            prec.status.publish(pubid, recd['data'].get("@version", "0"),
+                                f"dbio_store:{self._DEF_LATEST_COLL}/{pubid}")
 
         self.log.info("Successfully published %s as %s version %s (into %s_latest collection)",
-                      prec.id, recd['id'], recd['data'].get("@version", 0), self.dbcli.project)
+                      prec.id, pubid, recd['data'].get("@version", 0), self.dbcli.project)
         return endstate
 
 class ProjectServiceFactory:
