@@ -176,7 +176,18 @@ class DAPProjectRecord(ProjectRecord):
 
 to_DAPRec = DAPProjectRecord.from_dap_record
 
+def dap_restore_factory(locurl: str, dbcli: DBClient,
+                        config: Mapping={}, log: Logger=None) -> restore.ProjectRestorer:
+    """
+    a ProjectRestorer factory function that knows about DAP restorers (namely, for "aip:" URLs)
+    """
+    if locurl.startswith("aip:"):
+        from ..restore import AIPRestorer
+        return AIPRestorer.from_archived_at(locurl, dbcli, config, log)
 
+    else:
+        return restore.default_factory(locurl, dbcli, config, log)
+        
 class DAPService(ProjectService):
     """
     a project record request broker class for DAP records.  
@@ -238,6 +249,8 @@ class DAPService(ProjectService):
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
     """
+    _restorer_factory = staticmethod(dap_restore_factory)
+
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: Agent=None,
                  log: Logger=None, nerdstore: NERDResourceStorage=None, project_type=DAP_PROJECTS,
@@ -2745,20 +2758,6 @@ class DAPService(ProjectService):
                 prec.data[vprop] = prec.data.get(vprop, "") + "+"
         return prec
 
-    _restorer_factory = staticmethod(dap_restore_factory)
-
-def dap_restore_factory(locurl: str, dbcli: DBClient,
-                        config: Mapping={}, log: Logger=None) -> restore.ProjectRestorer:
-    """
-    a ProjectRestorer factory function that knows about DAP restorers (namely, for "aip:" URLs)
-    """
-    if locurl.startswith("aip:"):
-        from ..restore import AIPRestorer
-        return AIPRestorer.from_archived_at(locurl, dbcli, config, log)
-
-    else:
-        return restore.default_factory(locurl, dbcli, config, log)
-        
 
 class DAPServiceFactory(ProjectServiceFactory):
     """
