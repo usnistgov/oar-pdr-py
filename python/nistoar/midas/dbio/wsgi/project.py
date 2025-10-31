@@ -45,10 +45,14 @@ from collections.abc import Mapping, Sequence, Callable
 from typing import Iterator
 from urllib.parse import parse_qs
 import json, re
+import tempfile
+
+from zipp import Path
 
 from nistoar.web.rest import ServiceApp, Handler, Agent
 from nistoar.pdr.utils.validate import ValidationResults
 from nistoar.web.formats import JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
+from nistoar.midas.export.export import run as export_run
 from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
@@ -556,8 +560,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         if not perms:
             perms = dbio.ACLs.OWN
         
-        # Check if this is the :ids interface type (passed from constructor)
-        if path == ":ids":  # Changed from "ids" to ":ids"
+        if path == ":ids":  
             # Handle retrieval of multiple records by IDs
             ids = params.get('ids', []) if qstr else []
             if not ids:
@@ -571,6 +574,10 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             records = self._select_records_by_ids(ids, perms)
             out = self._sort_and_format_records(records)
             return self.send_json(out, ashead=ashead)
+        
+        elif path ==":export":
+            return self._handle_export_request(params, perms)
+
 
         # Default: select all records accessible to the user
         records = self._select_records(perms)
@@ -751,6 +758,49 @@ class ProjectACLsHandler(ProjectRecordHandler):
             parts[1] = self.who.actor
 
         return self.send_json(parts[1] in acl, ashead=ashead)  # returns true or false
+    
+    def _handle_export_request(self, params: dict, perms: list):
+        """Handle export requests via GET with query parameters"""
+        ids = params.get('ids', [])
+        if not ids:
+            return self.send_error_resp(400, "Missing ids parameter", 
+                                    "Query parameter 'ids' is required for export endpoint")
+        
+        if len(ids) == 1 and ',' in ids[0]:
+            ids = [id.strip() for id in ids[0].split(',')]
+
+        format_type = params.get('format', ['pdf'])[0]
+        template_name = params.get('template', [None])[0]
+
+        try:
+            records = list(self._select_records_by_ids(ids, perms))
+
+            if not records:
+                return self.send_error_resp(404, "No accessible records", 
+                                        "No records found with the provided IDs that you can access")
+            with tempfile.TemporaryDirectory() as temp_dir:
+                results = export_run(
+                input_data=records,
+                output_format=format_type,
+                output_directory=temp_dir,
+                template_name=template_name
+            )
+            if len(results) == 1:
+                # Single file - return directly
+                result = results[0]
+                file_path = Path(temp_dir) / result['filename']
+                file_content = file_path.read_bytes()
+                
+                return self.send_ok(
+                    file_content,
+                    contenttype=result.get('mimetype', 'application/octet-stream'),
+                    headers=[('Content-Disposition', f'attachment; filename="{result["filename"]}"')]
+                )
+            
+        except Exception as ex:
+            return self.send_error_resp(500, "Export failed", str(ex))
+
+
 
     def do_POST(self, path):
         """
