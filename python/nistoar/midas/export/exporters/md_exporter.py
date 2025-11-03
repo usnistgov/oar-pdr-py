@@ -2,6 +2,9 @@ from __future__ import annotations
 from typing import Any, Optional
 from collections.abc import Mapping as MappingABC
 from .base import Exporter
+import preppy
+
+DEFAULT_MD_TEMPLATE = "dmp_md_template.prep"
 
 
 class MarkdownExporter(Exporter):
@@ -33,4 +36,24 @@ class MarkdownExporter(Exporter):
         Render a single JSON input into a single Markdown output
         """
         # This exporter expects a mapping-like payload (DMPS style).
-        raise NotImplementedError()
+        if not isinstance(json_payload, MappingABC):
+            raise TypeError("MarkdownExporter expects a mapping-like payload (e.g., dict)")
+
+        template_filename = template_name or DEFAULT_MD_TEMPLATE
+
+        # Preppy can take the full .prep path or just the module base
+        # We pass the .prep path for clarity
+        template_path = self.resolve_template_path("markdown", template_filename)
+        preppy_template = preppy.getModule(str(template_path))
+
+        # Load template and parse
+        data_for_template = json_payload.get("data", json_payload)
+        md_text = preppy_template.get(data_for_template)
+
+        return {
+            "format": self.format_name,
+            "filename": f"{output_filename}{self.file_extension}",
+            "mimetype": "text/markdown",
+            "text": md_text,
+            "file_extension": self.file_extension,
+        }
