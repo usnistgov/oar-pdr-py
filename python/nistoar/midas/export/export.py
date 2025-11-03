@@ -6,7 +6,7 @@ from pathlib import Path
 from .utils.loader import normalize_input
 from .utils.writer import write_file
 from .exporters.pdf_exporter import PDFExporter
-from .exporters.markdown_exporter import MarkdownExporter
+from .exporters.md_exporter import MarkdownExporter
 
 
 def run(input_data: Iterable[Any], output_format: str, output_directory: Path, template_dir: str = None, template_name: str = None):
