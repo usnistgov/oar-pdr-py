@@ -34,7 +34,8 @@ class ExportHandler(Handler):
         "inputs": [...], # whatever iterable of items with the item supported by ``utils.loader.normalize_input``
         "template_dir": "...", # optional
         "template_name": "...", # optional
-        "output_dir": "..."
+        "output_dir": "...", # requires server output dir where file will be created
+        "output_filename": "...", # optional
       }
     """
     def do_OPTIONS(self, path):
@@ -68,6 +69,7 @@ class ExportHandler(Handler):
 
         template_dir = data.get("template_dir")
         template_name = data.get("template_name")
+        output_filename = data.get("output_filename")
 
         try:
             results = run_export(
@@ -76,6 +78,7 @@ class ExportHandler(Handler):
                 output_directory=Path(output_dir),
                 template_dir=template_dir,
                 template_name=template_name,
+                output_filename=output_filename,
             )
         except Exception as ex:
             if self.log:

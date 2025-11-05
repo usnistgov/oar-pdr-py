@@ -23,13 +23,13 @@ class Exporter(ABC):
         return base_templates / format_subdir / template_filename
 
     @abstractmethod
-    def render(self, input_type: str, payload: Any, output_filename: str, template_name: str = None):
+    def render(self, input_type: str, payload: Any, filename: str, template_name: str = None):
         """
         Render a single input payload into a single output file in the format requested.
         Args:
             input_type: Original format of the data
             payload: Content the exporter can handle.
-            output_filename: Base name for the output file (without extension).
+            filename: Base name for the rendered result (without extension).
             template_name: Optional template filename the exporter uses.
 
         Returns: dict with at least: format, filename, mimetype, file_extension, and either bytes or text.
