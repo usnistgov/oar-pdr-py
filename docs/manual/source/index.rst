@@ -20,7 +20,7 @@ deliver the functionality.  Links are provided to software API documentation.  N
 included in this document are repository operations.
 
 The ``nistoar`` packages are provided primarily via the
-`oar-pdr-py GitHub repository <https://github.com/usnistgov>`_.
+`oar-pdr-py GitHub repository <https://github.com/usnistgov/oar-pdr-py>`_.
 
 """""""""""""""""
 Table of Contents
