@@ -180,8 +180,8 @@ systems:
   separate processes.
 * :py:mod:`~nistoar.id` -- utilities for handling and minting identifiers
 * :py:mod:`~nistoar.doi` -- utilities for accessing DOI metadata
-* :py:mod:`~nistoar.jq` -- a front-end to the external tool `jq` [ref], used to convert
-  JSON data from one schema to another.
+* :py:mod:`~nistoar.jq` -- a Python interface to the external tool `jq` [ref], used to
+  convert JSON data from one schema to another.
 
 Software implementing other OAR systems are contained in other related repositories.  Some
 systems are implemented in languages other than Python.  These related repositories
@@ -191,6 +191,9 @@ include:
   Python implementation of the RMM service.
 * `oar-dist-service <https://github.com/usnistgov/oar-dist-service>`_
   -- a Java implementation of the Data Distribution service.
+* `oar-sdp <https://github.com/usnistgov/oar-sdp>`_ -- the front-end browser application
+  that presents the Science Data Portal, used for searching and browsing resources in the
+  RMM. 
 * `oar-pdr-angular <https://github.com/usnistgov/oar-pdr-angular>`_ --
   implementations of various PDR and MIDAS front-end applications, including the DAPTool
   for creating DAPs, the Landing Page Service that creates HTML presentations of DAPs
