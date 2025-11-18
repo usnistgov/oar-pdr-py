@@ -127,7 +127,7 @@ def execute(args, config: Mapping=None, log: Logger=None):
                                       args.infourl, feedback, args.change, args.replace)
 
     except NotAuthorized as ex:
-        raise CommandFailure(args.cmd, f"Unexpected authorization failure: {str(ex)}", 1) from ex
+        raise CommandFailure(args.cmd, f"Unexpected authorization failure: {str(ex)}", 9) from ex
     except Exception as ex:
         log.exception(ex)
         raise CommandFailure(args.cmd, f"Unexpected failure: {str(ex)}", 1) from ex

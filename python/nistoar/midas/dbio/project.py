@@ -1305,7 +1305,6 @@ class ProjectService(MIDASSystem):
                              an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
                              given by `id`.  
-        :raises NotEditable:  the requested record is not in the edit state.  
         :raises NotSubmitable:  if the finalization produces an invalid record because the record 
                              contains invalid data or is missing required data.
         :raises SubmissionFailed:  if, during actual submission (i.e. after finalization), an error 
