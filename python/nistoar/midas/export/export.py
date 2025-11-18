@@ -10,9 +10,10 @@ from .exporters.md_exporter import MarkdownExporter
 from .utils.concat import REGISTRY as CONCAT_REGISTRY
 
 
-def run(input_data: Iterable[Any], output_format: str, output_directory: Path, template_dir: str = None, template_name: str = None, output_filename: str = None):
+def run(input_data: Iterable[Any], output_format: str, output_directory: Path, template_dir: str = None, template_name: str = None, output_filename: str = None, generate_file: bool = False):
     """ Wrapper that handles 1 to N inputs. The initial format of the inputs, the template (if any) used for rendering,
      the output format and the output directory must be the same for all inputs. Only one output is produced.
+     Default behavior doesn't generate output file, it simply returns the rendered result.
 
     Args:
         input_data:
@@ -21,6 +22,7 @@ def run(input_data: Iterable[Any], output_format: str, output_directory: Path, t
         template_dir:
         template_name:
         output_filename:
+        generate_file:
 
     Returns:
 
@@ -42,6 +44,10 @@ def run(input_data: Iterable[Any], output_format: str, output_directory: Path, t
     if concat_fn is None:
         raise ValueError(f"Concatenation not supported for format '{output_format}'.")
     combined = concat_fn(results, output_filename)
+
+    # Default result
+    if not generate_file:
+        return combined
 
     # Single write
     path = write_file(output_directory, combined)

@@ -36,6 +36,7 @@ class ExportHandler(Handler):
         "template_name": "...", # optional
         "output_dir": "...", # requires server output dir where file will be created
         "output_filename": "...", # optional
+        "generate_file": boolean # default is false
       }
     """
     def do_OPTIONS(self, path):
@@ -63,30 +64,64 @@ class ExportHandler(Handler):
         if not isinstance(inputs, list) or not inputs:
             return self.send_error(400, "Bad Input", "inputs must be a non-empty array")
 
+        generate_file = bool(data.get("generate_file") or False)
         output_dir = data.get("output_dir")
-        if not isinstance(output_dir, str) or not output_dir.strip():
-            return self.send_error(400, "Bad Input", "output_dir is required")
+
+        if generate_file:
+            if not isinstance(output_dir, str) or not output_dir.strip():
+                return self.send_error(400, "Bad Input", "output_dir is required")
 
         template_dir = data.get("template_dir")
         template_name = data.get("template_name")
         output_filename = data.get("output_filename")
 
+        # Safe Path
+        output_dir_path = Path(output_dir) if output_dir else Path(".")
+
         try:
-            results = run_export(
+            result = run_export(
                 input_data=inputs,
                 output_format=output_format,
-                output_directory=Path(output_dir),
+                output_directory=output_dir_path,
                 template_dir=template_dir,
                 template_name=template_name,
                 output_filename=output_filename,
+                generate_file=generate_file
             )
         except Exception as ex:
             if self.log:
                 self.log.exception("export POST failed: %s", ex)
             return self.send_error(500, "Server Error")
 
-        payload = results[0] if len(results) == 1 else results
-        return self.send_json(payload)
+        # Return file content as stream
+        if not generate_file:
+            filename = result.get("filename", "output")
+            mimetype = result.get("mimetype", "application/octet-stream")
+
+            # return file bytes as response body
+            if "bytes" in result:
+                body = result["bytes"]
+                headers = [
+                    ("Content-Type", mimetype),
+                    ("Content-Disposition", f'inline; filename="{filename}"'),
+                ]
+                self._start("200 OK", headers)
+                return [body]
+
+            # return encoded text as response body
+            elif "text" in result:
+                body = result["text"].encode("utf-8")
+                headers = [
+                    ("Content-Type", f"{mimetype}; charset=utf-8"),
+                    ("Content-Disposition", f'inline; filename="{filename}"'),
+                ]
+                self._start("200 OK", headers)
+                return [body]
+
+            else:
+                return self.send_error(500, "Server Error", "No content to stream")
+
+        return self.send_json(result)
 
 
 class ExportApp(ServiceApp):
