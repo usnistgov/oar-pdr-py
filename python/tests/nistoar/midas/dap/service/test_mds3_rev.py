@@ -243,6 +243,7 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
         stat = self.svc.publish(id)
         self.assertIsNone(stat.get_review_from("sim"))
         self.assertEqual(stat.state, status.PUBLISHED)
+        prec = self.svc.get_record(id)
         self.assertEqual(prec.data['version'], "1.0.0")
 
         # now start a revision
@@ -258,7 +259,6 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
         stat = self.svc.submit(id, "tested revision", revopts)
         self.assertEqual(stat.state, status.PUBLISHED)
         prec = self.svc.get_record(id)
-        self.assertEqual(prec.data.get('@version'), '1.0.1')
         self.assertEqual(prec.data.get('version'), '1.0.1')
 
         # revise it again...
@@ -277,8 +277,8 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
         # Approve the change, triggering publication
         self.revcli.approve(id)
         prec = self.svc.get_record(id)
-        self.assertEqual(prec.data.get('@version'), '1.1.0')
         self.assertEqual(prec.data.get('version'), '1.1.0')
+        self.assertEqual(prec.data.get('@version'), '1.1.0')
 
         
         
