@@ -353,12 +353,21 @@ class UserSpaceScannerBase(UserSpaceScanner, ABC):
     def create_excludes_skip_scanner(cls, space, scanid, log=None):
         """
         a factory function for creating the scanner assuming the "excludes" rules for skipping 
-        certain files.  In addition to the basic skip rules (skipping files that start with "."
-        or "_"), it skips folders with names "TRASH" or "HIDE".
+        certain files.  This base implementation skips files and folders that start with either 
+        "." or "#".  
         """
+        # DEPRECATED:
+        # In addition to the basic skip rules (skipping files that start with "."
+        # or "#"), it skips folders with names "TRASH" or "HIDE".
+        
         if not log:
             log = logging.getLogger(f"scan.{space.id}")
-        return cls(space, scanid, exclude_folders_skip_patterns, log)
+
+        # use this if extra folder patterns are needed
+        # return cls(space, scanid, exclude_folders_skip_patterns, log)
+
+        # use this if # covers all excludable things
+        return cls(space, scanid, basic_skip_patterns, log)
 
 basic_skip_patterns = [
     re.compile(r"^\."),       # hidden files
@@ -478,6 +487,8 @@ class UserSpaceScanDriver:
         except FileManagerException:
             raise
         except Exception as ex:
+            if not folder:
+                folder = "uploads"
             raise FileManagerScanException("Unexpected error while getting scan folder contents%s: %s" %
                                            ((" (%s)" % folder) if folder else "", str(ex),)) from ex
 
@@ -509,6 +520,9 @@ class UserSpaceScanDriver:
             raise
 
         except Exception as ex:
+            self.log.exception(ex)
+            if not folder:
+                folder = "uploads folder"
             raise FileManagerScanException(f"Unexpected error while scanning {folder}: {str(ex)}") from ex
 
         return scan_id

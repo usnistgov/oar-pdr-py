@@ -303,10 +303,40 @@ class SpaceResource(Resource):
     @auth.authorization_required
     def put(self, id):
         """
-        create a new file manager space, assigning it a given identifier.  The input is a JSON object that 
-        must contain the property, ``foruser``, which represents the identifier for the user that will need 
-        full access permissions on the space.  If the input object includes an ``id`` property, it will be 
-        ignored.
+        create or revive a new file manager space, assigning it a given identifier.  
+
+        A file space is created from scratch when a new DAP record is created, but a space is revived
+        after a record is previously published and the authors move to revise it.  When the space is 
+        newly created, it is largely empty apart from a few standard folders and default files.  When 
+        it is revived, the the folder hierarchy established in the previous publication is recreated in 
+        the space and into those recreated folders special file-listing files are placed indicating 
+        the files previously published in each folder.  
+
+        The input is a JSON object that must contain the property, ``foruser``, which represents the 
+        identifier for the user that will need full access permissions on the space.  If the input 
+        object includes an ``id`` property, it will be ignored.  The object may also contain a 
+        ``contents`` property containing a list of objects (which can be empty); the inclusion of this 
+        property indicates a request to revive the space for a revision; otherwise, creation from scratch 
+        is assumed.  A request to create a space that already exists results in 405 (Conflict) error 
+        response.
+        
+        Each object in the ``contents`` list describes a file that was previously published; it should 
+        contain the following properties:
+
+        ``filepath``
+             (str) _Required_. the path to the file within the dataset.  If the file resides at the top 
+             of the file hierarchy, the path should just be the name of the file
+        ``size``
+             (int) _Optional_. the size of the file in bytes.  
+        ``checksum``
+             (str) _Optional_. the (SHA256) checksum hash for the file
+        ``type``
+             (str) _Optional_. a string value "file" or "folder" indicating the type of entry the object
+             describes. If not provided, "file" is assumed.  If the value is "folder", ``size`` and 
+             ``checksum`` properties are not expected and will be ignored.  In general, it is not 
+             necessary to include folder entries in the list unless it is expected to be empty.  
+
+        The list should be empty if no files were previously published.  
         """
         svc = current_app.service
         rec = request.json
@@ -315,8 +345,19 @@ class SpaceResource(Resource):
         if "for_user" not in rec:
             return {"message": "Create space request missing 'for_user' property" }, 400
 
+        if "contents" in rec:
+            if not isinstance(contents, list) or any(not isinstance(e, Mapping) for e in contents):
+                return { "message": "contents: not a list of objects" }, 400
+            if not all('filesystem' in e for e in contents):
+                return { "message": "contents: one or more entries missing filepath property" }, 400
+
+        doing = "creating"
         try:
-            sp = svc.create_space_for(id, rec['for_user'])
+            if rec.get('contents'):
+                doing = "reviving"
+                sp = svc.revive_space_for(id, rec['for_user'], rec['contents'])
+            else:
+                sp = svc.create_space_for(id, rec['for_user'])
             return sp.summarize()
 
         except FileManagerOpConflict as ex:
@@ -324,10 +365,10 @@ class SpaceResource(Resource):
             return {"message": str(ex)}, 405
         except FileManagerException as ex:
             current_app.logger.error(str(ex))
-            return server_error(intent="creating a new space")
+            return server_error(intent=f"{doing} a new space")
         except Exception as ex:
             current_app.logger.exception(ex)
-            return server_error(intent="creating a new space")
+            return server_error(intent=f"{doing} a new space")
 
 class SpaceScansResource(Resource):
     """

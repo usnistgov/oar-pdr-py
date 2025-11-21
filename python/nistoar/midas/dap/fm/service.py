@@ -185,6 +185,83 @@ class MIDASFileManagerService:
 
         return self._ensure_space_for(id, foruser)
 
+    _PPFName = "#previously_published_files.tsv"
+
+    def revive_space_for(self, id: str, foruser: str, pubished_files={}, folders=[]) -> FMSpace:
+        """
+        prepare a file space to be used to capture revisions to a published dataset.  
+
+        The file space may already exist and contain the copies of the files that were 
+        uploaded and published previously.  If so, the files will be moved out of the 
+        way...
+        """
+        space = self._ensure_space_for(id, foruser)
+
+        # move any previously uploaded files
+        ignore = [FMSpace.trash_folder, FMSpace.hide_folder, "#OLD"]
+        oldfolder = None
+        for file in os.listdir(space.root_dir/space.uploads_folder):
+            if file.startswith('#') or file.startswith('.') or file in ignore:
+                continue
+            if not oldfolder:
+                oldfolder = space.uploads_davpath+'/OLD'
+                if not (space.root_dir/'OLD').exists():
+                    self.wdcli.ensure_directory(oldfolder)
+                    self.nccli.set_user_permissions(foruser, PERM_ALL, oldfolder)
+            self.wdcli.move(space.uploads_davpath+'/'+file, oldfolder+'/'+file)
+
+        # create the previously published list files
+        if published_files:
+            # determine the hierarchy
+            files = sorted(published_files.keys(), reverse=True)
+            foldercnts = {}
+            for file in files:
+                file = Path(file)
+                for fldr in file.parents:
+                    fldr = str(fldr)
+                    if fldr in folders:
+                        continue
+                    foldercnts[fldr] = []
+                published_files[str(file)]['name'] = file.name
+                foldercnts[fldr].append(published_files[str(file)])
+
+            # create needed directories
+            prob = []
+            for fldr in sorted(foldercnts.keys()) + folders:
+                fldrpth = space.root_dir / space.uploads_folder / fldr
+                if not fldrpth.exists():
+                    self.wdcli.ensure_directory(space.uploads_davpath+'/'+fldr)
+                    self.nccli.set_user_permissions(foruser, PERM_ALL, space.uploads_davpath+'/'+fldr)
+                elif not fldrpth.is_dir():
+                    prob.append(fldr)
+                    continue
+
+                if fldr in foldercnts:
+                    filelist = []
+                    for file in foldercnts[fldr]:
+                        filelist.append(self._format_published_file(file))
+                    self.wdcli.wdcli.upload_to(self._filelist2listfile(filelist),
+                                               '/'.join([space.uploads_davpath, fldr, self._PPFName]))
+            
+            if prob:
+                # should not happen
+                msg = "Requested directories that exist as files:\n  " + "\n  ".join(prob)
+                raise FileManagerClientError(msg)
+
+        return space
+
+    def _format_published_file(fdat: Mapping) -> str:
+        return f"#keep\t{fdat['name']}\t{fdat.get('size','')}\t{fdat.get('checksum','')}"
+
+    def _filelist2listfile(flist: List[str]) -> str:
+        out = \
+"""# Below are the names of files that were previously published in the current folder"
+# (optionally followed by their size and SHA256 checksum hash)
+# To remove the file from the next version, replace "#keep" with "#delete"
+# 
+"""
+        return out + "\n".join(flist)
+
     def _ensure_space_for(self, id: str, foruser: str) -> FMSpace:
         space = FMSpace(id, self)
 
@@ -227,6 +304,9 @@ class MIDASFileManagerService:
                 self.wdcli.authenticate()
             for file in os.listdir(srcdir):
                 if file.startswith('.'):
+                    continue
+                if (space.root_dir / space.uploads_folder / file).exists():
+                    # this may be true if we are reviving a space for a revision
                     continue
 
                 resp = self.wdcli.wdcli.upload_sync(local_path=os.path.join(srcdir, file),

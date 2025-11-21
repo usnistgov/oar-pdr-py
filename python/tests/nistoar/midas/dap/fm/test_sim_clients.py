@@ -186,7 +186,7 @@ class SimFMWebDAVClientTest(test.TestCase):
         self.wdcli.ensure_directory(path)
         self.assertTrue((rootdir/path).is_dir())
         info = self.wdcli.get_resource_info(path)
-        self.assertEqual(info.get('name'), "/"+path)
+        self.assertEqual(info.get('path'), "/"+path)
         self.assertIn("created", info)
         self.assertIn("fileid", info)
         self.assertIn("size", info)
