@@ -200,7 +200,7 @@ class MIDASFileManagerService:
 
         # share space with user (may raise exception)
         if foruser != self._adminuser:
-            self.nccli.set_user_permissions(foruser, PERM_READ, space.root_davpath)
+            # self.nccli.set_user_permissions(foruser, PERM_READ, space.root_davpath)
             # space.set_permissions_for(space.system_folder, userid, PERM_READ)
             space.set_permissions_for(space.uploads_folder, foruser, PERM_ALL)
 
