@@ -77,22 +77,34 @@ class SimNextcloudApiTest(test.TestCase):
         perms = self.nccli.get_user_permissions("mdst:0001/mdst:0001/junk")['ocs']['data']
         self.assertEqual(perms, [])
 
-        self.nccli.set_user_permissions('ava1', sim.svc.PERM_DELETE, "mdst:0001")
+        p = self.nccli.set_user_permissions('ava1', sim.svc.PERM_DELETE, "mdst:0001")
+        self.assertIsNotNone(p)
+        p = p['ocs']['data']
+        self.assertTrue(isinstance(p, dict))
+        self.assertEqual(p.get('share_with'), 'ava1')
+        self.assertEqual(p.get('permissions'), sim.svc.PERM_DELETE)
+        pid = p.get('id')
+        self.assertTrue(pid);
+        
         perms = self.nccli.get_user_permissions("mdst:0001")['ocs']['data']
         self.assertEqual(len(perms), 1)
         self.assertEqual(perms[0].get('share_with'), 'ava1')
         self.assertEqual(perms[0].get('permissions'), sim.svc.PERM_DELETE)
+        self.assertEqual(perms[0].get('id'), pid)
+        
         perms = self.nccli.get_user_permissions("mdst:0001/mdst:0001/junk")['ocs']['data']
         self.assertEqual(len(perms), 1)
         self.assertEqual(perms[0].get('share_with'), 'ava1')
         self.assertEqual(perms[0].get('permissions'), sim.svc.PERM_DELETE)
+        self.assertEqual(perms[0].get('id'), pid)
+        
         perms = self.nccli.get_user_permissions('')['ocs']['data']
         self.assertEqual(perms, [])
 
         with self.assertRaises(FileManagerException):
             self.nccli.set_user_permissions('ava1', sim.svc.PERM_SHARE, "mdst:0001/mdst:0001/junk")
         
-        self.nccli.set_user_permissions('ava1', sim.svc.PERM_SHARE, "mdst:0001/mdst:0001")
+        p = self.nccli.set_user_permissions('ava1', sim.svc.PERM_SHARE, "mdst:0001/mdst:0001")
         perms = self.nccli.get_user_permissions("mdst:0001")['ocs']['data']
         self.assertEqual(len(perms), 1)
         self.assertEqual(perms[0].get('share_with'), 'ava1')
@@ -102,7 +114,7 @@ class SimNextcloudApiTest(test.TestCase):
         self.assertEqual(perms[0].get('share_with'), 'ava1')
         self.assertEqual(perms[0].get('permissions'), sim.svc.PERM_SHARE)
         
-        self.nccli.set_user_permissions('grn2', sim.svc.PERM_SHARE, "mdst:0001/mdst:0001")
+        p = self.nccli.set_user_permissions('grn2', sim.svc.PERM_SHARE, "mdst:0001/mdst:0001")
         perms = self.nccli.get_user_permissions("mdst:0001/mdst:0001")['ocs']['data']
         self.assertEqual(len(perms), 2)
         self.assertEqual(set(p.get('share_with') for p in perms), set(('ava1', 'grn2',)))
@@ -186,7 +198,7 @@ class SimFMWebDAVClientTest(test.TestCase):
         self.wdcli.ensure_directory(path)
         self.assertTrue((rootdir/path).is_dir())
         info = self.wdcli.get_resource_info(path)
-        self.assertEqual(info.get('name'), "/"+path)
+        self.assertEqual(info.get('path'), "/"+path)
         self.assertIn("created", info)
         self.assertIn("fileid", info)
         self.assertIn("size", info)

@@ -67,14 +67,17 @@ class SimNextcloudApi(NextcloudApi):
 
         return out
 
+    _previd = 1
     def set_user_permissions(self, user_name, perm_type, dir_name):
         defperm = {'share_with': user_name, 'uid_owner': self.cfg.get('admin_user', 'oar_api'),
                    'item_type': 'folder', 'permissions': svc.PERM_NONE }
-        data = self.get_user_permissions(dir_name)
-        data = data.get('ocs', {}).get('data', [])
+        out = self.get_user_permissions(dir_name)
+        data = out.get('ocs', {}).get('data', [])
         perm = [p for p in data if p.get('share_with') == user_name]
         if len(perm) == 0:
-            perm = defperm
+            perm = deepcopy(defperm)
+            self._previd += 1
+            perm['id'] = str(self._previd)
             data.append(perm)
         else:
             perm = perm[0]
@@ -85,7 +88,7 @@ class SimNextcloudApi(NextcloudApi):
 
         if dir.is_file():
             raise FileManagerServerError(405, f'files/userpermissions/{user_name}/{dir_name}',
-                                         "Method not allowed", "Can only delete permissions on folders")
+                                         "Method not allowed", "Can only set permissions on folders")
 
         perm['permissions'] = perm_type
         permfile = dir / self.PERMFILE
@@ -95,7 +98,8 @@ class SimNextcloudApi(NextcloudApi):
         except Exception as ex:
             raise UnexpectedFileManagerResponse("Unexpected response (500): "+str(ex))
 
-        return perm
+        out['ocs']['data'] = deepcopy(perm)
+        return out
 
     def delete_user_permissions(self, user_name, dir_name):
         dir = self.rootdir / dir_name
