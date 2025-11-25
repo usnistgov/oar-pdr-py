@@ -53,13 +53,26 @@ class TestExportHandler(test.TestCase):
         # Save and patch where ExportHandler actually calls it
         self._orig_run = getattr(wsgi_mod, "run_export", None)
 
-        def fake_run(input_data, output_format, output_directory, template_dir=None, template_name=None):
-            return [{
+        def fake_run(**kw):
+            """
+            Fake run_export that matches the signature and return shape:
+            - accepts keyword args (input_data, output_format, output_directory, ...)
+            - returns a single dict including filename/mimetype so streaming could work too
+            """
+            input_data = kw.get("input_data", [])
+            output_format = kw.get("output_format")
+            output_directory = kw.get("output_directory")
+            return {
                 "ok": True,
                 "fmt": output_format,
                 "count": len(input_data),
-                "outdir": str(output_directory)
-            }]
+                "outdir": str(output_directory),
+                "filename": "combined.out",
+                "mimetype": "application/octet-stream",
+                "file_extension": ".out",
+                "path": os.path.join(str(output_directory), "combined.out"),
+            }
+
         wsgi_mod.run_export = fake_run
 
         self.app = expwsgi.ExportApp(rootlog, {})
@@ -72,6 +85,26 @@ class TestExportHandler(test.TestCase):
                 delattr(wsgi_mod, "run_export")
             except Exception:
                 pass
+
+    class FakeRecord:
+        """Minimal record with id and data attributes"""
+
+        def __init__(self, rec_id):
+            self.id = rec_id
+            self.data = {"foo": "bar"}
+
+    class FakeDBClient:
+        """Minimal DB client exposing select_records_by_ids"""
+
+        def __init__(self, rec_ids):
+            self._recs = {rid: TestExportHandler.FakeRecord(rid) for rid in rec_ids}
+
+        def select_records_by_ids(self, ids, perm=None):
+            for rid in ids:
+                rec = self._recs.get(rid)
+                if rec is not None:
+                    # Returns iterator like the real function
+                    yield rec
 
     def test_handler_instance_type(self):
         handler = self.app.create_handler(
@@ -86,8 +119,9 @@ class TestExportHandler(test.TestCase):
     def test_post_ok_single_result(self):
         payload = {
             "output_format": "pdf",
-            "inputs": [{"id": "x"}],
-            "output_dir": "/tmp/out"
+            "inputs": [{"data": {"a": 1}}],
+            "output_dir": "/tmp/out",
+            "generate_file": True,
         }
         req = {"REQUEST_METHOD": "POST", "PATH_INFO": "/", "wsgi.input": StringIO(json.dumps(payload))}
         body = self.app(req, self.start)
@@ -99,19 +133,34 @@ class TestExportHandler(test.TestCase):
         self.assertEqual(data["count"], 1)
 
     def test_post_ok_multiple_results(self):
-        wsgi_mod.run_export = lambda **kw: [{"name": "a"}, {"name": "b"}]
+        def fake_multi(**kw):
+            input_data = kw.get("input_data", [])
+            return {
+                "ok": True,
+                "fmt": kw.get("output_format"),
+                "count": len(input_data),
+                "filename": "combined_multi.out",
+                "mimetype": "application/octet-stream",
+                "file_extension": ".out",
+                "path": os.path.join(str(kw.get("output_directory")), "combined_multi.out"),
+            }
+
+        wsgi_mod.run_export = fake_multi
+
         payload = {
             "output_format": "markdown",
-            "inputs": [{"id": 1}, {"id": 2}],
-            "output_dir": "/tmp/out"
+            "inputs": [{"data": {"a": 1}}, {"data": {"b": 2}}],
+            "output_dir": "/tmp/out",
+            "generate_file": True,
         }
         req = {"REQUEST_METHOD": "POST", "PATH_INFO": "/", "wsgi.input": StringIO(json.dumps(payload))}
         self.resp = []
         body = self.app(req, self.start)
         self.assertIn("200 ", self.resp[0])
         data = self.body_json(body)
-        self.assertIsInstance(data, list)
-        self.assertEqual([r["name"] for r in data], ["a", "b"])
+        self.assertIsInstance(data, dict)
+        self.assertEqual(data["fmt"], "markdown")
+        self.assertEqual(data["count"], 2)
 
     def test_options_preflight(self):
         req = {"REQUEST_METHOD": "OPTIONS", "PATH_INFO": "/"}
@@ -149,7 +198,7 @@ class TestExportHandler(test.TestCase):
             "PATH_INFO": "/",
             "wsgi.input": StringIO(json.dumps({
                 "output_format": "docx",
-                "inputs": [{"a": 1}],
+                "inputs": [{"data": {"a": 1}}],
                 "output_dir": "/tmp/out"
             }))
         }
@@ -182,7 +231,8 @@ class TestExportHandler(test.TestCase):
             "PATH_INFO": "/",
             "wsgi.input": StringIO(json.dumps({
                 "output_format": "markdown",
-                "inputs": [{"id": 1}]
+                "inputs": [{"data": {"a": 1}}],
+                "generate_file": True,
                 # output_dir missing
             }))
         }
@@ -199,8 +249,9 @@ class TestExportHandler(test.TestCase):
             "PATH_INFO": "/",
             "wsgi.input": StringIO(json.dumps({
                 "output_format": "pdf",
-                "inputs": [{"id": 1}],
-                "output_dir": "/tmp/out"
+                "inputs": [{"data": {"a": 1}}],
+                "output_dir": "/tmp/out",
+                "generate_file": True,
             }))
         }
         self.resp = []
@@ -208,6 +259,81 @@ class TestExportHandler(test.TestCase):
         self.assertIn("500 ", self.resp[0])
         txt = self.body_text(body)
         self.assertIsInstance(txt, str)
+
+    def test_inputs_ids_resolved_via_dbclient(self):
+        # Capture what input_data gets passed to run_export
+        captured = {}
+
+        def fake_run(**kw):
+            captured["input_data"] = kw.get("input_data", [])
+            captured["output_format"] = kw.get("output_format")
+            captured["output_directory"] = kw.get("output_directory")
+            return {
+                "ok": True,
+                "fmt": captured["output_format"],
+                "count": len(captured["input_data"]),
+                "outdir": str(captured["output_directory"]),
+                "filename": "combined.out",
+                "mimetype": "application/octet-stream",
+                "file_extension": ".out",
+                "path": os.path.join(str(captured["output_directory"]), "combined.out"),
+            }
+
+        wsgi_mod.run_export = fake_run
+
+        # Attach a fake DB client with one known record "rec-1"
+        self.app.dbcli = TestExportHandler.FakeDBClient(rec_ids=["rec-1"])
+
+        payload = {
+            "output_format": "pdf",
+            "inputs": ["rec-1"], # list of IDs (strings)
+            "output_dir": "/tmp/out",
+            "generate_file": True,
+        }
+        req = {
+            "REQUEST_METHOD": "POST",
+            "PATH_INFO": "/",
+            "wsgi.input": StringIO(json.dumps(payload)),
+        }
+
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+
+        # Check JSON response shape
+        data = self.body_json(body)
+        self.assertIsInstance(data, dict)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["fmt"], "pdf")
+        self.assertEqual(data["count"], 1)
+
+        # Assert that run_export received a FakeRecord instance
+        input_data = captured.get("input_data")
+        self.assertIsInstance(input_data, list)
+        self.assertEqual(len(input_data), 1)
+        self.assertIsInstance(input_data[0], TestExportHandler.FakeRecord)
+        self.assertEqual(input_data[0].id, "rec-1")
+
+    def test_inputs_unknown_id_returns_404(self):
+        # Fake DB client with NO records
+        self.app.dbcli = TestExportHandler.FakeDBClient(rec_ids=[])
+
+        payload = {
+            "output_format": "pdf",
+            "inputs": ["missing-id"],
+            "output_dir": "/tmp/out",
+            "generate_file": True,
+        }
+        req = {
+            "REQUEST_METHOD": "POST",
+            "PATH_INFO": "/",
+            "wsgi.input": StringIO(json.dumps(payload)),
+        }
+
+        body = self.app(req, self.start)
+        self.assertIn("404 ", self.resp[0])
+        txt = self.body_text(body).lower()
+        self.assertIn("not found", txt)
+        self.assertIn("project record", txt)
 
 
 if __name__ == "__main__":
