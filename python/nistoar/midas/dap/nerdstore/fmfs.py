@@ -102,7 +102,6 @@ _NO_FM_SUMMARY = OrderedDict([
     ("file_count", -1),
     ("folder_count", -1),
     ("usage", -1),
-    ("syncing", False),
     ("last_modified", "(unknown)"),
     ("last_scan_id", None),
     ("syncing", "unsynced")
@@ -437,10 +436,14 @@ class FMFSFileComps(FSBasedFileComps):
                 self._res.log.error("Failed to delete scan report, %s: %s", self.last_scan_id, str(ex))
             self.last_scan_id = None
 
+        syncing = "unknown"
+        if scanmd.get("in_progress") is not None:
+            syncing = "syncing" if scanmd["in_progress"] else "synced"
+
         return OrderedDict([
             ("file_count", len(scfiles)),
             ("folder_count", len(scfolders)),
-            ("syncing", scanmd.get("status", "unknown")),
+            ("syncing", syncing),
             ("last_scan_started", scanmd.get("scan_datetime", "(unknown)")),
             ("last_scan_id", self.last_scan_id),
             ("last_scan_is_complete", scanmd.get("is_complete", True)),

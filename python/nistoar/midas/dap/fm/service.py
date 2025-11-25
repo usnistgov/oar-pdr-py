@@ -730,7 +730,7 @@ class FMSpace:
         files = [f for f in scanmd.get('contents',[]) if f.get('resource_type', 'file') == 'file']
         summary['file_count'] = len(files)
         summary['folder_count'] = len([f for f in scanmd.get('contents',[])
-                                         if f.get('resource_type', 'file') == 'folder'])
+                                         if f.get('resource_type', 'file') == 'collection'])
         summary['usage'] = sum(f.get('size', 0) for f in files)
 
         self._cache_fm_summary(summary)
