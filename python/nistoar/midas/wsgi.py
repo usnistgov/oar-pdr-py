@@ -483,9 +483,17 @@ def PeopleServiceFactory(servicemodule):
 def ExportServiceFactory(dbio_client_factory, log, config, project_name):
     """
     Factory for the export service.
-    Export doesn't need dbio, so we ignore dbio_client_factory and project_name.
     """
-    return ExportApp(log, config)
+    app = ExportApp(log, config)
+    # Attach a DB client so ExportHandler._resolve_inputs() can look up records
+    if dbio_client_factory is not None and project_name:
+        # project_name is the collection / service type for DBIO
+        app.dbcli = dbio_client_factory.create_client(
+            servicetype=project_name,
+            foruser=AUTOADMIN
+        )
+
+        return app
 
 
 class DevAbout(About):
