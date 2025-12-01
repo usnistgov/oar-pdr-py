@@ -485,11 +485,14 @@ def ExportServiceFactory(dbio_client_factory, log, config, project_name):
     Factory for the export service.
     """
     app = ExportApp(log, config)
+
+    # 'dmp' is the only supported projects collection right now
+    prj_name = project_name or "dmp"
     # Attach a DB client so ExportHandler._resolve_inputs() can look up records
     if dbio_client_factory is not None and project_name:
         # project_name is the collection / service type for DBIO
         app.dbcli = dbio_client_factory.create_client(
-            servicetype=project_name,
+            servicetype=prj_name,
             foruser=AUTOADMIN
         )
 
