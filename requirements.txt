@@ -20,6 +20,9 @@ mako
 pyjwt
 psutil
 websockets==15.0.1
+trml2pdf==0.6
+preppy==5.0.1
+pypdf==6.1.3
 ejsonschema @ https://github.com/usnistgov/ejsonschema/archive/master.zip
 pynoid @ https://github.com/RayPlante/pynoid/archive/master.zip
 multibag @ https://github.com/usnistgov/multibag-py/archive/0.6.zip
