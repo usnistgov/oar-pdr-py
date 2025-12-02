@@ -16,3 +16,4 @@ mako
 pyjwt
 trml2pdf==0.6
 preppy==5.0.1
+pypdf==6.1.3
