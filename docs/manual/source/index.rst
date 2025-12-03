@@ -17,7 +17,7 @@ backend systems, especially the systems used for publishing into the PDR.  In th
 we introduce the primary functions of the PDR and its overall architecture.  We then
 describe the subcomponents and services that make up the PDR and how they are designed to
 deliver the functionality.  Links are provided to software API documentation.  Not
-included in this document are repository operations.
+covered in this document is information on repository operations.
 
 The ``nistoar`` packages are provided primarily via the
 `oar-pdr-py GitHub repository <https://github.com/usnistgov/oar-pdr-py>`_.
@@ -58,6 +58,14 @@ Table of Contents
   * The Identifier Resolver Service
   * Client Tools
 
+* Key Utilies
+
+  * Configuring Classes and Applications
+  * Message Logging
+  * Web Service Frameworks
+  * Job Management
+  * Other Utilities
+
 * The NIST Extensible Resource Data Model (NERDm)
   
   * Overview
@@ -71,5 +79,6 @@ Table of Contents
    :caption: Contents:
 
    intro
+   keyutilities
    api
 
