@@ -5,7 +5,7 @@ This is provided primarily for testing purposes
 """
 from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
-from typing import Iterator, List
+from typing import Iterator, List,Sequence
 from . import base
 from .notifier import DBIOClientNotifier
 
@@ -107,6 +107,19 @@ class InMemoryDBClient(base.DBClient):
                     yield deepcopy(rec)
                     break
     
+    def select_records_by_ids(self, ids: Sequence[str], perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+        if isinstance(perm, str):
+            perm = [perm]
+        if isinstance(perm, (list, tuple)):
+            perm = set(perm)
+        for rec in self._db[self._projcoll].values():
+            rec = base.ProjectRecord(self._projcoll, rec, self)
+            if rec.id in ids:
+                for p in perm:
+                    if rec.authorized(p):
+                        yield deepcopy(rec)
+                        break
+
     def adv_select_records(self, filter:dict,
                            perm: base.Permissions=base.ACLs.OWN,) -> Iterator[base.ProjectRecord]:
         if(base.DBClient.check_query_structure(filter) == True):

@@ -3,7 +3,7 @@ setuptools<66.0.0
 json-spec
 jsonschema==2.4.0
 requests
-pytest==4.6.5
+pytest==8.4.2
 filelock
 crossrefapi
 pyyaml
@@ -14,3 +14,5 @@ fs>=2.0.21
 jsonpatch
 mako
 pyjwt
+trml2pdf==0.6
+preppy==5.0.1

@@ -266,6 +266,190 @@ class TestMIDASProjectApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("400", self.resp[0])
 
+    def test_select_by_ids(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Record One", "data": {"title": "First Record"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp1 = self.body2dict(body)
+        id1 = resp1['id']
+        
+        self.resp = []
+        
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Record Two", "data": {"title": "Second Record"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp2 = self.body2dict(body)
+        id2 = resp2['id']
+        
+        self.resp = []
+        
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Record Three", "data": {"title": "Third Record"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp3 = self.body2dict(body)
+        id3 = resp3['id']
+        
+        self.resp = []
+        
+        path = ":ids"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': f'ids={id1},{id2}'
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        results = self.body2dict(body)
+        self.assertEqual(len(results), 2)
+        
+        returned_ids = [r['id'] for r in results]
+        self.assertIn(id1, returned_ids)
+        self.assertIn(id2, returned_ids)
+        self.assertNotIn(id3, returned_ids)
+        
+        for record in results:
+            if record['id'] == id1:
+                self.assertEqual(record['data']['title'], "First Record")
+            elif record['id'] == id2:
+                self.assertEqual(record['data']['title'], "Second Record")
+        
+        self.resp = []
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': f'ids={id3}'
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        results = self.body2dict(body)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['id'], id3)
+        self.assertEqual(results[0]['data']['title'], "Third Record")
+        
+        self.resp = []
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': f'ids={id1},{id2},{id3}'
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        results = self.body2dict(body)
+        self.assertEqual(len(results), 3)
+        
+        returned_ids = [r['id'] for r in results]
+        self.assertIn(id1, returned_ids)
+        self.assertIn(id2, returned_ids)
+        self.assertIn(id3, returned_ids)
+        
+        self.resp = []
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': 'ids=nonexistent:0001'
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        results = self.body2dict(body)
+        self.assertEqual(len(results), 0)
+        
+        self.resp = []
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': f'ids={id1},nonexistent:0001,{id3}'
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        results = self.body2dict(body)
+        self.assertEqual(len(results), 2)
+        
+        returned_ids = [r['id'] for r in results]
+        self.assertIn(id1, returned_ids)
+        self.assertIn(id3, returned_ids)
+        self.assertNotIn("nonexistent:0001", returned_ids)
+        
+        self.resp = []
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+        
+        self.resp = []
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': 'ids='
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+        
+        self.resp = []
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': f'ids={id1},{id2}&perm=read'
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        results = self.body2dict(body)
+        self.assertEqual(len(results), 2)
+        
+        self.resp = []
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': f'ids={id1}&ids={id2}&ids={id3}'
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        results = self.body2dict(body)
+        self.assertEqual(len(results), 3)
+        
+        self.resp = []
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': f'ids={id1}'
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        
+        cors = [h for h in self.resp if h.startswith("Access-Control-Allow-Origin")]
+        self.assertGreater(len(cors), 0)
+        self.assertTrue(cors[0].startswith("Access-Control-Allow-Origin: *"))
+
     def test_get_name(self):
         path = "mdm1:0003/name"
         req = {
