@@ -11,7 +11,7 @@ class MarkdownExporter(Exporter):
     format_name = "markdown"
     file_extension = ".md"
 
-    def render(self, input_type: str, payload: Any, output_filename: str, template_name: str = None):
+    def render(self, input_type: str, payload: Any, filename: str, template_name: str = None):
         """
         Render a single input payload into a single output file in the format requested.
         Input type must match one of the cases or a type error is raised.
@@ -19,7 +19,7 @@ class MarkdownExporter(Exporter):
         Args:
             input_type: Initial format of the data.
             payload: Content the exporter can handle.
-            output_filename: Base name for the output file (without extension).
+            filename: Base name for the rendered result (without extension).
             template_name: Optional template filename the exporter uses.
 
         Returns: A dictionary.
@@ -27,11 +27,11 @@ class MarkdownExporter(Exporter):
         """
         match input_type:
             case "json":
-                return self.render_json(payload, output_filename, template_name)
+                return self.render_json(payload, filename, template_name)
 
         raise TypeError("MarkdownExporter.render: unsupported payload type.")
 
-    def render_json(self, json_payload: Any, output_filename: str, template_name: str):
+    def render_json(self, json_payload: Any, filename: str, template_name: str):
         """
         Render a single JSON input into a single Markdown output
         """
@@ -52,7 +52,7 @@ class MarkdownExporter(Exporter):
 
         return {
             "format": self.format_name,
-            "filename": f"{output_filename}{self.file_extension}",
+            "filename": f"{filename}{self.file_extension}",
             "mimetype": "text/markdown",
             "text": md_text,
             "file_extension": self.file_extension,
