@@ -132,7 +132,13 @@ data into an application:
   in YAML or JSON format.
 
 Typically, an application will support all three; which one actually gets used can depend
-on environment variables or command-line inputs.  
+on environment variables or command-line inputs.  In particular, pulling configuration
+from a central service is intended for an integrated production environment where services
+can run across a cluster of containers and/or machines, while reading from a file is
+especially convenient for testing or stand-alone operation.
 
-...
+.. note::
+   More content is planned for this section
+
+
 
