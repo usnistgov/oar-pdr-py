@@ -2454,6 +2454,8 @@ class DAPService(ProjectService):
         dates['annotated'] = now
 
     def _finalize_version(self, prec: ProjectRecord, vers_inc_lev: int=None):
+        if prec.data.get('version'):
+            prec.data['@version'] = prec.data.get('version')
         ver = super()._finalize_version(prec, vers_inc_lev)
         nerd = self._store.open(prec.id)
         resmd = nerd.get_res_data()
@@ -2726,8 +2728,15 @@ class DAPService(ProjectService):
 
         return True
 
+    def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None):
+        # will replace this implementation with submitting to publication service
+        # in this temporary impl., fill _prec.data with the full NERDm record
+        nerd = self._store.open(prec.id)
+        prec.data = nerd.get_data()  
+        return super()._publish(prec)
+
     def publish(self, id: str, _prec=None, **kwargs):
-        # will replace this with submitting to publication service
+        # will replace this implementation with submitting to publication service (see also _publish())
         stat = super().publish(id, _prec, **kwargs)
 
         prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)
@@ -2748,15 +2757,61 @@ class DAPService(ProjectService):
         
     def _revise(self, prec: ProjectRecord):
         # restore data to nerdstore
-        provact = Action(Action.PUT, self.who, f"Creating Revision based on last published version")
-        self._restore_last_published_data(prec, provact)
+        msg = f"Creating Revision based on last published version"
+        provact = Action(Action.PUT, self.who, msg)
+        self._restore_last_published_data(prec, msg, provact, False)
 
         # populate file space
+        if self._fmcli:
+            nerdfiles = self._strore.open(prec.id).files().get_files()
+            dfiles = [n.get('filepath','') for n in nerdfiles if not nerdutils.is_type(n, "Collection")]
+            self.fmcli.revive_space(id, self.user, dfiles)
         
-        for vprop in ["version", "@version"]:
-            if not prec.data.get(vprop, "").endswith('+'):
-                prec.data[vprop] = prec.data.get(vprop, "") + "+"
+        if not prec.data.get('version', "").endswith('+'):
+            prec.data['version'] = prec.data.get('version', "") + "+"
         return prec
+
+    def _restore_last_published_data(self, prec: ProjectRecord, msg: str, foract: Action,
+                                     reset_state: bool=True):
+        pubid = prec.status.published_as
+        if not pubid:
+            raise ValueError("_restore_last_published_data(): project record is missing "
+                             "published_as property")
+
+        # setup prov action
+        defmsg = "Restored draft to last published version"
+        provact = Action(Action.PROCESS, prec.id, self.who,
+                         f"restored data to last published ({prec.status.archived_at})",
+                         {"name": "restore_last_published"})
+        if foract:
+            foract.add_subaction(provact)
+
+        try:
+            # Create restorer from archived_at URL
+            pubclient = self.dbcli.client_for(self._DEF_LATEST_COLL)
+            restorer = self._get_restorer_for(prec)
+
+            pubdata = restorer.get_data()   # convert to latest? (Not nec. if from data.nist.gov)
+            self._store.load_from(pubdata, prec.id)
+            nerd = self._store.open(prec.id)
+            prec.data = self._summarize(nerd)
+
+            if reset_state:
+                prec.status.set_state(status.PUBLISHED)
+            prec.status.act(self.STATUS_ACTION_RESTORE, msg or defmsg)
+            prec.save()
+            
+        except Exception as ex:
+            self.log.error("Failed to save restored record for project, %s: %s",
+                           prec.id, str(ex))
+            provact.message = "Failed to save restored data due to internal error"
+            raise
+        finally:
+            if not foract:
+                self._record_action(provact)
+
+        
+        
 
 
 class DAPServiceFactory(ProjectServiceFactory):

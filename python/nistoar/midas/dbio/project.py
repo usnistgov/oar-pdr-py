@@ -227,7 +227,8 @@ class ProjectService(MIDASSystem):
 
         out = None
         provact = Action(Action.DELETE, prec.id, self.who, "deleted draft record")
-        try: 
+        try:
+            #TODO: deal with prov data
             if prec.status.published_as:
                 # restore record to the last published version
                 self._restore_last_published_data(prec,
@@ -286,9 +287,9 @@ class ProjectService(MIDASSystem):
             prec.save()
             
         except Exception as ex:
-            self.log.error("Failed to save prepped-for-revision record for project, %s: %s",
+            self.log.error("Failed to save restored record for project, %s: %s",
                            prec.id, str(ex))
-            provact.message = "Failed to save prepped-for-revision data due to internal error"
+            provact.message = "Failed to save restored data due to internal error"
             raise
         finally:
             if not foract:
