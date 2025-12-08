@@ -187,14 +187,35 @@ class MIDASFileManagerService:
 
     _PPFName = "#previously_published_files.tsv"
 
-    def revive_space_for(self, id: str, foruser: str, pubished_files={}, folders=[]) -> FMSpace:
+    def revive_space_for(self, id: str, foruser: str, published_files={}) -> FMSpace:
         """
         prepare a file space to be used to capture revisions to a published dataset.  
 
         The file space may already exist and contain the copies of the files that were 
-        uploaded and published previously.  If so, the files will be moved out of the 
-        way...
+        uploaded and published previously.  If so, the files will be moved out into a top-level
+        folder called "#OLD".  
+
+        All folders that were part of the previous published version will be recreated in the space.
+        In lieu of restoring files, a special file called "#previously_published_files.tsv" will be 
+        created in each folder; this file will list the names of each of files (along with their size 
+        and checksum hash) previously published in that folder.  The ``published_files`` argument 
+        provides the paths and metadata that go into those file list files.  
+
+        :param str      id:  the identifier of space being revived
+        :param str foruser:  the user this is being revived for.  This need not be the same user
+                             that originally published the dataset or otherwise originally created
+                             the space.
+        :param dict published_files:  a dictionary describing the previously published files.  Each
+                             key is a path a file (relative to the uploads directory), and the 
+                             value are is a dictionary containing the file metadata: "size" giving 
+                             file's size in bytes, and checksum, giving the (SHA256) checksum hash.
         """
+        if published_files and \
+           (not isinstance(published_files, list) or \
+            any(not isinstance(f, Mapping) or not f.get('filepath') for f in published_files)):
+                raise ValueError("revive_space_for(): published_files: " +
+                                 "not a list of dicts with 'filepath' key")
+
         space = self._ensure_space_for(id, foruser)
 
         # move any previously uploaded files
@@ -204,8 +225,8 @@ class MIDASFileManagerService:
             if file.startswith('#') or file.startswith('.') or file in ignore:
                 continue
             if not oldfolder:
-                oldfolder = space.uploads_davpath+'/OLD'
-                if not (space.root_dir/'OLD').exists():
+                oldfolder = space.uploads_davpath+'/#OLD'
+                if not (space.root_dir/'#OLD').exists():
                     self.wdcli.ensure_directory(oldfolder)
                     self.nccli.set_user_permissions(foruser, PERM_ALL, oldfolder)
             self.wdcli.move(space.uploads_davpath+'/'+file, oldfolder+'/'+file)
@@ -213,35 +234,34 @@ class MIDASFileManagerService:
         # create the previously published list files
         if published_files:
             # determine the hierarchy
-            files = sorted(published_files.keys(), reverse=True)
+            files = sorted(published_files, key=lambda f: f['filepath'], reverse=True)
             foldercnts = {}
             for file in files:
-                file = Path(file)
-                for fldr in file.parents:
+                fp = Path(file['filepath'])
+                for fldr in fp.parents:
                     fldr = str(fldr)
-                    if fldr in folders:
-                        continue
-                    foldercnts[fldr] = []
-                published_files[str(file)]['name'] = file.name
-                foldercnts[fldr].append(published_files[str(file)])
+                    if fldr not in foldercnts:
+                        foldercnts[fldr] = []
+                fldr = str(fp.parents[0])
+                file['name'] = fp.name
+                foldercnts[fldr].append(file)
 
             # create needed directories
             prob = []
-            for fldr in sorted(foldercnts.keys()) + folders:
+            for fldr in sorted(foldercnts.keys()):
                 fldrpth = space.root_dir / space.uploads_folder / fldr
                 if not fldrpth.exists():
                     self.wdcli.ensure_directory(space.uploads_davpath+'/'+fldr)
-                    self.nccli.set_user_permissions(foruser, PERM_ALL, space.uploads_davpath+'/'+fldr)
+                    # self.nccli.set_user_permissions(foruser, PERM_ALL, space.uploads_davpath+'/'+fldr)
                 elif not fldrpth.is_dir():
                     prob.append(fldr)
                     continue
 
-                if fldr in foldercnts:
-                    filelist = []
-                    for file in foldercnts[fldr]:
-                        filelist.append(self._format_published_file(file))
-                    self.wdcli.wdcli.upload_to(self._filelist2listfile(filelist),
-                                               '/'.join([space.uploads_davpath, fldr, self._PPFName]))
+                filelist = []
+                for file in foldercnts[fldr]:
+                    filelist.append(self._format_published_file(file))
+                self.wdcli.wdcli.upload_to(self._filelist2listfile(filelist).encode('utf-8'),
+                                           '/'.join([space.uploads_davpath, fldr, self._PPFName]))
             
             if prob:
                 # should not happen
@@ -250,10 +270,10 @@ class MIDASFileManagerService:
 
         return space
 
-    def _format_published_file(fdat: Mapping) -> str:
+    def _format_published_file(self, fdat: Mapping) -> str:
         return f"#keep\t{fdat['name']}\t{fdat.get('size','')}\t{fdat.get('checksum','')}"
 
-    def _filelist2listfile(flist: List[str]) -> str:
+    def _filelist2listfile(self, flist: List[str]) -> str:
         out = \
 """# Below are the names of files that were previously published in the current folder"
 # (optionally followed by their size and SHA256 checksum hash)

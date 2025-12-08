@@ -151,6 +151,47 @@ class TestFlaskApp(test.TestCase):
         self.assertIn("mds3:0000", data)
         self.assertEqual(len(data), 3)
 
+    def test_revive(self):
+        resp = self.client.get("/mfm1/spaces", headers=self.authhdrs)
+        data = resp.json
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(isinstance(data, list))
+        self.assertEqual(data, [])
+
+        files = [
+            { "filepath": "README.txt",       "size": 16340,  "checksum": "XXXX" },
+            { "filepath": "bkfst/bagels.csv", "size": 220341, "checksum": "YYYY" }
+        ]
+
+        resp = self.client.put("/mfm1/spaces/mds3:0020",
+                               json={'for_user': 'ava1', 'contents': []},
+                               headers=self.authhdrs)
+        data = resp.json
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(data['file_count'], -1)
+        self.assertEqual(data['created_by'], 'ava1')
+        self.assertEqual(data['users'], ['ava1'])
+        self.assertEqual(data['id'], "mds3:0020")
+        upldir = rootdir/"mds3:0020"/"mds3:0020"
+        self.assertTrue(upldir.is_dir())
+        self.assertTrue((upldir/'#HIDE').is_dir())
+        self.assertTrue(not (upldir/'#previously_published_files.tsv').exists())
+        
+        resp = self.client.put("/mfm1/spaces/mds3:0030",
+                               json={'for_user': 'ava1', 'contents': files},
+                               headers=self.authhdrs)
+        data = resp.json
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(data['file_count'], -1)
+        self.assertEqual(data['created_by'], 'ava1')
+        self.assertEqual(data['users'], ['ava1'])
+        self.assertEqual(data['id'], "mds3:0030")
+        upldir = rootdir/"mds3:0030"/"mds3:0030"
+        self.assertTrue(upldir.is_dir())
+        self.assertTrue((upldir/'#HIDE').is_dir())
+        self.assertTrue((upldir/'#previously_published_files.tsv').exists())
+
+
     def _set_scan_queue(self):
         scan.set_slow_scan_queue(jobdir, resume=False)
         scan.slow_scan_queue.mod = simjobexec

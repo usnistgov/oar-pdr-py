@@ -231,7 +231,46 @@ class MIDASFileManagerServiceTest(test.TestCase):
             sp.get_scan(scid)
         sp.delete_scan(scid)
 
+    def test_format_previous_files(self):
+        files = [
+            { "size": 16340,  "checksum": "XXXX", "name": "README.txt" },
+            { "size": 220341, "checksum": "YYYY", "name": "bagels.csv" }
+        ]
+        lines = []
+        for f in files:
+            lines.append(self.cli._format_published_file(f))
+        self.assertEqual(lines[0], "#keep\tREADME.txt\t16340\tXXXX")
+        self.assertEqual(lines[1], "#keep\tbagels.csv\t220341\tYYYY")
 
+        table = self.cli._filelist2listfile(lines)
+        self.assertTrue(table.startswith("# Below are"))
+        self.assertTrue(table.split('\n')[-1].startswith("#keep\tbagels.csv"))
+        
+    def test_revive_space_for(self):
+        files = [
+            { "filepath": "README.txt",       "size": 16340,  "checksum": "XXXX" },
+            { "filepath": "bkfst/bagels.csv", "size": 220341, "checksum": "YYYY" }
+        ]
+        self.cli.revive_space_for("mdsx:8888", "nstr", files)
+
+        upldir = rootdir/"mdsx:8888"/"mdsx:8888"
+        self.assertTrue(upldir.is_dir())
+        prev = upldir/"#previously_published_files.tsv"
+        self.assertTrue(prev.is_file())
+        with open(prev) as fd:
+            lines = fd.readlines()
+        self.assertEqual(len([n for n in lines if "README.txt" in n]), 1)
+        self.assertEqual(len([n for n in lines if "bagels.csv" in n]), 0)
+
+        self.assertTrue((upldir/"bkfst").is_dir())
+        prev = upldir/"bkfst"/"#previously_published_files.tsv"
+        self.assertTrue(prev.is_file())
+        with open(prev) as fd:
+            lines = fd.readlines()
+        self.assertEqual(len([n for n in lines if "README.txt" in n]), 0)
+        self.assertEqual(len([n for n in lines if "bagels.csv" in n]), 1)
+        
+    
         
         
     
