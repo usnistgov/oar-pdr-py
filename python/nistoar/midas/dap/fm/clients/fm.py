@@ -246,8 +246,8 @@ class FileManager:
         request a new scan to commence asynchronously.  This function will return an initial scan 
         report which includes a list of the files found in the space and some initial metadata for them.  
         One of the properties returned is ``scan_id`` which can be used to retrieve updated versions of 
-        the report later.  The ``in_progress`` field indicates whether the scan is still in progress, 
-        meaning updates to the report are still expected.
+        the report later.  The ``is_complete`` field, if False, indicates that the scan is still in 
+        progress, meaning updates to the report are still expected.
         :param str spaceid:  the identifier for the space to scan.
         :return:  the initial version of the scan report.
                   :rtype: dict

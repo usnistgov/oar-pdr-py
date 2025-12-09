@@ -45,7 +45,7 @@ class BasicScanner(UserSpaceScannerBase):
         if content_md.get('contents'):
             # sort alphabetically; this puts top files first and folders ahead of their members
             content_md['contents'].sort(key=itemgetter('path'))
-            content_md['in_progress'] = True
+            content_md['is_complete'] = False
 
             for i in range(len(content_md['contents'])):
                 fmd = content_md['contents'].pop(0)
@@ -119,7 +119,7 @@ class BasicScanner(UserSpaceScannerBase):
                 self._save_report(self.scanid, content_md)
 
         # write out the final report
-        content_md['in_progress'] = False
+        content_md['is_complete'] = True
         self._save_report(self.scanid, content_md)
 
         return content_md

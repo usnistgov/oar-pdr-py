@@ -7,7 +7,7 @@
     "uploads_dir": "/shared/data/oar_api/files/mds3-0012/mds3-0012",
     "scan_root": "",
     "fm_system_path": "mds3-0012/mds3-0012-sys",
-    "status": "successful",
+    "is_complete": true,
     "contents": [
         {
             "fileid": "196",
@@ -54,7 +54,7 @@
             "path": "analysis/",
             "size": "32046",
             "last_modified": "2024-01-18T21:08:09+00:00",
-            "resource_type": "folder",
+            "resource_type": "collection",
             "scan_errors": []
         },
         {

@@ -826,7 +826,7 @@ class FMSpace:
         if 'scan_id' in scanmd:
             summary["last_scan_id"] = scanmd['scan_id']
             summary['last_scan_started'] = scanmd.get('scan_datetime', 'unknown')
-        summary['syncing'] = "syncing" if scanmd.get('in_progress') else "synced"
+        summary['syncing'] = "synced" if scanmd.get('is_complete') else "syncing"
         files = [f for f in scanmd.get('contents',[]) if f.get('resource_type', 'file') == 'file']
         summary['file_count'] = len(files)
         summary['folder_count'] = len([f for f in scanmd.get('contents',[])

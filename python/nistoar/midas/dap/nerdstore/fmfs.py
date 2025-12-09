@@ -429,7 +429,7 @@ class FMFSFileComps(FSBasedFileComps):
             self._res.log.warning("File hierarchy may be incomplete")
             raise RuntimeError("Failed add/update files due to missing folders")
 
-        if scanmd.get("status") and scanmd["status"] != "in_progress" and scanmd["status"] != "unsynced":
+        if scanmd.get("is_complete"):
             try:
                 self._fmcli.delete_scan(self._res.id, self.last_scan_id)
             except Exception as ex:
@@ -437,8 +437,8 @@ class FMFSFileComps(FSBasedFileComps):
             self.last_scan_id = None
 
         syncing = "unknown"
-        if scanmd.get("in_progress") is not None:
-            syncing = "syncing" if scanmd["in_progress"] else "synced"
+        if scanmd.get("is_complete") is not None:
+            syncing = "synced" if scanmd["is_complete"] else "syncing"
 
         return OrderedDict([
             ("file_count", len(scfiles)),
