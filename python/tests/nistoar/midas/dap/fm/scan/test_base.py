@@ -16,8 +16,6 @@ from nistoar.midas.dap.fm.scan import base as scan, simjobexec, BasicScanner, Ba
 
 # This is needed to for the logic in the tests below
 from nistoar.midas.dap.fm import service as fmsvc
-fmsvc.FMSpace.trash_folder = "TRASH"
-fmsvc.FMSpace.hide_folder = "HIDE"
 
 execdir = Path(__file__).parents[0]
 datadir = execdir.parents[0] / 'data'
@@ -39,8 +37,12 @@ def setUpModule():
     loghdlr.setLevel(logging.DEBUG)
     rootlog.addHandler(loghdlr)
     rootlog.setLevel(logging.DEBUG)
+    fmsvc.FMSpace.trash_folder = "TRASH"
+    fmsvc.FMSpace.hide_folder = "HIDE"
     
 def tearDownModule():
+    fmsvc.FMSpace.trash_folder = "#TRASH"
+    fmsvc.FMSpace.hide_folder = "#HIDE"
     global loghdlr
     if loghdlr:
         if rootlog:
