@@ -643,6 +643,7 @@ class JobRunner:
                         if job.source and job.source.is_file():
                             job = Job.from_state_file(job.source)
                         proc = await self.runner._launch_job(job)
+                        self.runner.log.debug("launched %s job with pid=%i", job.data_id, proc.pid)
                         ec = await proc.wait()
                         self.processed += 1
                         if job.source and job.source.is_file():

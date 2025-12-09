@@ -16,6 +16,7 @@ except ImportError:
 
 from nistoar.midas.dap.fm import service as fm, sim, flask as fmflask
 from nistoar.midas.dap.fm.scan import base as scan, simjobexec
+from nistoar.base.config import configure_log
 
 execdir = Path(__file__).parents[0]
 datadir = execdir.parents[0] / 'data'
@@ -66,6 +67,7 @@ config = {
     "logfile": "test_sim_fmflask.log"
 }
 
+configure_log(config=config)
 svccfg = config.get('service')
 nccli = sim.SimNextcloudApi(rootdir, svccfg.get('generic_api',{}))
 wdcli = sim.SimFMWebDAVClient(rootdir, svccfg.get('webdav',{}))

@@ -33,7 +33,7 @@ def startService(authmeth=None):
         os.mkdir(wrkdir)
     
     wpy = "python/tests/nistoar/midas/dap/fm/sim_fmflask_srv.py"
-    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} --enable-threads " \
           "--wsgi-file {3} --pidfile {4} --set-ph workdir={5}"
     cmd = cmd.format(os.path.join(tmpdir.name,"simsrv.log"), uwsgi_opts, srvport,
                      os.path.join(basedir, wpy), pidfile, wrkdir)
@@ -142,6 +142,11 @@ class MIDASFileManagerClientTest(test.TestCase):
         self.assertEqual(screp['space_id'], spid)
         self.assertEqual(len(screp['contents']), 0)
 
+        if not screp.get('is_complete'):
+            time.sleep(0.5)
+            screp = self.cli.get_scan(spid, scid)
+            self.assertTrue(screp.get('is_complete'))
+
         self.assertEqual(self.cli.last_scan_id(spid), scid)
 
         # add some files
@@ -160,8 +165,14 @@ class MIDASFileManagerClientTest(test.TestCase):
         self.assertNotEqual(screp['scan_id'], scid)
         scid = screp['scan_id']
 
-        time.sleep(0.75)
+        time.sleep(0.5)
         screp = self.cli.get_scan(spid, scid)
+        i = 0
+        while not screp.get('is_complete') and i < 5:
+            time.sleep(0.25)
+            i += 1
+            screp = self.cli.get_scan(spid, scid)
+        self.assertTrue(screp.get('is_complete'))
         self.assertTrue(isinstance(screp, Mapping))
         self.assertIn('scan_id', screp)
         self.assertEqual(screp['space_id'], spid)
