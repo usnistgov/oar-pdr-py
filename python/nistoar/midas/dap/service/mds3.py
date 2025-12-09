@@ -32,7 +32,7 @@ from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, No
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
                                   ProjectSelectionHandler, ServiceApp)
-from ...dbio import status, ANONYMOUS
+from ...dbio import status, ANONYMOUS, restore
 from ..review import DAPReviewer, DAPNERDmReviewValidator
 from ..extrev import ExternalReviewException, create_external_review_client
 from nistoar.base.config import ConfigurationException, merge_config
@@ -46,7 +46,7 @@ from nistoar.nsd import NSDServerError
 from . import validate
 from .. import nerdstore
 from ..nerdstore import NERDResource, NERDResourceStorage, NERDResourceStorageFactory, NERDStorageException
-from ..fm import FileManager, FileSpaceNotFound, FileSpaceException
+from ..fm import FileManager, FileManagerResourceNotFound, FileManagerException
 
 ASSIGN_DOI_NEVER   = 'never'
 ASSIGN_DOI_ALWAYS  = 'always'
@@ -150,53 +150,44 @@ class DAPProjectRecord(ProjectRecord):
         """
         if not self._fmcli:
             return
-        if not self._data.get('file_space', {}).get('creator'):
+        if not self._data.get('file_space', {}).get('location'):
             if not who:
                 who = self._cli.user_id
+            self._data.setdefault('file_space', {})
             try:
-                self._fmcli.get_record_space(self.id)
-            except FileSpaceNotFound as ex:
+                self._data['file_space'].update(self._fmcli.summarize_space(self.id))
+            except FileManagerResourceNotFound as ex:
                 try:
+                    self._data['file_space'] = self._fmcli.create_space(self.id, who)
                     self._data['file_space']['action'] = "create"
-                    self._fmcli.create_record_space(who, self.id)
                     self._data['file_space']['created'] = \
                         datetime.fromtimestamp(math.floor(time.time())).isoformat()
                     self._data['file_space']['creator'] = who
+                    self._data['file_space'].setdefault('id', self.id)
 
-                except FileSpaceException as ex:
-                    self.log.error("Problem creating file space: %s", str(ex))
+                except FileManagerException as ex:
+                    # self.log.error("Problem creating file space: %s", str(ex))
                     self._data['file_space']['message'] = "Failed to create file space"
                     raise
             else:
-                self._data['file_space']['creator'] = who
-                self._data['file_space']['id'] = self.id  # the ID of the space is the same as the rec
-
-    def determine_uploads_url(self):
-        """
-        return the expected URL for the browser-based view of a record space's uploads directory.
-        """
-        fs = self.file_space
-        if self._fmcli and fs and fs.get('uploads_dir_id'):
-            return f"{self._fmcli.web_base}/{fs['uploads_dir_id']}?dir=/{self.id}/{self.id}"
-        else:
-            return f"/{self.id}/{self.id}"
-
-    def to_dict(self):
-        out = super().to_dict()
-        if self._fmcli and out.get('file_space') and out['file_space'].get('id'):
-
-            out['file_space']['location'] = self.determine_uploads_url()
-
-            if self._fmcli.cfg.get('dav_base_url'):
-                out['file_space']['uploads_dav_url'] = \
-                    '/'.join([self._fmcli.cfg['dav_base_url'].rstrip('/'),
-                              out['file_space'].get('id'), out['file_space'].get('id')])
-        return out
+                self._data['file_space'].setdefault('creator', who)
+                self._data['file_space'].setdefault('id', self.id)
 
 
 to_DAPRec = DAPProjectRecord.from_dap_record
 
+def dap_restore_factory(locurl: str, dbcli: DBClient,
+                        config: Mapping={}, log: Logger=None) -> restore.ProjectRestorer:
+    """
+    a ProjectRestorer factory function that knows about DAP restorers (namely, for "aip:" URLs)
+    """
+    if locurl.startswith("aip:"):
+        from ..restore import AIPRestorer
+        return AIPRestorer.from_archived_at(locurl, dbcli, config, log)
 
+    else:
+        return restore.default_factory(locurl, dbcli, config, log)
+        
 class DAPService(ProjectService):
     """
     a project record request broker class for DAP records.  
@@ -258,6 +249,8 @@ class DAPService(ProjectService):
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
     """
+    _restorer_factory = staticmethod(dap_restore_factory)
+
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: Agent=None,
                  log: Logger=None, nerdstore: NERDResourceStorage=None, project_type=DAP_PROJECTS,
@@ -414,10 +407,10 @@ class DAPService(ProjectService):
         shoulder = prec.id.split(':', 1)[0]
 
         # create the space in the file-manager
-        if self._fmcli:
-            prec.ensure_file_space(self.who.actor)
-                
         try:
+            if self._fmcli:
+                prec.ensure_file_space(self.who.actor)
+                
             if meta:
                 meta = self._moderate_metadata(meta, shoulder)
                 if prec.meta:
@@ -1523,7 +1516,7 @@ class DAPService(ProjectService):
         :param str id:  the ID for the DAP project to sync
         :raises ObjectNotFound:  if the project with the given ID does not exist
         :raises NotAuthorized:   if the user does not write permission to make this update
-        :raises FileSpaceException:  if syncing failed for an unexpected reason
+        :raises FileManagerException:  if syncing failed for an unexpected reason
         """
         if not self._fmcli:
             return {}
@@ -1535,11 +1528,11 @@ class DAPService(ProjectService):
             files = nerd.files
             if hasattr(files, 'update_hierarchy'):
                 prec.file_space['action'] = 'sync'
-                if files.fm_summary.get('syncing') == "in_progress":
+                if files.fm_summary.get('syncing') == "syncing":
                     # a scan is still in progress, so just get the latests updates; don't start a new scan
                     prec.file_space.update(files.update_metadata())
                 else:
-                    prec.file_space.update(files.update_hierarchy())  # may raise FileSpaceException
+                    prec.file_space.update(files.update_hierarchy())  # may raise FileManagerException
                 prec.save()
         return prec.to_dict().get('file_space', {})
             
@@ -2461,6 +2454,8 @@ class DAPService(ProjectService):
         dates['annotated'] = now
 
     def _finalize_version(self, prec: ProjectRecord, vers_inc_lev: int=None):
+        if prec.data.get('version'):
+            prec.data['@version'] = prec.data.get('version')
         ver = super()._finalize_version(prec, vers_inc_lev)
         nerd = self._store.open(prec.id)
         resmd = nerd.get_res_data()
@@ -2601,7 +2596,7 @@ class DAPService(ProjectService):
             self._set_review_permissions(prec)
             # don't save until submission process is complete
 
-        except FileSpaceException as ex:
+        except FileManagerException as ex:
             self.log.warning("Trouble updating file store permissions: %s", str(ex))
 
         except Exception as ex:
@@ -2637,8 +2632,8 @@ class DAPService(ProjectService):
         if self._fmcli:
             for who in prec.acls.iter_perm_granted(ACLs.WRITE):
                 try:
-                    self._fmcli.manage_permissions(who, prec.id, "Read")
-                except FileSpaceException as ex:
+                    self._fmcli.set_space_permissions(prec.id, { who: "Read" })
+                except FileManagerException as ex:
                     self.log.error("Failed to write-protect file space: %s", str(ex))
 
         # revoke permissions that can change the record
@@ -2677,8 +2672,8 @@ class DAPService(ProjectService):
         if self._fmcli:
             for who in prec.acls.iter_perm_granted(ACLs.WRITE):
                 try:
-                    self._fmcli.manage_permissions(who, prec.id, "Write")
-                except FileSpaceException as ex:
+                    self._fmcli.set_space_permissions(prec.id, { who: "Write" })
+                except FileManagerException as ex:
                     self.log.error("Failed to make file space writable again: %s", str(ex))
 
         if not for_review:
@@ -2733,8 +2728,15 @@ class DAPService(ProjectService):
 
         return True
 
+    def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None):
+        # will replace this implementation with submitting to publication service
+        # in this temporary impl., fill _prec.data with the full NERDm record
+        nerd = self._store.open(prec.id)
+        prec.data = nerd.get_data()  
+        return super()._publish(prec)
+
     def publish(self, id: str, _prec=None, **kwargs):
-        # will replace this with submitting to publication service
+        # will replace this implementation with submitting to publication service (see also _publish())
         stat = super().publish(id, _prec, **kwargs)
 
         prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)
@@ -2755,14 +2757,62 @@ class DAPService(ProjectService):
         
     def _revise(self, prec: ProjectRecord):
         # restore data to nerdstore
+        msg = f"Creating Revision based on last published version"
+        provact = Action(Action.PUT, self.who, msg)
+        self._restore_last_published_data(prec, msg, provact, False)
 
         # populate file space
+        if self._fmcli:
+            nerdfiles = self._strore.open(prec.id).files().get_files()
+            dfiles = [n.get('filepath','') for n in nerdfiles if not nerdutils.is_type(n, "Collection")]
+            self.fmcli.revive_space(id, self.user, dfiles)
         
-        for vprop in ["version", "@version"]:
-            if not prec.data.get(vprop, "").endswith('+'):
-                prec.data[vprop] = prec.data.get(vprop, "") + "+"
+        if not prec.data.get('version', "").endswith('+'):
+            prec.data['version'] = prec.data.get('version', "") + "+"
         return prec
+
+    def _restore_last_published_data(self, prec: ProjectRecord, msg: str, foract: Action,
+                                     reset_state: bool=True):
+        pubid = prec.status.published_as
+        if not pubid:
+            raise ValueError("_restore_last_published_data(): project record is missing "
+                             "published_as property")
+
+        # setup prov action
+        defmsg = "Restored draft to last published version"
+        provact = Action(Action.PROCESS, prec.id, self.who,
+                         f"restored data to last published ({prec.status.archived_at})",
+                         {"name": "restore_last_published"})
+        if foract:
+            foract.add_subaction(provact)
+
+        try:
+            # Create restorer from archived_at URL
+            pubclient = self.dbcli.client_for(self._DEF_LATEST_COLL)
+            restorer = self._get_restorer_for(prec)
+
+            pubdata = restorer.get_data()   # convert to latest? (Not nec. if from data.nist.gov)
+            self._store.load_from(pubdata, prec.id)
+            nerd = self._store.open(prec.id)
+            prec.data = self._summarize(nerd)
+
+            if reset_state:
+                prec.status.set_state(status.PUBLISHED)
+            prec.status.act(self.STATUS_ACTION_RESTORE, msg or defmsg)
+            prec.save()
+            
+        except Exception as ex:
+            self.log.error("Failed to save restored record for project, %s: %s",
+                           prec.id, str(ex))
+            provact.message = "Failed to save restored data due to internal error"
+            raise
+        finally:
+            if not foract:
+                self._record_action(provact)
+
         
+        
+
 
 class DAPServiceFactory(ProjectServiceFactory):
     """
@@ -2984,7 +3034,7 @@ class DAPProjectInfoHandler(ProjectInfoHandler):
             return self.send_error_resp(404, "ID not found")
         except NotEditable as ex:
             return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit or ready")
-        except (FileSpaceException, NERDStorageException) as ex:
+        except (FileManagerException, NERDStorageException) as ex:
             self.log.error("Trouble communicating with file manager: %s", str(ex))
             return self.send_error_resp(500, "File manager service error",
                                         "Trouble communicating with file manager")
