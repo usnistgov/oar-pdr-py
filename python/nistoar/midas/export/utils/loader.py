@@ -30,10 +30,9 @@ def _load_json_source(source: Any):
     raise TypeError("For input_type='json', pass a dict or a path to a .json file.")
 
 
-def _set_filename_output(item: Any, index: int):
+def _set_filename(item: Any, index: int):
     """
-    Item is either a path to a file or a loaded json or a project record,
-    otherwise the output filename is defined with a fallback.
+    Set intermediary filenames for inputs prior to rendered results concat
 
     Args:
         item:
@@ -42,8 +41,8 @@ def _set_filename_output(item: Any, index: int):
     Returns:
 
     """
-    if isinstance(item, dict) and item.get("output_filename"):
-        return str(item["output_filename"])
+    if isinstance(item, dict) and item.get("filename"):
+        return str(item["filename"])
     if isinstance(item, Path):
         return Path(item).stem
     if _is_project_record(item):
@@ -90,7 +89,7 @@ def _name_from_project_record(rec: Any):
 
 def normalize_input(item: Any, index: int):
     """
-    Normalize the input item into a dict with the keys `input_type`, `payload`, `output_filename`.
+    Normalize the input item into a dict with the keys `input_type`, `payload`, `filename`.
     Item must be either:
         - a dict with the keys `input_type` and `source`
         - a loaded json
@@ -112,11 +111,11 @@ def normalize_input(item: Any, index: int):
                 f"Unsupported input_type '{input_type}'. Only 'json' is implemented here."
             )
         payload = _load_json_source(item["source"])
-        output_filename = _set_filename_output(item, index)
+        filename = _set_filename(item, index)
         return {
             'input_type': input_type,
             'payload': payload,
-            'output_filename': output_filename,
+            'filename': filename,
             }
 
     # Case 2: loaded json
@@ -124,7 +123,7 @@ def normalize_input(item: Any, index: int):
         return {
             'input_type': "json",
             'payload': item,
-            'output_filename': _set_filename_output(item, index),
+            'filename': _set_filename(item, index),
             }
 
     # Case 3: Path to a `.json`
@@ -132,7 +131,7 @@ def normalize_input(item: Any, index: int):
         return {
             'input_type': "json",
             'payload': _load_json_source(item),
-            'output_filename': _set_filename_output(item, index),
+            'filename': _set_filename(item, index),
         }
 
     # Case 4: ProjectRecord
@@ -144,7 +143,7 @@ def normalize_input(item: Any, index: int):
         return {
             "input_type": "json",
             "payload": payload,
-            "output_filename": _set_filename_output(item, index),
+            "filename": _set_filename(item, index),
         }
 
     # Unsupported

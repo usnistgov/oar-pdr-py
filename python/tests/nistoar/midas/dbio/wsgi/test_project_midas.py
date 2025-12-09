@@ -3,6 +3,7 @@ from collections import OrderedDict
 from pathlib import Path
 from io import StringIO
 import unittest as test
+from unittest.mock import patch, Mock
 
 from nistoar.midas.dbio import inmem, base, mongo
 from nistoar.midas.dbio.wsgi import project as prj
@@ -339,6 +340,110 @@ class TestMIDASProjectAppMongo(test.TestCase):
         
         self.resp = []
         
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+
+
+    def test_export_by_ids(self):
+    # Create test records first
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Export Record One", "data": {"title": "First Export Record"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp1 = self.body2dict(body)
+        id1 = resp1['id']
+        
+        self.resp = []
+        
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Export Record Two", "data": {"title": "Second Export Record"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp2 = self.body2dict(body)
+        id2 = resp2['id']
+        
+        self.resp = []
+        
+        # Test single record export with MongoDB
+        path = ":export"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': f'ids={id1}&format=pdf'
+        }
+        
+        # Mock the export functionality for MongoDB test
+        with patch('nistoar.midas.export.export.run') as mock_export:
+            mock_export.return_value = [{
+                'filename': 'mongo_export_record_one.pdf',
+                'format': 'pdf',
+                'mimetype': 'application/pdf'
+            }]
+            
+            with patch('pathlib.Path.read_bytes') as mock_read:
+                mock_read.return_value = b'%PDF-1.4 mongo fake pdf content'
+                
+                hdlr = self.app.create_handler(req, self.start, path, nistr)
+                self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+                body = hdlr.handle()
+                self.assertIn("200 ", self.resp[0])
+                
+                # Verify export was called
+                mock_export.assert_called_once()
+                call_args = mock_export.call_args
+                self.assertEqual(call_args[1]['output_format'], 'pdf')
+                
+                # Verify the record data passed to export
+                exported_records = call_args[1]['input_data']
+                self.assertEqual(len(exported_records), 1)
+                self.assertEqual(exported_records[0].data['title'], 'First Export Record')
+        
+        self.resp = []
+        
+        # Test multiple records export with MongoDB
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': f'ids={id1},{id2}&format=pdf'
+        }
+        
+        with patch('nistoar.midas.export.export.run') as mock_export:
+            mock_export.return_value = [
+                {'filename': 'mongo_record_one.pdf', 'format': 'pdf'},
+                {'filename': 'mongo_record_two.pdf', 'format': 'pdf'}
+            ]
+            
+            with patch('pathlib.Path.read_bytes') as mock_read:
+                mock_read.return_value = b'fake pdf content'
+                
+                with patch('zipfile.ZipFile'):
+                    hdlr = self.app.create_handler(req, self.start, path, nistr)
+                    body = hdlr.handle()
+                    self.assertIn("200 ", self.resp[0])
+                    
+                    # Verify both records were exported
+                    call_args = mock_export.call_args
+                    exported_records = call_args[1]['input_data']
+                    self.assertEqual(len(exported_records), 2)
+                    
+                    titles = [rec.data['title'] for rec in exported_records]
+                    self.assertIn('First Export Record', titles)
+                    self.assertIn('Second Export Record', titles)
+        
+        self.resp = []
+        
+        # Test error handling with MongoDB
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path

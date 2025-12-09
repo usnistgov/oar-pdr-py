@@ -3,6 +3,9 @@ from collections import OrderedDict
 from pathlib import Path
 from io import StringIO
 import unittest as test
+from unittest.mock import patch, Mock
+import preppy
+
 
 from nistoar.midas.dbio import inmem, base
 from nistoar.midas.dbio.wsgi import project as prj
@@ -449,6 +452,184 @@ class TestMIDASProjectApp(test.TestCase):
         cors = [h for h in self.resp if h.startswith("Access-Control-Allow-Origin")]
         self.assertGreater(len(cors), 0)
         self.assertTrue(cors[0].startswith("Access-Control-Allow-Origin: *"))
+
+    def test_export_by_ids_markdown(self):
+        logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(name)s:%(message)s')
+        # Create test records first
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        
+        # Create first record
+        req['wsgi.input'] = StringIO(json.dumps({
+            "name": "Export Record One", 
+            "data": {"title": "First Export Record", "description": "Test record for export"}
+        }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp1 = self.body2dict(body)
+        id1 = resp1['id']
+        
+        self.resp = []
+        
+        # Create second record
+        req['wsgi.input'] = StringIO(json.dumps({
+            "name": "Export Record Two", 
+            "data": {"title": "Second Export Record", "description": "Another test record"}
+        }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp2 = self.body2dict(body)
+        id2 = resp2['id']
+        
+        self.resp = []
+        
+        # Mock the entire export chain - no file operations
+        with patch('nistoar.midas.export.exporters.md_exporter.preppy.getModule') as mock_preppy:
+            with patch('nistoar.midas.export.utils.writer.write_file') as mock_write_file:
+                # Configure mock template
+                mock_template = Mock()
+                mock_template.get.return_value = "# First Export Record\n\nTest record for export\n"
+                mock_preppy.return_value = mock_template
+                
+                # Mock write_file to return a fake path instead of actually writing
+                mock_write_file.return_value = "/fake/path/export_record_one.md"
+                
+                # Test single record export with markdown
+                path = ":export"
+                req = {
+                    'REQUEST_METHOD': 'GET',
+                    'PATH_INFO': self.rootpath + path,
+                    'QUERY_STRING': f'ids={id1}&format=markdown'
+                }
+
+                print(f"\n=== DEBUG INFO ===")
+                print(f"Testing with ID: {id1}")
+                print(f"Query string: {req['QUERY_STRING']}")
+                print(f"Path: {req['PATH_INFO']}")
+                
+                hdlr = self.app.create_handler(req, self.start, path, nistr)
+                print(f"Handler created: {hdlr}")
+                print(f"Handler type: {type(hdlr)}")
+                self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+                try:
+                    body = hdlr.handle()
+                    print(f"Response status: {self.resp[0] if self.resp else 'No response'}")
+                    print(f"All response headers: {self.resp}")
+                    
+                    if body:
+                        print(f"Body type: {type(body)}")
+                        print(f"Body content: {str(body) if body else 'None'}")
+                        
+                        # Try to parse error details if it's a 500
+                        if "500" in str(self.resp[0]):
+                            try:
+                                error_body = self.body2dict(body)
+                                print(f"Error details: {error_body}")
+                            except Exception as e:
+                                print(f"Could not parse error body: {e}")
+                                
+                except Exception as e:
+                    print(f"Exception during handle(): {e}")
+                    import traceback
+                    traceback.print_exc()
+                        
+                # Check response status
+                self.assertIn("200 ", self.resp[0])
+                
+                # Verify response headers
+                content_type_header = None
+                content_disposition_header = None
+                for header in self.resp:
+                    if header.startswith('Content-Type:'):
+                        content_type_header = header
+                    elif header.startswith('Content-Disposition:'):
+                        content_disposition_header = header
+                
+                # Should return markdown content type
+                self.assertIsNotNone(content_type_header)
+                self.assertIn('text/markdown', content_type_header)
+                
+                # Should have attachment disposition
+                self.assertIsNotNone(content_disposition_header)
+                self.assertIn('attachment', content_disposition_header)
+                self.assertIn('.md', content_disposition_header)
+                
+                # Verify the template was called with record data
+                mock_template.get.assert_called()
+                
+                # Verify write_file was called
+                mock_write_file.assert_called_once()
+        
+        self.resp = []
+        
+        # Test multiple records export (should return ZIP)
+        with patch('nistoar.midas.export.exporters.md_exporter.preppy.getModule') as mock_preppy:
+            with patch('nistoar.midas.export.utils.writer.write_file') as mock_write_file:
+                mock_template = Mock()
+                mock_template.get.return_value = "# Test Markdown\n\nContent here\n"
+                mock_preppy.return_value = mock_template
+                
+                # Mock write_file to return fake paths for both files
+                mock_write_file.side_effect = [
+                    "/fake/path/export_record_one.md",
+                    "/fake/path/export_record_two.md"
+                ]
+                
+                req = {
+                    'REQUEST_METHOD': 'GET',
+                    'PATH_INFO': self.rootpath + path,
+                    'QUERY_STRING': f'ids={id1},{id2}&format=markdown'
+                }
+                
+                hdlr = self.app.create_handler(req, self.start, path, nistr)
+                body = hdlr.handle()
+                self.assertIn("200 ", self.resp[0])
+                
+                # Multiple files should return as ZIP
+                content_type_header = None
+                for header in self.resp:
+                    if header.startswith('Content-Type:'):
+                        content_type_header = header
+                        break
+                
+                self.assertIn('application/zip', content_type_header)
+                
+                # Should have called template for both records
+                self.assertEqual(mock_template.get.call_count, 2)
+                
+                # Should have called write_file for both records
+                self.assertEqual(mock_write_file.call_count, 2)
+        
+        self.resp = []
+        
+        # Test error cases (no mocking needed for these)
+        
+        # Missing ids parameter
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': 'format=markdown'  # Missing ids
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+        
+        self.resp = []
+        
+        # Non-existent IDs
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': 'ids=nonexistent:0001&format=markdown'
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("404 ", self.resp[0])
 
     def test_get_name(self):
         path = "mdm1:0003/name"

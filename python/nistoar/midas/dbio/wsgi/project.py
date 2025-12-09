@@ -683,6 +683,55 @@ class ProjectSelectionHandler(ProjectRecordHandler):
                                         ex.format_errors())
     
         return self.send_json(prec.to_dict(), "Project Created", 201)
+    
+    def _handle_export_request(self, params: dict, perms: list):
+        """Handle export requests via GET with query parameters"""
+        ids = params.get('ids', [])
+        if not ids:
+            return self.send_error_resp(400, "Missing ids parameter", 
+                                    "Query parameter 'ids' is required for export endpoint")
+        
+        if len(ids) == 1 and ',' in ids[0]:
+            ids = [id.strip() for id in ids[0].split(',')]
+
+        format_type = params.get('format', ['pdf'])[0]
+
+        try:
+            records = list(self._select_records_by_ids(ids, perms))
+            
+
+            if not records:
+                return self.send_error_resp(404, "No accessible records", 
+                                        "No records found with the provided IDs that you can access")
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # exporter for PDF export
+                results = export_run(
+                input_data=records,
+                output_format=format_type,
+                output_directory=temp_dir,
+                template_name=None   
+            )
+                
+            for i, result in enumerate(results):
+                self.log.debug(f"Result {i}: {result}")
+                self.log.debug(f"Result {i} keys: {list(result.keys())}")
+                self.log.debug(f"Result {i} filename: '{result.get('filename', 'NO_FILENAME')}'")
+                self.log.debug(f"Result {i} path: '{result.get('path', 'NO_PATH')}'")
+
+            if len(results) == 1:
+                # Single file - return directly
+                result = results[0]
+                file_path = Path(temp_dir) / result['filename']
+                file_content = file_path.read_bytes()
+                
+                return self.send_ok(
+                    file_content,
+                    contenttype=result.get('mimetype', 'application/octet-stream'),
+                    headers=[('Content-Disposition', f'attachment; filename="{result["filename"]}"')]
+                )
+            
+        except Exception as ex:
+            return self.send_error_resp(500, "Export failed", str(results))
 
 
 class ProjectACLsHandler(ProjectRecordHandler):
@@ -758,49 +807,6 @@ class ProjectACLsHandler(ProjectRecordHandler):
             parts[1] = self.who.actor
 
         return self.send_json(parts[1] in acl, ashead=ashead)  # returns true or false
-    
-    def _handle_export_request(self, params: dict, perms: list):
-        """Handle export requests via GET with query parameters"""
-        ids = params.get('ids', [])
-        if not ids:
-            return self.send_error_resp(400, "Missing ids parameter", 
-                                    "Query parameter 'ids' is required for export endpoint")
-        
-        if len(ids) == 1 and ',' in ids[0]:
-            ids = [id.strip() for id in ids[0].split(',')]
-
-        format_type = params.get('format', ['pdf'])[0]
-        template_name = params.get('template', [None])[0]
-
-        try:
-            records = list(self._select_records_by_ids(ids, perms))
-
-            if not records:
-                return self.send_error_resp(404, "No accessible records", 
-                                        "No records found with the provided IDs that you can access")
-            with tempfile.TemporaryDirectory() as temp_dir:
-                results = export_run(
-                input_data=records,
-                output_format=format_type,
-                output_directory=temp_dir,
-                template_name=template_name
-            )
-            if len(results) == 1:
-                # Single file - return directly
-                result = results[0]
-                file_path = Path(temp_dir) / result['filename']
-                file_content = file_path.read_bytes()
-                
-                return self.send_ok(
-                    file_content,
-                    contenttype=result.get('mimetype', 'application/octet-stream'),
-                    headers=[('Content-Disposition', f'attachment; filename="{result["filename"]}"')]
-                )
-            
-        except Exception as ex:
-            return self.send_error_resp(500, "Export failed", str(ex))
-
-
 
     def do_POST(self, path):
         """
