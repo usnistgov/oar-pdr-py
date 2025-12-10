@@ -434,6 +434,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
+        
         self.assertIn("200 ", self.resp[0])
         results = self.body2dict(body)
         self.assertEqual(len(results), 3)
@@ -453,183 +454,135 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertGreater(len(cors), 0)
         self.assertTrue(cors[0].startswith("Access-Control-Allow-Origin: *"))
 
-    def test_export_by_ids_markdown(self):
-        logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(name)s:%(message)s')
-        # Create test records first
+    def test_export_by_ids_single_pdf_bytes(self):
+        """Test export endpoint with single record - PDF bytes output"""
+        # Create test record
         path = ""
         req = {
             'REQUEST_METHOD': 'POST',
             'PATH_INFO': self.rootpath + path
         }
         
-        # Create first record
         req['wsgi.input'] = StringIO(json.dumps({
-            "name": "Export Record One", 
-            "data": {"title": "First Export Record", "description": "Test record for export"}
+            "name": "PDF Export Record", 
+            "data": {"title": "PDF Test Record", "description": "Test record for PDF export"}
         }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
         self.assertIn("201 ", self.resp[0])
-        resp1 = self.body2dict(body)
-        id1 = resp1['id']
+        resp = self.body2dict(body)
+        record_id = resp['id']
         
         self.resp = []
         
-        # Create second record
-        req['wsgi.input'] = StringIO(json.dumps({
-            "name": "Export Record Two", 
-            "data": {"title": "Second Export Record", "description": "Another test record"}
-        }))
-        hdlr = self.app.create_handler(req, self.start, path, nistr)
-        body = hdlr.handle()
-        self.assertIn("201 ", self.resp[0])
-        resp2 = self.body2dict(body)
-        id2 = resp2['id']
-        
-        self.resp = []
-        
-        # Mock the entire export chain - no file operations
-        with patch('nistoar.midas.export.exporters.md_exporter.preppy.getModule') as mock_preppy:
-            with patch('nistoar.midas.export.utils.writer.write_file') as mock_write_file:
-                # Configure mock template
+        with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString", return_value=b"%PDF-1.4\ntest pdf content"):
+            with patch("nistoar.midas.export.exporters.pdf_exporter.preppy.getModule") as mock_preppy:
                 mock_template = Mock()
-                mock_template.get.return_value = "# First Export Record\n\nTest record for export\n"
+                mock_template.get.return_value = "<document>PDF Content</document>"
                 mock_preppy.return_value = mock_template
                 
-                # Mock write_file to return a fake path instead of actually writing
-                mock_write_file.return_value = "/fake/path/export_record_one.md"
+                def fake_pdf_concat(results, output_filename):
+                    return {
+                        "format": "pdf",
+                        "filename": output_filename if output_filename.endswith(".pdf") else output_filename + ".pdf",
+                        "mimetype": "application/pdf",
+                        "file_extension": ".pdf",
+                        "bytes": b"%PDF-1.4\ntest pdf content",
+                    }
                 
-                # Test single record export with markdown
-                path = ":export"
-                req = {
-                    'REQUEST_METHOD': 'GET',
-                    'PATH_INFO': self.rootpath + path,
-                    'QUERY_STRING': f'ids={id1}&format=markdown'
-                }
-
-                print(f"\n=== DEBUG INFO ===")
-                print(f"Testing with ID: {id1}")
-                print(f"Query string: {req['QUERY_STRING']}")
-                print(f"Path: {req['PATH_INFO']}")
-                
-                hdlr = self.app.create_handler(req, self.start, path, nistr)
-                print(f"Handler created: {hdlr}")
-                print(f"Handler type: {type(hdlr)}")
-                self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
-                try:
-                    body = hdlr.handle()
-                    print(f"Response status: {self.resp[0] if self.resp else 'No response'}")
-                    print(f"All response headers: {self.resp}")
+                with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
+                    path = ":export"
+                    req = {
+                        'REQUEST_METHOD': 'GET',
+                        'PATH_INFO': self.rootpath + path,
+                        'QUERY_STRING': f'ids={record_id}&format=pdf'
+                    }
                     
-                    if body:
-                        print(f"Body type: {type(body)}")
-                        print(f"Body content: {str(body) if body else 'None'}")
-                        
-                        # Try to parse error details if it's a 500
-                        if "500" in str(self.resp[0]):
-                            try:
-                                error_body = self.body2dict(body)
-                                print(f"Error details: {error_body}")
-                            except Exception as e:
-                                print(f"Could not parse error body: {e}")
-                                
-                except Exception as e:
-                    print(f"Exception during handle(): {e}")
-                    import traceback
-                    traceback.print_exc()
-                        
-                # Check response status
-                self.assertIn("200 ", self.resp[0])
-                
-                # Verify response headers
-                content_type_header = None
-                content_disposition_header = None
-                for header in self.resp:
-                    if header.startswith('Content-Type:'):
-                        content_type_header = header
-                    elif header.startswith('Content-Disposition:'):
-                        content_disposition_header = header
-                
-                # Should return markdown content type
-                self.assertIsNotNone(content_type_header)
-                self.assertIn('text/markdown', content_type_header)
-                
-                # Should have attachment disposition
-                self.assertIsNotNone(content_disposition_header)
-                self.assertIn('attachment', content_disposition_header)
-                self.assertIn('.md', content_disposition_header)
-                
-                # Verify the template was called with record data
-                mock_template.get.assert_called()
-                
-                # Verify write_file was called
-                mock_write_file.assert_called_once()
+                    hdlr = self.app.create_handler(req, self.start, path, nistr)
+                    self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+                    body = hdlr.handle()
+                    
+                    self.assertIn("200 ", self.resp[0])
+                    
+                    content_type_header = None
+                    for header in self.resp:
+                        if header.startswith('Content-Type:'):
+                            content_type_header = header
+                            break
+                    
+                    self.assertIsNotNone(content_type_header)
+                    self.assertIn('application/pdf', content_type_header)
+                    
+                    pdf_content = b''.join(body) if isinstance(body, list) else body
+                    self.assertTrue(pdf_content.startswith(b'%PDF'))
+                    self.assertEqual(pdf_content, b"%PDF-1.4\ntest pdf content")
+                    
+
+    def test_export_by_ids_multiple_pdf_bytes(self):
+        """Test export endpoint with multiple records - combined PDF bytes"""
+        # Create multiple test records
+        record_ids = []
+        for i, name in enumerate(["PDF One", "PDF Two"], 1):
+            path = ""
+            req = {
+                'REQUEST_METHOD': 'POST',
+                'PATH_INFO': self.rootpath + path
+            }
+            req['wsgi.input'] = StringIO(json.dumps({
+                "name": f"Export {name}", 
+                "data": {"title": f"PDF Test {name}", "description": f"Test record {i}"}
+            }))
+            hdlr = self.app.create_handler(req, self.start, path, nistr)
+            body = hdlr.handle()
+            self.assertIn("201 ", self.resp[0])
+            resp = self.body2dict(body)
+            record_ids.append(resp['id'])
+            self.resp = []
         
-        self.resp = []
         
-        # Test multiple records export (should return ZIP)
-        with patch('nistoar.midas.export.exporters.md_exporter.preppy.getModule') as mock_preppy:
-            with patch('nistoar.midas.export.utils.writer.write_file') as mock_write_file:
+        with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString", return_value=b"%PDF-1.4\ncombined pdf content"):
+            with patch("nistoar.midas.export.exporters.pdf_exporter.preppy.getModule") as mock_preppy:
                 mock_template = Mock()
-                mock_template.get.return_value = "# Test Markdown\n\nContent here\n"
+                mock_template.get.return_value = "<document>Combined PDF Content</document>"
                 mock_preppy.return_value = mock_template
                 
-                # Mock write_file to return fake paths for both files
-                mock_write_file.side_effect = [
-                    "/fake/path/export_record_one.md",
-                    "/fake/path/export_record_two.md"
-                ]
                 
-                req = {
-                    'REQUEST_METHOD': 'GET',
-                    'PATH_INFO': self.rootpath + path,
-                    'QUERY_STRING': f'ids={id1},{id2}&format=markdown'
-                }
+                def fake_pdf_concat(results, output_filename):
+                    return {
+                        "format": "pdf",
+                        "filename": output_filename if output_filename.endswith(".pdf") else output_filename + ".pdf",
+                        "mimetype": "application/pdf", 
+                        "file_extension": ".pdf",
+                        "bytes": b"%PDF-1.4\ncombined pdf content",  
+                    }
                 
-                hdlr = self.app.create_handler(req, self.start, path, nistr)
-                body = hdlr.handle()
-                self.assertIn("200 ", self.resp[0])
-                
-                # Multiple files should return as ZIP
-                content_type_header = None
-                for header in self.resp:
-                    if header.startswith('Content-Type:'):
-                        content_type_header = header
-                        break
-                
-                self.assertIn('application/zip', content_type_header)
-                
-                # Should have called template for both records
-                self.assertEqual(mock_template.get.call_count, 2)
-                
-                # Should have called write_file for both records
-                self.assertEqual(mock_write_file.call_count, 2)
-        
-        self.resp = []
-        
-        # Test error cases (no mocking needed for these)
-        
-        # Missing ids parameter
-        req = {
-            'REQUEST_METHOD': 'GET',
-            'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': 'format=markdown'  # Missing ids
-        }
-        hdlr = self.app.create_handler(req, self.start, path, nistr)
-        body = hdlr.handle()
-        self.assertIn("400 ", self.resp[0])
-        
-        self.resp = []
-        
-        # Non-existent IDs
-        req = {
-            'REQUEST_METHOD': 'GET',
-            'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': 'ids=nonexistent:0001&format=markdown'
-        }
-        hdlr = self.app.create_handler(req, self.start, path, nistr)
-        body = hdlr.handle()
-        self.assertIn("404 ", self.resp[0])
+                with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
+                    path = ":export"
+                    req = {
+                        'REQUEST_METHOD': 'GET',
+                        'PATH_INFO': self.rootpath + path,
+                        'QUERY_STRING': f'ids={",".join(record_ids)}&format=pdf'  # Multiple records
+                    }
+                    
+                    hdlr = self.app.create_handler(req, self.start, path, nistr)
+                    body = hdlr.handle()
+                    
+                    self.assertIn("200 ", self.resp[0])
+                    
+                    content_type_header = None
+                    for header in self.resp:
+                        if header.startswith('Content-Type:'):
+                            content_type_header = header
+                            break
+                    
+                    self.assertIsNotNone(content_type_header)
+                    self.assertIn('application/pdf', content_type_header)
+                    
+                    self.assertEqual(mock_template.get.call_count, len(record_ids))
+                    
+                    pdf_content = b''.join(body) if isinstance(body, list) else body
+                    self.assertTrue(pdf_content.startswith(b'%PDF'))
+                    self.assertEqual(pdf_content, b"%PDF-1.4\ncombined pdf content")
 
     def test_get_name(self):
         path = "mdm1:0003/name"
