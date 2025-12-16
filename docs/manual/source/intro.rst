@@ -218,10 +218,6 @@ servers.
 Software Design Principles
 ==========================
 
-* Largely Object-oriented
-* Service Classes and Interface layers
-* Software Configuration
-
 If you are a developer who will be will be maintaining or adding to this libary (or you
 otherwise want to learn about the code by reading it and this manual), you may find it
 helpful to understand some of the key design principles that were employed in its

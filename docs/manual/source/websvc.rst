@@ -16,8 +16,12 @@ Indeed, the ``nistoar`` package is not locked into using any single web framewor
 Regardless of which framework is used, it is important to strive for a
 :ref:`strictly REST interface design <sec_designprinc>`.  
 
-Background
-==========
+.. note::
+   More content is planned for this section
+
+
+Introduction and Background
+===========================
 
 The Native ``nistoar`` WSGI Framework
 =====================================
@@ -28,8 +32,4 @@ Third-party Web Service Frameworks
 Using Flask
 -----------
 
-
-
-.. note::
-   More content is planned for this section
 
