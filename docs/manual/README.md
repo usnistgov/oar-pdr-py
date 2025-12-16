@@ -8,7 +8,8 @@ documentation.  It is built using the Sphinx documentation markup system.
 
 As of this writing, this document is very much a work-in-progress.  It is missing sections,
 and the in-line documentation forming the reference API contains many formatting errors.
-See [`index.rst`](index.rst) for an outline of the contents planned for this document.
+See [`source/index.rst`](source/index.rst) for an outline of the contents planned for this
+document. 
 
 ## Building the Guide
 
@@ -21,6 +22,6 @@ make html
 ```
 
 Building other formats may require additional dependencies to be installed.  Consult the
-[Sphinx documentation](https://www.phinx-doc.org/) for more information.
+[Sphinx documentation](https://www.sphinx-doc.org/) for more information.
 
 
