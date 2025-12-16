@@ -10,7 +10,7 @@ from nistoar.midas.dbio import inmem, base, AlreadyExists, InvalidUpdate, Object
 from nistoar.midas.dbio.wsgi import project as prj
 from nistoar.midas.dap.service import mds3
 from nistoar.midas.dap.fm import FileManager
-from nistoar.midas.dap.nerdstore.fmfs import FMFSResourceStorage
+from nistoar.midas.dap.nerdstore.fmfs import FMFSResourceStorage, _NO_FM_SUMMARY
 from nistoar.pdr.utils import read_nerd, read_json, prov
 from nistoar.nerdm.constants import CORE_SCHEMA_URI
 
@@ -49,7 +49,13 @@ def read_scan(id=None):
 def read_scan_reply(id=None):
     return read_json(daptestdir/"scan-req-ack.json")
 
-_recspace_summ = { "fileid": "129", "type": "folder", "size": "0" }
+#_recspace_summ = { "fileid": "129", "type": "folder", "size": "0" }
+_recspace_summ = deepcopy(_NO_FM_SUMMARY)
+_recspace_summ.update({
+    "uploads_dir_id": "129",
+    "uploads_dav_url": "https://webdav/id/id",
+    "location": "https://nc/files/files/129?dir=/mds3:0001/mds3:0001"
+})
 
 class TestMDS3DAPApp(test.TestCase):
 
@@ -65,11 +71,9 @@ class TestMDS3DAPApp(test.TestCase):
         return [e.decode() for e in resplist]
 
     @patch.multiple('nistoar.midas.dap.fm.FileManager',
-                    post_scan_files=MagicMock(return_value=read_scan_reply()),
-                    get_scan_files=MagicMock(return_value=read_scan()),
-                    authenticate=MagicMock(),
-                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
-                    get_record_space=MagicMock(return_value=_recspace_summ))
+                    start_scan=MagicMock(return_value=read_scan_reply()),
+                    get_scan=MagicMock(return_value=read_scan()),
+                    summarize_space=MagicMock(return_value=_recspace_summ))
     def setUp(self):
         self.nerddir = tempfile.TemporaryDirectory(prefix="nerdstore.", dir=tmpdir.name)
         self.fmcfg = {
@@ -77,9 +81,7 @@ class TestMDS3DAPApp(test.TestCase):
             'auth': {
                 'username': 'service_api',
                 'password': 'service_pwd'
-            },
-            'dav_base_url': 'http://localhost:8000/remote.php/dav/files/oar_api',
-            'web_base_url': 'https://nextcloud/apps/files/files'
+            }
         }
         self.cfg = {
             "dbio": {
@@ -164,12 +166,10 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertIn("404 ", self.resp[0])
 
     @patch.multiple('nistoar.midas.dap.fm.FileManager',
-                    post_scan_files=MagicMock(return_value=read_scan_reply()),
-                    get_scan_files=MagicMock(return_value=read_scan()),
-                    authenticate=MagicMock(),
-                    delete_scan_files=MagicMock(return_value={}),
-                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
-                    get_record_space=MagicMock(return_value=_recspace_summ))
+                    start_scan=MagicMock(return_value=read_scan_reply()),
+                    get_scan=MagicMock(return_value=read_scan()),
+                    delete_scan=MagicMock(return_value=True),
+                    summarize_space=MagicMock(return_value=_recspace_summ))
     def test_create(self):
         path = ""
         req = {
@@ -258,12 +258,10 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(len(resp), 9)
 
     @patch.multiple('nistoar.midas.dap.fm.FileManager',
-                    post_scan_files=MagicMock(return_value=read_scan_reply()),
-                    get_scan_files=MagicMock(return_value=read_scan()),
-                    authenticate=MagicMock(),
-                    delete_scan_files=MagicMock(return_value={}),
-                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
-                    get_record_space=MagicMock(return_value=_recspace_summ))
+                    start_scan=MagicMock(return_value=read_scan_reply()),
+                    get_scan=MagicMock(return_value=read_scan()),
+                    delete_scan=MagicMock(return_value=True),
+                    summarize_space=MagicMock(return_value=_recspace_summ))
     def test_put_patch(self):
         testnerd = read_nerd(pdr2210)
         res = deepcopy(testnerd)
@@ -490,12 +488,10 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['rights'], "What ever.")
 
     @patch.multiple('nistoar.midas.dap.fm.FileManager',
-                    post_scan_files=MagicMock(return_value=read_scan_reply()),
-                    get_scan_files=MagicMock(return_value=read_scan()),
-                    authenticate=MagicMock(),
-                    delete_scan_files=MagicMock(return_value={}),
-                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
-                    get_record_space=MagicMock(return_value=_recspace_summ))
+                    start_scan=MagicMock(return_value=read_scan_reply()),
+                    get_scan=MagicMock(return_value=read_scan()),
+                    delete_scan=MagicMock(return_value={}),
+                    summarize_space=MagicMock(return_value=_recspace_summ))
     def test_delete(self):
         testnerd = read_nerd(pdr2210)
         res = deepcopy(testnerd)
@@ -581,12 +577,10 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertNotIn("landingPage", resp)
 
     @patch.multiple('nistoar.midas.dap.fm.FileManager',
-                    post_scan_files=MagicMock(return_value=read_scan_reply()),
-                    get_scan_files=MagicMock(return_value=read_scan()),
-                    authenticate=MagicMock(),
-                    delete_scan_files=MagicMock(return_value={}),
-                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
-                    get_record_space=MagicMock(return_value=_recspace_summ))
+                    start_scan=MagicMock(return_value=read_scan_reply()),
+                    get_scan=MagicMock(return_value=read_scan()),
+                    delete_scan=MagicMock(return_value={}),
+                    summarize_space=MagicMock(return_value=_recspace_summ))
     def test_get_fs_info(self):
         path = ""
         req = {
@@ -623,9 +617,8 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['action'], '')
         self.assertEqual(resp['file_count'], 7)
         self.assertEqual(resp['folder_count'], 2)
-        self.assertEqual(resp['uploads_dav_url'],
-                         self.fmcfg['dav_base_url'].rstrip('/') + "/mds3:0001/mds3:0001")
-        self.assertEqual(resp['location'], self.fmcfg['web_base_url']+"/129?dir=/mds3:0001/mds3:0001")
+        self.assertEqual(resp['uploads_dav_url'], _recspace_summ['uploads_dav_url'])
+        self.assertEqual(resp['location'], _recspace_summ['location'])
 
         self.resp = []
         path = "mds3:0001"
@@ -646,9 +639,8 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['action'], '')
         self.assertEqual(resp['file_count'], 7)
         self.assertEqual(resp['folder_count'], 2)
-        self.assertEqual(resp['uploads_dav_url'],
-                         self.fmcfg['dav_base_url'].rstrip('/') + "/mds3:0001/mds3:0001")
-        self.assertEqual(resp['location'], self.fmcfg['web_base_url']+"/129?dir=/mds3:0001/mds3:0001")
+        self.assertEqual(resp['uploads_dav_url'], _recspace_summ['uploads_dav_url'])
+        self.assertEqual(resp['location'], _recspace_summ['location'])
 
         self.resp = []
         path = ""
@@ -673,21 +665,18 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['action'], '')
         self.assertEqual(resp['file_count'], 7)
         self.assertEqual(resp['folder_count'], 2)
-        self.assertEqual(resp['uploads_dav_url'],
-                         self.fmcfg['dav_base_url'].rstrip('/') + "/mds3:0001/mds3:0001")
-        self.assertEqual(resp['location'], self.fmcfg['web_base_url']+"/129?dir=/mds3:0001/mds3:0001")
+        self.assertEqual(resp['uploads_dav_url'], _recspace_summ['uploads_dav_url'])
+        self.assertEqual(resp['location'], _recspace_summ['location'])
 
 
     @patch.multiple('nistoar.midas.dap.fm.FileManager',
-                    post_scan_files=MagicMock(return_value=read_scan_reply()),
-                    get_scan_files=MagicMock(return_value=read_scan()),
-                    authenticate=MagicMock(),
-                    delete_scan_files=MagicMock(return_value={}),
-                    get_uploads_directory=MagicMock(return_value=_recspace_summ),
-                    get_record_space=MagicMock(return_value=_recspace_summ))
+                    start_scan=MagicMock(return_value=read_scan_reply()),
+                    get_scan=MagicMock(return_value=read_scan()),
+                    delete_scan=MagicMock(return_value={}),
+                    summarize_space=MagicMock(return_value=_recspace_summ))
     def test_putpatch_fs_info(self):
-        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 0)
-        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 0)
+        self.assertEqual(self.nerdstore._fmcli.get_scan.call_count, 0)
+        self.assertEqual(self.nerdstore._fmcli.start_scan.call_count, 0)
         
         # create the record
         path = ""
@@ -709,8 +698,8 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['name'], "Gurn's Opus")
         self.assertEqual(resp['id'], "mds3:0001")
 
-        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 1)
-        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 1)
+        self.assertEqual(self.nerdstore._fmcli.get_scan.call_count, 1)
+        self.assertEqual(self.nerdstore._fmcli.start_scan.call_count, 1)
         
         self.resp = []
         path = "mds3:0001/file_space"
@@ -729,8 +718,8 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['file_count'], 7)
         self.assertEqual(resp['folder_count'], 2)
 
-        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 2)
-        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 2)
+        self.assertEqual(self.nerdstore._fmcli.get_scan.call_count, 2)
+        self.assertEqual(self.nerdstore._fmcli.start_scan.call_count, 2)
         
         self.resp = []
         action = json.dumps({"action": "sync"})
@@ -752,8 +741,8 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['file_count'], 7)
         self.assertEqual(resp['folder_count'], 2)
 
-        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 3)
-        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 3)
+        self.assertEqual(self.nerdstore._fmcli.get_scan.call_count, 3)
+        self.assertEqual(self.nerdstore._fmcli.start_scan.call_count, 3)
         
         self.resp = []
         action = json.dumps({"action": "blowup"})
@@ -770,8 +759,8 @@ class TestMDS3DAPApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("400 ", self.resp[0])
 
-        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 3)
-        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 3)
+        self.assertEqual(self.nerdstore._fmcli.get_scan.call_count, 3)
+        self.assertEqual(self.nerdstore._fmcli.start_scan.call_count, 3)
         
         
         self.resp = []
@@ -789,8 +778,8 @@ class TestMDS3DAPApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("400 ", self.resp[0])
 
-        self.assertEqual(self.nerdstore._fmcli.get_scan_files.call_count, 3)
-        self.assertEqual(self.nerdstore._fmcli.post_scan_files.call_count, 3)
+        self.assertEqual(self.nerdstore._fmcli.get_scan.call_count, 3)
+        self.assertEqual(self.nerdstore._fmcli.start_scan.call_count, 3)
         
 
         

@@ -224,7 +224,7 @@ class TestProjectService(test.TestCase):
         prec = self.project.get_record(prec.id)
         self.assertEqual(prec.data.get('color'), "red")
         self.assertIsNone(prec.data.get('title'))
-        self.assertEqual(prec.status.state, status.SUBMITTED)
+        self.assertEqual(prec.status.state, status.PUBLISHED)
 
     def test_delete_revision(self):
         self.create_service()
