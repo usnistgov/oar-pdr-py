@@ -350,7 +350,7 @@ class TestMIDASProjectAppMongo(test.TestCase):
 
 
     def test_export_by_ids(self):
-    # Create test records first
+        # Create test records first
         path = ""
         req = {
             'REQUEST_METHOD': 'POST',
@@ -375,7 +375,7 @@ class TestMIDASProjectAppMongo(test.TestCase):
         
         self.resp = []
         
-        # Test single record export with MongoDB
+        # ✅ Test single record export with proper mocks
         path = ":export"
         req = {
             'REQUEST_METHOD': 'GET',
@@ -383,67 +383,98 @@ class TestMIDASProjectAppMongo(test.TestCase):
             'QUERY_STRING': f'ids={id1}&format=pdf'
         }
         
-        # Mock the export functionality for MongoDB test
-        with patch('nistoar.midas.export.export.run') as mock_export:
-            mock_export.return_value = [{
-                'filename': 'mongo_export_record_one.pdf',
-                'format': 'pdf',
-                'mimetype': 'application/pdf'
-            }]
-            
-            with patch('pathlib.Path.read_bytes') as mock_read:
-                mock_read.return_value = b'%PDF-1.4 mongo fake pdf content'
+        # ✅ Add the same mocks as your working tests
+        with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString", return_value=b"%PDF-1.4\nmongo test content"):
+            with patch("nistoar.midas.export.exporters.pdf_exporter.preppy.getModule") as mock_preppy:
+                mock_template = Mock()
+                mock_template.get.return_value = "<document>MongoDB PDF Content</document>"
+                mock_preppy.return_value = mock_template
                 
-                hdlr = self.app.create_handler(req, self.start, path, nistr)
-                self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
-                body = hdlr.handle()
-                self.assertIn("200 ", self.resp[0])
+                # ✅ Mock the concat registry 
+                def fake_pdf_concat(results, output_filename):
+                    return {
+                        "format": "pdf",
+                        "filename": output_filename if output_filename.endswith(".pdf") else output_filename + ".pdf",
+                        "mimetype": "application/pdf",
+                        "file_extension": ".pdf",
+                        "bytes": b"%PDF-1.4\nmongo test content",  # ✅ Include bytes
+                    }
                 
-                # Verify export was called
-                mock_export.assert_called_once()
-                call_args = mock_export.call_args
-                self.assertEqual(call_args[1]['output_format'], 'pdf')
-                
-                # Verify the record data passed to export
-                exported_records = call_args[1]['input_data']
-                self.assertEqual(len(exported_records), 1)
-                self.assertEqual(exported_records[0].data['title'], 'First Export Record')
+                with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
+                    hdlr = self.app.create_handler(req, self.start, path, nistr)
+                    self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+                    body = hdlr.handle()
+                    
+                    # ✅ Check for success
+                    self.assertIn("200 ", self.resp[0])
+                    
+                    # ✅ Verify PDF content type
+                    content_type_header = None
+                    for header in self.resp:
+                        if header.startswith('Content-Type:'):
+                            content_type_header = header
+                            break
+                    
+                    self.assertIsNotNone(content_type_header)
+                    self.assertIn('application/pdf', content_type_header)
+                    
+                    # ✅ Verify PDF bytes
+                    pdf_content = b''.join(body) if isinstance(body, list) else body
+                    self.assertTrue(pdf_content.startswith(b'%PDF'))
+                    self.assertEqual(pdf_content, b"%PDF-1.4\nmongo test content")
         
         self.resp = []
         
-        # Test multiple records export with MongoDB
+        # ✅ Test multiple records export - should return single combined PDF
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
             'QUERY_STRING': f'ids={id1},{id2}&format=pdf'
         }
         
-        with patch('nistoar.midas.export.export.run') as mock_export:
-            mock_export.return_value = [
-                {'filename': 'mongo_record_one.pdf', 'format': 'pdf'},
-                {'filename': 'mongo_record_two.pdf', 'format': 'pdf'}
-            ]
-            
-            with patch('pathlib.Path.read_bytes') as mock_read:
-                mock_read.return_value = b'fake pdf content'
+        with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString", return_value=b"%PDF-1.4\nmongo combined content"):
+            with patch("nistoar.midas.export.exporters.pdf_exporter.preppy.getModule") as mock_preppy:
+                mock_template = Mock()
+                mock_template.get.return_value = "<document>Combined MongoDB Content</document>"
+                mock_preppy.return_value = mock_template
                 
-                with patch('zipfile.ZipFile'):
+                # ✅ Multiple records get combined into single PDF by concat function
+                def fake_pdf_concat(results, output_filename):
+                    return {
+                        "format": "pdf",
+                        "filename": output_filename if output_filename.endswith(".pdf") else output_filename + ".pdf",
+                        "mimetype": "application/pdf",
+                        "file_extension": ".pdf",
+                        "bytes": b"%PDF-1.4\nmongo combined content",  # ✅ Single combined PDF
+                    }
+                
+                with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
                     hdlr = self.app.create_handler(req, self.start, path, nistr)
                     body = hdlr.handle()
+                    
+                    # ✅ Should return single combined PDF (not ZIP)
                     self.assertIn("200 ", self.resp[0])
                     
-                    # Verify both records were exported
-                    call_args = mock_export.call_args
-                    exported_records = call_args[1]['input_data']
-                    self.assertEqual(len(exported_records), 2)
+                    # ✅ Verify it's PDF, not ZIP
+                    content_type_header = None
+                    for header in self.resp:
+                        if header.startswith('Content-Type:'):
+                            content_type_header = header
+                            break
                     
-                    titles = [rec.data['title'] for rec in exported_records]
-                    self.assertIn('First Export Record', titles)
-                    self.assertIn('Second Export Record', titles)
+                    self.assertIn('application/pdf', content_type_header)  # ✅ PDF, not ZIP
+                    
+                    # ✅ Should have called template for each record
+                    self.assertEqual(mock_template.get.call_count, 2)
+                    
+                    # ✅ Verify combined PDF bytes
+                    pdf_content = b''.join(body) if isinstance(body, list) else body
+                    self.assertTrue(pdf_content.startswith(b'%PDF'))
+                    self.assertEqual(pdf_content, b"%PDF-1.4\nmongo combined content")
         
         self.resp = []
         
-        # Test error handling with MongoDB
+        # ✅ Test error handling - missing IDs
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path
