@@ -26,9 +26,8 @@ class PDFExporter(Exporter):
         Returns: A dictionary.
 
         """
-        match input_type:
-            case "json":
-                return self.render_json(payload, filename, template_name)
+        if input_type == "json":
+            return self.render_json(payload, filename, template_name)
 
         raise TypeError("PDFExporter.render: unsupported payload type.")
 

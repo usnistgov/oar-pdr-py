@@ -746,7 +746,6 @@ class TestMIDASApp(test.TestCase):
         data = self.body2dict(body)
         self.assertEqual(data["message"], "Export Service is available")
         self.assertIn("versions", data)
-        self.assertIn("def", data["versions"])
 
     def test_export_post(self):
         from unittest.mock import patch

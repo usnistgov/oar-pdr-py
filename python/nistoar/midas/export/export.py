@@ -34,20 +34,28 @@ def run(input_data: Iterable[Any], output_format: str, output_directory: Path, t
         result = export(item, output_format, template_dir, template_name, _index=i)
         results.append(result)
 
+    if not results:
+        raise ValueError("No rendered results produced from the input data.")
+
     # Determine output name
     if output_filename is None:
         # Use the first rendered filename as a fallback
         output_filename = results[0].get("filename", "combined")
-
+        
     # Concatenate via registry
     concat_fn = CONCAT_REGISTRY.get(output_format)
     if concat_fn is None:
         raise ValueError(f"Concatenation not supported for format '{output_format}'.")
     combined = concat_fn(results, output_filename)
+    
 
     # Default result
     if not generate_file:
         return combined
+
+
+    if output_directory is None:
+        raise ValueError("output_directory cannot be None when generate_file=True")
 
     # Single write
     path = write_file(output_directory, combined)
