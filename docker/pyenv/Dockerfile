@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y python3-yaml curl wget less sudo zip \
                                          p7zip-full ca-certificates git
 # RUN pip install --upgrade pip setuptools
 RUN pip install funcsigs 'bagit>=1.6.3,<2.0' 'fs>=2.0.21' jsonpatch mako pyjwt \
-                jsonpath_ng lxml webdavclient3 websockets
+                jsonpath_ng lxml webdavclient3 
+RUN pip install preppy==5.0.1 trml2pdf==0.6
 
 # install multibag from source
 RUN multibag_ver=0.5 && \

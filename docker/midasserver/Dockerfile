@@ -9,6 +9,7 @@ FROM oar-pdr-py/pyenv
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod a+rx /usr/local/bin/entrypoint.sh
+RUN pip install preppy==5.0.1 trml2pdf==0.6
 
 VOLUME /dev/oar-pdr-py
 VOLUME /app/dist

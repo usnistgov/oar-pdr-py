@@ -26,7 +26,7 @@ class MarkdownExporter(Exporter):
 
         """
         if input_type == "json":
-            return self.render_json(payload, output_filename, template_name)
+            return self.render_json(payload, filename, template_name)
 
         raise TypeError("MarkdownExporter.render: unsupported payload type.")
 
