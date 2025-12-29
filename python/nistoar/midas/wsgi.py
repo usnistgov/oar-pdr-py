@@ -496,7 +496,7 @@ def ExportServiceFactory(dbio_client_factory, log, config, project_name):
             foruser=AUTOADMIN
         )
 
-        return app
+    return app
 
 
 class DevAbout(About):
