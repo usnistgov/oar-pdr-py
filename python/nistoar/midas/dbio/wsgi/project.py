@@ -553,6 +553,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         :param bool ashead:  if True, the request is actually a HEAD request for the data
         """
         perms = []
+        params = {}
         qstr = self._env.get('QUERY_STRING')
         if qstr:
             params = parse_qs(qstr)
