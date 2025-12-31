@@ -3,6 +3,9 @@ from collections import OrderedDict
 from pathlib import Path
 from io import StringIO
 import unittest as test
+from unittest.mock import patch, Mock
+import preppy
+
 
 from nistoar.midas.dbio import inmem, base
 from nistoar.midas.dbio.wsgi import project as prj
@@ -431,6 +434,7 @@ class TestMIDASProjectApp(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
+        
         self.assertIn("200 ", self.resp[0])
         results = self.body2dict(body)
         self.assertEqual(len(results), 3)
@@ -449,6 +453,136 @@ class TestMIDASProjectApp(test.TestCase):
         cors = [h for h in self.resp if h.startswith("Access-Control-Allow-Origin")]
         self.assertGreater(len(cors), 0)
         self.assertTrue(cors[0].startswith("Access-Control-Allow-Origin: *"))
+
+    def test_export_by_ids_single_pdf_bytes(self):
+        """Test export endpoint with single record - PDF bytes output"""
+        # Create test record
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        
+        req['wsgi.input'] = StringIO(json.dumps({
+            "name": "PDF Export Record", 
+            "data": {"title": "PDF Test Record", "description": "Test record for PDF export"}
+        }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        record_id = resp['id']
+        
+        self.resp = []
+        
+        with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString", return_value=b"%PDF-1.4\ntest pdf content"):
+            with patch("nistoar.midas.export.exporters.pdf_exporter.preppy.getModule") as mock_preppy:
+                mock_template = Mock()
+                mock_template.get.return_value = "<document>PDF Content</document>"
+                mock_preppy.return_value = mock_template
+                
+                def fake_pdf_concat(results, output_filename):
+                    return {
+                        "format": "pdf",
+                        "filename": output_filename if output_filename.endswith(".pdf") else output_filename + ".pdf",
+                        "mimetype": "application/pdf",
+                        "file_extension": ".pdf",
+                        "bytes": b"%PDF-1.4\ntest pdf content",
+                    }
+                
+                with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
+                    path = ":export"
+                    req = {
+                        'REQUEST_METHOD': 'GET',
+                        'PATH_INFO': self.rootpath + path,
+                        'QUERY_STRING': f'ids={record_id}&format=pdf'
+                    }
+                    
+                    hdlr = self.app.create_handler(req, self.start, path, nistr)
+                    self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+                    body = hdlr.handle()
+                    
+                    self.assertIn("200 ", self.resp[0])
+                    
+                    content_type_header = None
+                    for header in self.resp:
+                        if header.startswith('Content-Type:'):
+                            content_type_header = header
+                            break
+                    
+                    self.assertIsNotNone(content_type_header)
+                    self.assertIn('application/pdf', content_type_header)
+                    
+                    pdf_content = b''.join(body) if isinstance(body, list) else body
+                    self.assertTrue(pdf_content.startswith(b'%PDF'))
+                    self.assertEqual(pdf_content, b"%PDF-1.4\ntest pdf content")
+                    
+
+    def test_export_by_ids_multiple_pdf_bytes(self):
+        """Test export endpoint with multiple records - combined PDF bytes"""
+        # Create multiple test records
+        record_ids = []
+        for i, name in enumerate(["PDF One", "PDF Two"], 1):
+            path = ""
+            req = {
+                'REQUEST_METHOD': 'POST',
+                'PATH_INFO': self.rootpath + path
+            }
+            req['wsgi.input'] = StringIO(json.dumps({
+                "name": f"Export {name}", 
+                "data": {"title": f"PDF Test {name}", "description": f"Test record {i}"}
+            }))
+            hdlr = self.app.create_handler(req, self.start, path, nistr)
+            body = hdlr.handle()
+            self.assertIn("201 ", self.resp[0])
+            resp = self.body2dict(body)
+            record_ids.append(resp['id'])
+            self.resp = []
+        
+        
+        with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString", return_value=b"%PDF-1.4\ncombined pdf content"):
+            with patch("nistoar.midas.export.exporters.pdf_exporter.preppy.getModule") as mock_preppy:
+                mock_template = Mock()
+                mock_template.get.return_value = "<document>Combined PDF Content</document>"
+                mock_preppy.return_value = mock_template
+                
+                
+                def fake_pdf_concat(results, output_filename):
+                    return {
+                        "format": "pdf",
+                        "filename": output_filename if output_filename.endswith(".pdf") else output_filename + ".pdf",
+                        "mimetype": "application/pdf", 
+                        "file_extension": ".pdf",
+                        "bytes": b"%PDF-1.4\ncombined pdf content",  
+                    }
+                
+                with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
+                    path = ":export"
+                    req = {
+                        'REQUEST_METHOD': 'GET',
+                        'PATH_INFO': self.rootpath + path,
+                        'QUERY_STRING': f'ids={",".join(record_ids)}&format=pdf'  # Multiple records
+                    }
+                    
+                    hdlr = self.app.create_handler(req, self.start, path, nistr)
+                    body = hdlr.handle()
+                    
+                    self.assertIn("200 ", self.resp[0])
+                    
+                    content_type_header = None
+                    for header in self.resp:
+                        if header.startswith('Content-Type:'):
+                            content_type_header = header
+                            break
+                    
+                    self.assertIsNotNone(content_type_header)
+                    self.assertIn('application/pdf', content_type_header)
+                    
+                    self.assertEqual(mock_template.get.call_count, len(record_ids))
+                    
+                    pdf_content = b''.join(body) if isinstance(body, list) else body
+                    self.assertTrue(pdf_content.startswith(b'%PDF'))
+                    self.assertEqual(pdf_content, b"%PDF-1.4\ncombined pdf content")
 
     def test_get_name(self):
         path = "mdm1:0003/name"

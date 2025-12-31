@@ -45,10 +45,14 @@ from collections.abc import Mapping, Sequence, Callable
 from typing import Iterator
 from urllib.parse import parse_qs
 import json, re
+import tempfile
+
+from zipp import Path
 
 from nistoar.web.rest import ServiceApp, Handler, Agent
 from nistoar.pdr.utils.validate import ValidationResults
 from nistoar.web.formats import JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
+from nistoar.midas.export.export import run as export_run
 from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
@@ -549,6 +553,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         :param bool ashead:  if True, the request is actually a HEAD request for the data
         """
         perms = []
+        params = {}
         qstr = self._env.get('QUERY_STRING')
         if qstr:
             params = parse_qs(qstr)
@@ -556,8 +561,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         if not perms:
             perms = dbio.ACLs.OWN
         
-        # Check if this is the :ids interface type (passed from constructor)
-        if path == ":ids":  # Changed from "ids" to ":ids"
+        if path == ":ids":  
             # Handle retrieval of multiple records by IDs
             ids = params.get('ids', []) if qstr else []
             if not ids:
@@ -571,6 +575,10 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             records = self._select_records_by_ids(ids, perms)
             out = self._sort_and_format_records(records)
             return self.send_json(out, ashead=ashead)
+        
+        elif path ==":export":
+            return self._handle_export_request(params, perms)
+
 
         # Default: select all records accessible to the user
         records = self._select_records(perms)
@@ -676,6 +684,42 @@ class ProjectSelectionHandler(ProjectRecordHandler):
                                         ex.format_errors())
     
         return self.send_json(prec.to_dict(), "Project Created", 201)
+    
+    def _handle_export_request(self, params: dict, perms: list):
+        """Handle export requests via GET with query parameters"""
+        ids = params.get('ids', [])
+        if not ids:
+            return self.send_error_resp(400, "Missing ids parameter", 
+                                    "Query parameter 'ids' is required for export endpoint")
+        
+        if len(ids) == 1 and ',' in ids[0]:
+            ids = [id.strip() for id in ids[0].split(',')]
+
+        format_type = params.get('format', ['pdf'])[0]
+
+        try:
+            records = list(self._select_records_by_ids(ids, perms))
+
+            if not records:
+                return self.send_error_resp(404, "No accessible records", 
+                                        "No records found with the provided IDs that you can access")
+            
+            result = export_run(
+                input_data=records,
+                output_format=format_type,
+                output_directory=None,
+                template_name=None,
+                generate_file=False
+            )
+            
+            return self.send_ok(
+                result['bytes'],
+                contenttype=result.get('mimetype', 'application/octet-stream')
+            )
+                            
+        except Exception as ex:
+            self.log.exception(f"Exception in export request: {ex}")
+            return self.send_error_resp(500, "Export failed", str(ex))
 
 
 class ProjectACLsHandler(ProjectRecordHandler):

@@ -3,6 +3,7 @@ from collections import OrderedDict
 from pathlib import Path
 from io import StringIO
 import unittest as test
+from unittest.mock import patch, Mock
 
 from nistoar.midas.dbio import inmem, base, mongo
 from nistoar.midas.dbio.wsgi import project as prj
@@ -346,6 +347,137 @@ class TestMIDASProjectAppMongo(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
         self.assertIn("400 ", self.resp[0])
+
+
+    def test_export_by_ids(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Export Record One", "data": {"title": "First Export Record"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp1 = self.body2dict(body)
+        id1 = resp1['id']
+        
+        self.resp = []
+        
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Export Record Two", "data": {"title": "Second Export Record"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp2 = self.body2dict(body)
+        id2 = resp2['id']
+        
+        self.resp = []
+        
+        path = ":export"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': f'ids={id1}&format=pdf'
+        }
+        
+        with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString", return_value=b"%PDF-1.4\nmongo test content"):
+            with patch("nistoar.midas.export.exporters.pdf_exporter.preppy.getModule") as mock_preppy:
+                mock_template = Mock()
+                mock_template.get.return_value = "<document>MongoDB PDF Content</document>"
+                mock_preppy.return_value = mock_template
+                
+                def fake_pdf_concat(results, output_filename):
+                    return {
+                        "format": "pdf",
+                        "filename": output_filename if output_filename.endswith(".pdf") else output_filename + ".pdf",
+                        "mimetype": "application/pdf",
+                        "file_extension": ".pdf",
+                        "bytes": b"%PDF-1.4\nmongo test content",  
+                    }
+                
+                with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
+                    hdlr = self.app.create_handler(req, self.start, path, nistr)
+                    self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+                    body = hdlr.handle()
+                    
+                    
+                    self.assertIn("200 ", self.resp[0])
+                    
+                    
+                    content_type_header = None
+                    for header in self.resp:
+                        if header.startswith('Content-Type:'):
+                            content_type_header = header
+                            break
+                    
+                    self.assertIsNotNone(content_type_header)
+                    self.assertIn('application/pdf', content_type_header)
+                    
+                    
+                    pdf_content = b''.join(body) if isinstance(body, list) else body
+                    self.assertTrue(pdf_content.startswith(b'%PDF'))
+                    self.assertEqual(pdf_content, b"%PDF-1.4\nmongo test content")
+        
+        self.resp = []
+        
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path,
+            'QUERY_STRING': f'ids={id1},{id2}&format=pdf'
+        }
+        
+        with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString", return_value=b"%PDF-1.4\nmongo combined content"):
+            with patch("nistoar.midas.export.exporters.pdf_exporter.preppy.getModule") as mock_preppy:
+                mock_template = Mock()
+                mock_template.get.return_value = "<document>Combined MongoDB Content</document>"
+                mock_preppy.return_value = mock_template
+                
+                
+                def fake_pdf_concat(results, output_filename):
+                    return {
+                        "format": "pdf",
+                        "filename": output_filename if output_filename.endswith(".pdf") else output_filename + ".pdf",
+                        "mimetype": "application/pdf",
+                        "file_extension": ".pdf",
+                        "bytes": b"%PDF-1.4\nmongo combined content", 
+                    }
+                
+                with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
+                    hdlr = self.app.create_handler(req, self.start, path, nistr)
+                    body = hdlr.handle()
+                    
+                    
+                    self.assertIn("200 ", self.resp[0])
+                    
+                    
+                    content_type_header = None
+                    for header in self.resp:
+                        if header.startswith('Content-Type:'):
+                            content_type_header = header
+                            break
+                    
+                    self.assertIn('application/pdf', content_type_header)  
+                    
+                    
+                    self.assertEqual(mock_template.get.call_count, 2)
+                    
+                
+                    pdf_content = b''.join(body) if isinstance(body, list) else body
+                    self.assertTrue(pdf_content.startswith(b'%PDF'))
+                    self.assertEqual(pdf_content, b"%PDF-1.4\nmongo combined content")
+        
+        self.resp = []
+        
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+        
 
 
 
