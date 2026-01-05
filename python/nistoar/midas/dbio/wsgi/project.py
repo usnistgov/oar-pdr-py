@@ -579,11 +579,11 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         elif path ==":export":
             return self._handle_export_request(params, perms)
 
-
-        # Default: select all records accessible to the user
-        records = self._select_records(perms)
-        out = self._sort_and_format_records(records)
-        return self.send_json(out, ashead=ashead)
+        else:
+            # Default: select all records accessible to the user
+            records = self._select_records(perms)
+            out = self._sort_and_format_records(records)
+            return self.send_json(out, ashead=ashead)
 
     def do_POST(self, path):
         """
