@@ -712,10 +712,19 @@ class ProjectSelectionHandler(ProjectRecordHandler):
                 generate_file=False
             )
             
-            return self.send_ok(
-                result['bytes'],
-                contenttype=result.get('mimetype', 'application/octet-stream')
-            )
+            if 'bytes' in result:
+                return self.send_ok(
+                    result['bytes'],
+                    contenttype=result.get('mimetype', 'application/octet-stream')
+                )
+            elif 'text' in result:
+                return self.send_ok(
+                    result['text'],
+                    contenttype=result.get('mimetype', 'text/plain')
+                )
+            else:
+                return self.send_error_resp(500, "Export format error", 
+                                        f"Unsupported export result format for {format_type}")
                             
         except Exception as ex:
             self.log.exception(f"Exception in export request: {ex}")
