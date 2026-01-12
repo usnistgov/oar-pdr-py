@@ -131,6 +131,7 @@
 
     <!-- ======= SECTION: Authors/Contributors ======== -->
     <!-- ============================================== -->
+    {{if record.get('authors')}}
     <para style="data">     
       <br/> 
     </para>
@@ -145,28 +146,19 @@
       <br/> 
     </para>
 
-    <para style="data">
-      <b>Author Count:</b>
-      <br/>
-      {{record.get('author_count', 0)}}
-    </para>
-
-    {{if record.get('authors')}}
-    <para style="data">
-      <b>Authors:</b>
-    </para>
-
     <!-- =======TABLE======== -->
     <blockTable style="dapTableStyle">
     	<tr>
     		<td align="LEFT">          <para><b>Name</b></para>                       </td>
-    		<td align="LEFT">          <para><b>Affiliation</b></para>                </td>
+    		<td align="LEFT">          <para><b>Organization</b></para>               </td>
+        <td align="LEFT">          <para><b>Division/Group</b></para>             </td>
         <td align="LEFT">          <para><b>ORCID</b></para>                       </td>
     	</tr>    
       {{for author in record['authors']}}
         <tr>
             <td><para style="table_normal">{{author.get('fn', 'N/A')}}</para></td>
-            <td><para style="table_normal">{{author.get('affiliation', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{author.get('affiliation', [{}])[0].get('title', 'N/A') if author.get('affiliation') else 'N/A'}}</para></td>
+            <td><para style="table_normal">{{', '.join(author.get('affiliation', [{}])[0].get('subunits', [])) if author.get('affiliation') and author['affiliation'][0].get('subunits') else 'N/A'}}</para></td>
             <td><para style="table_normal">{{author.get('orcid', 'N/A')}}</para></td>
         </tr>
       {{endfor}}  
@@ -235,7 +227,7 @@
 
     <!-- ======= SECTION: Keywords / Phrases ======== -->
     <!-- ============================================ -->
-    {{if record.get('keyword') or record.get('topic')}}
+    {{if record.get('keywords') or record.get('theme')}}
     <para style="data">     
       <br/> 
     </para>
@@ -255,7 +247,7 @@
     	<tr>
     		<td align="LEFT">          <para><b>Keywords / Topics</b></para>         </td>
     	</tr>    
-      {{for kw in record.get('keyword', []) + record.get('topic', [])}}
+      {{for kw in record.get('keywords', []) + record.get('theme', [])}}
         <tr>
             <td><para style="table_normal">{{kw.get('tag', kw) if isinstance(kw, dict) else kw}}</para></td>
         </tr>
@@ -339,13 +331,17 @@
     <!-- =======TABLE======== -->
     <blockTable style="dapTableStyle">
     	<tr>
-    		<td align="LEFT">          <para><b>Reference</b></para>                  </td>
-    		<td align="LEFT">          <para><b>Type</b></para>                       </td>
+    		<td align="LEFT">          <para><b>Title</b></para>                      </td>
+    		<td align="LEFT">          <para><b>Citation</b></para>                   </td>
+        <td align="LEFT">          <para><b>Publication Year</b></para>           </td>
+        <td align="LEFT">          <para><b>Volume/Pages</b></para>               </td>
     	</tr>    
       {{for ref in record['references']}}
         <tr>
-            <td><para style="table_normal">{{ref.get('title', ref.get('citation', 'N/A'))}}</para></td>
-            <td><para style="table_normal">{{ref.get('@type', 'Reference')}}</para></td>
+            <td><para style="table_normal">{{ref.get('title', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{ref.get('citation', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{ref.get('publishYear', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{ref.get('vol', '') + ('(' + ref.get('volNumber', '') + ')' if ref.get('volNumber') else '') + (' ' + ref.get('pages', '') if ref.get('pages') else '') if ref.get('vol') or ref.get('pages') else 'N/A'}}</para></td>
         </tr>
       {{endfor}}  
     </blockTable>
@@ -353,46 +349,6 @@
       <br/> 
     </para>
     {{endif}}
-    {{endif}}
-
-    <!-- ======= SECTION: Technical Details ======== -->
-    <!-- ========================================== -->
-    <para style="data">     
-      <br/> 
-    </para>
-    <!-- =======TABLE======== -->
-    <blockTable style="SubHeading" >
-    	<tr>
-    		<td ><para style="Heading"><b>Technical Details</b></para> </td>
-    	</tr>
-    </blockTable>
-
-    <para style="data">     
-      <br/> 
-    </para>
-
-    {{if record.get('description')}}
-    <para style="data">
-      <b>Description:</b>
-      <br/>
-      {{record['description'][:500]}}{{if len(record['description']) > 500}}...{{endif}}
-    </para>
-    {{endif}}
-
-    {{if record.get('modified')}}
-    <para style="data">
-      <b>Last Modified:</b>
-      <br/>
-      {{record['modified']}}
-    </para>
-    {{endif}}
-
-    {{if record.get('issued')}}
-    <para style="data">
-      <b>Issued:</b>
-      <br/>
-      {{record['issued']}}
-    </para>
     {{endif}}
 
     <!-- ======= SECTION: Contact Information ======== -->
