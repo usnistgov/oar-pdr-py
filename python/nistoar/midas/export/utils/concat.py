@@ -59,8 +59,53 @@ def concat_pdf(rendered_results: List[Dict], output_filename: str) -> Dict:
     }
 
 
+def concat_csv(rendered_results: List[Dict], output_filename: str) -> Dict:
+    """
+    Join multiple CSV texts by merging headers and combining rows.
+    Rendered_results is a list of dicts that must contain the key 'text'
+    """
+    csv_texts = []
+    for result in rendered_results:
+        txt = result.get("text")
+        if not isinstance(txt, str):
+            raise TypeError("concat_csv expects all inputs to have a 'text' key.")
+        csv_texts.append(txt.strip())
+    
+    if not csv_texts:
+        return {
+            "format": "csv",
+            "filename": f"{output_filename}.csv" if not output_filename.endswith(".csv") else output_filename,
+            "mimetype": "text/csv",
+            "text": "",
+            "file_extension": ".csv",
+        }
+    
+    # Extract header from first CSV and combine all data rows
+    lines = csv_texts[0].split('\n')
+    header = lines[0] if lines else ""
+    combined_rows = []
+    
+    for csv_text in csv_texts:
+        text_lines = csv_text.split('\n')
+        # Skip header (first line) and add data rows
+        for line in text_lines[1:]:
+            if line.strip():  # Skip empty lines
+                combined_rows.append(line)
+    
+    combined_csv = header + '\n' + '\n'.join(combined_rows) if combined_rows else header
+
+    return {
+        "format": "csv",
+        "filename": f"{output_filename}.csv" if not output_filename.endswith(".csv") else output_filename,
+        "mimetype": "text/csv",
+        "text": combined_csv,
+        "file_extension": ".csv",
+    }
+
+
 # Registry of exporters mapped to their respective concat function
 REGISTRY = {
     "markdown": concat_markdown,
     "pdf": concat_pdf,
+    "csv": concat_csv,
 }

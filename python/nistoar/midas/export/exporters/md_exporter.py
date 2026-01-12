@@ -4,7 +4,7 @@ from collections.abc import Mapping as MappingABC
 from .base import Exporter
 import preppy
 
-DEFAULT_MD_TEMPLATE = "dmp_md_template.prep"
+DEFAULT_MD_TEMPLATE = "dmp_md_template.prep"  # Fallback to DMP template for compatibility
 
 
 class MarkdownExporter(Exporter):

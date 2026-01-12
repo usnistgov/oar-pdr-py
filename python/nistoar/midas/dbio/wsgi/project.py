@@ -704,11 +704,14 @@ class ProjectSelectionHandler(ProjectRecordHandler):
                 return self.send_error_resp(404, "No accessible records", 
                                         "No records found with the provided IDs that you can access")
             
+            # Detect record type for template selection
+            template_name = self._determine_template_name(records, format_type)
+            
             result = export_run(
                 input_data=records,
                 output_format=format_type,
                 output_directory=None,
-                template_name=None,
+                template_name=template_name,
                 generate_file=False
             )
             
@@ -729,6 +732,36 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         except Exception as ex:
             self.log.exception(f"Exception in export request: {ex}")
             return self.send_error_resp(500, "Export failed", str(ex))
+
+    def _determine_template_name(self, records: list, format_type: str) -> str:
+        """Determine appropriate template name based on record type and format"""
+        if not records:
+            return None
+            
+        # Check first record to determine type
+        first_record = records[0]
+        
+        # Method 1: Check record type field directly
+        record_type = first_record.get('type', '').lower()
+        if record_type in ['dmp', 'dap']:
+            return f"{record_type}_{format_type}_template"
+            
+        # Method 2: Check ID prefix patterns
+        record_id = first_record.get('id', '')
+        if record_id.startswith('mdm1'):  # DMP records
+            return f"dmp_{format_type}_template"
+        elif record_id.startswith('mds3'):  # DAP records  
+            return f"dap_{format_type}_template"
+            
+        # Method 3: Check metadata for type indicators
+        meta = first_record.get('meta', {})
+        if 'dmp' in str(meta).lower():
+            return f"dmp_{format_type}_template"
+        elif 'dap' in str(meta).lower():
+            return f"dap_{format_type}_template"
+            
+        # Default fallback - assume DMP for backward compatibility
+        return f"dmp_{format_type}_template"
 
 
 class ProjectACLsHandler(ProjectRecordHandler):

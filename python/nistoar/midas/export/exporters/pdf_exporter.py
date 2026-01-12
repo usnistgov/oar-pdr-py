@@ -5,7 +5,7 @@ from .base import Exporter
 import preppy
 import trml2pdf
 
-DEFAULT_PDF_TEMPLATE = "dmp_pdf_template.prep"
+DEFAULT_PDF_TEMPLATE = "dmp_pdf_template.prep"  # Fallback to DMP template for compatibility
 
 
 class PDFExporter(Exporter):

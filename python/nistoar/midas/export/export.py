@@ -7,6 +7,7 @@ from .utils.loader import normalize_input
 from .utils.writer import write_file
 from .exporters.pdf_exporter import PDFExporter
 from .exporters.md_exporter import MarkdownExporter
+from .exporters.csv_exporter import CSVExporter
 from .utils.concat import REGISTRY as CONCAT_REGISTRY
 
 
@@ -94,6 +95,7 @@ def export(input_item: Any, output_format: str, template_dir: str = None, templa
     exporters: Dict[str, Any] = {
         "pdf": PDFExporter(template_dir=template_dir),
         "markdown": MarkdownExporter(template_dir=template_dir),
+        "csv": CSVExporter(template_dir=template_dir),
     }
     if output_format_key not in exporters:
         supported = ", ".join(sorted(exporters.keys()))
