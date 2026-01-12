@@ -741,20 +741,26 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         # Check first record to determine type
         first_record = records[0]
         
+        # Convert ProjectRecord to dict if necessary
+        if hasattr(first_record, 'to_dict'):
+            record_dict = first_record.to_dict()
+        else:
+            record_dict = first_record
+        
         # Method 1: Check record type field directly
-        record_type = first_record.get('type', '').lower()
+        record_type = record_dict.get('type', '').lower()
         if record_type in ['dmp', 'dap']:
             return f"{record_type}_{format_type}_template"
             
         # Method 2: Check ID prefix patterns
-        record_id = first_record.get('id', '')
+        record_id = record_dict.get('id', '')
         if record_id.startswith('mdm1'):  # DMP records
             return f"dmp_{format_type}_template"
         elif record_id.startswith('mds3'):  # DAP records  
             return f"dap_{format_type}_template"
             
         # Method 3: Check metadata for type indicators
-        meta = first_record.get('meta', {})
+        meta = record_dict.get('meta', {})
         if 'dmp' in str(meta).lower():
             return f"dmp_{format_type}_template"
         elif 'dap' in str(meta).lower():
