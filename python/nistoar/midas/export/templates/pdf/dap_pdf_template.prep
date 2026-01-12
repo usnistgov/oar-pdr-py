@@ -1,0 +1,318 @@
+{{def(record)}}
+<!DOCTYPE document SYSTEM "rml.dtd">
+<!-- Data Asset Plan PDF Template -->
+<document filename="dap_export.pdf">
+  <template showBoundary = "1">
+
+    <pageTemplate id="main">
+      <frame  id="second" x1="15" y1="15" width="565" height="815" overlapAttachedSpace="1"/>
+    </pageTemplate>
+  
+  </template>
+
+  <stylesheet>
+
+    <paraStyle 
+      name="mainBanner" 
+      fontName="Helvetica" 
+      fontSize="35" 
+      textColor="#000000"
+    />
+
+    <paraStyle 
+      name="Heading" 
+      fontName="Helvetica" 
+      fontSize="20" 
+      spaceBefore="20"
+      bottomPadding="20"
+      textColor="#000000"
+    />
+
+    <paraStyle 
+      name="SubHeading" 
+      fontName="Helvetica-Bold" 
+      fontSize="14" 
+      spaceBefore="15"
+      spaceAfter="5"
+      textColor="#000000"
+    />
+
+    <paraStyle 
+      name="data" 
+      fontName="Helvetica" 
+      fontSize="12" 
+      spaceAfter = "10"
+    />
+
+    <paraStyle name="table_normal" fontName="Helvetica" fontSize="11" leading="13"/>
+
+    <blockTableStyle id="dapTableStyle" spaceAfter="10">
+      <!-- This sets a font for every cell -->
+      <blockFont name="Helvetica" size="10" start="0,1" stop="-1,-1"/>
+      
+      <!-- This sets a font for the first row -->
+      <blockFont name="Helvetica-BoldOblique" size="11" start="0,0" />
+      
+      <!-- This sets a textColor for all the text in the table -->
+      <blockTextColor colorName="black"/>      
+      
+      <!-- This sets a background color for the header row -->
+      <blockBackground colorName="#b8d4f1" start="0,0" />
+      
+      <!-- This sets a background color for the rest of the table -->
+      <blockBackground colorName="#f5f5f5" start="0,1" stop="-1,-1"/>
+
+      <!-- Grid lines -->
+      <lineStyle kind="GRID" colorName="#cccccc" start="0,1" stop="-1,-1"/>
+	   
+    </blockTableStyle>
+
+    <blockTableStyle id="dapBanner" spaceAfter="10">     
+      
+      <!-- This sets a background color for the banner -->
+      <blockBackground colorName="#ffffff" start="0,0" />
+
+      <blockFont name="Helvetica-Bold" size="28" start="0,0" stop="-1,-1"/>
+      
+      <blockAlignment value="center" start="0,0" stop="-1,-1" />
+	   
+    </blockTableStyle>
+
+    <blockTableStyle id="dapInfoTable" spaceAfter="10">
+      
+      <!-- Font settings -->
+      <blockFont name="Helvetica-Bold" size="11" start="0,0" stop="0,-1"/>
+      <blockFont name="Helvetica" size="11" start="1,0" stop="-1,-1"/>
+      
+      <!-- Colors -->
+      <blockTextColor colorName="black"/>
+      <blockBackground colorName="#e8f1ff" start="0,0" stop="0,-1"/>
+      <blockBackground colorName="#ffffff" start="1,0" stop="-1,-1"/>
+
+      <!-- Grid lines -->
+      <lineStyle kind="GRID" colorName="#cccccc"/>
+	   
+    </blockTableStyle>
+
+  </stylesheet>
+
+  <story>
+
+    <!-- Banner -->
+    <blockTable style="dapBanner" colWidths="565">
+      <tr>
+        <td>Data Asset Plan (DAP)</td>
+      </tr>
+    </blockTable>
+
+    <spacer length="20"/>
+
+    <!-- Basic Information Section -->
+    <para style="Heading">Basic Information</para>
+
+    <blockTable style="dapInfoTable" colWidths="150,415">
+      <tr>
+        <td>Title</td>
+        <td>{{record.get('title', 'N/A')}}</td>
+      </tr>
+      <tr>
+        <td>Project Description</td>
+        <td>{{record.get('projectDescription', 'N/A')}}</td>
+      </tr>
+      <tr>
+        <td>Start Date</td>
+        <td>{{record.get('startDate', 'N/A')}}</td>
+      </tr>
+      <tr>
+        <td>Asset Type</td>
+        <td>{{record.get('assetType', 'Data Asset')}}</td>
+      </tr>
+      <tr>
+        <td>Searchable</td>
+        <td>{{record.get('dapSearchable', 'N/A')}}</td>
+      </tr>
+    </blockTable>
+
+    <!-- Funding Information -->
+    {{if record.get('funding')}}
+    <para style="SubHeading">Funding Information</para>
+    <blockTable style="dapInfoTable" colWidths="150,415">
+      <tr>
+        <td>Grant Source</td>
+        <td>{{record['funding'].get('grant_source', 'N/A')}}</td>
+      </tr>
+      <tr>
+        <td>Grant ID</td>
+        <td>{{record['funding'].get('grant_id', 'N/A')}}</td>
+      </tr>
+    </blockTable>
+    {{endif}}
+
+    <!-- Contributors Section -->
+    {{if record.get('contributors')}}
+    <para style="Heading">Contributors</para>
+
+    {{script}}
+    # Prepare contributors data for table
+    contributors_data = [['Name', 'Institution', 'Email', 'ORCID', 'Primary Contact']]
+
+    for c in record.get('contributors', []):
+        name = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip() or 'N/A'
+        institution = c.get('institution', 'N/A')
+        email = c.get('emailAddress', 'N/A')
+        orcid = c.get('orcid', 'N/A')
+        primary = 'Yes' if c.get('primary_contact') else 'No'
+        
+        contributors_data.append([name, institution, email, orcid, primary])
+    {{endscript}}
+
+    <blockTable style="dapTableStyle" colWidths="120,140,120,100,85">
+      {{for row in contributors_data}}
+      <tr>
+        {{for cell in row}}
+        <td>{{cell}}</td>
+        {{endfor}}
+      </tr>
+      {{endfor}}
+    </blockTable>
+    {{endif}}
+
+    <!-- Data Sources Section -->
+    {{if record.get('dataSources')}}
+    <para style="Heading">Data Sources</para>
+
+    {{script}}
+    # Prepare data sources for table
+    sources_data = [['Source Name', 'Type', 'Format', 'Access Method']]
+
+    for ds in record.get('dataSources', []):
+        name = ds.get('name', 'N/A')
+        source_type = ds.get('sourceType', 'N/A')
+        data_format = ds.get('dataFormat', 'N/A')
+        access = ds.get('accessMethod', 'N/A')
+        
+        sources_data.append([name, source_type, data_format, access])
+    {{endscript}}
+
+    <blockTable style="dapTableStyle" colWidths="140,140,140,145">
+      {{for row in sources_data}}
+      <tr>
+        {{for cell in row}}
+        <td>{{cell}}</td>
+        {{endfor}}
+      </tr>
+      {{endfor}}
+    </blockTable>
+    {{endif}}
+
+    <!-- Data Assets Section -->
+    {{if record.get('dataAssets')}}
+    <para style="Heading">Data Assets</para>
+
+    {{script}}
+    # Prepare data assets for table
+    assets_data = [['Asset Name', 'Size', 'Format', 'Location']]
+
+    for asset in record.get('dataAssets', []):
+        name = asset.get('name', 'N/A')
+        size = asset.get('estimatedSize', 'N/A')
+        format = asset.get('format', 'N/A')
+        location = asset.get('storageLocation', 'N/A')
+        
+        assets_data.append([name, size, format, location])
+    {{endscript}}
+
+    <blockTable style="dapTableStyle" colWidths="140,100,120,205">
+      {{for row in assets_data}}
+      <tr>
+        {{for cell in row}}
+        <td>{{cell}}</td>
+        {{endfor}}
+      </tr>
+      {{endfor}}
+    </blockTable>
+    {{endif}}
+
+    <!-- Storage and Access Section -->
+    <para style="Heading">Storage and Access</para>
+    
+    <blockTable style="dapInfoTable" colWidths="150,415">
+      <tr>
+        <td>Storage Requirements</td>
+        <td>{{record.get('storageRequirements', 'Not specified')}}</td>
+      </tr>
+      <tr>
+        <td>Access Restrictions</td>
+        <td>{{record.get('accessRestrictions', 'Not specified')}}</td>
+      </tr>
+      <tr>
+        <td>Retention Period</td>
+        <td>{{record.get('retentionPeriod', 'Not specified')}}</td>
+      </tr>
+    </blockTable>
+
+    <!-- Technical Details Section -->
+    <para style="Heading">Technical Details</para>
+    
+    <blockTable style="dapInfoTable" colWidths="150,415">
+      <tr>
+        <td>File Formats</td>
+        <td>{{", ".join(record.get('supportedFormats', ['Not specified']))}}</td>
+      </tr>
+      <tr>
+        <td>Processing Requirements</td>
+        <td>{{record.get('processingRequirements', 'Not specified')}}</td>
+      </tr>
+      <tr>
+        <td>Quality Assurance</td>
+        <td>{{record.get('qualityAssurance', 'Not specified')}}</td>
+      </tr>
+    </blockTable>
+
+    <!-- Compliance Section -->
+    <para style="Heading">Compliance and Standards</para>
+    
+    <blockTable style="dapInfoTable" colWidths="150,415">
+      <tr>
+        <td>Data Standards</td>
+        <td>{{", ".join(record.get('dataStandards', ['Not specified']))}}</td>
+      </tr>
+      <tr>
+        <td>Metadata Standards</td>
+        <td>{{", ".join(record.get('metadataStandards', ['Not specified']))}}</td>
+      </tr>
+      <tr>
+        <td>Regulatory Compliance</td>
+        <td>{{record.get('regulatoryCompliance', 'Not specified')}}</td>
+      </tr>
+    </blockTable>
+
+    <!-- Comments Section -->
+    {{if record.get('comments') or record.get('internalNotes')}}
+    <para style="Heading">Comments and Notes</para>
+    
+    <blockTable style="dapInfoTable" colWidths="150,415">
+      {{if record.get('comments')}}
+      <tr>
+        <td>Additional Comments</td>
+        <td>{{record.get('comments')}}</td>
+      </tr>
+      {{endif}}
+      {{if record.get('internalNotes')}}
+      <tr>
+        <td>Internal Notes</td>
+        <td>{{record.get('internalNotes')}}</td>
+      </tr>
+      {{endif}}
+    </blockTable>
+    {{endif}}
+
+    <spacer length="20"/>
+
+    <!-- Footer -->
+    <para style="data">
+      <i>Generated on: {{import datetime; datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}}</i>
+    </para>
+
+  </story>
+</document>

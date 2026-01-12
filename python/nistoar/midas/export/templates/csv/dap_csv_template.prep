@@ -1,0 +1,8 @@
+{{# DAP CSV Template for Data Asset Plans  
+   This template renders DAP records in CSV format with essential fields
+   Required fields: Name, ID, Type, Owner, Status, Data Fields
+}}
+"Name","ID","Type","Owner","Status","Title","Description","Contact","Created","Modified","Status Details","Keywords","Data Sources","File Count","Total Size","Comments"
+{{for record in records}}
+"{{record.get('name', 'N/A')}}","{{record.get('id', 'N/A')}}","DAP","{{record.get('owner', {}).get('fn', 'N/A')}}","{{record.get('meta', {}).get('status', 'N/A')}}","{{record.get('data', {}).get('title', 'N/A')}}","{{record.get('data', {}).get('description', '').replace('"', '""')}}","{{record.get('data', {}).get('contact', {}).get('fn', 'N/A')}}","{{record.get('meta', {}).get('creationDate', 'N/A')}}","{{record.get('meta', {}).get('lastModified', 'N/A')}}","{{record.get('meta', {}).get('status_log', [])[-1].get('message', 'N/A') if record.get('meta', {}).get('status_log') else 'N/A'}}","{{'; '.join(record.get('data', {}).get('keyword', []))}}","{{'; '.join([ds.get('title', 'N/A') for ds in record.get('data', {}).get('dataSources', [])])}}","{{len(record.get('data', {}).get('files', []))}}","{{sum([f.get('size', 0) for f in record.get('data', {}).get('files', [])])}}","{{record.get('data', {}).get('comments', '').replace('"', '""')}}"
+{{endfor}}

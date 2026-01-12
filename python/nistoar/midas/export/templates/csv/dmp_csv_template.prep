@@ -1,0 +1,8 @@
+{{# DMP CSV Template for Data Management Plans
+   This template renders DMP records in CSV format with essential fields
+   Required fields: Name, ID, Type, Owner, Status, Data Fields
+}}
+"Name","ID","Type","Owner","Status","Title","Description","Contact","Created","Modified","Status Details","Keywords","Data Products","Comments"
+{{for record in records}}
+"{{record.get('name', 'N/A')}}","{{record.get('id', 'N/A')}}","DMP","{{record.get('owner', {}).get('fn', 'N/A')}}","{{record.get('meta', {}).get('status', 'N/A')}}","{{record.get('data', {}).get('title', 'N/A')}}","{{record.get('data', {}).get('description', '').replace('"', '""')}}","{{record.get('data', {}).get('contact', {}).get('fn', 'N/A')}}","{{record.get('meta', {}).get('creationDate', 'N/A')}}","{{record.get('meta', {}).get('lastModified', 'N/A')}}","{{record.get('meta', {}).get('status_log', [])[-1].get('message', 'N/A') if record.get('meta', {}).get('status_log') else 'N/A'}}","{{'; '.join(record.get('data', {}).get('keyword', []))}}","{{'; '.join([dp.get('title', 'N/A') for dp in record.get('data', {}).get('dataProduct', [])])}}","{{record.get('data', {}).get('comments', '').replace('"', '""')}}"
+{{endfor}}
