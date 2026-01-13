@@ -44,9 +44,11 @@ class CSVExporter(Exporter):
         template_path = self.resolve_template_path("csv", template_filename)
         preppy_template = preppy.getModule(str(template_path))
 
-        # Load template and parse
+        # Load template and parse - CSV templates expect a list of records
         data_for_template = json_payload.get("data", json_payload)
-        csv_text = preppy_template.get(data_for_template)
+        # Wrap single record in a list since CSV templates use {{for record in records}}
+        records_list = [json_payload]  # Pass the full record including metadata
+        csv_text = preppy_template.get(records=records_list)
 
         return {
             "format": self.format_name,
