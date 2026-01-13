@@ -23,3 +23,6 @@ websockets==15.0.1
 ejsonschema @ https://github.com/usnistgov/ejsonschema/archive/master.zip
 pynoid @ https://github.com/RayPlante/pynoid/archive/master.zip
 multibag @ https://github.com/usnistgov/multibag-py/archive/0.6.zip
+pypdf
+preppy==5.0.1
+trml2pdf==0.6

@@ -91,16 +91,32 @@ class CSVExporter(Exporter):
             status = record.get("status", {})
             meta = record.get("meta", {})
             
+            # Handle status object properly - it might be a RecordStatus object or dict
+            if hasattr(status, 'get'):
+                # It's a dictionary
+                status_state = status.get("state", "N/A")
+                status_action = status.get("action", "N/A")
+                status_created = status.get("createdDate", "N/A")
+                status_modified = status.get("modifiedDate", "N/A")
+                status_message = status.get("message", "N/A")
+            else:
+                # It's a RecordStatus object
+                status_state = getattr(status, "state", "N/A")
+                status_action = getattr(status, "action", "N/A")
+                status_created = getattr(status, "createdDate", "N/A")
+                status_modified = getattr(status, "modifiedDate", "N/A")
+                status_message = getattr(status, "message", "N/A")
+            
             row = [
                 record.get("name", "N/A"),
                 record.get("id", "N/A"),
                 "DAP",
                 record.get("owner", "N/A"),
-                status.get("state", "N/A"),
-                status.get("action", "N/A"),
-                status.get("createdDate", "N/A"),
-                status.get("modifiedDate", "N/A"),
-                status.get("message", "N/A"),
+                status_state,
+                status_action,
+                status_created,
+                status_modified,
+                status_message,
                 data.get("title", "N/A"),
                 data.get("doi", "N/A"),
                 data.get("_schema", "N/A"),
@@ -130,16 +146,32 @@ class CSVExporter(Exporter):
             data = record.get("data", {})
             status = record.get("status", {})
             
+            # Handle status object properly - it might be a RecordStatus object or dict
+            if hasattr(status, 'get'):
+                # It's a dictionary
+                status_state = status.get("state", "N/A")
+                status_action = status.get("action", "N/A")
+                status_created = status.get("createdDate", "N/A")
+                status_modified = status.get("modifiedDate", "N/A")
+                status_message = status.get("message", "N/A")
+            else:
+                # It's a RecordStatus object
+                status_state = getattr(status, "state", "N/A")
+                status_action = getattr(status, "action", "N/A")
+                status_created = getattr(status, "createdDate", "N/A")
+                status_modified = getattr(status, "modifiedDate", "N/A")
+                status_message = getattr(status, "message", "N/A")
+            
             row = [
                 record.get("name", "N/A"),
                 record.get("id", "N/A"),
                 "DMP",
                 record.get("owner", "N/A"),
-                status.get("state", "N/A"),
-                status.get("action", "N/A"),
-                status.get("createdDate", "N/A"),
-                status.get("modifiedDate", "N/A"),
-                status.get("message", "N/A"),
+                status_state,
+                status_action,
+                status_created,
+                status_modified,
+                status_message,
                 data.get("title", "N/A"),
                 data.get("projectDescription", "N/A"),
                 data.get("startDate", "N/A"),
