@@ -2,8 +2,9 @@ from __future__ import annotations
 from typing import Any, Optional
 from collections.abc import Mapping as MappingABC
 from .base import Exporter
+import preppy
 
-DEFAULT_CSV_TEMPLATE = "dmp_csv_template.prep" 
+DEFAULT_CSV_TEMPLATE = "dmp_csv_template.prep"  # Fallback to DMP template for compatibility
 
 
 class CSVExporter(Exporter):
@@ -30,18 +31,9 @@ class CSVExporter(Exporter):
 
     def render_json(self, json_payload: Any, filename: str, template_name: str = None):
         """
-        Render JSON data into CSV format using the specified template.
-        
-        Args:
-            json_payload: The record data (ProjectRecord object or dict)
-            filename: Base filename for output
-            template_name: Template to use (determined by WSGI handler)
-            
-        Returns: Dict with CSV content and metadata
+        Render a single JSON input into a single CSV output
         """
-        import preppy
-        
-        # This exporter expects a mapping-like payload (DMPS/DAPS style).
+        # This exporter expects a mapping-like payload (DMPS style).
         if not isinstance(json_payload, MappingABC):
             raise TypeError("CSVExporter expects a mapping-like payload (e.g., dict)")
 
@@ -52,24 +44,14 @@ class CSVExporter(Exporter):
         template_path = self.resolve_template_path("csv", template_filename)
         preppy_template = preppy.getModule(str(template_path))
 
-        # Load template and parse - handle both list of records and single record
-        if isinstance(json_payload, list):
-            records = [rec.get("data", rec) if isinstance(rec, dict) else rec for rec in json_payload]
-        else:
-            data_for_template = json_payload.get("data", json_payload)
-            records = [data_for_template]
-
-        # Generate CSV content using preppy template
-        csv_content = preppy_template.getOutput(records=records)
-
-        # Ensure filename has correct extension
-        if not filename.endswith('.csv'):
-            filename = f"{filename}.csv"
+        # Load template and parse
+        data_for_template = json_payload.get("data", json_payload)
+        csv_text = preppy_template.get(data_for_template)
 
         return {
             "format": self.format_name,
-            "filename": filename,
+            "filename": f"{filename}{self.file_extension}",
             "mimetype": "text/csv",
-            "text": csv_content,
+            "text": csv_text,
             "file_extension": self.file_extension,
         }
