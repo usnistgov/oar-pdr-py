@@ -89,8 +89,10 @@ class MIDASFileManagerServiceTest(test.TestCase):
         self.config['admin_user'] = 'admin'
 
         os.rmdir(rootdir)
-        with self.assertRaises(ConfigurationException):
-            self.cli = fm.MIDASFileManagerService(self.config)
+        # no longer raises exception; writes warning to log instead
+        # with self.assertRaises(ConfigurationException):
+        #     self.cli = fm.MIDASFileManagerService(self.config)
+        self.cli = fm.MIDASFileManagerService(self.config)
 
 #    @patch('requests.request')
     def test_test(self):  # , mock_request):
@@ -110,6 +112,7 @@ class MIDASFileManagerServiceTest(test.TestCase):
         id = "mdst:XXX1"
         self.assertTrue(not (rootdir/id).exists())
         self.assertTrue(not self.cli.space_exists(id))
+        self.assertNotIn(id, self.cli.space_ids())
         with self.assertRaises(FileManagerResourceNotFound):
             self.cli.get_space(id)
 
@@ -141,6 +144,7 @@ class MIDASFileManagerServiceTest(test.TestCase):
         self.assertTrue(sp.resource_exists(id+"-sys"))
         self.assertTrue(sp.resource_exists(id+"/#HIDE"))
         self.assertTrue(sp.resource_exists(id+"/#TRASH"))
+        self.assertIn(id, self.cli.space_ids())
 
         self.cli.delete_space(id)
         self.assertTrue(not sp.resource_exists(id))
