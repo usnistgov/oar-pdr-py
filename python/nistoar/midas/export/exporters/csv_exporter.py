@@ -36,12 +36,28 @@ class CSVExporter(Exporter):
         import csv
         import io
         
-        # This exporter expects a mapping-like payload (DMPS style).
-        if not isinstance(json_payload, MappingABC):
-            raise TypeError("CSVExporter expects a mapping-like payload (e.g., dict)")
+        # DEBUG: Let's see what we're actually receiving
+        print(f"DEBUG CSV: json_payload type = {type(json_payload)}")
+        print(f"DEBUG CSV: json_payload = {json_payload}")
+        print(f"DEBUG CSV: template_name = {template_name}")
+        
+        # Handle both single record and array of records
+        if isinstance(json_payload, list) and len(json_payload) > 0:
+            # Take the first record from the array
+            record = json_payload[0]
+            print(f"DEBUG CSV: Using first record from array")
+        elif isinstance(json_payload, MappingABC):
+            record = json_payload
+            print(f"DEBUG CSV: Using single record")
+        else:
+            raise TypeError("CSVExporter expects a mapping-like payload or array of records")
 
+        print(f"DEBUG CSV: record type = {type(record)}")
+        print(f"DEBUG CSV: record keys = {list(record.keys()) if hasattr(record, 'keys') else 'no keys'}")
+        
         # Determine record type from template name or ID
-        is_dap = (template_name and "dap" in template_name.lower()) or (json_payload.get("id", "").startswith("mds3"))
+        is_dap = (template_name and "dap" in template_name.lower()) or (record.get("id", "").startswith("mds3"))
+        print(f"DEBUG CSV: is_dap = {is_dap}")
         
         # Create CSV content
         output = io.StringIO()
@@ -58,15 +74,15 @@ class CSVExporter(Exporter):
             ]
             writer.writerow(headers)
             
-            data = json_payload.get("data", {})
-            status = json_payload.get("status", {})
-            meta = json_payload.get("meta", {})
+            data = record.get("data", {})
+            status = record.get("status", {})
+            meta = record.get("meta", {})
             
             row = [
-                json_payload.get("name", "N/A"),
-                json_payload.get("id", "N/A"),
+                record.get("name", "N/A"),
+                record.get("id", "N/A"),
                 "DAP",
-                json_payload.get("owner", "N/A"),
+                record.get("owner", "N/A"),
                 status.get("state", "N/A"),
                 status.get("action", "N/A"),
                 status.get("createdDate", "N/A"),
@@ -98,14 +114,14 @@ class CSVExporter(Exporter):
             ]
             writer.writerow(headers)
             
-            data = json_payload.get("data", {})
-            status = json_payload.get("status", {})
+            data = record.get("data", {})
+            status = record.get("status", {})
             
             row = [
-                json_payload.get("name", "N/A"),
-                json_payload.get("id", "N/A"),
+                record.get("name", "N/A"),
+                record.get("id", "N/A"),
                 "DMP",
-                json_payload.get("owner", "N/A"),
+                record.get("owner", "N/A"),
                 status.get("state", "N/A"),
                 status.get("action", "N/A"),
                 status.get("createdDate", "N/A"),
