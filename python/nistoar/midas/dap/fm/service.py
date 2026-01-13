@@ -104,7 +104,12 @@ class MIDASFileManagerService:
         if self._root_dir:
             self._root_dir = Path(self._root_dir)
             if not self._root_dir.is_dir():
-                raise ConfigurationException("local_storage_root_dir: does not exist as a directory")
+                # raise ConfigurationException("local_storage_root_dir: does not exist as a directory")
+                #
+                # NOTE: This directory may not exist yet if file manager (nextcloud) is still
+                # coming up and installing; warn only
+                self.log.warning("MIDASFileManagerService: local data storage dir does not exist yet: %s",
+                                 self._root_dir)
 
         self._ncfilesurl = self.cfg.get('nextcloud_files_url')
         if not self._ncfilesurl:
@@ -350,18 +355,26 @@ class MIDASFileManagerService:
         return True if space for the given DAP record ID exists already
         """
         if self._root_dir:
-            return (self._root_dir / id).exists()
+            if not self._root_dir.exists():
+                self.log.warning("data root dir still does not exist! (%s)", self._root_dir)
+            else:
+                return (self._root_dir / id).exists()
         return self.wdcli.is_directory(id)
 
     def space_ids(self) -> List[str]:
         """
         return the list of identifiers for the existing spaces
         """
-        if not self._root_dir:
-            return []
-        return [d for d in os.listdir(self._root_dir) if not d.startswith('.') and 
-                                                         not d.startswith("_") and
-                                                         any([p.search(d) for p in self.spaceid_pats])]
+        if self._root_dir:
+            if not self._root_dir.exists():
+                self.log.warning("data root dir still does not exist! (%s)", self._root_dir)
+            else:
+                # Consult the local filesystem
+                return [d for d in os.listdir(self._root_dir)
+                          if not d.startswith('.') and not d.startswith("_") and
+                          any([p.search(d) for p in self.spaceid_pats])]
+        return []
+    
     def get_space(self, id: str):
         """
         return the space that has been set up for the DAP with the given record ID
