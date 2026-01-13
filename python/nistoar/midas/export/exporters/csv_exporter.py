@@ -36,28 +36,41 @@ class CSVExporter(Exporter):
         import csv
         import io
         
-        # DEBUG: Let's see what we're actually receiving
-        print(f"DEBUG CSV: json_payload type = {type(json_payload)}")
-        print(f"DEBUG CSV: json_payload = {json_payload}")
-        print(f"DEBUG CSV: template_name = {template_name}")
-        
         # Handle both single record and array of records
         if isinstance(json_payload, list) and len(json_payload) > 0:
             # Take the first record from the array
             record = json_payload[0]
-            print(f"DEBUG CSV: Using first record from array")
         elif isinstance(json_payload, MappingABC):
             record = json_payload
-            print(f"DEBUG CSV: Using single record")
         else:
-            raise TypeError("CSVExporter expects a mapping-like payload or array of records")
+            # Handle object records (like _FakeProjectRecord) - should be rare since normalize_input handles this
+            if hasattr(json_payload, 'data'):
+                record = {
+                    'id': getattr(json_payload, 'id', 'N/A'),
+                    'name': getattr(json_payload, 'name', 'N/A'),
+                    'owner': getattr(json_payload, 'owner', 'N/A'),
+                    'status': getattr(json_payload, 'status', {}),
+                    'data': getattr(json_payload, 'data', {}),
+                    'meta': getattr(json_payload, 'meta', {})
+                }
+            else:
+                raise TypeError("CSVExporter expects a mapping-like payload, array of records, or object with data attribute")
 
-        print(f"DEBUG CSV: record type = {type(record)}")
-        print(f"DEBUG CSV: record keys = {list(record.keys()) if hasattr(record, 'keys') else 'no keys'}")
+        # Handle legacy data-only format for backward compatibility (should be rare now)
+        if 'data' in record and len(record) == 1:
+            # This is the old data-only format, reconstruct record structure from data
+            data = record['data']
+            record = {
+                'id': data.get('id', data.get('@id', 'N/A')),  # Try @id for DAP records
+                'name': data.get('name', data.get('title', 'N/A')),  # Use title as fallback for name
+                'owner': 'N/A',  # Cannot recover from data-only
+                'status': {},  # Cannot recover from data-only
+                'data': data,
+                'meta': {}  # Cannot recover from data-only
+            }
         
         # Determine record type from template name or ID
         is_dap = (template_name and "dap" in template_name.lower()) or (record.get("id", "").startswith("mds3"))
-        print(f"DEBUG CSV: is_dap = {is_dap}")
         
         # Create CSV content
         output = io.StringIO()

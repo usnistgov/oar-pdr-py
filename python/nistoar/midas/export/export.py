@@ -88,6 +88,7 @@ def export(input_item: Any, output_format: str, template_dir: str = None, templa
     info = normalize_input(input_item, index=_index)
     input_type = info['input_type']
     payload = info['payload']
+    
     filename = info['filename']
 
     # Select the right exporter

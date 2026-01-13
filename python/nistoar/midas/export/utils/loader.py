@@ -136,9 +136,16 @@ def normalize_input(item: Any, index: int):
 
     # Case 4: ProjectRecord
     if _is_project_record(item):
-        # Build a mapping that contains a 'data' key for the template
+        # Build a complete mapping that includes all record fields for comprehensive export support
+        # This maintains backward compatibility: PDF/Markdown can still access payload["data"]
+        # while enabling CSV to access payload["id"], payload["name"], etc.
         payload = {
-            "data": dict(item.data)
+            "id": getattr(item, "id", None),
+            "name": getattr(item, "name", None), 
+            "owner": getattr(item, "owner", None),
+            "status": getattr(item, "status", {}),
+            "data": dict(item.data),
+            "meta": getattr(item, "meta", {})
         }
         return {
             "input_type": "json",
