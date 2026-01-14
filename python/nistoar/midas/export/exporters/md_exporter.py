@@ -42,7 +42,7 @@ class MarkdownExporter(Exporter):
 
         # Preppy can take the full .prep path or just the module base
         # We pass the .prep path for clarity
-        template_path = self.resolve_template_path("markdown", template_filename)
+        template_path = self.resolve_template_path("md", template_filename)
         preppy_template = preppy.getModule(str(template_path))
 
         # Load template and parse
