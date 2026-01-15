@@ -233,3 +233,12 @@ class NextcloudApi:
         """ Check is arg user is tied to an existing user or not, returns bool accordingly"""
         response = self.get_user(user)
         return bool(response)
+
+    def delete_group_permissions(self, group_name, dir_name):
+        """ Delete group permissions for a directory."""
+        return self._get_json('DELETE', f'files/sharegroup/{group_name}/{dir_name}')
+
+    def set_group_permissions(self, group_name, perm_type, dir_name):
+        """ Set group permissions for a directory."""
+        return self._get_json('POST', f'files/sharegroup/{group_name}/{perm_type}/{dir_name}')
+
