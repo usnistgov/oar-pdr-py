@@ -254,32 +254,6 @@ class MongoDBClient(base.DBClient):
         except Exception as ex:
             raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
 
-    def select_records_by_ids(self, ids: List[str],  perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
-        if isinstance(perm, str):
-            perm = [perm]
-        if isinstance(perm, (list, tuple)):
-            perm = set(perm)
-        idents = [self.user_id] + list(self.user_groups)
-
-        # Build permission constraints (same as in select_records method)
-        if len(perm) > 1:
-            perm_constraints = {"$or": []}
-            for p in perm:
-                perm_constraints["$or"].append({"acls."+p: {"$in": idents}})
-        else:
-            perm_constraints = {"acls."+list(perm)[0]: {"$in": idents}}
-
-        # Combine ID filter with permission constraints
-        query = {"id": {"$in": ids}, **perm_constraints}
-
-        try:
-            coll = self.native[self._projcoll]
-            for rec in coll.find(query, {'_id': False}):
-                yield base.ProjectRecord(self._projcoll, rec, self)
-
-        except Exception as ex:
-            raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
-
     def adv_select_records(self, filter: dict,
                            perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
         
