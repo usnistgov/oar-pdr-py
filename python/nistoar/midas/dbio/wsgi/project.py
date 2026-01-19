@@ -42,14 +42,12 @@ are handled accordingly:
 from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence, Callable
-from typing import Iterator
+from typing import Iterator, List
 from urllib.parse import parse_qs
 import json, re
-import tempfile
-
-from zipp import Path
 
 from nistoar.web.rest import ServiceApp, Handler, Agent
+from nistoar.web.formats import Format, FormatSupport, Unacceptable, UnsupportedFormat
 from nistoar.pdr.utils.validate import ValidationResults
 from nistoar.web.formats import JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
 from nistoar.midas.export.export import run as export_run
@@ -59,6 +57,7 @@ from .base import DBIOHandler
 from .search_sorter import SortByPerm
 
 __all__ = ["MIDASProjectHandler", "ProjectDataHandler"]
+SUPPORTED_FILTERS = set("name id owner status_state".split())
 
 class ProjectRecordHandler(DBIOHandler):
     """
@@ -512,6 +511,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             iftype = ""
         super(ProjectSelectionHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, iftype,
                                                       config, log)
+        self._set_format_qp("format")
 
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "POST"])
@@ -545,45 +545,48 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             sortd.add_record(rec)
         return [rec.to_dict() for rec in sortd.sorted()]
 
-    def do_GET(self, path, ashead=False):
+    def do_GET(self, path, ashead=False, format=None):
         """
         respond to a GET request, interpreted as a search for records accessible by the user
         :param str path:  a path to the portion of the data to get.  This is the same as the `datapath`
                           given to the handler constructor.  This will always be an empty string.
         :param bool ashead:  if True, the request is actually a HEAD request for the data
         """
+        # Set supported output formats
+        supp_fmts = FormatSupport()
+        JSONSupport.add_support(supp_fmts, ["text/json", "application/json"], asdefault=True)
+        supp_fmts.support(Format("pdf", "application/pdf"))
+        supp_fmts.support(Format("markdown", "text/markdown"), ["text/markdown", "text/plain"])
+        supp_fmts.support(Format("csv", "text/csv"))
+        self._set_default_format_support(supp_fmts)
+        
         perms = []
         params = {}
+        filters = {}
+        fmt = self.select_format(format)   # may raise UnsupportedFormat, Unacceptable
+        
         qstr = self._env.get('QUERY_STRING')
         if qstr:
             params = parse_qs(qstr)
             perms = params.get('perm')
+            filters = dict([(k,v) for k,v in params.items() if k in SUPPORTED_FILTERS])
         if not perms:
             perms = dbio.ACLs.OWN
-        
-        if path == ":ids":  
-            # Handle retrieval of multiple records by IDs
-            ids = params.get('ids', []) if qstr else []
-            if not ids:
-                return self.send_error_resp(400, "Missing ids parameter", 
-                                        "Query parameter 'ids' is required for ids endpoint")
-            
-            # If ids is a single string, split it by comma
-            if len(ids) == 1 and ',' in ids[0]:
-                ids = [id.strip() for id in ids[0].split(',')]
-            
-            records = self._select_records_by_ids(ids, perms)
-            out = self._sort_and_format_records(records)
-            return self.send_json(out, ashead=ashead)
-        
-        elif path ==":export":
-            return self._handle_export_request(params, perms)
 
-        else:
-            # Default: select all records accessible to the user
-            records = self._select_records(perms)
-            out = self._sort_and_format_records(records)
-            return self.send_json(out, ashead=ashead)
+        # split up filter values that are in comma-separated lists
+        for prop,vals in filters.items():
+            out = []
+            for v in vals:
+                out.extend(v.split(','))
+            filters[prop] = out
+
+        recs = self._sort_and_format_records(self._select_records(perms, **filters))
+
+        if fmt.name in ["pdf", "csv", "markdown"]:
+            return self._format_records_as(recs, fmt)
+
+        # Default: send in the default format, json
+        return self.send_json(recs, ashead=ashead)
 
     def do_POST(self, path):
         """
@@ -685,25 +688,11 @@ class ProjectSelectionHandler(ProjectRecordHandler):
     
         return self.send_json(prec.to_dict(), "Project Created", 201)
     
-    def _handle_export_request(self, params: dict, perms: list):
+    def _format_records_as(self, records: List[Mapping], format):
         """Handle export requests via GET with query parameters"""
-        ids = params.get('ids', [])
-        if not ids:
-            return self.send_error_resp(400, "Missing ids parameter", 
-                                    "Query parameter 'ids' is required for export endpoint")
+        format_type = format.name
         
-        if len(ids) == 1 and ',' in ids[0]:
-            ids = [id.strip() for id in ids[0].split(',')]
-
-        format_type = params.get('format', ['pdf'])[0]
-
         try:
-            records = list(self._select_records_by_ids(ids, perms))
-
-            if not records:
-                return self.send_error_resp(404, "No accessible records", 
-                                        "No records found with the provided IDs that you can access")
-            
             # Detect record type for template selection
             template_name = self._determine_template_name(records, format_type)
             
@@ -714,24 +703,23 @@ class ProjectSelectionHandler(ProjectRecordHandler):
                 template_name=template_name,
                 generate_file=False
             )
-            
-            if 'bytes' in result:
-                return self.send_ok(
-                    result['bytes'],
-                    contenttype=result.get('mimetype', 'application/octet-stream')
-                )
-            elif 'text' in result:
-                return self.send_ok(
-                    result['text'],
-                    contenttype=result.get('mimetype', 'text/plain')
-                )
-            else:
-                return self.send_error_resp(500, "Export format error", 
-                                        f"Unsupported export result format for {format_type}")
+
+            content = result.get('bytes', result.get('text'))
+            if not content and result.get('path'):
+                # deliver content from a file
+                pass
+
+            if content:
+                return self.send_ok(content, contenttype=format.ctype)
+
+            # unable to comply
+            return self.send_error_resp(500, "Export format error",
+                             f"Failed to convert records into requested format, {format_type}")
                             
         except Exception as ex:
-            self.log.exception(f"Exception in export request: {ex}")
-            return self.send_error_resp(500, "Export failed", str(ex))
+            self.log.exception(f"Exception in export request: {str(ex)}")
+            return self.send_error_resp(500, "Export failed",
+                                        f"Failure during export formatting into {format_type}")
 
     def _determine_template_name(self, records: list, format_type: str) -> str:
         """Determine appropriate template name based on record type and format"""

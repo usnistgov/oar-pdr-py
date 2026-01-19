@@ -303,11 +303,11 @@ class TestMIDASProjectApp(test.TestCase):
         
         self.resp = []
         
-        path = ":ids"
+        path = ""
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': f'ids={id1},{id2}'
+            'QUERY_STRING': f'id={id1},{id2}'
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
@@ -332,7 +332,7 @@ class TestMIDASProjectApp(test.TestCase):
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': f'ids={id3}'
+            'QUERY_STRING': f'id={id3}'
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
@@ -347,7 +347,7 @@ class TestMIDASProjectApp(test.TestCase):
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': f'ids={id1},{id2},{id3}'
+            'QUERY_STRING': f'id={id1},{id2},{id3}'
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
@@ -365,7 +365,7 @@ class TestMIDASProjectApp(test.TestCase):
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': 'ids=nonexistent:0001'
+            'QUERY_STRING': 'id=nonexistent:0001'
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
@@ -378,7 +378,7 @@ class TestMIDASProjectApp(test.TestCase):
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': f'ids={id1},nonexistent:0001,{id3}'
+            'QUERY_STRING': f'id={id1},nonexistent:0001,{id3}'
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
@@ -392,32 +392,37 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertNotIn("nonexistent:0001", returned_ids)
         
         self.resp = []
-        
+
+        # no filters; get everything
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("400 ", self.resp[0])
+        self.assertIn("200 ", self.resp[0])
+        results = self.body2dict(body)
+        self.assertEqual(len(results),  3)
         
         self.resp = []
         
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': 'ids='
+            'QUERY_STRING': 'id='
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("400 ", self.resp[0])
+        self.assertIn("200 ", self.resp[0])
+        results = self.body2dict(body)
+        self.assertEqual(len(results),  3)
         
         self.resp = []
         
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': f'ids={id1},{id2}&perm=read'
+            'QUERY_STRING': f'id={id1},{id2}&perm=read'
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
@@ -430,7 +435,7 @@ class TestMIDASProjectApp(test.TestCase):
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': f'ids={id1}&ids={id2}&ids={id3}'
+            'QUERY_STRING': f'id={id1}&id={id2}&id={id3}'
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
@@ -444,7 +449,7 @@ class TestMIDASProjectApp(test.TestCase):
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': f'ids={id1}'
+            'QUERY_STRING': f'id={id1}'
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
@@ -491,11 +496,11 @@ class TestMIDASProjectApp(test.TestCase):
                     }
                 
                 with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
-                    path = ":export"
+                    path = ""
                     req = {
                         'REQUEST_METHOD': 'GET',
                         'PATH_INFO': self.rootpath + path,
-                        'QUERY_STRING': f'ids={record_id}&format=pdf'
+                        'QUERY_STRING': f'id={record_id}&format=pdf'
                     }
                     
                     hdlr = self.app.create_handler(req, self.start, path, nistr)
@@ -557,11 +562,11 @@ class TestMIDASProjectApp(test.TestCase):
                     }
                 
                 with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
-                    path = ":export"
+                    path = ""
                     req = {
                         'REQUEST_METHOD': 'GET',
                         'PATH_INFO': self.rootpath + path,
-                        'QUERY_STRING': f'ids={",".join(record_ids)}&format=pdf'  # Multiple records
+                        'QUERY_STRING': f'id={",".join(record_ids)}&format=pdf'  # Multiple records
                     }
                     
                     hdlr = self.app.create_handler(req, self.start, path, nistr)
