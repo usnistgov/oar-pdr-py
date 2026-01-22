@@ -522,6 +522,11 @@ class DAPService(ProjectService):
             elif meta.get("contactName"):
                 out['contactPoint'] = self._moderate_contactPoint({"fn": meta["contactName"]}, doval=False)
 
+            # collection
+            if meta.get('partOfCollection') and meta.get('collections'):
+                colls = [{"label": c} for c in meta['collections']]
+                out['isPartOf'] = self._moderate_isPartOf(colls, doval=False)
+
             ro = deepcopy(self.cfg.get('default_responsible_org', {}))
             if self.dbcli.people_service and out.get('contactPoint', {}).get('hasEmail'):
                 ps = self.dbcli.people_service
@@ -571,7 +576,7 @@ class DAPService(ProjectService):
 
     def _moderate_metadata(self, mdata: MutableMapping, shoulder=None):
         # only accept expected keys
-        allowed = "resourceType creatorisContact contactName willUpload provideLink softwareLink assocPageType".split()
+        allowed = "resourceType creatorisContact contactName willUpload provideLink softwareLink assocPageType partOfCollection collections".split()
         mdata = OrderedDict([p for p in mdata.items() if p[0] in allowed])
 
         out = super()._moderate_metadata(mdata, shoulder)
@@ -580,12 +585,18 @@ class DAPService(ProjectService):
         elif out.get('creatorisContact') is None:
             out['creatorisContact'] = True
 
+        if isinstance(out.get('partOfCollections'), str):
+            out['creatorisContact'] = out['creatorisContact'].lower() == "true"
+        elif out.get('partOfCollection') is None:
+            out['partOfCollection'] = False
+
         return out
         
     def _new_metadata_for(self, shoulder=None):
         return OrderedDict([
             ("resourceType", "data"),
-            ("creatorisContact", True)
+            ("creatorisContact", True),
+            ("partOfCollection", False)
         ])
 
     def get_nerdm_data(self, id: str, part: str=None):

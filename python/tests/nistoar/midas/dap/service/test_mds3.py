@@ -107,7 +107,8 @@ class TestMDS3DAPService(test.TestCase):
         prec = self.svc.create_record("goob")
         self.assertEqual(prec.name, "goob")
         self.assertEqual(prec.id, "mdsy:0003")
-        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data"})
+        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
+                                     "partOfCollection": False})
         self.assertEqual(prec.owner, "nstr1")
         self.assertIn("_schema", prec.data)
         self.assertNotIn("_extensionSchemas", prec.data)  # contains only data summary
@@ -120,7 +121,8 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec2.id, "mdsy:0003")
         self.assertEqual(prec2.data['@id'], "ark:/88434/mdsy-0003")
         self.assertEqual(prec2.data['doi'], "doi:10.88888/mdsy-0003")
-        self.assertEqual(prec2.meta, {"creatorisContact": True, "resourceType": "data"})
+        self.assertEqual(prec2.meta, {"creatorisContact": True, "resourceType": "data",
+                                      "partOfCollection": False})
         self.assertEqual(prec2.owner, "nstr1")
 
         with self.assertRaises(AlreadyExists):
@@ -159,7 +161,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.name, "gurn")
         self.assertEqual(prec.id, "mdsy:0003")
         self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data",
-                                     "agent_vehicle": "midas" })
+                                     "agent_vehicle": "midas", "partOfCollection": False })
         for key in "_schema @type authors references file_count nonfile_count".split():
             self.assertIn(key, prec.data)
         self.assertNotIn('color', prec.data)
@@ -173,12 +175,15 @@ class TestMDS3DAPService(test.TestCase):
         # some legit metadata but no legit identity info
         prec = self.svc.create_record("goob", {"title": "test"},
                                       {"creatorIsContact": "TRUE",
-                                       "softwareLink": "https://github.com/usnistgov/goob" })
+                                       "softwareLink": "https://github.com/usnistgov/goob",
+                                       "partOfCollection": True,
+                                       "collections": ["peanuts"]  })
         self.assertEqual(prec.name, "goob")
         self.assertEqual(prec.id, "mdsy:0004")
         self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
                                      "softwareLink": "https://github.com/usnistgov/goob",
-                                     "agent_vehicle": "midas" })
+                                     "agent_vehicle": "midas", "partOfCollection": True,
+                                     "collections": ["peanuts"] })
         self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0004")
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0004")
         self.assertEqual(prec.data['nonfile_count'], 1)
@@ -193,7 +198,9 @@ class TestMDS3DAPService(test.TestCase):
         self.assertTrue(isinstance(resmd.get('responsibleOrganization'), list))
         self.assertEqual(len(resmd['responsibleOrganization']), 1)
         self.assertEqual(resmd['responsibleOrganization'][0]['title'], 'NIST')
-        
+        self.assertIn("isPartOf", resmd)
+        self.assertEqual(len(resmd['isPartOf']), 1)
+        self.assertEqual(resmd['isPartOf'][0]['title'], "Peanuts!")
 
         # inject some identity info into service and try again
         self.svc.who._md.update({"userName": "Gurn", "userLastName": "Cranston", "email": "gurn@thejerk.org"})
@@ -204,7 +211,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.id, "mdsy:0005")
         self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
                                      "softwareLink": "https://github.com/usnistgov/goob",
-                                     "agent_vehicle": "midas" })
+                                     "agent_vehicle": "midas", "partOfCollection": False })
         self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0005")
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0005")
         self.assertEqual(prec.data['nonfile_count'], 1)
@@ -239,7 +246,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.owner, "ava1")
         self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
                                      "softwareLink": "https://github.com/usnistgov/goob",
-                                     "agent_vehicle": "midas" })
+                                     "agent_vehicle": "midas", "partOfCollection": False })
         self.assertEqual(prec.data['doi'], "doi:10.88888/mds2-1492")
         self.assertEqual(prec.data['@id'], "ark:/88434/mds2-1492")
         self.assertEqual(prec.data['nonfile_count'], 1)
