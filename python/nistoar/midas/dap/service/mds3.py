@@ -298,6 +298,11 @@ class DAPService(ProjectService):
                 raise ConfigurationException("'validate_nerdm' is set but cannot find schema dir")
             self._valid8r = validate.create_lenient_validator(self._schemadir, "_")
 
+        self._legitcolls = self.cfg.get("available_collections", {})
+        if not isinstance(self._legitcolls, Mapping) or \
+           any(not isinstance(k, str) or not isinstance(v, Mapping) or not v.get('@id')
+               for k,v in self._legitcolls.items()):
+            raise ConfigurationException("available_collections: not a dict[str,dict['@id']]")
         self._mediatypes = None
         self._formatbyext = None
         self._extrevcli = extrevcli
@@ -586,7 +591,7 @@ class DAPService(ProjectService):
     def get_nerdm_data(self, id: str, part: str=None):
         """
         return the full NERDm metadata.  This differs from the :py:method:`get_data` method which (in
-        this implementation) only returns a summary of hte NERDm metadata.  
+        this implementation) only returns a summary of the NERDm metadata.  
         :param str id:    the identifier for the record whose NERDm data should be returned. 
         :param str part:  a path to the part of the record that should be returned.  This can be the 
                           name of a top level NERDm property or one of the following special values:
@@ -632,6 +637,20 @@ class DAPService(ProjectService):
                             out = nerd.files.get_file_by_id(key)
                         except nerdstore.ObjectNotFound as ex:
                             raise ObjectNotFound(id, part, str(ex))
+                elif steps[0] == "isPartOf":
+                    out = nerd.get_res_data().get("isPartOf")
+                    if isinstance(out, list):
+                        if isinstance(key, int):
+                            if key >= len(out):
+                                raise ObjectNotFound(id, part,
+                                                     f"isPartOf list index out of range: [{key}]")
+                            out = out[key]
+                        else:
+                            out = [c for c in out if isinstance(c, Mapping) and c.get('@id') == key]
+                            if not out:
+                                raise ObjectNotFound(id, part,
+                                                     f"isPartOf: no item with @id={key}")
+                            out = out[0]
                 else:
                     raise PartNotAccessible(id, part, "Accessing %s not supported" % part)
 
@@ -657,7 +676,7 @@ class DAPService(ProjectService):
                 out = nerd.get_res_data()
                 if part in out:
                     out = out[part]
-                elif part in "description @type contactPoint title rights disclaimer landingPage theme topic".split():
+                elif part in "description @type contactPoint title rights disclaimer landingPage theme topic isPartOf".split():
                     raise ObjectNotFound(prec.id, part, "%s property not set yet" % part)
                 else:
                     raise PartNotAccessible(prec.id, part, "Accessing %s not supported" % part)
@@ -769,7 +788,7 @@ class DAPService(ProjectService):
                             return False
                         nerd.files.empty()
                         nerd.nonfiles.empty()
-                    elif part in "title rights disclaimer description landingPage keyword topic theme".split():
+                    elif part in "title rights disclaimer description landingPage keyword topic theme isPartOf".split():
                         resmd = nerd.get_res_data()
                         if part not in resmd:
                             return False
@@ -817,6 +836,16 @@ class DAPService(ProjectService):
                                 nerd.files.delete_file(parts[1])
                             except (KeyError) as ex:
                                 return False
+                    elif parts[0] == "isPartOf":
+                        # get rid of the collection reference where part[1] is either @id or label
+                        resmd = nerd.get_res_data()
+                        if self._legitcolls.get(parts[1],{}).get('@id'):
+                            parts[1] = self._legitcolls[parts[1]]['@id']
+                        if resmd.get('isPartOf'):
+                            resmd['isPartOf'] = \
+                                [c for c in resmd['isPartOf']
+                                   if c.get('@id') != parts[1] and c.get('@id') != parts[1]]
+                            nerd.replace_res_data(resmd)
                     else:
                         raise PartNotAccessible(_prec.id, part, "Clearing %s not allowed" % part)
                 else:
@@ -1179,9 +1208,21 @@ class DAPService(ProjectService):
                     data = self._update_component(nerd, data, key, replace, doval=doval)
                     provact.add_subaction(Action(subacttype, "%s#data/pdr:f[%s]" % (prec.id, str(key)), 
                                                  self.who, what, self._jsondiff(old, data)))
+
+                elif steps[0] == "isPartOf":
+                    res = nerd.get_res_data()
+                    old = res.get(steps[0])
+                    data = self._update_isPartOf_coll(nerd, data, key, replace, doval=doval)
+                    provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
+                                                 f"{prec.id}#data.isPartOf[{key}]", self.who,
+                                                 f"updating isPartOf collection",
+                                                 self._jsondiff(old, res[steps[0]])))
                     
                 else:
                     raise PartNotAccessible(prec.id, path, "Updating %s not allowed" % path)
+
+            # in the cases below, nothing appears after the single-word path (i.e. no key for a
+            # member resource).
 
             elif path == "authors":
                 if not isinstance(data, list):
@@ -1326,6 +1367,22 @@ class DAPService(ProjectService):
 
                 res[path] = self._moderate_keyword(data, res, doval=doval, replace=replace,
                                                    kwpropname='theme')  # may raise InvalidUpdate
+                provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
+                                             prec.id+"#data."+path, self.who, "updating "+path,
+                                             self._jsondiff(old, res[path])))
+                nerd.replace_res_data(res)
+                data = res[path]
+
+            elif path == "isPartOf":
+                if not isinstance(data, (list, Mapping)):
+                    raise InvalidUpdate(part+" data is not a list of objects", sys=self)
+                res = nerd.get_res_data()
+                old = res.get(path)
+
+                # replace=True with this path means replace entire isPartOf list; replace=False means
+                # replace the isPartOf elements with IDs that match elements in the input list
+                res[path] = self._moderate_isPartOf(data, [] if replace else res.get('isPartOf', []),
+                                                    doval=doval, replace=True)
                 provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
                                              prec.id+"#data."+path, self.who, "updating "+path,
                                              self._jsondiff(old, res[path])))
@@ -1869,6 +1926,61 @@ class DAPService(ProjectService):
             raise InvalidUpdate("description value is not a string or array of strings", sys=self)
         return [self._moderate_text(t, resmd, doval=doval) for t in val if t]
 
+    def _moderate_isPartOf(self, val, curipo=None, doval=True, replace=False):
+        # :param curipo:  the current list of isPartOf values before the update; None or []
+        #                 assumes all previous values should be replaced
+        # :param doval:   if True, validate the individual values
+        # :param replace: if True, an input item that matches one from curipo should replace it
+        #
+        if isinstance(val, Mapping):
+            val = [ val ]
+        if any(not isinstance(v, Mapping) for v in val):
+            raise InvalidUpdate("isPartOf value is not an object or array of objects", sys=self)
+
+        # make a map of the isPartOf items we already have to maintain a unique list
+        colls = OrderedDict()
+        unkn = 0
+        if isinstance(curipo, list):
+            for item in curipo:
+                id = item.get('@id')
+                if not id:
+                    unkn += 1
+                    id = f"unkn#{unkn}"
+                colls[id] = item
+
+        for item in val:
+            # a collection can be identified either via an @id or a label...
+            if item.get('@id'):
+                coll = [c for c in self._legitcolls.values() if c.get('@id') == item['@id']]
+                if not coll:
+                    # ...but it must be recognized as a collection that is available to authors
+                    raise InvalidUpdate(f"Collection {item['@id']} not available for adding to")
+                else:
+                    coll = coll[0]
+            elif item.get('label'):
+                coll = self._legitcolls.get(item['label'])
+                if not coll:
+                    # ...but it must be recognized as a collection that is available to authors
+                    raise InvalidUpdate(f"Collection {item['label']} not available for adding to")
+            else:
+                raise InvalidUpdate(f"Collection request does not specify a collection: {str(item)}")
+
+            item.update(coll)
+            item['@type'] = [ "nrda:ScienceTheme", "nrdp:PublicDataResource" ]
+
+            if doval:
+                schemauri = NERDM_SCH_ID + "/definitions/ResourceReference"
+                self.validate_json(item, schemauri)
+                if not item.get("@id"):
+                    raise InvalidUpdate(f"isPartOf item is missing required @id")
+                
+            if not replace and colls.get(item.get('@id')):
+                colls[item['@id']].update(item)
+            else:
+                colls[item['@id']] = item
+
+        return [v for v in colls.values()]
+
     def _moderate_keyword(self, val, resmd=None, doval=True, replace=True, kwpropname='keyword'):
         if val is None:
             val = []
@@ -2116,6 +2228,63 @@ class DAPService(ProjectService):
         else:
             data = self._update_listitem(nerd.nonfiles, self._moderate_nonfile, data, pos, replace, doval)
         return data
+
+    def _update_isPartOf_coll(self, nerd, ipoitem: Mapping, key=None, replace=False, doval=False):
+        # update (or add, if necessary) an individual isPartOf item.
+        # :param nerd:     the NERDResource object contain the current, un-updated record
+        # :param ipoitem:  the data for the isPartOf item to update
+        # :param key:      either an integer position or @id to indicate which item gets updated; 
+        #                  if None, the value of @id in ipoitem is used; otherwise, if not an int,
+        #                  this will override @id in the item.  Note that @id must be from a
+        #                  configured available collection.  A non-matching key will cause the new
+        #                  isPartOf item to be added.
+        # :param replace:  if False and key matches an existing item in nerd, the new item will be
+        #                  merged into rather than replacing it, overriding matching properties.
+        # :param doval:    if True, validate the results
+        resmd = nerd.get_res_data()
+        old = resmd.get('isPartOf', [])
+
+        pos = -1 
+        if isinstance(key, int):
+            pos = key
+        if pos >= len(old):
+            pos = -1
+        elif pos >= 0:
+            key = old[pos].get('@id')
+        elif isinstance(key, int):
+            key = None
+            
+        if key is None:
+            key = ipoitem.get('@id')
+            if not key:
+                key = ipoitem.get('label')
+                if key:
+                    key = self._legitcolls.get(key, {}).get('@id')
+        if key in self._legitcolls:
+            key = self._legitcolls.get(key, {}).get('@id')
+
+        if not key:
+            raise InvalidUpdate("isPartOf item is missing @id property (as well as label)")
+
+        if pos < 0:
+            # find the position of a current isPartOf item with the same @id
+            for p, item in enumerate(old):
+                if item.get('@id') == key:
+                    pos = p
+                    break
+        if not ipoitem.get('@id'):
+            ipoitem['@id'] = key
+
+        ipoitem = self._moderate_isPartOf(ipoitem, [] if pos < 0 else [old[pos]],
+                                          doval=doval, replace=replace)[0]
+        if pos < 0:
+            old.append(ipoitem)
+        else:
+            old[pos] = ipoitem
+        resmd['isPartOf'] = old
+        nerd.replace_res_data(resmd)
+        
+        return ipoitem
 
     def _filter_props(self, obj, props):
         # remove all properties from obj that are not listed in props
@@ -2376,6 +2545,12 @@ class DAPService(ProjectService):
     def _moderate_res_data(self, resmd, basemd, nerd, replace=False, doval=True):
         if not resmd.get("_schema"):
             resmd["_schema"] = NERDM_SCH_ID
+
+        if resmd.get('isPartOf'):
+            basecolls = basemd.get("isPartOf", []) if not replace else []
+            if 'isPartOf' in basemd:
+                del basemd['isPartOf']
+            resmd['isPartOf'] = self._moderate_isPartOf(resmd['isPartOf'], basecolls, False, True)
 
         restypes = resmd.get("@type", [])
         if not replace:
@@ -2947,7 +3122,9 @@ class DAPProjectDataHandler(ProjectDataHandler):
                     out = self.svc.set_file_component(self._id, newdata)
                 else:
                     out = self.svc.add_nonfile_component(self._id, newdata)
-
+            elif path == "isPartOf":
+                key = newdata.get('@id') or newdata.get('label')
+                out = self.svc.replace_data(self._id, newdata, f"isPartOf/{key}")
             else:
                 return self.send_error_resp(405, "POST not allowed",
                                             "POST not supported on path")
