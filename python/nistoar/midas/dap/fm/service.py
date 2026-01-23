@@ -293,12 +293,13 @@ class MIDASFileManagerService:
         # create the user if necessary (may raise exception)
         self.ensure_user(foruser)
 
-        # create the directories (may raise exception)
-        self.wdcli.ensure_directory(space.root_davpath)
-        self.wdcli.ensure_directory(space.system_davpath)
-        self.wdcli.ensure_directory(space.uploads_davpath)
-        self.wdcli.ensure_directory(space.hide_davpath)
-        self.wdcli.ensure_directory(space.trash_davpath)
+        with self.wdcli.open_session():
+            # create the directories (may raise exception)
+            self.wdcli.ensure_directory(space.root_davpath)
+            self.wdcli.ensure_directory(space.system_davpath)
+            self.wdcli.ensure_directory(space.uploads_davpath)
+            self.wdcli.ensure_directory(space.hide_davpath)
+            self.wdcli.ensure_directory(space.trash_davpath)
 
         # share space with user (may raise exception)
         if foruser != self._adminuser:
@@ -767,14 +768,14 @@ class FMSpace:
         filename = self.scan_report_filename_for(scan_id)
 
         try:
-            wdcli.authenticate()
-            response = wdcli.wdcli.upload_to(json.dumps(md, indent=4).encode('utf-8'),
-                                             self.system_davpath+'/'+filename)
+            with wdcli.open_session():
+                response = wdcli.wdcli.upload_to(json.dumps(md, indent=4).encode('utf-8'),
+                                                 self.system_davpath+'/'+filename)
 
-            if response and (response.status_code < 200 or response.status_code >= 300):
-                msg = "Unexpected response during upload of '%s' to system_davpath: %s (%s)" % \
-                      (filename, response.reason, response.status_code)
-                raise UnexpectedFileManagerResponse(msg, code=response.status_code)
+                if response and (response.status_code < 200 or response.status_code >= 300):
+                    msg = "Unexpected response during upload of '%s' to system_davpath: %s (%s)" % \
+                          (filename, response.reason, response.status_code)
+                    raise UnexpectedFileManagerResponse(msg, code=response.status_code)
 
             self.log.debug('Uploaded scan file: ' + filename)
 
@@ -906,8 +907,8 @@ class FMSpace:
         report = "/".join([self.system_davpath, self.scan_report_filename_for(scanid)])
 
         try:
-            self.svc.wdcli.authenticate()
-            resp = self.svc.wdcli.wdcli.clean(report)
+            with self.svc.wdcli.open_session():
+                resp = self.svc.wdcli.wdcli.clean(report)
         except RemoteResourceNotFound as ex:
             pass
         except Exception as ex:
