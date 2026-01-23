@@ -36,9 +36,8 @@ class ExportHandler(Handler):
                          # or list of dicts with 'data' key containing JSON project data.
         "template_dir": "...", # optional
         "template_name": "...", # optional
-        "output_dir": "...", # requires server output dir where file will be created
+        "output_dir": "...", # requires server output dir where file will be created (None doesn't generate output file)
         "output_filename": "...", # optional
-        "generate_file": boolean # default is false
       }
     """
     def do_OPTIONS(self, path):
@@ -121,12 +120,7 @@ class ExportHandler(Handler):
         if not isinstance(inputs, list) or not inputs:
             return self.send_error(400, "Bad Input", "inputs must be a non-empty array")
 
-        generate_file = bool(data.get("generate_file") or False)
         output_dir = data.get("output_dir")
-
-        if generate_file:
-            if not isinstance(output_dir, str) or not output_dir.strip():
-                return self.send_error(400, "Bad Input", "output_dir is required")
 
         template_dir = data.get("template_dir")
         template_name = data.get("template_name")
@@ -145,17 +139,16 @@ class ExportHandler(Handler):
             return self.send_error(500, "Server Error", str(ex))
 
         # Safe Path
-        output_dir_path = Path(output_dir) if output_dir else Path(".")
+        output_dir_path = Path(output_dir) if output_dir is not None else None
 
         try:
             result = run_export(
                 input_data=resolved_inputs,
                 output_format=output_format,
-                output_directory=output_dir_path,
+                output_directory=output_dir_path, # None means "return content, not a file"
                 template_dir=template_dir,
                 template_name=template_name,
                 output_filename=output_filename,
-                generate_file=generate_file
             )
         except Exception as ex:
             if self.log:
@@ -163,7 +156,7 @@ class ExportHandler(Handler):
             return self.send_error(500, "Server Error")
 
         # Return file content as stream
-        if not generate_file:
+        if not output_dir:
             filename = result.get("filename", "output")
             mimetype = result.get("mimetype", "application/octet-stream")
 

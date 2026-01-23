@@ -712,7 +712,6 @@ class ProjectSelectionHandler(ProjectRecordHandler):
                 output_format=format_type,
                 output_directory=None,
                 template_name=template_name,
-                generate_file=False
             )
             
             if 'bytes' in result:

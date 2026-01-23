@@ -774,7 +774,6 @@ class TestMIDASApp(test.TestCase):
                     "output_format": "pdf",
                     "inputs": [{"data": {"title": "X"}}],
                     "output_dir": "/tmp/out",
-                    "generate_file": True  # force JSON response path (not streamed bytes/text)
                 })),
             }
             self.resp = []

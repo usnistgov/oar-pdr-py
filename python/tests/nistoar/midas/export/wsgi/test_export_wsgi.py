@@ -121,7 +121,6 @@ class TestExportHandler(test.TestCase):
             "output_format": "pdf",
             "inputs": [{"data": {"a": 1}}],
             "output_dir": "/tmp/out",
-            "generate_file": True,
         }
         req = {"REQUEST_METHOD": "POST", "PATH_INFO": "/", "wsgi.input": StringIO(json.dumps(payload))}
         body = self.app(req, self.start)
@@ -151,7 +150,6 @@ class TestExportHandler(test.TestCase):
             "output_format": "markdown",
             "inputs": [{"data": {"a": 1}}, {"data": {"b": 2}}],
             "output_dir": "/tmp/out",
-            "generate_file": True,
         }
         req = {"REQUEST_METHOD": "POST", "PATH_INFO": "/", "wsgi.input": StringIO(json.dumps(payload))}
         self.resp = []
@@ -225,23 +223,6 @@ class TestExportHandler(test.TestCase):
         self.assertIn("inputs", txt)
         self.assertIn("array", txt)
 
-    def test_output_dir_required(self):
-        req = {
-            "REQUEST_METHOD": "POST",
-            "PATH_INFO": "/",
-            "wsgi.input": StringIO(json.dumps({
-                "output_format": "markdown",
-                "inputs": [{"data": {"a": 1}}],
-                "generate_file": True,
-                # output_dir missing
-            }))
-        }
-        body = self.app(req, self.start)
-        self.assertIn("400 ", self.resp[0])
-        txt = self.body_text(body).lower()
-        self.assertIn("output_dir", txt)
-        self.assertIn("required", txt)
-
     def test_export_runtime_error(self):
         wsgi_mod.run_export = lambda **kw: (_ for _ in ()).throw(RuntimeError("kaboom"))
         req = {
@@ -251,7 +232,6 @@ class TestExportHandler(test.TestCase):
                 "output_format": "pdf",
                 "inputs": [{"data": {"a": 1}}],
                 "output_dir": "/tmp/out",
-                "generate_file": True,
             }))
         }
         self.resp = []
@@ -288,7 +268,6 @@ class TestExportHandler(test.TestCase):
             "output_format": "pdf",
             "inputs": ["rec-1"], # list of IDs (strings)
             "output_dir": "/tmp/out",
-            "generate_file": True,
         }
         req = {
             "REQUEST_METHOD": "POST",
@@ -321,7 +300,6 @@ class TestExportHandler(test.TestCase):
             "output_format": "pdf",
             "inputs": ["missing-id"],
             "output_dir": "/tmp/out",
-            "generate_file": True,
         }
         req = {
             "REQUEST_METHOD": "POST",
