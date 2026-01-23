@@ -260,6 +260,34 @@ class FMWebDAVClient:
         self.wdcli = wd3c.Client(self._wdcopts)
         if self.cfg.get('ca_bundle'):
             self.wdcli.verify = self.cfg['ca_bundle']
+
+    def disconnect(self):
+        """
+        remove the underlying WebDAV client, essentially unauthenticating.  This will force 
+        future uses of this client to authenticate again (via :py:meth:`authenticate`).  
+        """
+        self.wdcli = None
+
+    def open_session(self):
+        return self.AuthenticatedSession(self)
+
+    class AuthenticatedSession:
+        """
+        a context manager that opens and closes an authenticated session with the WebDAV service.
+        By reauthenticating whenever the session is started, this helps ensures that the temporary 
+        password remains fresh. 
+        """
+        def __init__(self, client):
+            self._cli = client
+
+        def __enter__(self):
+            self._cli.disconnect()
+            self._cli.authenticate()
+            return self._cli
+
+        def __exit__(self, exctype, excval, exctb):
+            self._cli.disconnect()
+            return False
             
     def is_directory(self, path):
         """Check if arg path leads to a directory, returns bool accordingly"""

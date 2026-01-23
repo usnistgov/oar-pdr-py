@@ -101,6 +101,40 @@ class FMWebDAVClientTest(test.TestCase):
         self.assertEqual(self.cli._wdcopts.get('webdav_login'), 'oar_api')
         self.assertEqual(self.cli._wdcopts.get('webdav_password'), 'goober')
 
+        self.cli.disconnect()
+        self.assertIsNone(self.cli.wdcli)
+
+    @patch('requests.post')
+    def test_session(self, mock_request):
+        mock_resp = Mock()
+        mock_resp.status_code = 200
+        mock_resp.text = '{"temporary_password": "goober"}'
+        def mock_json():
+            return json.loads(mock_resp.text)
+        mock_resp.json = mock_json
+        mock_resp.headers = {'content-type': 'application/json'}
+        mock_request.return_value = mock_resp
+
+        config = {
+            'service_endpoint': 'http://mockservice/api',
+            'authentication': {
+                'client_cert_path': certpath,
+                'client_key_path':  keypath
+            }
+        }
+        self.cli = fmwd.FMWebDAVClient(config)
+        self.assertIsNone(self.cli.wdcli)
+
+        with self.cli.AuthenticatedSession(self.cli) as c:
+            self.assertIsNotNone(c.wdcli)
+            self.assertIsNotNone(self.cli.wdcli)
+        self.assertIsNone(self.cli.wdcli)
+
+        with self.cli.open_session() as c:
+            self.assertIsNotNone(c.wdcli)
+            self.assertIsNotNone(self.cli.wdcli)
+        self.assertIsNone(self.cli.wdcli)
+
     def test_exists(self):
         with self.assertRaises(fmwd.FileManagerCommError):
             self.cli.exists("mds3-0000")
