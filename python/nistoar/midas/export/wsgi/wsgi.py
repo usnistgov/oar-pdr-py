@@ -113,7 +113,7 @@ class ExportHandler(Handler):
             return self.send_error(400, "Input not parseable as JSON", f"JSON parse error: {ex}")
 
         output_format = (data.get("output_format") or "").strip().lower()
-        if output_format not in {"pdf", "markdown"}:
+        if output_format not in {"pdf", "markdown", "csv"}:
             return self.send_error(400, "Bad Input", "output_format must be one of: pdf, markdown")
 
         inputs = data.get("inputs")
