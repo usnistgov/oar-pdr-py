@@ -107,7 +107,7 @@ class TestMDS3DAPService(test.TestCase):
         prec = self.svc.create_record("goob")
         self.assertEqual(prec.name, "goob")
         self.assertEqual(prec.id, "mdsy:0003")
-        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
+        self.assertEqual(prec.meta, {"creatorIsContact": True, "resourceType": "data",
                                      "partOfCollection": False})
         self.assertEqual(prec.owner, "nstr1")
         self.assertIn("_schema", prec.data)
@@ -121,7 +121,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec2.id, "mdsy:0003")
         self.assertEqual(prec2.data['@id'], "ark:/88434/mdsy-0003")
         self.assertEqual(prec2.data['doi'], "doi:10.88888/mdsy-0003")
-        self.assertEqual(prec2.meta, {"creatorisContact": True, "resourceType": "data",
+        self.assertEqual(prec2.meta, {"creatorIsContact": True, "resourceType": "data",
                                       "partOfCollection": False})
         self.assertEqual(prec2.owner, "nstr1")
 
@@ -156,11 +156,11 @@ class TestMDS3DAPService(test.TestCase):
 
         # goofy data
         prec = self.svc.create_record("gurn", {"color": "red"},
-                                      {"temper": "dark", "creatorisContact": "goob",
+                                      {"temper": "dark", "creatorIsContact": "goob",
                                        "softwarelink": "http://..." })  # misspelled key
         self.assertEqual(prec.name, "gurn")
         self.assertEqual(prec.id, "mdsy:0003")
-        self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data",
+        self.assertEqual(prec.meta, {"creatorIsContact": False, "resourceType": "data",
                                      "agent_vehicle": "midas", "partOfCollection": False })
         for key in "_schema @type authors references file_count nonfile_count".split():
             self.assertIn(key, prec.data)
@@ -180,7 +180,7 @@ class TestMDS3DAPService(test.TestCase):
                                        "collections": ["peanuts"]  })
         self.assertEqual(prec.name, "goob")
         self.assertEqual(prec.id, "mdsy:0004")
-        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
+        self.assertEqual(prec.meta, {"creatorIsContact": True, "resourceType": "data",
                                      "softwareLink": "https://github.com/usnistgov/goob",
                                      "agent_vehicle": "midas", "partOfCollection": True,
                                      "collections": ["peanuts"] })
@@ -209,7 +209,7 @@ class TestMDS3DAPService(test.TestCase):
                                        "softwareLink": "https://github.com/usnistgov/goob" })
         self.assertEqual(prec.name, "cranston")
         self.assertEqual(prec.id, "mdsy:0005")
-        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
+        self.assertEqual(prec.meta, {"creatorIsContact": True, "resourceType": "data",
                                      "softwareLink": "https://github.com/usnistgov/goob",
                                      "agent_vehicle": "midas", "partOfCollection": False })
         self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0005")
@@ -244,7 +244,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.name, "goob")
         self.assertEqual(prec.id, "mds2:1492")
         self.assertEqual(prec.owner, "ava1")
-        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
+        self.assertEqual(prec.meta, {"creatorIsContact": True, "resourceType": "data",
                                      "softwareLink": "https://github.com/usnistgov/goob",
                                      "agent_vehicle": "midas", "partOfCollection": False })
         self.assertEqual(prec.data['doi'], "doi:10.88888/mds2-1492")
