@@ -74,7 +74,11 @@ class TestMDS3DAPApp(test.TestCase):
 #                "store_dir": os.path.join(tmpdir.name)
                 "type": "inmem",
             },
-            "taxonomy_dir": modeldir
+            "taxonomy_dir": modeldir,
+            "available_collections": {
+                "peanuts": { "@id": "ark:/88888/pdr0-goober", "title": "Peanuts!" },
+                "raisins": { "@id": "ark:/88888/pdr0-gurn", "title": "Raisinettes" }
+            }
         }
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mds3": 0 }})
         self.nerdstore = InMemoryResourceStorage(self.cfg["nerdstorage"])
@@ -836,8 +840,115 @@ class TestMDS3DAPApp(test.TestCase):
         out = self.body2dict(body)
         self.assertEqual(len(out), 0)
         
+    def test_isPartOf(self):
+        # create a record
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Gurn's Opus" }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['id'], "mds3:0001")
+        self.assertNotIn('isPartOf', resp['data'])
+        id = resp['id']
 
+        # make part of two collections
+        self.resp = []
+        path = id + '/data/isPartOf'
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path
+        }
+        colls = [{"label": "peanuts"}, {"label": "raisins"}]
+        req['wsgi.input'] = StringIO(json.dumps(colls))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "isPartOf")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['@id'], "ark:/88888/pdr0-goober")
+        self.assertEqual(out[1]['@id'], "ark:/88888/pdr0-gurn")
+
+        # make sure the update got saved
+        self.resp = []
+        req['REQUEST_METHOD'] = 'GET'
+        del req['wsgi.input']
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), out)
+
+        # delete one of the collections memberships
+        self.resp = []
+        path = id + '/data/isPartOf/peanuts'
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+
+        self.resp = []
+        path = id + '/data/isPartOf'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['@id'], "ark:/88888/pdr0-gurn")
+
+        # replace all memberships
+        self.resp = []
+        path = id + '/data/isPartOf'
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path
+        }
+        colls = [{"label": "peanuts"}]
+        req['wsgi.input'] = StringIO(json.dumps(colls))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "isPartOf")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['@id'], "ark:/88888/pdr0-goober")
         
+        # delete everything
+        self.resp = []
+        path = id + '/data/isPartOf'
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+
+        self.resp = []
+        path = id + '/data/isPartOf'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("404 ", self.resp[0])
 
         
 if __name__ == '__main__':

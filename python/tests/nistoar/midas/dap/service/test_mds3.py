@@ -69,8 +69,12 @@ class TestMDS3DAPService(test.TestCase):
                 "@id": mds3.NIST_ROR,
                 "title": "NIST"
             },
-            "taxonomy_dir": modeldir
-#            "taxonomy_dir": os.environ.get('OAR_ETC_DIR', def_etc_dir)
+            "taxonomy_dir": modeldir,
+#            "taxonomy_dir": os.environ.get('OAR_ETC_DIR', def_etc_dir),
+            "available_collections": {
+                "peanuts": { "@id": "ark:/88888/pdr0-goober", "title": "Peanuts!" },
+                "raisins": { "@id": "ark:/88888/pdr0-gurn", "title": "Raisinettes" }
+            }
         }
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdsy": 2 }})
 
@@ -103,7 +107,8 @@ class TestMDS3DAPService(test.TestCase):
         prec = self.svc.create_record("goob")
         self.assertEqual(prec.name, "goob")
         self.assertEqual(prec.id, "mdsy:0003")
-        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data"})
+        self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
+                                     "partOfCollection": False})
         self.assertEqual(prec.owner, "nstr1")
         self.assertIn("_schema", prec.data)
         self.assertNotIn("_extensionSchemas", prec.data)  # contains only data summary
@@ -116,7 +121,8 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec2.id, "mdsy:0003")
         self.assertEqual(prec2.data['@id'], "ark:/88434/mdsy-0003")
         self.assertEqual(prec2.data['doi'], "doi:10.88888/mdsy-0003")
-        self.assertEqual(prec2.meta, {"creatorisContact": True, "resourceType": "data"})
+        self.assertEqual(prec2.meta, {"creatorisContact": True, "resourceType": "data",
+                                      "partOfCollection": False})
         self.assertEqual(prec2.owner, "nstr1")
 
         with self.assertRaises(AlreadyExists):
@@ -155,7 +161,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.name, "gurn")
         self.assertEqual(prec.id, "mdsy:0003")
         self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data",
-                                     "agent_vehicle": "midas" })
+                                     "agent_vehicle": "midas", "partOfCollection": False })
         for key in "_schema @type authors references file_count nonfile_count".split():
             self.assertIn(key, prec.data)
         self.assertNotIn('color', prec.data)
@@ -169,12 +175,15 @@ class TestMDS3DAPService(test.TestCase):
         # some legit metadata but no legit identity info
         prec = self.svc.create_record("goob", {"title": "test"},
                                       {"creatorIsContact": "TRUE",
-                                       "softwareLink": "https://github.com/usnistgov/goob" })
+                                       "softwareLink": "https://github.com/usnistgov/goob",
+                                       "partOfCollection": True,
+                                       "collections": ["peanuts"]  })
         self.assertEqual(prec.name, "goob")
         self.assertEqual(prec.id, "mdsy:0004")
         self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
                                      "softwareLink": "https://github.com/usnistgov/goob",
-                                     "agent_vehicle": "midas" })
+                                     "agent_vehicle": "midas", "partOfCollection": True,
+                                     "collections": ["peanuts"] })
         self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0004")
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0004")
         self.assertEqual(prec.data['nonfile_count'], 1)
@@ -189,7 +198,9 @@ class TestMDS3DAPService(test.TestCase):
         self.assertTrue(isinstance(resmd.get('responsibleOrganization'), list))
         self.assertEqual(len(resmd['responsibleOrganization']), 1)
         self.assertEqual(resmd['responsibleOrganization'][0]['title'], 'NIST')
-        
+        self.assertIn("isPartOf", resmd)
+        self.assertEqual(len(resmd['isPartOf']), 1)
+        self.assertEqual(resmd['isPartOf'][0]['title'], "Peanuts!")
 
         # inject some identity info into service and try again
         self.svc.who._md.update({"userName": "Gurn", "userLastName": "Cranston", "email": "gurn@thejerk.org"})
@@ -200,7 +211,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.id, "mdsy:0005")
         self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
                                      "softwareLink": "https://github.com/usnistgov/goob",
-                                     "agent_vehicle": "midas" })
+                                     "agent_vehicle": "midas", "partOfCollection": False })
         self.assertEqual(prec.data['doi'], "doi:10.88888/mdsy-0005")
         self.assertEqual(prec.data['@id'], "ark:/88434/mdsy-0005")
         self.assertEqual(prec.data['nonfile_count'], 1)
@@ -235,7 +246,7 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(prec.owner, "ava1")
         self.assertEqual(prec.meta, {"creatorisContact": True, "resourceType": "data",
                                      "softwareLink": "https://github.com/usnistgov/goob",
-                                     "agent_vehicle": "midas" })
+                                     "agent_vehicle": "midas", "partOfCollection": False })
         self.assertEqual(prec.data['doi'], "doi:10.88888/mds2-1492")
         self.assertEqual(prec.data['@id'], "ark:/88434/mds2-1492")
         self.assertEqual(prec.data['nonfile_count'], 1)
@@ -1100,6 +1111,192 @@ class TestMDS3DAPService(test.TestCase):
         self.assertEqual(cmp, {"@type": ["nrd:IncludedResource"], "resourceType": ['nrdp:DataPublication'],
                                "proxyFor": "ark:/88434/bob", "title": "Bob the Blob",
                                "description": "wow", "_extensionSchemas": [mds3.NERDM_DEF+"IncludedResource"]})
+
+    def test_moderate_isPartOf(self):
+        self.create_service()
+        self.assertTrue(self.svc._legitcolls)
+
+        data = [{ "@id": "ark:/88888/pdr0-goober", "title": "Peanuts are good", "label": "gomer" }]
+        out = self.svc._moderate_isPartOf(data)
+        self.assertEqual(out[0]["@id"], data[0]["@id"])
+        self.assertEqual(out[0]["title"], "Peanuts!")
+        self.assertEqual(out[0]["label"], "gomer")
+        self.assertTrue(out[0]["@type"])
+        self.assertEqual(len(out[0]), 4)
+        self.assertEqual(len(out), 1)
+
+        out = self.svc._moderate_isPartOf(data[0])
+        self.assertEqual(out[0]["@id"], data[0]["@id"])
+        self.assertEqual(out[0]["title"], "Peanuts!")
+        self.assertEqual(out[0]["label"], "gomer")
+        self.assertTrue(out[0]["@type"])
+        self.assertEqual(len(out[0]), 4)
+        self.assertEqual(len(out), 1)
+
+        data = [{ "label": "raisins"}]
+        out = self.svc._moderate_isPartOf(data, out)
+        self.assertEqual(out[0]["@id"], "ark:/88888/pdr0-goober")
+        self.assertEqual(out[0]["title"], "Peanuts!")
+        self.assertEqual(out[0]["label"], "gomer")
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[1]["@id"], "ark:/88888/pdr0-gurn")
+        self.assertEqual(out[1]["title"], "Raisinettes")
+        self.assertEqual(out[1]["label"], "raisins")
+        self.assertTrue(out[1]["@type"])
+        self.assertEqual(len(out[0]), 4)
+
+        data = self.svc._moderate_isPartOf([], out, False)
+        self.assertEqual(data, out)
+
+        with self.assertRaises(InvalidUpdate):
+            self.svc._moderate_isPartOf([{'label': "forensics"}])
+
+        with self.assertRaises(InvalidUpdate):
+            self.svc._moderate_isPartOf([{'@id': "ark:/88888/anyoldid"}])
+
+    def test_update_part_nerd_isPartOf(self):
+        self.create_service()
+        prec = self.svc.create_record("goob")
+        id = prec.id
+        nerd = self.svc._store.open(id)
+
+        colld = [{ "label": "peanuts" }]
+        out = self.svc._update_part_nerd("isPartOf", prec, nerd, colld)
+        self.assertTrue(isinstance(out, list))
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['@id'], "ark:/88888/pdr0-goober")
+        self.assertIn('@type', out[0])
+        self.assertIn('label', out[0])
+        ipo = nerd.get_res_data().get("isPartOf")
+        self.assertEqual(len(ipo), 1)
+        self.assertEqual(ipo, out)
+
+        colld = {}
+        out = self.svc._update_part_nerd("isPartOf/raisins", prec, nerd, colld, replace=True)
+        self.assertTrue(isinstance(out, Mapping))
+        self.assertEqual(out['@id'], "ark:/88888/pdr0-gurn")
+        self.assertIn('@type', out)
+        self.assertNotIn('label', out)
+        ipo = nerd.get_res_data().get("isPartOf")
+        self.assertEqual(len(ipo), 2)
+        self.assertEqual(ipo[1], out)
+        self.assertEqual(ipo[0]['@id'], "ark:/88888/pdr0-goober")
+
+        colld = { "color": "red" }
+        out = self.svc._update_part_nerd("isPartOf/ark:/88888/pdr0-gurn", prec, nerd,
+                                         colld, replace=True)
+        self.assertTrue(isinstance(out, Mapping))
+        self.assertEqual(out['@id'], "ark:/88888/pdr0-gurn")
+        self.assertIn('@type', out)
+        self.assertNotIn('label', out)
+        self.assertEqual(out['color'], 'red')
+        ipo = nerd.get_res_data().get("isPartOf")
+        self.assertEqual(len(ipo), 2)
+        self.assertEqual(ipo[1], out)
+        self.assertEqual(ipo[0]['@id'], "ark:/88888/pdr0-goober")
+
+        colld = [{ "@id": "ark:/88888/pdr0-gurn" }]
+        out = self.svc._update_part_nerd("isPartOf", prec, nerd, colld, replace=True)
+        self.assertTrue(isinstance(out, list))
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['@id'], "ark:/88888/pdr0-gurn")
+        self.assertIn('@type', out[0])
+        self.assertNotIn('label', out[0])
+        self.assertNotIn('color', out[0])
+        ipo = nerd.get_res_data().get("isPartOf")
+        self.assertEqual(len(ipo), 1)
+        self.assertEqual(ipo, out)
+
+        colld = [{ "label": "ark:/88888/pdr0-gurn" }]
+        with self.assertRaises(InvalidUpdate):
+            self.svc._update_part_nerd("isPartOf", prec, nerd, colld)
+        
+        
+    def test_update_isPartOf_coll(self):
+        self.create_service()
+        prec = self.svc.create_record("goob")
+        id = prec.id
+        nerd = self.svc._store.open(id)
+
+        # Add to a collection
+        collref = { "label": "peanuts" }
+        added = self.svc._update_isPartOf_coll(nerd, collref)
+        self.assertIn("title", added)
+        self.assertIn("label", added)
+        self.assertIn("@id", added)
+        ipo = nerd.get_res_data().get("isPartOf")
+        self.assertEqual(len(ipo), 1)
+        self.assertEqual(ipo[0], added)
+
+        # Add to another collection
+        collref = { "@id": "ark:/88888/pdr0-gurn" }
+        added = self.svc._update_isPartOf_coll(nerd, collref)
+        self.assertIn("title", added)
+        self.assertNotIn("label", added)
+        self.assertIn("@id", added)
+        ipo = nerd.get_res_data().get("isPartOf")
+        self.assertEqual(len(ipo), 2)
+        self.assertEqual(ipo[1], added)
+        self.assertEqual(ipo[0].get('@id'), "ark:/88888/pdr0-goober")
+
+        # Modify a membership
+        collref = {"@id": "ark:/88888/pdr0-goober", "status": "open", "title": "Meet the Peanuts"}
+        added = self.svc._update_isPartOf_coll(nerd, collref, replace=False)
+        self.assertEqual(added['@id'], collref['@id'])
+        self.assertEqual(added['title'], "Peanuts!")
+        self.assertEqual(added['label'], "peanuts")
+        self.assertEqual(added['status'], "open")
+        ipo = nerd.get_res_data().get("isPartOf")
+        self.assertEqual(len(ipo), 2)
+        self.assertEqual(ipo[0], added)
+        self.assertEqual(ipo[1].get('@id'), "ark:/88888/pdr0-gurn")
+
+        # Modify a membership by key
+        collref = {"title": "Meet the Peanuts", "color": "red"}
+        added = self.svc._update_isPartOf_coll(nerd, collref, 0, replace=False)
+        self.assertEqual(added['@id'], "ark:/88888/pdr0-goober")
+        self.assertEqual(added['title'], "Peanuts!")
+        self.assertEqual(added['label'], "peanuts")
+        self.assertEqual(added['status'], "open")
+        self.assertEqual(added['color'], "red")
+        ipo = nerd.get_res_data().get("isPartOf")
+        self.assertEqual(len(ipo), 2)
+        self.assertEqual(ipo[0], added)
+        self.assertEqual(ipo[1].get('@id'), "ark:/88888/pdr0-gurn")
+
+        # Replace a member by key
+        collref = {"title": "Meet the Peanuts", "color": "blue"}
+        added = self.svc._update_isPartOf_coll(nerd, collref, "ark:/88888/pdr0-goober", replace=True)
+        self.assertEqual(added['@id'], "ark:/88888/pdr0-goober")
+        self.assertEqual(added['title'], "Peanuts!")
+        self.assertNotIn('label', added)
+        self.assertNotIn('status', added)
+        self.assertEqual(added['color'], "blue")
+        ipo = nerd.get_res_data().get("isPartOf")
+        self.assertEqual(len(ipo), 2)
+        self.assertEqual(ipo[0], added)
+        self.assertEqual(ipo[1].get('@id'), "ark:/88888/pdr0-gurn")
+
+        # Replace a member by label key
+        collref = {"title": "Meet the Peanuts", "color": "pink"}
+        added = self.svc._update_isPartOf_coll(nerd, collref, "raisins", replace=True)
+        self.assertEqual(added['@id'], "ark:/88888/pdr0-gurn")
+        self.assertEqual(added['title'], "Raisinettes")
+        self.assertNotIn('label', added)
+        self.assertNotIn('status', added)
+        self.assertEqual(added['color'], "pink")
+        ipo = nerd.get_res_data().get("isPartOf")
+        self.assertEqual(len(ipo), 2)
+        self.assertEqual(ipo[1], added)
+        self.assertEqual(ipo[0].get('@id'), "ark:/88888/pdr0-goober")
+
+        collref = {"title": "Meet the Peanuts", "color": "pink"}
+        with self.assertRaises(InvalidUpdate):
+            self.svc._update_isPartOf_coll(nerd, collref)
+        with self.assertRaises(InvalidUpdate):
+            self.svc._update_isPartOf_coll(nerd, collref, 5)
+        with self.assertRaises(InvalidUpdate):
+            self.svc._update_isPartOf_coll(nerd, collref, "forensics")
 
     def test_get_sw_desc_for(self):
         self.create_service()

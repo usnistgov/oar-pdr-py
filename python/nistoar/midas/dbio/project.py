@@ -435,18 +435,29 @@ class ProjectService(MIDASSystem):
         prec = self.dbcli.get_record_for(id)  # may raise ObjectNotFound
         if not part:
             return prec.data
-        return self._extract_data_part(prec.data, part)
+        return self._extract_data_part(prec.data, part, id)
 
-    def _extract_data_part(self, data, part):
+    def _extract_data_part(self, data, part, id):
         if not part:
             return data
         steps = part.split('/')
         out = data
         while steps:
             prop = steps.pop(0)
-            if prop not in out:
-                raise ObjectNotFound(id, part)
-            out = out[prop]
+            if isinstance(out, Mapping):
+                if prop not in out:
+                    raise ObjectNotFound(id, part)
+                out = out[prop]
+            elif isinstance(out, list):
+                # elements of a list can be accessed via its @id value
+                matched = None
+                for item in out:
+                    if isinstance(item, Mapping) and item.get('@id') == prop:
+                        matched = item
+                        break;
+                if not matched:
+                    raise ObjectNotFound(id, part)
+                out = matched
 
         return out
 
@@ -555,7 +566,7 @@ class ProjectService(MIDASSystem):
 
         self.log.info("Updated data for %s record %s (%s) for %s",
                       self.dbcli.project, _prec.id, _prec.name, self.who)
-        return self._extract_data_part(data, part)
+        return self._extract_data_part(data, part, _prec.id)
 
     def _jsondiff(self, old, new):
         return {"jsonpatch": jsonpatch.make_patch(old, new)}
@@ -736,7 +747,7 @@ class ProjectService(MIDASSystem):
 
         self.log.info("Replaced data for %s record %s (%s) for %s",
                       self.dbcli.project, _prec.id, _prec.name, self.who)
-        return self._extract_data_part(data, part)
+        return self._extract_data_part(data, part, _prec.id)
 
     def _save_data(self, indata: Mapping, prec: ProjectRecord, message: str, 
                    action: str = _STATUS_ACTION_UPDATE, update_state: bool = True) -> Mapping:
