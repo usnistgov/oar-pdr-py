@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Union
 from pathlib import Path
 
 from .utils.loader import normalize_input
@@ -11,10 +11,11 @@ from .exporters.csv_exporter import CSVExporter
 from .utils.concat import REGISTRY as CONCAT_REGISTRY
 
 
-def run(input_data: Iterable[Any], output_format: str, output_directory: Path, template_dir: str = None, template_name: str = None, output_filename: str = None, generate_file: bool = False):
+def run(input_data: Iterable[Any], output_format: str, output_directory: Optional[Union[str, Path]] = None, template_dir: str = None, template_name: str = None, output_filename: str = None):
     """ Wrapper that handles 1 to N inputs. The initial format of the inputs, the template (if any) used for rendering,
      the output format and the output directory must be the same for all inputs. Only one output is produced.
-     Default behavior doesn't generate output file, it simply returns the rendered result.
+     Default behavior doesn't generate output file, it simply returns the rendered result. output file is generated
+     only if output_directory is not None.
 
     Args:
         input_data:
@@ -23,7 +24,6 @@ def run(input_data: Iterable[Any], output_format: str, output_directory: Path, t
         template_dir:
         template_name:
         output_filename:
-        generate_file:
 
     Returns:
 
@@ -48,15 +48,10 @@ def run(input_data: Iterable[Any], output_format: str, output_directory: Path, t
     if concat_fn is None:
         raise ValueError(f"Concatenation not supported for format '{output_format}'.")
     combined = concat_fn(results, output_filename)
-    
 
     # Default result
-    if not generate_file:
-        return combined
-
-
     if output_directory is None:
-        raise ValueError("output_directory cannot be None when generate_file=True")
+        return combined
 
     # Single write
     path = write_file(output_directory, combined)

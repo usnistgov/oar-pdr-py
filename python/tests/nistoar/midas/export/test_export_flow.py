@@ -63,9 +63,7 @@ class ExportFlowTest(test.TestCase):
                 output_format="pdf",
                 output_directory=self.outdir,
                 template_dir=str(self.outdir),
-                template_name="dmp_pdf_template.prep",
-                generate_file=True,
-            )
+                template_name="dmp_pdf_template.prep"            )
         # run(...) now returns a single combined dict
         self.assertIsInstance(result, dict)
         self.assertEqual(result["format"], "pdf")
@@ -201,7 +199,6 @@ class ExportFlowProjectRecordTest(test.TestCase):
                 output_directory=self.outdir,
                 template_dir=str(self.outdir),
                 template_name="dmp_pdf_template.prep",
-                generate_file=True,
             )
         self.assertIsInstance(result, dict)
         self.assertEqual(result["format"], "pdf")
@@ -635,10 +632,8 @@ class ExportFlowProjectRecordTest(test.TestCase):
             result = run(
                 input_data=rec_iter,
                 output_format="pdf",
-                output_directory=self.outdir,
                 template_dir=str(self.outdir),
                 template_name="dmp_pdf_template.prep",
-                generate_file=False,  # ✅ Don't write file - return bytes
             )
         
         # Verify we got bytes (not file path)
@@ -681,9 +676,7 @@ class ExportFlowProjectRecordTest(test.TestCase):
             result_bytes = run(
                 input_data=rec_iter1,
                 output_format="pdf",
-                output_directory=self.outdir,
                 template_name="dmp_pdf_template.prep",
-                generate_file=False,  # ✅ Return bytes
             )
             
             # Test 2: Write file and get path
@@ -692,7 +685,6 @@ class ExportFlowProjectRecordTest(test.TestCase):
                 output_format="pdf",
                 output_directory=self.outdir,
                 template_name="dmp_pdf_template.prep",
-                generate_file=True,  # ✅ Write file
             )
         
         
@@ -753,7 +745,6 @@ class ExportFlowProjectRecordTest(test.TestCase):
             output_format="csv",
             output_directory=self.outdir,
             template_name="dmp_csv_template.prep",
-            generate_file=False,  # Return bytes only
         )
 
         # Verify successful batch export
@@ -816,8 +807,7 @@ class ExportFlowProjectRecordTest(test.TestCase):
             input_data=dap_records,
             output_format="csv",
             output_directory=self.outdir,
-            template_name="dap_csv_template.prep",
-            generate_file=False,  # Return bytes only
+            template_name="dap_csv_template.prep"
         )
 
         # Verify successful batch export
@@ -895,8 +885,7 @@ class ExportFlowProjectRecordTest(test.TestCase):
                 input_data=mixed_records,
                 output_format="markdown",
                 output_directory=self.outdir,
-                template_name="mixed_template.prep",
-                generate_file=False,  # Return text only
+                template_name="mixed_template.prep"
             )
 
         # Verify successful batch export
