@@ -89,6 +89,117 @@ class ProjectRecordHandler(DBIOHandler):
                                                    path, config, log)
         self.svc = service
 
+    def _format_records_as(self, records: List[Mapping], format):
+        """
+        Handle export requests for non-JSON formats with validation and error handling.
+
+        Validates records before formatting and skips invalid records while logging warnings.
+        Returns partial results if some records are valid, or error if all fail validation.
+
+        :param records: List of record dictionaries to format
+        :param format: Format object with name and content type
+        :return: Formatted response via send_ok() or send_error_resp()
+        """
+        format_type = format.name
+
+        # Validate and filter records
+        valid_records = []
+        for rec in records:
+            try:
+                # Basic validation - records must have an ID
+                if not rec.get('id'):
+                    raise ValueError("Record missing 'id' field")
+                # Add more validation as needed
+                valid_records.append(rec)
+            except Exception as ex:
+                self.log.warning(f"Skipping malformed record {rec.get('id', 'unknown')}: {str(ex)}")
+
+        # If all records failed validation, return error
+        if not valid_records:
+            return self.send_error_resp(400, "All records failed validation",
+                                        f"No valid records could be formatted as {format_type}")
+
+        # Log if some records were skipped
+        if len(valid_records) < len(records):
+            self.log.warning(f"Skipped {len(records) - len(valid_records)} invalid records during {format_type} export")
+
+        try:
+            # Detect record type for template selection
+            template_name = self._determine_template_name(valid_records, format_type)
+
+            result = export_run(
+                input_data=valid_records,
+                output_format=format_type,
+                output_directory=None,
+                template_name=template_name,
+                generate_file=False
+            )
+
+            content = result.get('bytes', result.get('text'))
+            if not content and result.get('path'):
+                # deliver content from a file
+                pass
+
+            if content:
+                return self.send_ok(content, contenttype=format.ctype)
+
+            # unable to comply
+            return self.send_error_resp(500, "Export format error",
+                             f"Failed to convert records into requested format, {format_type}")
+
+        except Exception as ex:
+            self.log.exception(f"Exception during {format_type} export: {str(ex)}")
+            return self.send_error_resp(500, "Export failed",
+                                        f"Failure during export formatting: {str(ex)}")
+
+    def _determine_template_name(self, records: list, format_type: str) -> str:
+        """
+        Determine appropriate template name based on record type and format.
+
+        Checks multiple indicators to detect record type:
+        1. Explicit 'type' field (dmp/dap)
+        2. ID prefix patterns (mdm1=DMP, mds3=DAP)
+        3. Metadata content
+        4. Default fallback to DMP
+
+        :param records: List of record dictionaries
+        :param format_type: Output format (pdf, csv, markdown)
+        :return: Template name string (e.g., 'dmp_pdf_template')
+        """
+        if not records:
+            return None
+
+        # Check first record to determine type
+        first_record = records[0]
+
+        # Convert ProjectRecord to dict if necessary
+        if hasattr(first_record, 'to_dict'):
+            record_dict = first_record.to_dict()
+        else:
+            record_dict = first_record
+
+        # Method 1: Check record type field directly
+        record_type = record_dict.get('type', '').lower()
+        if record_type in ['dmp', 'dap']:
+            return f"{record_type}_{format_type}_template"
+
+        # Method 2: Check ID prefix patterns
+        record_id = record_dict.get('id', '')
+        if record_id.startswith('mdm1'):  # DMP records
+            return f"dmp_{format_type}_template"
+        elif record_id.startswith('mds3'):  # DAP records
+            return f"dap_{format_type}_template"
+
+        # Method 3: Check metadata for type indicators
+        meta = record_dict.get('meta', {})
+        if 'dmp' in str(meta).lower():
+            return f"dmp_{format_type}_template"
+        elif 'dap' in str(meta).lower():
+            return f"dap_{format_type}_template"
+
+        # Default fallback - assume DMP for backward compatibility
+        return f"dmp_{format_type}_template"
+
     def free(self):
         self.svc.free()
 
@@ -129,14 +240,43 @@ class ProjectHandler(ProjectRecordHandler):
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "DELETE"])
 
-    def do_GET(self, path, ashead=False):
+    def do_GET(self, path, ashead=False, format=None):
+        """
+        Respond to a GET request for a single project record.
+        Supports JSON (default) and export formats (PDF, CSV, Markdown).
+
+        :param str path:  a path to the portion of the data to get
+        :param bool ashead:  if True, the request is actually a HEAD request
+        :param str format:  optional format override for testing
+        """
+        # Setup format support
+        supp_fmts = FormatSupport()
+        JSONSupport.add_support(supp_fmts, ["text/json", "application/json"], asdefault=True)
+        supp_fmts.support(Format("pdf", "application/pdf"))
+        supp_fmts.support(Format("markdown", "text/markdown"), ["text/markdown", "text/plain"])
+        supp_fmts.support(Format("csv", "text/csv"))
+        self._set_default_format_support(supp_fmts)
+
+        # Select format (via query parameter or Accept header)
+        try:
+            fmt = self.select_format(format)
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
+        # Get record
         try:
             prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
-            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
+            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found",
                                         self._id, ashead=ashead)
+
+        # Format output
+        if fmt.name in ["pdf", "csv", "markdown"]:
+            return self._format_records_as([prec.to_dict()], fmt)
 
         return self.send_json(prec.to_dict(), ashead=ashead)
 
@@ -582,6 +722,16 @@ class ProjectSelectionHandler(ProjectRecordHandler):
 
         recs = self._sort_and_format_records(self._select_records(perms, **filters))
 
+        # Handle empty results based on format
+        if not recs:
+            if fmt.name == "json":
+                # Empty JSON array is valid RESTful response
+                return self.send_json([], ashead=ashead)
+            else:
+                # Cannot export empty result set to PDF/CSV/Markdown
+                return self.send_error_resp(400, "Cannot export empty result set",
+                                            "No records match the specified filters")
+
         if fmt.name in ["pdf", "csv", "markdown"]:
             return self._format_records_as(recs, fmt)
 
@@ -687,75 +837,6 @@ class ProjectSelectionHandler(ProjectRecordHandler):
                                         ex.format_errors())
     
         return self.send_json(prec.to_dict(), "Project Created", 201)
-    
-    def _format_records_as(self, records: List[Mapping], format):
-        """Handle export requests via GET with query parameters"""
-        format_type = format.name
-        
-        try:
-            # Detect record type for template selection
-            template_name = self._determine_template_name(records, format_type)
-            
-            result = export_run(
-                input_data=records,
-                output_format=format_type,
-                output_directory=None,
-                template_name=template_name,
-                generate_file=False
-            )
-
-            content = result.get('bytes', result.get('text'))
-            if not content and result.get('path'):
-                # deliver content from a file
-                pass
-
-            if content:
-                return self.send_ok(content, contenttype=format.ctype)
-
-            # unable to comply
-            return self.send_error_resp(500, "Export format error",
-                             f"Failed to convert records into requested format, {format_type}")
-                            
-        except Exception as ex:
-            self.log.exception(f"Exception in export request: {str(ex)}")
-            return self.send_error_resp(500, "Export failed",
-                                        f"Failure during export formatting into {format_type}")
-
-    def _determine_template_name(self, records: list, format_type: str) -> str:
-        """Determine appropriate template name based on record type and format"""
-        if not records:
-            return None
-            
-        # Check first record to determine type
-        first_record = records[0]
-        
-        # Convert ProjectRecord to dict if necessary
-        if hasattr(first_record, 'to_dict'):
-            record_dict = first_record.to_dict()
-        else:
-            record_dict = first_record
-        
-        # Method 1: Check record type field directly
-        record_type = record_dict.get('type', '').lower()
-        if record_type in ['dmp', 'dap']:
-            return f"{record_type}_{format_type}_template"
-            
-        # Method 2: Check ID prefix patterns
-        record_id = record_dict.get('id', '')
-        if record_id.startswith('mdm1'):  # DMP records
-            return f"dmp_{format_type}_template"
-        elif record_id.startswith('mds3'):  # DAP records  
-            return f"dap_{format_type}_template"
-            
-        # Method 3: Check metadata for type indicators
-        meta = record_dict.get('meta', {})
-        if 'dmp' in str(meta).lower():
-            return f"dmp_{format_type}_template"
-        elif 'dap' in str(meta).lower():
-            return f"dap_{format_type}_template"
-            
-        # Default fallback - assume DMP for backward compatibility
-        return f"dmp_{format_type}_template"
 
 
 class ProjectACLsHandler(ProjectRecordHandler):
