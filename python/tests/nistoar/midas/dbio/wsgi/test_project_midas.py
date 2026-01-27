@@ -293,11 +293,11 @@ class TestMIDASProjectAppMongo(test.TestCase):
         
         self.resp = []
         
-        path = ":ids"
+        path = ""
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': f'ids={id1},{id2}'
+            'QUERY_STRING': f'id={id1},{id2}'
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
@@ -316,7 +316,7 @@ class TestMIDASProjectAppMongo(test.TestCase):
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': f'ids={id3}'
+            'QUERY_STRING': f'id={id3}'
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
@@ -330,7 +330,7 @@ class TestMIDASProjectAppMongo(test.TestCase):
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': 'ids=nonexistent:0001'
+            'QUERY_STRING': 'id=nonexistent:0001'
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
@@ -346,7 +346,12 @@ class TestMIDASProjectAppMongo(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("400 ", self.resp[0])
+        self.assertIn("200 ", self.resp[0])
+        ctype = [r for r in self.resp if 'Content-Type:' in r]
+        self.assertTrue(len(ctype), 1)
+        self.assertIn('application/json', ctype[0])
+        results = self.body2dict(body)
+        self.assertEqual(len(results), 3)
 
 
     def test_export_by_ids(self):
@@ -374,11 +379,11 @@ class TestMIDASProjectAppMongo(test.TestCase):
         
         self.resp = []
         
-        path = ":export"
+        path = ""
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': f'ids={id1}&format=pdf'
+            'QUERY_STRING': f'id={id1}&format=pdf'
         }
         
         with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString", return_value=b"%PDF-1.4\nmongo test content"):
@@ -425,7 +430,7 @@ class TestMIDASProjectAppMongo(test.TestCase):
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path,
-            'QUERY_STRING': f'ids={id1},{id2}&format=pdf'
+            'QUERY_STRING': f'id={id1},{id2}&format=pdf'
         }
         
         with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString", return_value=b"%PDF-1.4\nmongo combined content"):
@@ -476,7 +481,12 @@ class TestMIDASProjectAppMongo(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("400 ", self.resp[0])
+        self.assertIn("200 ", self.resp[0])
+        ctype = [r for r in self.resp if 'Content-Type:' in r]
+        self.assertTrue(len(ctype), 1)
+        self.assertIn('application/json', ctype[0])
+        results = self.body2dict(body)
+        self.assertEqual(len(results), 2)
         
 
 
