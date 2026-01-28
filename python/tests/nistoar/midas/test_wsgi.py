@@ -499,20 +499,6 @@ class TestMIDASApp(test.TestCase):
                         "href": "http://midas3.nist.gov/midas/pyu"
                     }
                 },
-                "export": {
-                    "about": {
-                        "message": "Export Service is available",
-                        "title": "Export API",
-                        "describedBy": "https://midas3.nist.gov/midas/apidocs/export",
-                        "href": "http://midas3.nist.gov/midas/export"
-                    },
-                    "default_convention": "v1",
-                    "conventions": {
-                        "v1": {
-                            "type": "export/v1"
-                        }
-                    }
-                }
             }
         }
         self.clifact = inmem.InMemoryDBClientFactory({})
@@ -550,7 +536,7 @@ class TestMIDASApp(test.TestCase):
         self.assertIn("services", data)
         self.assertIn("dmp", list(data['services'].keys()))
         self.assertIn("dap", list(data['services'].keys()))
-        self.assertEqual(len(data["services"]), 3)
+        self.assertEqual(len(data["services"]), 2)
         self.assertNotIn("versions", data)
         
     def test_about_dmp(self):
@@ -735,57 +721,6 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["id"], "mds3:0001")
         self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "drafts")
-
-    def test_export_about(self):
-        # GET /midas/export/ should be handled by the About app for the export service
-        req = {
-            "REQUEST_METHOD": "GET",
-            "PATH_INFO": "/midas/export/",
-        }
-        body = self.app(req, self.start)
-        self.assertIn("200 ", self.resp[0])
-        data = self.body2dict(body)
-
-        # Basic shape
-        self.assertEqual(data.get("message"), "Export Service is available")
-        self.assertIn("title", data)
-        self.assertIn("describedBy", data)
-        self.assertIn("href", data)
-
-        # Versions should include 'def' (created because default_convention is v1)
-        self.assertIn("versions", data)
-        self.assertIn("def", data["versions"])
-
-    def test_export_post(self):
-        from unittest.mock import patch
-        with patch("nistoar.midas.export.wsgi.wsgi.run_export",
-                   return_value={
-                       "format": "pdf",
-                       "filename": "out.pdf",
-                       "mimetype": "application/pdf",
-                       "file_extension": ".pdf",
-                       "path": "/tmp/out/out.pdf",
-                   }):
-            req = {
-                "REQUEST_METHOD": "POST",
-                # Route through the MIDASApp: /midas/export/v1  (handler expects empty subpath)
-                "PATH_INFO": "/midas/export/v1",
-                "wsgi.input": StringIO(json.dumps({
-                    "output_format": "pdf",
-                    "inputs": [{"data": {"title": "X"}}],
-                    "output_dir": "/tmp/out",
-                })),
-            }
-            self.resp = []
-            body = self.app(req, self.start)
-            self.assertIn("200 ", self.resp[0])
-            data = self.body2dict(body)
-
-            self.assertEqual(data["format"], "pdf")
-            self.assertEqual(data["filename"], "out.pdf")
-            self.assertEqual(data["mimetype"], "application/pdf")
-            self.assertEqual(data["file_extension"], ".pdf")
-            self.assertTrue(str(data["path"]).endswith("/tmp/out/out.pdf"))
 
 
 midasserverdir = Path(__file__).parents[4] / 'docker' / 'midasserver'

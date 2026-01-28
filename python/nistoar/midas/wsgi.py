@@ -16,7 +16,6 @@ the following endpoints:
     authoring.
   * ``/nsdi/v1/`` -- an API for retrieving fast indexes matching entries in the NIST Staff Directory
     (see :py:mod:`nistoar.midas.nsdi` for details).
-  * ``/export/v1/`` -- an API to export DMP records into a supported format (PDF, Markdown,..)
 
 These endpoint send and receive data stored in the backend database through the common 
 :py:mod:` DBIO layer <nistoar.midas.dbio>`.  
@@ -156,8 +155,6 @@ from .dbio.fsbased import FSBasedDBClientFactory
 from .dbio.mongo import MongoDBClientFactory
 from .nsdi.wsgi import v1 as nsdiv1
 from nistoar.base.config import ConfigurationException, merge_config
-
-from .export.wsgi import ExportApp
 
 from nistoar.nsd.wsgi import nsd1, oar1
 
@@ -480,25 +477,6 @@ def PeopleServiceFactory(servicemodule):
     return factory
 
 
-def ExportServiceFactory(dbio_client_factory, log, config, project_name):
-    """
-    Factory for the export service.
-    """
-    app = ExportApp(log, config)
-
-    # 'dmp' is the only supported projects collection right now
-    prj_name = project_name or "dmp"
-    # Attach a DB client so ExportHandler._resolve_inputs() can look up records
-    if dbio_client_factory is not None and project_name:
-        # project_name is the collection / service type for DBIO
-        app.dbcli = dbio_client_factory.create_client(
-            servicetype=prj_name,
-            foruser=AUTOADMIN
-        )
-
-    return app
-
-
 class DevAbout(About):
     """
     an alternative About SubApp intended for use in unit tests.  It exposes a DELETE method that 
@@ -556,7 +534,6 @@ _MIDASServiceApps = {
 #    "nsdi/v1":   nsdiv1.NSDIndexerAppFactory
     "nsd/oar1":  PeopleServiceFactory(oar1),
     "nsd/nsd1":  PeopleServiceFactory(nsd1),
-    "export/v1": ExportServiceFactory,
 }
 
 class MIDASApp(AuthenticatedWSGIApp):
