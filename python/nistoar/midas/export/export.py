@@ -88,10 +88,12 @@ def export(input_item: Any, output_format: str, template_dir: str = None, templa
 
     # Select the right exporter
     output_format_key = (output_format or "").strip().lower()
+    roots = [template_dir] if template_dir else None
     exporters: Dict[str, Any] = {
-        "pdf": PDFExporter(template_dir=template_dir),
-        "markdown": MarkdownExporter(template_dir=template_dir),
-        "csv": CSVExporter(template_dir=template_dir),
+        "pdf": PDFExporter(template_roots=roots),
+        "markdown": MarkdownExporter(template_roots=roots),
+        "csv": CSVExporter(template_roots=roots),
+
     }
     if output_format_key not in exporters:
         supported = ", ".join(sorted(exporters.keys()))

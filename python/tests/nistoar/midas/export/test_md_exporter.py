@@ -13,10 +13,10 @@ class MarkdownExporterTest(test.TestCase):
         mock_template.get.return_value = "# My DMP\nSome content\n"
         mock_get_module.return_value = mock_template
 
-        exporter = MarkdownExporter(template_dir="/tmp/does-not-matter")
+        exporter = MarkdownExporter(template_roots=["/tmp/does-not-matter"])
 
         payload = {"data": {"title": "My DMP"}}
-        result = exporter.render("json", payload, "mydoc_md", template_name="dmp_md_template.prep")
+        result = exporter.render("json", payload, "mydoc_md", template_name="dmp_markdown_template.prep")
 
         self.assertEqual(result["format"], "markdown")
         self.assertEqual(result["filename"], "mydoc_md.md")
@@ -29,7 +29,7 @@ class MarkdownExporterTest(test.TestCase):
         # Ensure preppy was called with the correct template path
         args, _ = mock_get_module.call_args
         # args[0] is the template path string passed to preppy.getModule(...)
-        self.assertTrue(str(args[0]).endswith("dmp_md_template.prep"))
+        self.assertTrue(str(args[0]).endswith("dmp_markdown_template.prep"))
 
         # Making sure template.get(...) was fed the inner "data" dict
         mock_template.get.assert_called_once_with({"title": "My DMP"})

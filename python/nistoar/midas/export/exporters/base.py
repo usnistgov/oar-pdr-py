@@ -1,7 +1,9 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Iterable, Union
+
+from ..utils.templates import TemplateResolver
 
 
 class Exporter(ABC):
@@ -11,16 +13,19 @@ class Exporter(ABC):
     format_name: str = ""
     file_extension: str = ""
 
-    def __init__(self, *, template_dir: str = None):
-        # base folder for templates
-        self.template_dir = template_dir
+    def __init__(self, *, template_roots: Optional[Iterable[Union[str, Path]]] = None):
+        """
+        - Provide one or more roots where templates may live.
+        - Layout is <root>/<format>/<template_filename>.
+        - If not provided, defaults to package templates dir.
+        """
+        self._resolver = TemplateResolver(template_roots)
 
-    def resolve_template_path(self, format_subdir: str, template_filename: str):
+    def resolve_template_path(self, format_subdir: str, template_filename: str) -> Path:
         """
-        Full path to a template file under templates/<format_subdirectory>/.
+        Unified path resolution via TemplateResolver.
         """
-        base_templates = Path(self.template_dir or Path(__file__).resolve().parents[1] / "templates")
-        return base_templates / format_subdir / template_filename
+        return self._resolver.resolve(format_subdir, template_filename)
 
     @abstractmethod
     def render(self, input_type: str, payload: Any, filename: str, template_name: str = None):

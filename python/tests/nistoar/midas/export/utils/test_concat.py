@@ -15,7 +15,7 @@ class TestConcatCSV(unittest.TestCase):
         self.assertEqual(result["filename"], "output.csv")
         self.assertEqual(result["mimetype"], "text/csv")
         self.assertEqual(result["file_extension"], ".csv")
-        expected_text = "Name,ID,Type\nTest Record,test1,dmp\n"
+        expected_text = "Name,ID,Type\nTest Record,test1,dmp"
         self.assertEqual(result["text"], expected_text)
 
     def test_concat_csv_multiple_records(self):

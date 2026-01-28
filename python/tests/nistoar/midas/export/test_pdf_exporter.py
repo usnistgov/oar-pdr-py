@@ -17,7 +17,7 @@ class PDFExporterTest(test.TestCase):
         # Mock trml2pdf
         mock_parse_string.return_value = b"%PDF-sample%"
 
-        exporter = PDFExporter(template_dir="/tmp/does-not-matter")
+        exporter = PDFExporter(template_roots=["/tmp/does-not-matter"])
         payload = {"data": {"title": "My DMP"}}
         result = exporter.render("json", payload, "mydoc", template_name="dmp_pdf_template.prep")
 

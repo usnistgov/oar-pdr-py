@@ -743,7 +743,6 @@ class ExportFlowProjectRecordTest(test.TestCase):
         result = run(
             input_data=dmp_records,
             output_format="csv",
-            output_directory=self.outdir,
             template_name="dmp_csv_template.prep",
         )
 
@@ -806,7 +805,6 @@ class ExportFlowProjectRecordTest(test.TestCase):
         result = run(
             input_data=dap_records,
             output_format="csv",
-            output_directory=self.outdir,
             template_name="dap_csv_template.prep"
         )
 
@@ -884,7 +882,6 @@ class ExportFlowProjectRecordTest(test.TestCase):
             result = run(
                 input_data=mixed_records,
                 output_format="markdown",
-                output_directory=self.outdir,
                 template_name="mixed_template.prep"
             )
 
