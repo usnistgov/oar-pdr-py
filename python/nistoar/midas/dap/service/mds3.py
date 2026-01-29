@@ -528,10 +528,7 @@ class DAPService(ProjectService):
 
             elif meta.get("contact"):
                 cp = OrderedDict()
-                if meta["contact"].get('firstName'):
-                    cp["fn"] = f"{meta['contact'].get('firstName')} {meta['contact'].get('lastName')}"
-                else:
-                    cp["fn"] = {meta['contact'].get('lastName', '')}
+                cp["fn"] = meta['contact'].get('name')
                 if meta['contact'].get('email'):
                     cp["hasEmail"] = meta['contact']['email']
 
