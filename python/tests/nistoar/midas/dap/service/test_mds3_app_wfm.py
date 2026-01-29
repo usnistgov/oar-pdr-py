@@ -188,7 +188,7 @@ class TestMDS3DAPApp(test.TestCase):
         # TODO: this will succeed after we define the Software extension schema
         self.resp = []
         req['wsgi.input'] = StringIO(json.dumps({"meta": { "resourceType": "Software",
-                                                           "creatorisContact": "false",
+                                                           "creatorIsContact": "false",
                                                            "softwareLink": "https://sw.ex/gurn" },
                                                  "name": "Gurn's Opus" }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
@@ -202,7 +202,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['id'], "mds3:0001")
         self.assertEqual(resp['meta']["resourceType"], "Software")
         self.assertEqual(resp['meta']["softwareLink"], "https://sw.ex/gurn")
-        self.assertIs(resp['meta']["creatorisContact"], False)
+        self.assertIs(resp['meta']["creatorIsContact"], False)
         self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
         self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
         self.assertEqual(resp['data']['@type'],
@@ -212,7 +212,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.resp = []
         req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": {"fn": "Gurn Cranston"},
                                                            "keyword": [ "testing" ] },
-                                                 "meta": { "creatorisContact": "false",
+                                                 "meta": { "creatorIsContact": "false",
                                                            "softwareLink": "https://sw.ex/gurn" },
                                                  "name": "Gurn's Penultimate" }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
@@ -227,7 +227,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['id'], "mds3:0002")
         self.assertEqual(resp['meta']["resourceType"], "data")
         self.assertEqual(resp['meta']["softwareLink"], "https://sw.ex/gurn")
-        self.assertIs(resp['meta']["creatorisContact"], False)
+        self.assertIs(resp['meta']["creatorIsContact"], False)
         self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0002')
         self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0002')
         self.assertIn('authors', resp['data'])
@@ -278,7 +278,7 @@ class TestMDS3DAPApp(test.TestCase):
         }
         req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": res['contactPoint'],
                                                            "keyword": [ "testing" ] },
-                                                 "meta": { "creatorisContact": "false" },
+                                                 "meta": { "creatorIsContact": "false" },
                                                  "name": "OptSortSph" }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
@@ -291,7 +291,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['name'], "OptSortSph")
         self.assertEqual(resp['id'], "mds3:0001")
         self.assertEqual(resp['meta']["resourceType"], "data")
-        self.assertIs(resp['meta']["creatorisContact"], False)
+        self.assertIs(resp['meta']["creatorIsContact"], False)
         self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
         self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
         self.assertIn('authors', resp['data'])
@@ -509,7 +509,7 @@ class TestMDS3DAPApp(test.TestCase):
         req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": res['contactPoint'],
                                                            "keyword": [ "testing" ],
                                                            "landingPage": "https://example.com/" },
-                                                 "meta": { "creatorisContact": "false" },
+                                                 "meta": { "creatorIsContact": "false" },
                                                  "name": "OptSortSph" }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
@@ -588,7 +588,7 @@ class TestMDS3DAPApp(test.TestCase):
             'PATH_INFO': self.rootpath + path
         }
         req['wsgi.input'] = StringIO(json.dumps({"meta": { "resourceType": "Software",
-                                                           "creatorisContact": "false",
+                                                           "creatorIsContact": "false",
                                                            "softwareLink": "https://sw.ex/gurn" },
                                                  "name": "Gurn's Opus" }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
@@ -685,7 +685,7 @@ class TestMDS3DAPApp(test.TestCase):
             'PATH_INFO': self.rootpath + path
         }
         req['wsgi.input'] = StringIO(json.dumps({"meta": { "resourceType": "Software",
-                                                           "creatorisContact": "false",
+                                                           "creatorIsContact": "false",
                                                            "softwareLink": "https://sw.ex/gurn" },
                                                  "name": "Gurn's Opus" }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
