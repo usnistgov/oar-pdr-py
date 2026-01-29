@@ -511,16 +511,29 @@ class DAPService(ProjectService):
                 out['components'] = [swcomp] + out['components']
 
             # contact info
-            if meta.get("creatorisContact"):
+            cp = None
+            if meta.get("creatorIsContact") is None or meta["creatorIsContact"] or \
+               not meta.get('contact'):
+                if meta.get("creatorIsContact") is None:
+                    self.log.warning("DAP client did not set creatorIsContact in creation request")
+                elif not meta["creatorIsContact"]:
+                    self.log.warning("DAP client set creatorIsContact=%s but contact is unset",
+                                     meta["creatorIsContact"])
+
                 cp = OrderedDict()
                 if self.who.get_prop("userName") and self.who.get_prop("userLastName"):
                     cp['fn'] = f"{self.who.get_prop('userName')} {self.who.get_prop('userLastName')}"
                 if self.who.get_prop("email"):
                     cp['hasEmail'] = self.who.get_prop("email")
-                if cp:
-                    out['contactPoint'] = cp
-            elif meta.get("contactName"):
-                out['contactPoint'] = self._moderate_contactPoint({"fn": meta["contactName"]}, doval=False)
+
+            elif meta.get("contact"):
+                cp = OrderedDict()
+                cp["fn"] = meta['contact'].get('name')
+                if meta['contact'].get('email'):
+                    cp["hasEmail"] = meta['contact']['email']
+
+            if cp:
+                out['contactPoint'] = self._moderate_contactPoint(cp, doval=False)
 
             # collection
             if meta.get('partOfCollection') and meta.get('collections'):
@@ -576,17 +589,17 @@ class DAPService(ProjectService):
 
     def _moderate_metadata(self, mdata: MutableMapping, shoulder=None):
         # only accept expected keys
-        allowed = "resourceType creatorisContact contactName willUpload provideLink softwareLink assocPageType partOfCollection collections".split()
+        allowed = "resourceType creatorIsContact contact willUpload provideLink softwareLink assocPageType partOfCollection collections".split()
         mdata = OrderedDict([p for p in mdata.items() if p[0] in allowed])
 
         out = super()._moderate_metadata(mdata, shoulder)
-        if isinstance(out.get('creatorisContact'), str):
-            out['creatorisContact'] = out['creatorisContact'].lower() == "true"
-        elif out.get('creatorisContact') is None:
-            out['creatorisContact'] = True
+        if isinstance(out.get('creatorIsContact'), str):
+            out['creatorIsContact'] = out['creatorIsContact'].lower() == "true"
+        elif out.get('creatorIsContact') is None:
+            out['creatorIsContact'] = True
 
         if isinstance(out.get('partOfCollections'), str):
-            out['creatorisContact'] = out['creatorisContact'].lower() == "true"
+            out['creatorIsContact'] = out['creatorIsContact'].lower() == "true"
         elif out.get('partOfCollection') is None:
             out['partOfCollection'] = False
 
@@ -595,7 +608,7 @@ class DAPService(ProjectService):
     def _new_metadata_for(self, shoulder=None):
         return OrderedDict([
             ("resourceType", "data"),
-            ("creatorisContact", True),
+            ("creatorIsContact", True),
             ("partOfCollection", False)
         ])
 
