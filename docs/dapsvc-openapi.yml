@@ -35,10 +35,14 @@ servers:
 
 paths:
   /mds3:
-    summary: the resource representing the full collection of publications created under the MDS3 convention
+    summary: the resource representing the full, searchable collection of publications created under the MDS3 convention
     get:
       summary: search for DAP records
-      description: return all or a subset of DAP records that the requesting user is authorized to read
+      description: >-
+        return all or a subset of DAP records that the requesting user is authorized to read.  To get
+        a subset, use one or more of the filtering query parameters (name, id, owner, status_state).
+        By default, the matching records are returned as a JSON array; however other formats are
+        supported either via the Accept Header or the format query parameter.  
       parameters:
         - in: query
           name: format
@@ -116,6 +120,7 @@ paths:
             enum: ["edit", "processing", "ready", "submitted", "accepted", "in press", "published", "unwell"]
           required: false
           description: a single status state name or a comma-delimited list of names; the output will include all records whose status.state property matches any one of the names given.
+            
       responses:
         "200":
           description: >-
@@ -130,6 +135,24 @@ paths:
                 "empty":
                   summary: no matching DAPs found
                   value: '[]'
+            "text/markdown":
+              schema:
+                description: a rendering of the DAP records in Markdown format for human readability
+                type: string
+            "text/plain":
+              schema:
+                description: a rendering of the DAP records in Markdown format for human readability, identical to text/markdown
+                type: string
+            "application/pdf":
+              schema:
+                description: a rendering of the DAP records as PDF
+                type: string
+                format: binary
+            "text/csv":
+              schema:
+                description: a structuring of the DAP records into rows of a comma-separated-value (CSV) table.
+                type: string
+                format: csv
     post:
       summary: create a new DAP record
       description: >-
@@ -205,6 +228,28 @@ paths:
         provides a digest of the draft publication document with selected properties and summary
         information; to see the full draft publication document, access the
         [/mds3/{draftid}/data endpoint](../mds3-draftid--data/get).
+      parameters:
+        - in: query
+          name: format
+          required: false
+          description: >-
+            a name that identifies the desired format for the output (overriding content negotiation);
+            the default value is nerdm.  This parameter serves as an alternative to content negotiation
+            via the Accept Header (which also works).  
+          schema:
+            type: string
+            enum: [ "json", "nerdm", "pdf", "markdown", "csv" ]
+          examples:
+            "PDF":
+              value: "pdf"
+            "Markdown":
+              value: "markdown"
+            "CSV table":
+              value: "csv"
+            "JSON, in NERDm format":
+              value: "nerdm"
+            "JSON (syn. for nerdm)":
+              value: "json"
       responses:
         "200":
           description:  The DAP draft record with the given identifier was found and returned
@@ -212,6 +257,25 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ProjectRecord"
+                description: the requested DAP record object
+            "text/markdown":
+              schema:
+                description: a rendering of the DAP record in Markdown format for human readability
+                type: string
+            "text/plain":
+              schema:
+                description: a rendering of the DAP record in Markdown format for human readability, identical to text/markdown
+                type: string
+            "application/pdf":
+              schema:
+                description: a rendering of the DAP record as PDF
+                type: string
+                format: binary
+            "text/csv":
+              schema:
+                description: a structuring of the DAP record into a single row of a comma-separated-value (CSV) table.
+                type: string
+                format: csv
         "404":
           description:  The DAP draft record with the given identifier was not found
           content:
