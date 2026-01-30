@@ -131,8 +131,7 @@ class ProjectRecordHandler(DBIOHandler):
                 input_data=valid_records,
                 output_format=format_type,
                 output_directory=None,
-                template_name=template_name,
-                generate_file=False
+                template_name=template_name
             )
 
             content = result.get('bytes', result.get('text'))
