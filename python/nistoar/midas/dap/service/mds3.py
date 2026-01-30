@@ -3267,6 +3267,15 @@ class DAPProjectSelectionHandler(ProjectSelectionHandler):
         for rec in self._dbcli.select_records(perms, **constraints):
             yield to_DAPRec(rec, self._fmcli)
 
+    def _select_records_by_ids(self, ids: List[str], perms) -> Iterator[ProjectRecord]:
+        """
+        submit a search query in a project specific way.  This implementation ensures that 
+        DAPProjectRecords corresponding to provided ids are returned.
+        :return:  an iterator for the matched records
+        """
+        for rec in self._dbcli.select_records_by_ids(ids, perms):
+            yield to_DAPRec(rec, self._fmcli)
+
     def _adv_selected_records(self, filter, perms) -> Iterator[ProjectRecord]:
         """
         submit the advanced search query in a project-specific way. This implementation passes 

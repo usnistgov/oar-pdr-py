@@ -1250,16 +1250,22 @@ class DBClient(ABC):
     def select_records(self, perm: Permissions = ACLs.OWN, **constraints) -> Iterator[ProjectRecord]:
         """
         return an iterator of project records for which the given user has at least one of the given 
-        permissions
+        permissions and matches additional optional search constraints
 
         :param str       user:  the identity of the user that wants access to the records.  
         :param str|[str] perm:  the permissions the user requires for the selected record.  For
                                 each record returned the user will have at least one of these
                                 permissions.  The value can either be a single permission value
                                 (a str) or a list/tuple of permissions
+        :param list _constraint_:  an additional constraint that will match any record with a property
+                                refered to by the constraint name if its value matches any of those 
+                                given in the constraint's value list.  Supported _constraint_ names 
+                                include ``name``, ``id``, ``status.state``, and ``owner``.  Particular 
+                                implementations may support additional properties; any unsupported 
+                                constraints will be ignored.  
         """
         raise NotImplementedError()
-    
+
     @abstractmethod
     def adv_select_records(self, filter: Mapping, perm: Permissions = ACLs.OWN) -> Iterator[ProjectRecord]:
         """

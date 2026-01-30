@@ -19,9 +19,16 @@ webdavclient3
 mako
 pyjwt
 psutil
+<<<<<<< HEAD
+websockets==15.0.1
+=======
 pyopenssl
 Flask-RESTful
 python-json-logger
+>>>>>>> 09f6db161e677bce27cef904914868136e914792
 ejsonschema @ https://github.com/usnistgov/ejsonschema/archive/master.zip
 pynoid @ https://github.com/RayPlante/pynoid/archive/master.zip
-multibag @ https://github.com/usnistgov/multibag-py/archive/0.3.zip
+multibag @ https://github.com/usnistgov/multibag-py/archive/0.6.zip
+pypdf
+preppy==5.0.1
+trml2pdf==0.6
