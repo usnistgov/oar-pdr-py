@@ -5,12 +5,14 @@ This is provided primarily for testing purposes
 """
 from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
-from typing import Iterator, List
+from typing import Iterator, List,Sequence
 from . import base
 from .notifier import DBIOClientNotifier
 
 from nistoar.base.config import merge_config
 from nistoar.nsd.service import PeopleService, MongoPeopleService, create_people_service
+
+SUPPORTED_CONSTRAINTS = set("name id owner status_state".split())
 
 class InMemoryDBClient(base.DBClient):
     """
@@ -96,12 +98,54 @@ class InMemoryDBClient(base.DBClient):
         return not exists
 
     def select_records(self, perm: base.Permissions=base.ACLs.OWN, **cnsts) -> Iterator[base.ProjectRecord]:
+        """
+        return an iterator of project records for which the given user has at least one of the given 
+        permissions and matches additional optional search constraints
+
+        :param str       user:  the identity of the user that wants access to the records.  
+        :param str|[str] perm:  the permissions the user requires for the selected record.  For
+                                each record returned the user will have at least one of these
+                                permissions.  The value can either be a single permission value
+                                (a str) or a list/tuple of permissions
+        :param list _cnsts_:    an additional constraint that will match any record with a property
+                                refered to by the constraint name if its value matches any of those 
+                                given in the constraint's value list.  Supported _constraint_ names 
+                                include ``name``, ``id``, ``status.state``, and ``owner``.  Particular 
+                                implementations may support additional properties; any unsupported 
+                                constraints will be ignored.  Note that multiple constraints are 
+                                logically AND-ed together; that is, a matched record must match at least
+                                one value from each constraint value list.
+        """
         if isinstance(perm, str):
             perm = [perm]
         if isinstance(perm, (list, tuple)):
             perm = set(perm)
+
+        for prop in cnsts:
+            if cnsts.get(prop) and not isinstance(cnsts[prop], (list, tuple)):
+                cnsts[prop] = [ cnsts[prop] ]
+
+        # filter first on the raw record data (for ease); assumes records in storage are already
+        # sufficiently initialized.
         for rec in self._db[self._projcoll].values():
+            if cnsts:
+                # filter out records not matched by cnsts
+                matched = True
+                for prop in SUPPORTED_CONSTRAINTS:
+                    vals = cnsts.get(prop)
+                    if not vals:
+                        continue
+
+                    if prop == "status_state":
+                        if rec.get('status', {}).get('state') not in vals:
+                            matched = False
+                    elif rec.get(prop) not in vals:
+                        matched = False
+                if not matched:
+                    continue
+                
             rec = base.ProjectRecord(self._projcoll, rec, self)
+
             for p in perm:
                 if rec.authorized(p):
                     yield deepcopy(rec)

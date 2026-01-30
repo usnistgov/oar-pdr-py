@@ -1,0 +1,174 @@
+{{def(record)}}
+# Data Asset Plan (DAP)
+
+---
+
+## Basic Information
+
+**Title:**
+{{record['title']}}
+
+**Project Description:**
+{{record['projectDescription']}}
+
+**Start Date:**
+{{record['startDate']}}
+
+**Make DAP Searchable:**
+{{record['dapSearchable']}}
+
+**Asset Type:**
+{{record.get('assetType', 'Data Asset')}}
+
+**Funding:**
+
+| Grant Source | Grant ID |
+| --- | --- |
+| {{record['funding']['grant_source']}} | {{record['funding']['grant_id']}} |
+
+---
+
+## Researchers
+
+**Contributors:**
+
+{{script}}
+def md_escape(x):
+    if isinstance(x, str):
+        # escape pipes so markdown doesn't think it's a new column
+        return x.replace('|', r'\|').replace('\n', ' ').strip()
+    return '' if x is None else str(x)
+
+lines = []
+lines.append("| Name | Surname | Primary Contact | Institution | ORG ID | Email | ORCID |")
+lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+
+for c in record.get('contributors', []):
+    row = "| {fn} | {ln} | {pc} | {inst} | {orgid} | {email} | {orcid} |".format(
+        fn=md_escape(c.get('firstName')),
+        ln=md_escape(c.get('lastName')),
+        pc=md_escape(c.get('primary_contact')),
+        inst=md_escape(c.get('institution')),
+        orgid=md_escape(c.get('groupOrgID')),
+        email=md_escape(c.get('emailAddress')),
+        orcid=md_escape(c.get('orcid'))
+    )
+    lines.append(row)
+
+contributors_table = "\n".join(lines)
+{{endscript}}
+
+{{contributors_table}}
+
+---
+
+## Data Sources
+
+**Primary Data Sources:**
+
+{{script}}
+data_sources = record.get('dataSources', [])
+if data_sources:
+    lines = []
+    lines.append("| Source Name | Description | Type | Format | Access |")
+    lines.append("| --- | --- | --- | --- | --- |")
+    
+    for ds in data_sources:
+        row = "| {name} | {desc} | {type} | {format} | {access} |".format(
+            name=md_escape(ds.get('name', 'N/A')),
+            desc=md_escape(ds.get('description', 'N/A')),
+            type=md_escape(ds.get('sourceType', 'N/A')),
+            format=md_escape(ds.get('dataFormat', 'N/A')),
+            access=md_escape(ds.get('accessMethod', 'N/A'))
+        )
+        lines.append(row)
+    
+    data_sources_table = "\n".join(lines)
+else:
+    data_sources_table = "*No data sources specified.*"
+{{endscript}}
+
+{{data_sources_table}}
+
+---
+
+## Data Assets
+
+**Asset Details:**
+
+{{script}}
+assets = record.get('dataAssets', [])
+if assets:
+    lines = []
+    lines.append("| Asset Name | Description | Size | Format | Location |")
+    lines.append("| --- | --- | --- | --- | --- |")
+    
+    for asset in assets:
+        row = "| {name} | {desc} | {size} | {format} | {location} |".format(
+            name=md_escape(asset.get('name', 'N/A')),
+            desc=md_escape(asset.get('description', 'N/A')),
+            size=md_escape(asset.get('estimatedSize', 'N/A')),
+            format=md_escape(asset.get('format', 'N/A')),
+            location=md_escape(asset.get('storageLocation', 'N/A'))
+        )
+        lines.append(row)
+    
+    assets_table = "\n".join(lines)
+else:
+    assets_table = "*No data assets specified.*"
+{{endscript}}
+
+{{assets_table}}
+
+---
+
+## Storage and Access
+
+**Storage Requirements:**
+{{record.get('storageRequirements', 'Not specified')}}
+
+**Access Restrictions:**
+{{record.get('accessRestrictions', 'Not specified')}}
+
+**Retention Period:**
+{{record.get('retentionPeriod', 'Not specified')}}
+
+---
+
+## Technical Details
+
+**File Formats:**
+{{", ".join(record.get('supportedFormats', ['Not specified']))}}
+
+**Processing Requirements:**
+{{record.get('processingRequirements', 'Not specified')}}
+
+**Quality Assurance:**
+{{record.get('qualityAssurance', 'Not specified')}}
+
+---
+
+## Compliance and Standards
+
+**Data Standards:**
+{{", ".join(record.get('dataStandards', ['Not specified']))}}
+
+**Metadata Standards:**
+{{", ".join(record.get('metadataStandards', ['Not specified']))}}
+
+**Regulatory Compliance:**
+{{record.get('regulatoryCompliance', 'Not specified')}}
+
+---
+
+## Comments and Notes
+
+**Additional Comments:**
+{{record.get('comments', 'No additional comments.')}}
+
+**Internal Notes:**
+{{record.get('internalNotes', 'No internal notes.')}}
+
+---
+
+*Generated on: {{import datetime; datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}}*

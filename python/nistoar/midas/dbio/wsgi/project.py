@@ -42,19 +42,22 @@ are handled accordingly:
 from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence, Callable
-from typing import Iterator
+from typing import Iterator, List
 from urllib.parse import parse_qs
 import json, re
 
 from nistoar.web.rest import ServiceApp, Handler, Agent
+from nistoar.web.formats import Format, FormatSupport, Unacceptable, UnsupportedFormat
 from nistoar.pdr.utils.validate import ValidationResults
 from nistoar.web.formats import JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
+from nistoar.midas.export.export import run as export_run
 from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
 from .search_sorter import SortByPerm
 
 __all__ = ["MIDASProjectHandler", "ProjectDataHandler"]
+SUPPORTED_FILTERS = set("name id owner status_state".split())
 
 class ProjectRecordHandler(DBIOHandler):
     """
@@ -85,6 +88,116 @@ class ProjectRecordHandler(DBIOHandler):
         super(ProjectRecordHandler, self).__init__(svcapp, service.dbcli, wsgienv, start_resp, who,
                                                    path, config, log)
         self.svc = service
+
+    def _format_records_as(self, records: List[Mapping], format):
+        """
+        Handle export requests for non-JSON formats with validation and error handling.
+
+        Validates records before formatting and skips invalid records while logging warnings.
+        Returns partial results if some records are valid, or error if all fail validation.
+
+        :param records: List of record dictionaries to format
+        :param format: Format object with name and content type
+        :return: Formatted response via send_ok() or send_error_resp()
+        """
+        format_type = format.name
+
+        # Validate and filter records
+        valid_records = []
+        for rec in records:
+            try:
+                # Basic validation - records must have an ID
+                if not rec.get('id'):
+                    raise ValueError("Record missing 'id' field")
+                # Add more validation as needed
+                valid_records.append(rec)
+            except Exception as ex:
+                self.log.warning(f"Skipping malformed record {rec.get('id', 'unknown')}: {str(ex)}")
+
+        # If all records failed validation, return error
+        if not valid_records:
+            return self.send_error_resp(400, "All records failed validation",
+                                        f"No valid records could be formatted as {format_type}")
+
+        # Log if some records were skipped
+        if len(valid_records) < len(records):
+            self.log.warning(f"Skipped {len(records) - len(valid_records)} invalid records during {format_type} export")
+
+        try:
+            # Detect record type for template selection
+            template_name = self._determine_template_name(valid_records, format_type)
+
+            result = export_run(
+                input_data=valid_records,
+                output_format=format_type,
+                output_directory=None,
+                template_name=template_name
+            )
+
+            content = result.get('bytes', result.get('text'))
+            if not content and result.get('path'):
+                # deliver content from a file
+                pass
+
+            if content:
+                return self.send_ok(content, contenttype=format.ctype)
+
+            # unable to comply
+            return self.send_error_resp(500, "Export format error",
+                             f"Failed to convert records into requested format, {format_type}")
+
+        except Exception as ex:
+            self.log.exception(f"Exception during {format_type} export: {str(ex)}")
+            return self.send_error_resp(500, "Export failed",
+                                        f"Failure during export formatting: {str(ex)}")
+
+    def _determine_template_name(self, records: list, format_type: str) -> str:
+        """
+        Determine appropriate template name based on record type and format.
+
+        Checks multiple indicators to detect record type:
+        1. Explicit 'type' field (dmp/dap)
+        2. ID prefix patterns (mdm1=DMP, mds3=DAP)
+        3. Metadata content
+        4. Default fallback to DMP
+
+        :param records: List of record dictionaries
+        :param format_type: Output format (pdf, csv, markdown)
+        :return: Template name string (e.g., 'dmp_pdf_template')
+        """
+        if not records:
+            return None
+
+        # Check first record to determine type
+        first_record = records[0]
+
+        # Convert ProjectRecord to dict if necessary
+        if hasattr(first_record, 'to_dict'):
+            record_dict = first_record.to_dict()
+        else:
+            record_dict = first_record
+
+        # Method 1: Check record type field directly
+        record_type = record_dict.get('type', '').lower()
+        if record_type in ['dmp', 'dap']:
+            return f"{record_type}_{format_type}_template"
+
+        # Method 2: Check ID prefix patterns
+        record_id = record_dict.get('id', '')
+        if record_id.startswith('mdm1'):  # DMP records
+            return f"dmp_{format_type}_template"
+        elif record_id.startswith('mds3'):  # DAP records
+            return f"dap_{format_type}_template"
+
+        # Method 3: Check metadata for type indicators
+        meta = record_dict.get('meta', {})
+        if 'dmp' in str(meta).lower():
+            return f"dmp_{format_type}_template"
+        elif 'dap' in str(meta).lower():
+            return f"dap_{format_type}_template"
+
+        # Default fallback - assume DMP for backward compatibility
+        return f"dmp_{format_type}_template"
 
     def free(self):
         self.svc.free()
@@ -126,14 +239,43 @@ class ProjectHandler(ProjectRecordHandler):
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "DELETE"])
 
-    def do_GET(self, path, ashead=False):
+    def do_GET(self, path, ashead=False, format=None):
+        """
+        Respond to a GET request for a single project record.
+        Supports JSON (default) and export formats (PDF, CSV, Markdown).
+
+        :param str path:  a path to the portion of the data to get
+        :param bool ashead:  if True, the request is actually a HEAD request
+        :param str format:  optional format override for testing
+        """
+        # Setup format support
+        supp_fmts = FormatSupport()
+        JSONSupport.add_support(supp_fmts, ["text/json", "application/json"], asdefault=True)
+        supp_fmts.support(Format("pdf", "application/pdf"))
+        supp_fmts.support(Format("markdown", "text/markdown"), ["text/markdown", "text/plain"])
+        supp_fmts.support(Format("csv", "text/csv"))
+        self._set_default_format_support(supp_fmts)
+
+        # Select format (via query parameter or Accept header)
+        try:
+            fmt = self.select_format(format)
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
+        # Get record
         try:
             prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
-            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
+            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found",
                                         self._id, ashead=ashead)
+
+        # Format output
+        if fmt.name in ["pdf", "csv", "markdown"]:
+            return self._format_records_as([prec.to_dict()], fmt)
 
         return self.send_json(prec.to_dict(), ashead=ashead)
 
@@ -507,6 +649,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             iftype = ""
         super(ProjectSelectionHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, iftype,
                                                       config, log)
+        self._set_format_qp("format")
 
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "POST"])
@@ -519,29 +662,79 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         :return:  a generator that iterates through the matched records
         """
         return self._dbcli.select_records(perms, **constraints)
+    
+    def _select_records_by_ids(self, ids: Sequence[str], perms) -> Iterator[ProjectRecord]:
+        """
+        submit a search query in a project specific way.  This method is provided as a 
+        hook to subclasses that may need to specialize the search strategy or manipulate the results.  
+        This implementation passes the query directly to the generic DBClient instance.
+        :return:  a generator that iterates through the records corresponding to the provided ids.
+        """
+        return self._dbcli.select_records_by_ids(ids, perms)
 
-    def do_GET(self, path, ashead=False):
+    def _sort_and_format_records(self, records: Iterator[ProjectRecord]) -> list:
+        """
+        Helper method to sort records by permission and convert to dictionaries.
+        :param records: Iterator of ProjectRecord objects
+        :return: List of record dictionaries sorted by permission
+        """
+        sortd = SortByPerm()
+        for rec in records:
+            sortd.add_record(rec)
+        return [rec.to_dict() for rec in sortd.sorted()]
+
+    def do_GET(self, path, ashead=False, format=None):
         """
         respond to a GET request, interpreted as a search for records accessible by the user
         :param str path:  a path to the portion of the data to get.  This is the same as the `datapath`
                           given to the handler constructor.  This will always be an empty string.
         :param bool ashead:  if True, the request is actually a HEAD request for the data
         """
+        # Set supported output formats
+        supp_fmts = FormatSupport()
+        JSONSupport.add_support(supp_fmts, ["text/json", "application/json"], asdefault=True)
+        supp_fmts.support(Format("pdf", "application/pdf"))
+        supp_fmts.support(Format("markdown", "text/markdown"), ["text/markdown", "text/plain"])
+        supp_fmts.support(Format("csv", "text/csv"))
+        self._set_default_format_support(supp_fmts)
+        
         perms = []
+        params = {}
+        filters = {}
+        fmt = self.select_format(format)   # may raise UnsupportedFormat, Unacceptable
+        
         qstr = self._env.get('QUERY_STRING')
         if qstr:
             params = parse_qs(qstr)
             perms = params.get('perm')
+            filters = dict([(k,v) for k,v in params.items() if k in SUPPORTED_FILTERS])
         if not perms:
             perms = dbio.ACLs.OWN
 
-        # sort the results by the best permission type permitted
-        sortd = SortByPerm()
-        for rec in self._select_records(perms):
-            sortd.add_record(rec)
-        out = [rec.to_dict() for rec in sortd.sorted()]
+        # split up filter values that are in comma-separated lists
+        for prop,vals in filters.items():
+            out = []
+            for v in vals:
+                out.extend(v.split(','))
+            filters[prop] = out
 
-        return self.send_json(out, ashead=ashead)
+        recs = self._sort_and_format_records(self._select_records(perms, **filters))
+
+        # Handle empty results based on format
+        if not recs:
+            if fmt.name == "json":
+                # Empty JSON array is valid RESTful response
+                return self.send_json([], ashead=ashead)
+            else:
+                # Cannot export empty result set to PDF/CSV/Markdown
+                return self.send_error_resp(400, "Cannot export empty result set",
+                                            "No records match the specified filters")
+
+        if fmt.name in ["pdf", "csv", "markdown"]:
+            return self._format_records_as(recs, fmt)
+
+        # Default: send in the default format, json
+        return self.send_json(recs, ashead=ashead)
 
     def do_POST(self, path):
         """

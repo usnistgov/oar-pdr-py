@@ -498,7 +498,7 @@ class TestMIDASApp(test.TestCase):
                         "describedBy": "https://midas3.nist.gov/midas/apidocs/pyu",
                         "href": "http://midas3.nist.gov/midas/pyu"
                     }
-                }
+                },
             }
         }
         self.clifact = inmem.InMemoryDBClientFactory({})
@@ -721,6 +721,7 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["id"], "mds3:0001")
         self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "drafts")
+
 
 midasserverdir = Path(__file__).parents[4] / 'docker' / 'midasserver'
 midasserverconf = midasserverdir / 'midas-dmpdap_conf.yml'
