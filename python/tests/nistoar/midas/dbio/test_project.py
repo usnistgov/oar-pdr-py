@@ -97,15 +97,21 @@ class TestProjectService(test.TestCase):
     def test_extract_data_part(self):
         data = {"color": "red", "pos": {"x": 23, "y": 12, "grid": "A", "vec": [22, 11, 0], "desc": {"a": 1}}}
         self.create_service()
-        self.assertEqual(self.project._extract_data_part(data, "color"), "red")
-        self.assertEqual(self.project._extract_data_part(data, "pos"),
+        self.assertEqual(self.project._extract_data_part(data, "color", "id"), "red")
+        self.assertEqual(self.project._extract_data_part(data, "pos", "id"),
                          {"x": 23, "y": 12, "grid": "A", "vec": [22, 11, 0], "desc": {"a": 1}})
-        self.assertEqual(self.project._extract_data_part(data, "pos/vec"), [22, 11, 0])
-        self.assertEqual(self.project._extract_data_part(data, "pos/y"), 12)
-        self.assertEqual(self.project._extract_data_part(data, "pos/desc/a"), 1)
+        self.assertEqual(self.project._extract_data_part(data, "pos/vec", "id"), [22, 11, 0])
+        self.assertEqual(self.project._extract_data_part(data, "pos/y", "id"), 12)
+        self.assertEqual(self.project._extract_data_part(data, "pos/desc/a", "id"), 1)
         with self.assertRaises(project.ObjectNotFound):
-            self.project._extract_data_part(data, "pos/desc/b")
-        
+            self.project._extract_data_part(data, "pos/desc/b", "id")
+
+        data["stuff"] = {}
+        data["stuff"]["items"] = [ {"@id": "goob", "c": 0}, {"@id": "gurn", "c": 1} ]
+        self.assertEqual(self.project._extract_data_part(data, "stuff/items/gurn", "id"),
+                         {"@id": "gurn", "c": 1})
+        with self.assertRaises(project.ObjectNotFound):
+            self.project._extract_data_part(data, "stuff/items/c", "id")
 
     def test_create_record(self):
         self.create_service()
@@ -224,7 +230,7 @@ class TestProjectService(test.TestCase):
         prec = self.project.get_record(prec.id)
         self.assertEqual(prec.data.get('color'), "red")
         self.assertIsNone(prec.data.get('title'))
-        self.assertEqual(prec.status.state, status.SUBMITTED)
+        self.assertEqual(prec.status.state, status.PUBLISHED)
 
     def test_delete_revision(self):
         self.create_service()

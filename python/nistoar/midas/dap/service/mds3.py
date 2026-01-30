@@ -28,11 +28,11 @@ from urllib.parse import urlparse, unquote
 from functools import reduce
 
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
-                     InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable,
+                     InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable, DBIORecordException,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
                                   ProjectSelectionHandler, ServiceApp)
-from ...dbio import status, ANONYMOUS
+from ...dbio import status, ANONYMOUS, restore
 from ..review import DAPReviewer, DAPNERDmReviewValidator
 from ..extrev import ExternalReviewException, create_external_review_client
 from nistoar.base.config import ConfigurationException, merge_config
@@ -46,7 +46,7 @@ from nistoar.nsd import NSDServerError
 from . import validate
 from .. import nerdstore
 from ..nerdstore import NERDResource, NERDResourceStorage, NERDResourceStorageFactory, NERDStorageException
-from ..fm import FileManager, FileSpaceNotFound, FileSpaceException
+from ..fm import FileManager, FileManagerResourceNotFound, FileManagerException
 
 ASSIGN_DOI_NEVER   = 'never'
 ASSIGN_DOI_ALWAYS  = 'always'
@@ -150,53 +150,44 @@ class DAPProjectRecord(ProjectRecord):
         """
         if not self._fmcli:
             return
-        if not self._data.get('file_space', {}).get('creator'):
+        if not self._data.get('file_space', {}).get('location'):
             if not who:
                 who = self._cli.user_id
+            self._data.setdefault('file_space', {})
             try:
-                self._fmcli.get_record_space(self.id)
-            except FileSpaceNotFound as ex:
+                self._data['file_space'].update(self._fmcli.summarize_space(self.id))
+            except FileManagerResourceNotFound as ex:
                 try:
+                    self._data['file_space'] = self._fmcli.create_space(self.id, who)
                     self._data['file_space']['action'] = "create"
-                    self._fmcli.create_record_space(who, self.id)
                     self._data['file_space']['created'] = \
                         datetime.fromtimestamp(math.floor(time.time())).isoformat()
                     self._data['file_space']['creator'] = who
+                    self._data['file_space'].setdefault('id', self.id)
 
-                except FileSpaceException as ex:
-                    self.log.error("Problem creating file space: %s", str(ex))
+                except FileManagerException as ex:
+                    # self.log.error("Problem creating file space: %s", str(ex))
                     self._data['file_space']['message'] = "Failed to create file space"
                     raise
             else:
-                self._data['file_space']['creator'] = who
-                self._data['file_space']['id'] = self.id  # the ID of the space is the same as the rec
-
-    def determine_uploads_url(self):
-        """
-        return the expected URL for the browser-based view of a record space's uploads directory.
-        """
-        fs = self.file_space
-        if self._fmcli and fs and fs.get('uploads_dir_id'):
-            return f"{self._fmcli.web_base}/{fs['uploads_dir_id']}?dir=/{self.id}/{self.id}"
-        else:
-            return f"/{self.id}/{self.id}"
-
-    def to_dict(self):
-        out = super().to_dict()
-        if self._fmcli and out.get('file_space') and out['file_space'].get('id'):
-
-            out['file_space']['location'] = self.determine_uploads_url()
-
-            if self._fmcli.cfg.get('dav_base_url'):
-                out['file_space']['uploads_dav_url'] = \
-                    '/'.join([self._fmcli.cfg['dav_base_url'].rstrip('/'),
-                              out['file_space'].get('id'), out['file_space'].get('id')])
-        return out
+                self._data['file_space'].setdefault('creator', who)
+                self._data['file_space'].setdefault('id', self.id)
 
 
 to_DAPRec = DAPProjectRecord.from_dap_record
 
+def dap_restore_factory(locurl: str, dbcli: DBClient,
+                        config: Mapping={}, log: Logger=None) -> restore.ProjectRestorer:
+    """
+    a ProjectRestorer factory function that knows about DAP restorers (namely, for "aip:" URLs)
+    """
+    if locurl.startswith("aip:"):
+        from ..restore import AIPRestorer
+        return AIPRestorer.from_archived_at(locurl, dbcli, config, log)
 
+    else:
+        return restore.default_factory(locurl, dbcli, config, log)
+        
 class DAPService(ProjectService):
     """
     a project record request broker class for DAP records.  
@@ -258,6 +249,8 @@ class DAPService(ProjectService):
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
     """
+    _restorer_factory = staticmethod(dap_restore_factory)
+
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: Agent=None,
                  log: Logger=None, nerdstore: NERDResourceStorage=None, project_type=DAP_PROJECTS,
@@ -305,6 +298,11 @@ class DAPService(ProjectService):
                 raise ConfigurationException("'validate_nerdm' is set but cannot find schema dir")
             self._valid8r = validate.create_lenient_validator(self._schemadir, "_")
 
+        self._legitcolls = self.cfg.get("available_collections", {})
+        if not isinstance(self._legitcolls, Mapping) or \
+           any(not isinstance(k, str) or not isinstance(v, Mapping) or not v.get('@id')
+               for k,v in self._legitcolls.items()):
+            raise ConfigurationException("available_collections: not a dict[str,dict['@id']]")
         self._mediatypes = None
         self._formatbyext = None
         self._extrevcli = extrevcli
@@ -312,6 +310,8 @@ class DAPService(ProjectService):
         self._minnerdmver = minnerdmver
 
         self._taxondir = self.cfg.get('taxonomy_dir', os.path.join(def_etc_dir, "schemas"))
+#        if 'auto_publish' not in self.cfg:
+#            self.cfg['auto_publish'] = False
 
     def _make_fm_client(self, fmcfg):
         return FileManager(fmcfg)
@@ -412,10 +412,10 @@ class DAPService(ProjectService):
         shoulder = prec.id.split(':', 1)[0]
 
         # create the space in the file-manager
-        if self._fmcli:
-            prec.ensure_file_space(self.who.actor)
-                
         try:
+            if self._fmcli:
+                prec.ensure_file_space(self.who.actor)
+                
             if meta:
                 meta = self._moderate_metadata(meta, shoulder)
                 if prec.meta:
@@ -511,16 +511,34 @@ class DAPService(ProjectService):
                 out['components'] = [swcomp] + out['components']
 
             # contact info
-            if meta.get("creatorisContact"):
+            cp = None
+            if meta.get("creatorIsContact") is None or meta["creatorIsContact"] or \
+               not meta.get('contact'):
+                if meta.get("creatorIsContact") is None:
+                    self.log.warning("DAP client did not set creatorIsContact in creation request")
+                elif not meta["creatorIsContact"]:
+                    self.log.warning("DAP client set creatorIsContact=%s but contact is unset",
+                                     meta["creatorIsContact"])
+
                 cp = OrderedDict()
                 if self.who.get_prop("userName") and self.who.get_prop("userLastName"):
                     cp['fn'] = f"{self.who.get_prop('userName')} {self.who.get_prop('userLastName')}"
                 if self.who.get_prop("email"):
                     cp['hasEmail'] = self.who.get_prop("email")
-                if cp:
-                    out['contactPoint'] = cp
-            elif meta.get("contactName"):
-                out['contactPoint'] = self._moderate_contactPoint({"fn": meta["contactName"]}, doval=False)
+
+            elif meta.get("contact"):
+                cp = OrderedDict()
+                cp["fn"] = meta['contact'].get('name')
+                if meta['contact'].get('email'):
+                    cp["hasEmail"] = meta['contact']['email']
+
+            if cp:
+                out['contactPoint'] = self._moderate_contactPoint(cp, doval=False)
+
+            # collection
+            if meta.get('partOfCollection') and meta.get('collections'):
+                colls = [{"label": c} for c in meta['collections']]
+                out['isPartOf'] = self._moderate_isPartOf(colls, doval=False)
 
             ro = deepcopy(self.cfg.get('default_responsible_org', {}))
             if self.dbcli.people_service and out.get('contactPoint', {}).get('hasEmail'):
@@ -571,27 +589,33 @@ class DAPService(ProjectService):
 
     def _moderate_metadata(self, mdata: MutableMapping, shoulder=None):
         # only accept expected keys
-        allowed = "resourceType creatorisContact contactName willUpload provideLink softwareLink assocPageType".split()
+        allowed = "resourceType creatorIsContact contact willUpload provideLink softwareLink assocPageType partOfCollection collections".split()
         mdata = OrderedDict([p for p in mdata.items() if p[0] in allowed])
 
         out = super()._moderate_metadata(mdata, shoulder)
-        if isinstance(out.get('creatorisContact'), str):
-            out['creatorisContact'] = out['creatorisContact'].lower() == "true"
-        elif out.get('creatorisContact') is None:
-            out['creatorisContact'] = True
+        if isinstance(out.get('creatorIsContact'), str):
+            out['creatorIsContact'] = out['creatorIsContact'].lower() == "true"
+        elif out.get('creatorIsContact') is None:
+            out['creatorIsContact'] = True
+
+        if isinstance(out.get('partOfCollections'), str):
+            out['creatorIsContact'] = out['creatorIsContact'].lower() == "true"
+        elif out.get('partOfCollection') is None:
+            out['partOfCollection'] = False
 
         return out
         
     def _new_metadata_for(self, shoulder=None):
         return OrderedDict([
             ("resourceType", "data"),
-            ("creatorisContact", True)
+            ("creatorIsContact", True),
+            ("partOfCollection", False)
         ])
 
     def get_nerdm_data(self, id: str, part: str=None):
         """
         return the full NERDm metadata.  This differs from the :py:method:`get_data` method which (in
-        this implementation) only returns a summary of hte NERDm metadata.  
+        this implementation) only returns a summary of the NERDm metadata.  
         :param str id:    the identifier for the record whose NERDm data should be returned. 
         :param str part:  a path to the part of the record that should be returned.  This can be the 
                           name of a top level NERDm property or one of the following special values:
@@ -637,6 +661,20 @@ class DAPService(ProjectService):
                             out = nerd.files.get_file_by_id(key)
                         except nerdstore.ObjectNotFound as ex:
                             raise ObjectNotFound(id, part, str(ex))
+                elif steps[0] == "isPartOf":
+                    out = nerd.get_res_data().get("isPartOf")
+                    if isinstance(out, list):
+                        if isinstance(key, int):
+                            if key >= len(out):
+                                raise ObjectNotFound(id, part,
+                                                     f"isPartOf list index out of range: [{key}]")
+                            out = out[key]
+                        else:
+                            out = [c for c in out if isinstance(c, Mapping) and c.get('@id') == key]
+                            if not out:
+                                raise ObjectNotFound(id, part,
+                                                     f"isPartOf: no item with @id={key}")
+                            out = out[0]
                 else:
                     raise PartNotAccessible(id, part, "Accessing %s not supported" % part)
 
@@ -662,7 +700,7 @@ class DAPService(ProjectService):
                 out = nerd.get_res_data()
                 if part in out:
                     out = out[part]
-                elif part in "description @type contactPoint title rights disclaimer landingPage theme topic".split():
+                elif part in "description @type contactPoint title rights disclaimer landingPage theme topic isPartOf".split():
                     raise ObjectNotFound(prec.id, part, "%s property not set yet" % part)
                 else:
                     raise PartNotAccessible(prec.id, part, "Accessing %s not supported" % part)
@@ -774,7 +812,7 @@ class DAPService(ProjectService):
                             return False
                         nerd.files.empty()
                         nerd.nonfiles.empty()
-                    elif part in "title rights disclaimer description landingPage keyword topic theme".split():
+                    elif part in "title rights disclaimer description landingPage keyword topic theme isPartOf".split():
                         resmd = nerd.get_res_data()
                         if part not in resmd:
                             return False
@@ -822,6 +860,16 @@ class DAPService(ProjectService):
                                 nerd.files.delete_file(parts[1])
                             except (KeyError) as ex:
                                 return False
+                    elif parts[0] == "isPartOf":
+                        # get rid of the collection reference where part[1] is either @id or label
+                        resmd = nerd.get_res_data()
+                        if self._legitcolls.get(parts[1],{}).get('@id'):
+                            parts[1] = self._legitcolls[parts[1]]['@id']
+                        if resmd.get('isPartOf'):
+                            resmd['isPartOf'] = \
+                                [c for c in resmd['isPartOf']
+                                   if c.get('@id') != parts[1] and c.get('@id') != parts[1]]
+                            nerd.replace_res_data(resmd)
                     else:
                         raise PartNotAccessible(_prec.id, part, "Clearing %s not allowed" % part)
                 else:
@@ -1184,9 +1232,21 @@ class DAPService(ProjectService):
                     data = self._update_component(nerd, data, key, replace, doval=doval)
                     provact.add_subaction(Action(subacttype, "%s#data/pdr:f[%s]" % (prec.id, str(key)), 
                                                  self.who, what, self._jsondiff(old, data)))
+
+                elif steps[0] == "isPartOf":
+                    res = nerd.get_res_data()
+                    old = res.get(steps[0])
+                    data = self._update_isPartOf_coll(nerd, data, key, replace, doval=doval)
+                    provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
+                                                 f"{prec.id}#data.isPartOf[{key}]", self.who,
+                                                 f"updating isPartOf collection",
+                                                 self._jsondiff(old, res[steps[0]])))
                     
                 else:
                     raise PartNotAccessible(prec.id, path, "Updating %s not allowed" % path)
+
+            # in the cases below, nothing appears after the single-word path (i.e. no key for a
+            # member resource).
 
             elif path == "authors":
                 if not isinstance(data, list):
@@ -1331,6 +1391,22 @@ class DAPService(ProjectService):
 
                 res[path] = self._moderate_keyword(data, res, doval=doval, replace=replace,
                                                    kwpropname='theme')  # may raise InvalidUpdate
+                provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
+                                             prec.id+"#data."+path, self.who, "updating "+path,
+                                             self._jsondiff(old, res[path])))
+                nerd.replace_res_data(res)
+                data = res[path]
+
+            elif path == "isPartOf":
+                if not isinstance(data, (list, Mapping)):
+                    raise InvalidUpdate(part+" data is not a list of objects", sys=self)
+                res = nerd.get_res_data()
+                old = res.get(path)
+
+                # replace=True with this path means replace entire isPartOf list; replace=False means
+                # replace the isPartOf elements with IDs that match elements in the input list
+                res[path] = self._moderate_isPartOf(data, [] if replace else res.get('isPartOf', []),
+                                                    doval=doval, replace=True)
                 provact.add_subaction(Action(Action.PUT if replace else Action.PATCH,
                                              prec.id+"#data."+path, self.who, "updating "+path,
                                              self._jsondiff(old, res[path])))
@@ -1521,7 +1597,7 @@ class DAPService(ProjectService):
         :param str id:  the ID for the DAP project to sync
         :raises ObjectNotFound:  if the project with the given ID does not exist
         :raises NotAuthorized:   if the user does not write permission to make this update
-        :raises FileSpaceException:  if syncing failed for an unexpected reason
+        :raises FileManagerException:  if syncing failed for an unexpected reason
         """
         if not self._fmcli:
             return {}
@@ -1533,11 +1609,11 @@ class DAPService(ProjectService):
             files = nerd.files
             if hasattr(files, 'update_hierarchy'):
                 prec.file_space['action'] = 'sync'
-                if files.fm_summary.get('syncing') == "in_progress":
+                if files.fm_summary.get('syncing') == "syncing":
                     # a scan is still in progress, so just get the latests updates; don't start a new scan
                     prec.file_space.update(files.update_metadata())
                 else:
-                    prec.file_space.update(files.update_hierarchy())  # may raise FileSpaceException
+                    prec.file_space.update(files.update_hierarchy())  # may raise FileManagerException
                 prec.save()
         return prec.to_dict().get('file_space', {})
             
@@ -1874,6 +1950,61 @@ class DAPService(ProjectService):
             raise InvalidUpdate("description value is not a string or array of strings", sys=self)
         return [self._moderate_text(t, resmd, doval=doval) for t in val if t]
 
+    def _moderate_isPartOf(self, val, curipo=None, doval=True, replace=False):
+        # :param curipo:  the current list of isPartOf values before the update; None or []
+        #                 assumes all previous values should be replaced
+        # :param doval:   if True, validate the individual values
+        # :param replace: if True, an input item that matches one from curipo should replace it
+        #
+        if isinstance(val, Mapping):
+            val = [ val ]
+        if any(not isinstance(v, Mapping) for v in val):
+            raise InvalidUpdate("isPartOf value is not an object or array of objects", sys=self)
+
+        # make a map of the isPartOf items we already have to maintain a unique list
+        colls = OrderedDict()
+        unkn = 0
+        if isinstance(curipo, list):
+            for item in curipo:
+                id = item.get('@id')
+                if not id:
+                    unkn += 1
+                    id = f"unkn#{unkn}"
+                colls[id] = item
+
+        for item in val:
+            # a collection can be identified either via an @id or a label...
+            if item.get('@id'):
+                coll = [c for c in self._legitcolls.values() if c.get('@id') == item['@id']]
+                if not coll:
+                    # ...but it must be recognized as a collection that is available to authors
+                    raise InvalidUpdate(f"Collection {item['@id']} not available for adding to")
+                else:
+                    coll = coll[0]
+            elif item.get('label'):
+                coll = self._legitcolls.get(item['label'])
+                if not coll:
+                    # ...but it must be recognized as a collection that is available to authors
+                    raise InvalidUpdate(f"Collection {item['label']} not available for adding to")
+            else:
+                raise InvalidUpdate(f"Collection request does not specify a collection: {str(item)}")
+
+            item.update(coll)
+            item['@type'] = [ "nrda:ScienceTheme", "nrdp:PublicDataResource" ]
+
+            if doval:
+                schemauri = NERDM_SCH_ID + "/definitions/ResourceReference"
+                self.validate_json(item, schemauri)
+                if not item.get("@id"):
+                    raise InvalidUpdate(f"isPartOf item is missing required @id")
+                
+            if not replace and colls.get(item.get('@id')):
+                colls[item['@id']].update(item)
+            else:
+                colls[item['@id']] = item
+
+        return [v for v in colls.values()]
+
     def _moderate_keyword(self, val, resmd=None, doval=True, replace=True, kwpropname='keyword'):
         if val is None:
             val = []
@@ -2121,6 +2252,63 @@ class DAPService(ProjectService):
         else:
             data = self._update_listitem(nerd.nonfiles, self._moderate_nonfile, data, pos, replace, doval)
         return data
+
+    def _update_isPartOf_coll(self, nerd, ipoitem: Mapping, key=None, replace=False, doval=False):
+        # update (or add, if necessary) an individual isPartOf item.
+        # :param nerd:     the NERDResource object contain the current, un-updated record
+        # :param ipoitem:  the data for the isPartOf item to update
+        # :param key:      either an integer position or @id to indicate which item gets updated; 
+        #                  if None, the value of @id in ipoitem is used; otherwise, if not an int,
+        #                  this will override @id in the item.  Note that @id must be from a
+        #                  configured available collection.  A non-matching key will cause the new
+        #                  isPartOf item to be added.
+        # :param replace:  if False and key matches an existing item in nerd, the new item will be
+        #                  merged into rather than replacing it, overriding matching properties.
+        # :param doval:    if True, validate the results
+        resmd = nerd.get_res_data()
+        old = resmd.get('isPartOf', [])
+
+        pos = -1 
+        if isinstance(key, int):
+            pos = key
+        if pos >= len(old):
+            pos = -1
+        elif pos >= 0:
+            key = old[pos].get('@id')
+        elif isinstance(key, int):
+            key = None
+            
+        if key is None:
+            key = ipoitem.get('@id')
+            if not key:
+                key = ipoitem.get('label')
+                if key:
+                    key = self._legitcolls.get(key, {}).get('@id')
+        if key in self._legitcolls:
+            key = self._legitcolls.get(key, {}).get('@id')
+
+        if not key:
+            raise InvalidUpdate("isPartOf item is missing @id property (as well as label)")
+
+        if pos < 0:
+            # find the position of a current isPartOf item with the same @id
+            for p, item in enumerate(old):
+                if item.get('@id') == key:
+                    pos = p
+                    break
+        if not ipoitem.get('@id'):
+            ipoitem['@id'] = key
+
+        ipoitem = self._moderate_isPartOf(ipoitem, [] if pos < 0 else [old[pos]],
+                                          doval=doval, replace=replace)[0]
+        if pos < 0:
+            old.append(ipoitem)
+        else:
+            old[pos] = ipoitem
+        resmd['isPartOf'] = old
+        nerd.replace_res_data(resmd)
+        
+        return ipoitem
 
     def _filter_props(self, obj, props):
         # remove all properties from obj that are not listed in props
@@ -2382,6 +2570,12 @@ class DAPService(ProjectService):
         if not resmd.get("_schema"):
             resmd["_schema"] = NERDM_SCH_ID
 
+        if resmd.get('isPartOf'):
+            basecolls = basemd.get("isPartOf", []) if not replace else []
+            if 'isPartOf' in basemd:
+                del basemd['isPartOf']
+            resmd['isPartOf'] = self._moderate_isPartOf(resmd['isPartOf'], basecolls, False, True)
+
         restypes = resmd.get("@type", [])
         if not replace:
             restypes += basemd.get("@type", [])
@@ -2459,6 +2653,8 @@ class DAPService(ProjectService):
         dates['annotated'] = now
 
     def _finalize_version(self, prec: ProjectRecord, vers_inc_lev: int=None):
+        if prec.data.get('version'):
+            prec.data['@version'] = prec.data.get('version')
         ver = super()._finalize_version(prec, vers_inc_lev)
         nerd = self._store.open(prec.id)
         resmd = nerd.get_res_data()
@@ -2597,9 +2793,9 @@ class DAPService(ProjectService):
         try:
             # reset permissions
             self._set_review_permissions(prec)
-            prec.save()
+            # don't save until submission process is complete
 
-        except FileSpaceException as ex:
+        except FileManagerException as ex:
             self.log.warning("Trouble updating file store permissions: %s", str(ex))
 
         except Exception as ex:
@@ -2617,7 +2813,7 @@ class DAPService(ProjectService):
 
         This implementation establishes a "publish" permission allowing curator-administrators 
         to shepherd the record through the review process.  Write access is revoked for users 
-        that currently have it (saving who that is to an "_edit" permission).  Curators and 
+        that currently have it (saving who that is to an "_write" permission).  Curators and 
         reviewers will be given read access.
         """
         if readers is None:
@@ -2635,9 +2831,9 @@ class DAPService(ProjectService):
         if self._fmcli:
             for who in prec.acls.iter_perm_granted(ACLs.WRITE):
                 try:
-                    self._fmcli.manage_permissions(who, prec.id, "Read")
-                except FileSpaceException as ex:
-                    self.log.error("Failed to make file space writable again: %s", str(ex))
+                    self._fmcli.set_space_permissions(prec.id, { who: "Read" })
+                except FileManagerException as ex:
+                    self.log.error("Failed to write-protect file space: %s", str(ex))
 
         # revoke permissions that can change the record
         prec.acls.revoke_perm_from_all(ACLs.WRITE)
@@ -2675,8 +2871,8 @@ class DAPService(ProjectService):
         if self._fmcli:
             for who in prec.acls.iter_perm_granted(ACLs.WRITE):
                 try:
-                    self._fmcli.manage_permissions(who, prec.id, "Write")
-                except FileSpaceException as ex:
+                    self._fmcli.set_space_permissions(prec.id, { who: "Write" })
+                except FileManagerException as ex:
                     self.log.error("Failed to make file space writable again: %s", str(ex))
 
         if not for_review:
@@ -2704,7 +2900,7 @@ class DAPService(ProjectService):
                                        request_changes: bool=False) -> bool:
         if request_changes:
             prec.status.set_state(status.EDIT)
-            self._set_review_permissions(prec)
+            self._unset_review_permissions(prec, for_review=True)
         return False
 
     def _sufficiently_reviewed(self, id, _prec=None):
@@ -2731,16 +2927,91 @@ class DAPService(ProjectService):
 
         return True
 
+    def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None):
+        # will replace this implementation with submitting to publication service
+        # in this temporary impl., fill _prec.data with the full NERDm record
+        nerd = self._store.open(prec.id)
+        prec.data = nerd.get_data()  
+        return super()._publish(prec)
+
+    def publish(self, id: str, _prec=None, **kwargs):
+        # will replace this implementation with submitting to publication service (see also _publish())
+        stat = super().publish(id, _prec, **kwargs)
+
+        prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)
+        if prec.status.state == status.PUBLISHED:
+            self._unset_review_permissions(prec)
+            try:
+                prec.save()
+            except Exception as ex:
+                self.log.error("Failed to save project record while publishing, %s: %s", prec.id, str(ex))
+                if isinstance(ex, DBIOException):
+                    raise
+                raise DBIORecordException(prec.id,
+                                          "Failed to save record (id=%s) which publishing: %s: %s" %
+                                          (prec.id, type(ex).__name__, str(ex)))
+            stat = prec.status.clone()
+
+        return stat
+        
     def _revise(self, prec: ProjectRecord):
         # restore data to nerdstore
+        msg = f"Creating Revision based on last published version"
+        provact = Action(Action.PUT, self.who, msg)
+        self._restore_last_published_data(prec, msg, provact, False)
 
         # populate file space
+        if self._fmcli:
+            nerdfiles = self._strore.open(prec.id).files().get_files()
+            dfiles = [n.get('filepath','') for n in nerdfiles if not nerdutils.is_type(n, "Collection")]
+            self.fmcli.revive_space(id, self.user, dfiles)
         
-        for vprop in ["version", "@version"]:
-            if not prec.data.get(vprop, "").endswith('+'):
-                prec.data[vprop] = prec.data.get(vprop, "") + "+"
+        if not prec.data.get('version', "").endswith('+'):
+            prec.data['version'] = prec.data.get('version', "") + "+"
         return prec
+
+    def _restore_last_published_data(self, prec: ProjectRecord, msg: str, foract: Action,
+                                     reset_state: bool=True):
+        pubid = prec.status.published_as
+        if not pubid:
+            raise ValueError("_restore_last_published_data(): project record is missing "
+                             "published_as property")
+
+        # setup prov action
+        defmsg = "Restored draft to last published version"
+        provact = Action(Action.PROCESS, prec.id, self.who,
+                         f"restored data to last published ({prec.status.archived_at})",
+                         {"name": "restore_last_published"})
+        if foract:
+            foract.add_subaction(provact)
+
+        try:
+            # Create restorer from archived_at URL
+            pubclient = self.dbcli.client_for(self._DEF_LATEST_COLL)
+            restorer = self._get_restorer_for(prec)
+
+            pubdata = restorer.get_data()   # convert to latest? (Not nec. if from data.nist.gov)
+            self._store.load_from(pubdata, prec.id)
+            nerd = self._store.open(prec.id)
+            prec.data = self._summarize(nerd)
+
+            if reset_state:
+                prec.status.set_state(status.PUBLISHED)
+            prec.status.act(self.STATUS_ACTION_RESTORE, msg or defmsg)
+            prec.save()
+            
+        except Exception as ex:
+            self.log.error("Failed to save restored record for project, %s: %s",
+                           prec.id, str(ex))
+            provact.message = "Failed to save restored data due to internal error"
+            raise
+        finally:
+            if not foract:
+                self._record_action(provact)
+
         
+        
+
 
 class DAPServiceFactory(ProjectServiceFactory):
     """
@@ -2875,7 +3146,9 @@ class DAPProjectDataHandler(ProjectDataHandler):
                     out = self.svc.set_file_component(self._id, newdata)
                 else:
                     out = self.svc.add_nonfile_component(self._id, newdata)
-
+            elif path == "isPartOf":
+                key = newdata.get('@id') or newdata.get('label')
+                out = self.svc.replace_data(self._id, newdata, f"isPartOf/{key}")
             else:
                 return self.send_error_resp(405, "POST not allowed",
                                             "POST not supported on path")
@@ -2962,7 +3235,7 @@ class DAPProjectInfoHandler(ProjectInfoHandler):
             return self.send_error_resp(404, "ID not found")
         except NotEditable as ex:
             return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit or ready")
-        except (FileSpaceException, NERDStorageException) as ex:
+        except (FileManagerException, NERDStorageException) as ex:
             self.log.error("Trouble communicating with file manager: %s", str(ex))
             return self.send_error_resp(500, "File manager service error",
                                         "Trouble communicating with file manager")

@@ -592,7 +592,6 @@ class ProjectDataHandler(ProjectRecordHandler):
                                         "Requested part of data cannot be updated")
         except dbio.NotEditable as ex:
             return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit")
-                                        
 
         return self.send_json(data)
 

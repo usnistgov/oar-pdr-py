@@ -48,13 +48,19 @@ class DAPNERDmReviewValidator(ValidatorBase):
         return nerd.get("@id", "mds:unkn")
 
     def _test_prop_exists(self, prop: str, id: str, md: Mapping, out: ValidationResults,
-                          desc=None, instruct=None):
+                          desc: str=None, instruct: str=None, issuetype=REQ):
         """
         a templated test for testing the existance of a property
         :param str prop:  the property to look for in the given metadata dictionary
         :param str   id:  the identifier to assign to the result
         :param dict  md:  the metadata dictionary to examine
         :param ValidationResults out:  the results object to add the test result to
+        :param str desc:  a specialized description message to attach; if not provided,
+                          a suitable default is set
+        :param str instruct:  a specialized instruction message to attach; if not provided,
+                          a suitable default is set
+        :param int issuetype:  the issue type to assign to this test (one of REQ, WARN, or REC); 
+                          if not provided, REQ is assumed.
         :return:   the result of this test
                    :rtype:  ValidationIssue
         """
@@ -63,7 +69,7 @@ class DAPNERDmReviewValidator(ValidatorBase):
         if not instruct:
             instruct = f"Add a {prop}"
 
-        t = self._err(id, desc)
+        t = self.define_test(id, desc, issuetype)
         return out._add_applied(t, bool(md.get(prop)), instruct)
 
     def test_title(self, nerd, want=ALL, out=None, **kw):
@@ -123,19 +129,19 @@ class DAPNERDmReviewValidator(ValidatorBase):
     def test_keywords(self, nerd, want=ALL, out=None, **kw):
         """
         Apply tests to the title.  These include:
-          2.4.1.  REQ:  need at least one keyword
+          2.4.1.  WARN:  need at least one keyword
           2.4.2.  WARN: each element contains one keyword phrase
         """
         if not out:
             out = ValidationResults(self._target_name(nerd), want)
 
-        if want & (REC|WARN) == 0:
+        if want & (WARN) == 0:
             # they want what we don't provide
             return out
 
         # must have one
         t = self._test_prop_exists("keyword", "2.4.1 keyword", nerd, out,
-                                   "At least one keyword is required", "Add a keyword")
+                                   "At least one keyword is recommended", "Add a keyword", WARN)
 
         if t.passed():
             # look out for possibly concatonated keywords
@@ -246,15 +252,15 @@ class DAPNERDmReviewValidator(ValidatorBase):
             out = ValidationResults(self._target_name(nerd), want)
 
         auths = nerd.get("authors", [])
-        if want & REC:
-            t = self._rec("1.3.1 authors",
-                          "To be considered a full Data Publication, authors should be provided")
+        if want & WARN:
+            t = self._warn("1.3.1 authors",
+                           "To be considered a full Data Publication, authors should be provided")
             t = out._add_applied(t, len(auths) > 0, "Add some authors")
         if auths:
             orcids = [a["orcid"] for a in auths if a.get("orcid")]
-            if want & REC:
+            if want & WARN:
                 fix = len(auths)-len(orcids)
-                t = self._rec("1.3.2 authors", "Each author should include an ORCID")
+                t = self._warn("1.3.2 authors", "Each author should include an ORCID")
                 t = out._add_applied(t, len(auths) == len(orcids),
                                      f"Add ORCIDs for {fix} author{'s' if fix>1 else ''}")
 

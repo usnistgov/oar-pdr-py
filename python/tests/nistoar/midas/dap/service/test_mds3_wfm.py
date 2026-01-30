@@ -6,7 +6,7 @@ from pathlib import Path
 from nistoar.midas.dbio import inmem, base, AlreadyExists, InvalidUpdate, ObjectNotFound, PartNotAccessible
 from nistoar.midas.dbio import project as prj
 from nistoar.midas.dap.service import mds3
-from nistoar.midas.dap.fm import FileSpaceNotFound
+from nistoar.midas.dap.fm import FileManagerResourceNotFound
 from nistoar.pdr.utils import prov
 from nistoar.pdr.utils import read_nerd
 from nistoar.nerdm.constants import CORE_SCHEMA_URI
@@ -56,11 +56,21 @@ class TestDAPProjectRecord(test.TestCase):
             self.fm = mock.return_value
             self.fm.post_scan_files.return_value = ack
             self.fm.get_scan_files.return_value = read_scan()
-            self.fm.get_record_space.return_value = {
+            self.fm.get_space.return_value = {
                 "fileid": "129",
                 "type": "folder",
                 "size": "0"
             }
+            self.fm.summarize_space.return_value = {
+                "folder_count": 0,
+                "file_count": 0,
+                "usage": 0,
+                "syncing": "unsynced",
+                "uploads_dir_id": "129",
+                "location": "https://nc/goob/mdsy:0003/mdsy:0003",
+                "uploads_dav_url": "https://nc/webdav/mdsy:0003/mdsy:0003"
+            }
+            self.fm.create_space.return_value = self.fm.summarize_space.return_value
             self.fm.get_uploads_directory.return_value = {
                 "fileid": "130",
                 "type": "folder",
@@ -110,8 +120,14 @@ class TestDAPProjectRecord(test.TestCase):
         self.assertIn('meta', rec)
         self.assertIn('file_space', rec)
         self.assertFalse(rec['file_space'].get('creator'))
+        self.assertFalse(rec['file_space'].get('uploads_dav_url'))
+
+        self.prec.ensure_file_space(self.prec._cli.user_id)
+        rec = self.prec.to_dict()
+        self.assertIn('file_space', rec)
+        self.assertEqual(rec['file_space'].get('creator'), nistr.actor)
         self.assertTrue(rec['file_space'].get('uploads_dav_url'))
-        self.assertEqual(rec['file_space'].get('location'), f"/{self.prec.id}/{self.prec.id}")
+        self.assertTrue(rec['file_space'].get('location').endswith(f"/{self.prec.id}/{self.prec.id}"))
 
     def test_ensure_file_space(self):
         fs = self.prec.file_space
@@ -132,8 +148,9 @@ class TestDAPProjectRecord(test.TestCase):
         self.assertFalse(fs.get('created'))
         self.assertEqual(fs.get('action'), '')
 
-        self.fm.get_record_space.side_effect = FileSpaceNotFound(self.prec.id)
+        self.fm.summarize_space.side_effect = FileManagerResourceNotFound(self.prec.id)
         self.prec.ensure_file_space()
+        fs = self.prec.file_space
         self.assertTrue(fs.get('id'))
         self.assertEqual(fs.get('creator'), 'nstr1')
         self.assertTrue(fs.get('created'))
@@ -180,18 +197,23 @@ class TestMDS3DAPServiceWithFM(test.TestCase):
         ack = read_scan_reply()
         with patch('nistoar.midas.dap.fm.FileManager') as mock:
             self.fm = mock.return_value
-            self.fm.post_scan_files.return_value = ack
-            self.fm.get_scan_files.return_value = read_scan()
-            self.fm.get_record_space.return_value = {
-                "fileid": "129",
-                "type": "folder",
-                "size": "0"
-            }
+            self.fm.start_scan.return_value = ack
+            self.fm.get_scan.return_value = read_scan()
             self.fm.get_uploads_directory.return_value = {
                 "fileid": "130",
                 "type": "folder",
                 "size": "0"
             }
+            self.fm.summarize_space.return_value = {
+                "folder_count": 0,
+                "file_count": 0,
+                "usage": 0,
+                "syncing": "unsynced",
+                "uploads_dir_id": "129",
+                "location": "https://nc/goob/mdsy:0003/mdsy:0003",
+                "uploads_dav_url": "https://nc/webdav/mdsy:0003/mdsy:0003"
+            }
+            self.fm.create_space.return_value = self.fm.summarize_space.return_value
             type(self.fm).cfg = PropertyMock(return_value={'dav_base_url': 'base'})
 
     def create_service(self):
@@ -218,7 +240,7 @@ class TestMDS3DAPServiceWithFM(test.TestCase):
     def test_create_record(self):
         self.create_service()
         self.assertTrue(not self.svc.dbcli.name_exists("goob"))
-        self.fm.get_record_space.side_effect = FileSpaceNotFound("goob")
+        self.fm.summarize_space.side_effect = FileManagerResourceNotFound("goob")
         
         prec = self.svc.create_record("goob")
         self.assertTrue(hasattr(prec, 'file_space'))

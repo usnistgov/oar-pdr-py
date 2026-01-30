@@ -70,17 +70,17 @@ The state of each job is persisted as part of its queue as a dictionary with the
 ``errors``
     a list of messages describing errors that led to a failed or killed execution
 """
-import time, asyncio, threading, queue
+import logging, os, shutil, threading, json, sys, time, asyncio, queue
 from asyncio import subprocess as sp
-from typing import List, Callable, Union
+from typing import List, Callable, Union, Sequence, Mapping
 from types import ModuleType
 from collections import OrderedDict
-from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
 from logging import Logger
 from random import randint
-import logging, os, shutil, threading, json, sys
+
+import psutil
 
 from nistoar.pdr.utils import read_json, write_json, LockedFile
 from nistoar.base import config as cfgmod
@@ -357,7 +357,7 @@ class JobQueue:
         if trigger and not self.pq.empty():
             self.run_queued()
 
-    def _restorer_is_running(restrdata):
+    def _restorer_is_running(self, restrdata):
         if not restrdata.get('pid'):
             return False
         cl = self._running_cmd(restrdata['pid'])
@@ -566,6 +566,7 @@ class JobRunner:
 
         if out is sp.PIPE:
             async def capture():
+                # capture output from the job and feed it into our logger
                 buffer = []
                 while True:
                     line = await proc.stdout.readline()
@@ -573,25 +574,51 @@ class JobRunner:
                         break
                     line = line.decode('utf8')
                     if line.startswith('{'):
+                        # job output lines are expected to come in as JSON objects
                         try:
                             logdata = json.loads(line)
                         except Exception:
                             buffer.append(line.rstrip())
                         else:
                             if buffer:
+                                # log any non-JSON output we've accumulated
                                 self.log.warning("\n".join(buffer))
                                 buffer = []
 
-                            logrec = logging.LogRecord(logdata.get("name", self.log.name),
-                                                       logdata.get("level", logging.INFO),
+                            name = "JOB"
+                            if logdata.get("process"):
+                                name += f":{logdata['process']}"
+                            if logdata.get("name"):
+                                name += f".{logdata['name']}"
+                            args = logdata.get("args", ())
+                            if not isinstance(args, (tuple, list)):
+                                args = (args,)
+                            if not isinstance(args, tuple):
+                                args = tuple(args)
+                            msg = logdata.get("msg","")
+                            if len(args) > 0 and msg:
+                                try:
+                                    msg % args
+                                except TypeError:
+                                    msg = f"{msg} ({str(args)})"
+                                    args = ()
+                                    
+                            logrec = logging.LogRecord(name,
+                                                       logdata.get("levelno", logging.INFO),
                                                        logdata.get("pathname", ""),
                                                        logdata.get("lineno", -1),
-                                                       logdata.get("msg",""), [], None)
+                                                       msg, args,
+                                                       logdata.get("exc_info"),
+                                                       logdata.get("funcName", "?"),
+                                                       logdata.get("stack_info"))
                             logging.getLogger(logrec.name).handle(logrec)
                     else:
+                        # Not JSON; buffer it, and we'll spit it out to the logger once
+                        # JSON lines return.
                         buffer.append(line.rstrip())
 
                 if buffer:
+                    # spit out any remaining non-JSON output
                     self.log.warning("\n".join(buffer))
 
             await capture()
@@ -616,6 +643,7 @@ class JobRunner:
                         if job.source and job.source.is_file():
                             job = Job.from_state_file(job.source)
                         proc = await self.runner._launch_job(job)
+                        self.runner.log.debug("launched %s job with pid=%i", job.data_id, proc.pid)
                         ec = await proc.wait()
                         self.processed += 1
                         if job.source and job.source.is_file():

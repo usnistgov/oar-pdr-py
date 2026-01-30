@@ -48,7 +48,7 @@ AUTOADMIN = "dbio:admin"     # a superuser identity that should only be used by 
 
 __all__ = ["DBClient", "DBClientFactory", "ProjectRecord", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP",
            "ANONYMOUS", "DAP_PROJECTS", "DMP_PROJECTS", "ObjectNotFound", "NotAuthorized", "AlreadyExists",
-           "InvalidRecord", "InvalidUpdate" ]
+           "InvalidRecord", "InvalidUpdate", "DBIOException", "DBIORecordException" ]
 
 Permissions = Union[str, Sequence[str], AbstractSet[str]]
 CST = []
@@ -124,7 +124,8 @@ class ACLs:
         """
         if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
-        if perm_name == self.PUBLISH and not self._rec.is_superuser():
+        if perm_name == self.PUBLISH and not self._rec.is_superuser() and \
+           not self._rec.authorized(self.PUBLISH):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
 
         empty = []
@@ -151,7 +152,8 @@ class ACLs:
         """
         if not self._rec.authorized(self.ADMIN):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
-        if perm_name == self.PUBLISH and not self._rec.is_superuser():
+        if perm_name == self.PUBLISH and not self._rec.is_superuser() and \
+           not self._rec.authorized(self.PUBLISH):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
 
         if perm_name not in self._perms:

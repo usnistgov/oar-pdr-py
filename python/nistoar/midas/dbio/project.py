@@ -21,7 +21,7 @@ import jsonpatch
 from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, PUBLIC_GROUP, ANONYMOUS, AUTOADMIN,
                    RecordStatus, AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException,
                    InvalidUpdate, InvalidRecord)
-from . import status
+from . import status, restore
 from .. import MIDASException, MIDASSystem
 from nistoar.pdr.utils.prov import Agent, Action
 from nistoar.pdr.utils.validate import ValidationResults, ALL, REQ, WARN
@@ -98,12 +98,12 @@ class ProjectService(MIDASSystem):
         self.cfg = config
         for param in "default_perms".split():
             if not isinstance(self.cfg.get(param,{}), Mapping):
-                raise ConfigurationException("%s: value is not a object as required: %s" %
+                raise ConfigurationException("ProjectService: %s: value is not an object as required: %s" %
                                              (param, type(self.cfg.get(param))))
         for param,val in self.cfg.get('default_perms',{}).items():
             if not isinstance(val, list) or not all(isinstance(p, str) for p in val):
                 raise ConfigurationException(
-                    "default_perms.%s: value is not a list of strings as required: %s" %
+                    "ProjectService: default_perms.%s: value is not a list of strings as required: %s" %
                     (param, repr(val))
                 )
         
@@ -117,6 +117,8 @@ class ProjectService(MIDASSystem):
         self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), self.who)
         if not self.dbcli.people_service:
             self.log.warning("No people service available for %s service", project_type)
+        self._DEF_LATEST_COLL = f"{self.dbcli.project}_latest"
+        self._DEF_VERSION_COLL = f"{self.dbcli.project}_version"
 
     @property
     def user(self) -> Agent:
@@ -225,7 +227,8 @@ class ProjectService(MIDASSystem):
 
         out = None
         provact = Action(Action.DELETE, prec.id, self.who, "deleted draft record")
-        try: 
+        try:
+            #TODO: deal with prov data
             if prec.status.published_as:
                 # restore record to the last published version
                 self._restore_last_published_data(prec,
@@ -260,42 +263,60 @@ class ProjectService(MIDASSystem):
             raise ValueError("_restore_last_published_data(): project record is missing "
                              "published_as property")
 
-        if prec.status.archived_at:
-            self.log.warning("%s: archived_at property is set but will be ignored; assuming default")
-        archived_at = f"dbio_store:{self.dbcli.project}_latest/{self._arkify_recid(prec.id)}"
+#        if prec.status.archived_at:
+#            self.log.warning("%s: archived_at property is set but will be ignored; assuming default")
+#        archived_at = f"dbio_store:{self._DEF_LATEST_COLL}/{self._arkify_recid(prec.id)}"
 
         # setup prov action
         defmsg = "Restored draft to last published version"
         provact = Action(Action.PROCESS, prec.id, self.who,
-                         f"restored data to last published ({archived_at})",
+                         f"restored data to last published ({prec.status.archived_at})",
                          {"name": "restore_last_published"})
         if foract:
             foract.add_subaction(provact)
 
         try:
             # Create restorer from archived_at URL
-            # TODO: this will be replaced with the use of a factory that processes the archived_at URL
-            pubclient = self.dbcli.client_for(f"{self.dbcli.project}_latest")
-            # restorer = DBIOStoreRestorer(dbclient, self._arkify_recid(prec.id))
-            # prec.data = restorer.get_data()
-
-            # Restore data and set into project record
-            pubrec = pubclient.get_record_for(self._arkify_recid(prec.id), ACLs.READ)
-            prec.data = pubrec.data
+            pubclient = self.dbcli.client_for(self._DEF_LATEST_COLL)
+            restorer = self._get_restorer_for(prec)
+            restorer.restore(prec, dofree=True)
 
             if reset_state:
-                prec.status.set_state(pubrec.status.state)
+                prec.status.set_state(status.PUBLISHED)
             prec.status.act(self.STATUS_ACTION_RESTORE, message or defmsg)
             prec.save()
             
         except Exception as ex:
-            self.log.error("Failed to save prepped-for-revision record for project, %s: %s",
+            self.log.error("Failed to save restored record for project, %s: %s",
                            prec.id, str(ex))
-            provact.message = "Failed to save prepped-for-revision data due to internal error"
+            provact.message = "Failed to save restored data due to internal error"
             raise
         finally:
             if not foract:
                 self._record_action(provact)
+
+    _restorer_factory = staticmethod(restore.default_factory)
+    def _get_restorer_for(self, prec):
+        # ensure that this record has been published before; published_as should have a legit value
+        pubid = prec.status.published_as
+        if not pubid:
+            raise DBIORecordException(prec.id, "Unable to restore to last published state: " +
+                                      "project record appears unpublished (missing published_as property)")
+        pubid = re.sub(r'/pdr:v/\S+$', '', pubid)  # drop the version extension, if included
+
+        publoc = prec.status.archived_at
+        if not publoc:
+            # assume default archiving location
+            publoc = f"dbio_store:{self._DEF_LATEST_COLL}/{pubid}"
+
+        try:
+            return self._restorer_factory(publoc, prec._cli, self.cfg.get("restore"),
+                                          self.log.getChild("restorer"))
+        except DBIOException:
+            raise
+        except Exception as ex:
+            raise DBIORecordException(prec.id, "Unable to restore to last published state: " +
+                                      "Failed to interpret archived_at URL: "+str(ex)) from ex
 
     def reassign_record(self, id, recipient: str, disown: bool=False):
         """
@@ -414,18 +435,29 @@ class ProjectService(MIDASSystem):
         prec = self.dbcli.get_record_for(id)  # may raise ObjectNotFound
         if not part:
             return prec.data
-        return self._extract_data_part(prec.data, part)
+        return self._extract_data_part(prec.data, part, id)
 
-    def _extract_data_part(self, data, part):
+    def _extract_data_part(self, data, part, id):
         if not part:
             return data
         steps = part.split('/')
         out = data
         while steps:
             prop = steps.pop(0)
-            if prop not in out:
-                raise ObjectNotFound(id, part)
-            out = out[prop]
+            if isinstance(out, Mapping):
+                if prop not in out:
+                    raise ObjectNotFound(id, part)
+                out = out[prop]
+            elif isinstance(out, list):
+                # elements of a list can be accessed via its @id value
+                matched = None
+                for item in out:
+                    if isinstance(item, Mapping) and item.get('@id') == prop:
+                        matched = item
+                        break;
+                if not matched:
+                    raise ObjectNotFound(id, part)
+                out = matched
 
         return out
 
@@ -534,7 +566,7 @@ class ProjectService(MIDASSystem):
 
         self.log.info("Updated data for %s record %s (%s) for %s",
                       self.dbcli.project, _prec.id, _prec.name, self.who)
-        return self._extract_data_part(data, part)
+        return self._extract_data_part(data, part, _prec.id)
 
     def _jsondiff(self, old, new):
         return {"jsonpatch": jsonpatch.make_patch(old, new)}
@@ -715,7 +747,7 @@ class ProjectService(MIDASSystem):
 
         self.log.info("Replaced data for %s record %s (%s) for %s",
                       self.dbcli.project, _prec.id, _prec.name, self.who)
-        return self._extract_data_part(data, part)
+        return self._extract_data_part(data, part, _prec.id)
 
     def _save_data(self, indata: Mapping, prec: ProjectRecord, message: str, 
                    action: str = _STATUS_ACTION_UPDATE, update_state: bool = True) -> Mapping:
@@ -1075,9 +1107,15 @@ class ProjectService(MIDASSystem):
         if not _prec:
             _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)   # may raise ObjectNotFound/NotAuthorized
 
+        self.log.info("%s: submitting %s for review/publication", _prec.id, self.dbcli.project)
+
         # Prepare for the actual submission:  Ensure current state is correct, finalize/validate record.
         # May raise NotSubmitable, NotEditable
-        self._submit__prep(_prec, options)
+        try:
+            self._submit__prep(_prec, options)
+        except Exception as ex:
+            self.log.error("%s: Submission prep failed: %s", _prec.id, str(ex))
+            raise
 
         # this record is ready for submission.  Send the record to its post-editing destination,
         # and return the state that it should be set to.  Normally, this implementation function
@@ -1090,6 +1128,7 @@ class ProjectService(MIDASSystem):
 
         except InvalidRecord as ex:
             emsg = "submit process failed: "+str(ex)
+            self.log.error(emsg)
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": ex.errors}))
             _prec.status.set_state(status.EDIT)
@@ -1099,6 +1138,7 @@ class ProjectService(MIDASSystem):
 
         except Exception as ex:
             emsg = "Submit process failed due to an internal error"
+            self.log.error(emsg)
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": [emsg]}))
             _prec.status.set_state(status.EDIT)
@@ -1108,7 +1148,11 @@ class ProjectService(MIDASSystem):
 
         # Wrap up the submisstion process: record provenance info, set state and save the
         # record, as needed.
-        statusdata = self._submit__wrapup(poststate, _prec, message, options)
+        try: 
+            statusdata = self._submit__wrapup(poststate, _prec, message, options)
+        except Exception as ex:
+            self.log.error("%s: Submission wrap-up failed: %s", _prec.id, str(ex))
+            raise            
 
         # If there is anything that should be done automatically _after_ submitting (e.g.
         # publishing), do it here.
@@ -1168,7 +1212,12 @@ class ProjectService(MIDASSystem):
 
             prec.status.set_state(poststat)
             prec.status.act(self.STATUS_ACTION_SUBMIT, message or defmsg, self.who.actor)
-            prec.save()
+            try:
+                prec.save()
+            except Exception as ex:
+                self.log.error("%s: Failed to save record state for submission (%s): %s",
+                               _prec.id, poststat, str(ex))
+                raise
 
         self.log.info("Submitted %s record %s (%s) for %s",
                       self.dbcli.project, prec.id, prec.name, self.who)
@@ -1288,7 +1337,6 @@ class ProjectService(MIDASSystem):
                              an undefined or unrecognized part of the data
         :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
                              given by `id`.  
-        :raises NotEditable:  the requested record is not in the edit state.  
         :raises NotSubmitable:  if the finalization produces an invalid record because the record 
                              contains invalid data or is missing required data.
         :raises SubmissionFailed:  if, during actual submission (i.e. after finalization), an error 
@@ -1355,7 +1403,14 @@ class ProjectService(MIDASSystem):
 
             stat.set_state(poststat)
             stat.act(self.STATUS_ACTION_PUBLISH, message, self.who.actor)
-            _prec.save()
+            try:
+                _prec.save()
+            except Exception as ex:
+                self.log.error("%s: Failed to save record state for publishing (%s): %s",
+                               _prec.id, poststat, str(ex))
+                raise
+
+            self.log.info(message)
 
 #        self.log.info("Submitted %s record %s (%s) for %s for final publication",
 #                      self.dbcli.project, _prec.id, _prec.name, self.who)
@@ -1397,8 +1452,14 @@ class ProjectService(MIDASSystem):
         if not message:
             message = "Restored record for revision"
         stat.act(self.STATUS_ACTION_REVISE, message)
-        _prec.save()
+        try:
+            _prec.save()
+        except Exception as ex:
+            self.log.error("%s: unable to save record state after revision setup (%s): %s",
+                           _prec.id, status.EDIT, str(ex))
+            raise
 
+        self.log.info("%s: set for revising", _prec.id)
         return _prec
 
     def _revise(self, prec: ProjectRecord, options: Mapping=None):
@@ -1416,7 +1477,7 @@ class ProjectService(MIDASSystem):
         :py:class:`~nistoar.midas.dbio.base.DBClient` instance.
         """
         self.dbcli.free()
-                    
+
     def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None):
         """
         Actually launch the publishing process on the given record and update its state  
@@ -1437,11 +1498,12 @@ class ProjectService(MIDASSystem):
         """
         endstate = status.PUBLISHED    # or could be status.SUBMITTED
         try:
-            latestcli = self.dbcli.client_for(f"{self.dbcli.project}_latest", AUTOADMIN)
-            versioncli = self.dbcli.client_for(f"{self.dbcli.project}_version", AUTOADMIN)
+            latestcli = self.dbcli.client_for(self._DEF_LATEST_COLL, AUTOADMIN)
+            versioncli = self.dbcli.client_for(self._DEF_VERSION_COLL, AUTOADMIN)
 
             recd = prec.to_dict()
-            recd['id'] = self._arkify_recid(prec.id)
+            pubid = self._arkify_recid(prec.id)
+            recd['id'] = pubid
             latest = ProjectRecord(latestcli.project, deepcopy(recd), latestcli)
             recd['id'] += "/pdr:v/" + recd['data'].get("@version", "0")
             version = ProjectRecord(versioncli.project, deepcopy(recd), versioncli)
@@ -1469,12 +1531,12 @@ class ProjectService(MIDASSystem):
             raise SubmissionFailed(prec.id, msg) from ex
 
         if endstate == status.PUBLISHED:
-            base = self.cfg.get('published_resolver_ep', 'midas:')
-            prec.status.publish(recd['id'], recd['data'].get("@version", "0"),
-                                f"{base}{self.dbcli.project}_latest/{recd['id']}")
+#            base = self.cfg.get('published_resolver_ep', 'midas:')
+            prec.status.publish(pubid, recd['data'].get("@version", "0"),
+                                f"dbio_store:{self._DEF_LATEST_COLL}/{pubid}")
 
         self.log.info("Successfully published %s as %s version %s (into %s_latest collection)",
-                      prec.id, recd['id'], recd['data'].get("@version", 0), self.dbcli.project)
+                      prec.id, pubid, recd['data'].get("@version", 0), self.dbcli.project)
         return endstate
 
 class ProjectServiceFactory:
