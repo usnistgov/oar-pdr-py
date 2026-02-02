@@ -48,6 +48,21 @@ paths:
             "JSON (syn. for nerdm)":
               value: "json"
         - in: query
+          name: perm
+          required: false
+          schema:
+            type: string
+            enum: [ "read", "write", "admin", "delete" ]
+          description: >-
+            a single permission name or a comma-delimited list of permission names; the output will 
+            only include records for which the user has at least one of these permissions granted to
+            them.  If not provided, it defaults to all of the standard permissions.  
+          examples:
+            "write-access":
+              value: "write"
+            "all-access":
+              value: "read,write,admin,delete"
+        - in: query
           name: name
           schema:
             type: string
@@ -646,6 +661,15 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+        "409":
+          description:
+            The requested record is not in an editable state or in a sufficient state to apply
+            the action.  For example, this is returned in response to a finalize or submit action
+            request if the record does include the minimum required data.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
     patch:
       summary: "update the status (synonymous to a PUT request)"
       description:
@@ -716,6 +740,15 @@ paths:
         "401":
           description:
             The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "409":
+          description:
+            The requested record is not in an editable state or in a sufficient state to apply
+            the action.  For example, this is returned in response to a finalize or submit action
+            request if the record does include the minimum required data.  
           content:
             "application/json":
               schema:

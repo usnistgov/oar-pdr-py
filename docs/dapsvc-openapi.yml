@@ -39,7 +39,83 @@ paths:
     get:
       summary: search for DAP records
       description: return all or a subset of DAP records that the requesting user is authorized to read
-      parameters: [ ]    # parameters for selecting matching records.
+      parameters:
+        - in: query
+          name: format
+          required: false
+          description: >-
+            a name that identifies the desired format for the output (overriding content negotiation);
+            the default value is nerdm.  This parameter serves as an alternative to content negotiation
+            via the Accept Header (which also works).  
+          schema:
+            type: string
+            enum: [ "json", "nerdm", "pdf", "markdown", "csv" ]
+          examples:
+            "PDF":
+              value: "pdf"
+            "Markdown":
+              value: "markdown"
+            "CSV table":
+              value: "csv"
+            "JSON, in NERDm format":
+              value: "nerdm"
+            "JSON (syn. for nerdm)":
+              value: "json"
+        - in: query
+          name: perm
+          required: false
+          schema:
+            type: string
+            enum: [ "read", "write", "admin", "delete" ]
+          description: >-
+            a single permission name or a comma-delimited list of permission names; the output will 
+            only include records for which the user has at least one of these permissions granted to
+            them.  If not provided, it defaults to all of the standard permissions.  
+          examples:
+            "write-access":
+              value: "write"
+            "all-access":
+              value: "read,write,admin,delete"
+        - in: query
+          name: name
+          schema:
+            type: string
+          required: false
+          description: a single records name or a comma-delimited list of names; the output will include all records whose name property matches any one of the names given.
+          examples:
+            "Select records with a particular name":
+              value: "myrec"
+            "Select records having either one of the two given names":
+              value: "mytestrec,myrealrec"
+        - in: query
+          name: id
+          schema:
+            type: string
+          required: false
+          description: a single records name or a comma-delimited list of identifiers; the output will include all records whose id property matches any one of the identifiers given.
+          examples:
+            "Select records with a particular ID":
+              value: "mds3:0104"
+            "Select records having either one of the three given ids":
+              value: "mds3:0010,mds3:0012,mds3:0013"
+        - in: query
+          name: owner
+          schema:
+            type: string
+          required: false
+          description: a single user identifier or a comma-delimited list of identifiers; the output will include all records whose owner property matches any one of the identifiers given.
+          examples:
+            "Select records with a particular ID":
+              value: "rlp3"
+            "Select records having either one of the three given ids":
+              value: "rlp3,ava1,nist:op"
+        - in: query
+          name: status_state
+          schema:
+            type: string
+            enum: ["edit", "processing", "ready", "submitted", "accepted", "in press", "published", "unwell"]
+          required: false
+          description: a single status state name or a comma-delimited list of names; the output will include all records whose status.state property matches any one of the names given.
       responses:
         "200":
           description: >-
@@ -658,6 +734,15 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+        "409":
+          description:
+            The requested record is not in an editable state or in a sufficient state to apply
+            the action.  For example, this is returned in response to a finalize or submit action
+            request if the record does include the minimum required data.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
     patch:
       summary: "update the status message"
       description: >-
@@ -701,6 +786,15 @@ paths:
         "401":
           description: >-
             The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "409":
+          description:
+            The requested record is not in an editable state or in a sufficient state to apply
+            the action.  For example, this is returned in response to a finalize or submit action
+            request if the record does include the minimum required data.  
           content:
             "application/json":
               schema:
