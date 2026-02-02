@@ -72,6 +72,16 @@ paths:
           "application/json":
             schema:
               "$ref": "#/components/schemas/CreateRecordRequest"
+            examples:
+              "create-min":
+                summary: minimum required input
+                value:
+                  name: mydap1
+              "create-data":
+                summary: providing some initial data
+                value:
+                  name: mydap2
+                  data: { "title": "My Second DAP" }
       responses:
         "201":
           description: >-
@@ -188,6 +198,10 @@ paths:
           "application/json":
             schema:
               type: object
+            examples:
+              "replace-data":
+                summary: replace the data contents
+                value: { "title": "My Second DAP", "keywords": ["testing", "AppScan"] }
       responses:
         "200":
           description: >-
@@ -239,6 +253,10 @@ paths:
           "application/json":
             schema:
               type: object
+            examples:
+              "update-data":
+                summary: merge given properties into the data contents
+                value: { "title": "My Second DAP", "keywords": ["testing", "AppScan"] }
       responses:
         "200":
           description:  The DAP record with the given identifier was found and it data content was updated and returned
@@ -343,6 +361,13 @@ paths:
               oneOf:
                 - type: object
                 - type: string
+            examples:
+              "replace-data-title":
+                summary: replace the value of a top-level NERDm property
+                value: "\"My Second DMP\""
+              "replace-data-keywords":
+                summary: replace the value of a top-level NERDm property
+                value: ["testing", "AppScan"]
       responses:
         "200":
           description: >-
@@ -351,7 +376,7 @@ paths:
             submitted as required by policy or convention.
           content:
             "application/json":
-            description: the type of the output is the type defined for the property in the NERDm schema
+              description: the type of the output is the type defined for the property in the NERDm schema
               schema:
                 oneOf:
                   - type: object
@@ -429,6 +454,10 @@ paths:
           "application/json":
             schema:
               type: string
+            examples:
+              "replace-name":
+                summary: replace the current name
+                value: "\"mySpecialDAP\""
       responses:
         "200":
           description:  the record was found, the name was successfully changed and the new name returned
@@ -500,6 +529,10 @@ paths:
           "application/json":
             schema:
               type: string
+            examples:
+              "switch-owner":
+                summary: Switch the current owner
+                value: "\"ava1\""
       responses:
         "200":
           description:  the record was found, the name was successfully changed and the new owner returned
@@ -561,6 +594,16 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+            examples:
+              "finalize":
+                summary: finalize the record
+                value:
+                  action: "finalize"
+                  message: "all editing complete"
+              "submit":
+                summary: submit the record
+                value:
+                  action: "submit"
     put:
       summary: "apply an action to the record"
       description: >-
@@ -728,6 +771,12 @@ paths:
           "application/json":
             schema:
               "$ref": "#/components/schemas/ACLs"
+            examples:
+              "replace-acls":
+                summary: replace all permissions
+                value:
+                  read: [ "me", "you", "him", "her" ]
+                  write: [ "me", "her" ]
       responses:
         "200":
           description:  the updated ACLs (inluding the ones that were not updated)
@@ -788,6 +837,12 @@ paths:
           "application/json":
             schema:
               "$ref": "#/components/schemas/ACLs"
+            examples:
+              "update-acls":
+                summary: replace all permissions
+                value:
+                  read: [ "you", "him", "her" ]
+                  write: [ "her" ]
       responses:
         "200":
           description:  the updated ACLs (inluding the ones that were not updated)
@@ -888,6 +943,10 @@ paths:
           "application/json":
             schema:
               type: string
+            examples:
+              "add-user-to-perm":
+                summary: add a user to the list granted a permission
+                value: "\"ava1\""
       responses:
         "200":
           description:  a updated list of user and group identifiers with this permission
@@ -948,6 +1007,10 @@ paths:
             schema:
               type: array
               items: { type: string }
+            examples:
+              "replace-perm":
+                summary: replace users given a permission
+                value: [ "me", "you", "him", "her" ]
       responses:
         "200":
           description:  the updated list of user and group identifiers with this permission
@@ -1011,6 +1074,13 @@ paths:
                 - type: array 
                   items: { type: string }
                 - type: string
+            examples:
+              "update-to-perm":
+                summary: merge in users to be given a permission
+                value: [ "him", "her" ]
+              "add-to-perm":
+                summary: merge in users to be given a permission
+                value: [ "him" ]
       responses:
         "200":
           description:  the updated list of user and group identifiers with this permission
