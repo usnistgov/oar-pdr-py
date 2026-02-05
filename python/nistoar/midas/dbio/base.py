@@ -905,7 +905,7 @@ class ProjectRecord(ProtectedRecord):
         if not self.authorized(ACLs.ADMIN):
             raise NotAuthorized(self._cli.user_id, "change name")
         if self._cli and self._cli.name_exists(newname):
-            raise AlreadyExists(f"User {self_cli.user_id} has already defined a record with name={newname}")
+            raise AlreadyExists(f"User {self._cli.user_id} has already defined a record with name={newname}")
 
         self._data['name'] = newname
 
