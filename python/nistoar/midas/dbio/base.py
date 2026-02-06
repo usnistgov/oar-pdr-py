@@ -374,14 +374,15 @@ class ProtectedRecord(ABC):
         """
         return self._acls
 
-    def save(self):
+    def save(self, _need_perm=ACLs.WRITE):
         """
         save any updates to this record.  This implementation checks to make sure that the user 
         attached to the underlying client is authorized to make updates.
 
         :raises NotAuthorized:  if the user given by who is not authorized update the record
         """
-        if not self.authorized(ACLs.WRITE):
+        # Note: when we've changed permission ACLs.ADMIN is what should be required when saving
+        if not self.authorized(_need_perm):
             raise NotAuthorized(self._cli.user_id, "update record")
         olddates = (self.status.modified,
                     self.status.created, self.status.since)
@@ -904,7 +905,7 @@ class ProjectRecord(ProtectedRecord):
         if not self.authorized(ACLs.ADMIN):
             raise NotAuthorized(self._cli.user_id, "change name")
         if self._cli and self._cli.name_exists(newname):
-            raise AlreadyExists(f"User {self_cli.user_id} has already defined a record with name={newname}")
+            raise AlreadyExists(f"User {self._cli.user_id} has already defined a record with name={newname}")
 
         self._data['name'] = newname
 

@@ -39,7 +39,83 @@ paths:
     get:
       summary: search for DAP records
       description: return all or a subset of DAP records that the requesting user is authorized to read
-      parameters: [ ]    # parameters for selecting matching records.
+      parameters:
+        - in: query
+          name: format
+          required: false
+          description: >-
+            a name that identifies the desired format for the output (overriding content negotiation);
+            the default value is nerdm.  This parameter serves as an alternative to content negotiation
+            via the Accept Header (which also works).  
+          schema:
+            type: string
+            enum: [ "json", "nerdm", "pdf", "markdown", "csv" ]
+          examples:
+            "PDF":
+              value: "pdf"
+            "Markdown":
+              value: "markdown"
+            "CSV table":
+              value: "csv"
+            "JSON, in NERDm format":
+              value: "nerdm"
+            "JSON (syn. for nerdm)":
+              value: "json"
+        - in: query
+          name: perm
+          required: false
+          schema:
+            type: string
+            enum: [ "read", "write", "admin", "delete" ]
+          description: >-
+            a single permission name or a comma-delimited list of permission names; the output will 
+            only include records for which the user has at least one of these permissions granted to
+            them.  If not provided, it defaults to all of the standard permissions.  
+          examples:
+            "write-access":
+              value: "write"
+            "all-access":
+              value: "read,write,admin,delete"
+        - in: query
+          name: name
+          schema:
+            type: string
+          required: false
+          description: a single records name or a comma-delimited list of names; the output will include all records whose name property matches any one of the names given.
+          examples:
+            "Select records with a particular name":
+              value: "myrec"
+            "Select records having either one of the two given names":
+              value: "mytestrec,myrealrec"
+        - in: query
+          name: id
+          schema:
+            type: string
+          required: false
+          description: a single records name or a comma-delimited list of identifiers; the output will include all records whose id property matches any one of the identifiers given.
+          examples:
+            "Select records with a particular ID":
+              value: "mds3:0104"
+            "Select records having either one of the three given ids":
+              value: "mds3:0010,mds3:0012,mds3:0013"
+        - in: query
+          name: owner
+          schema:
+            type: string
+          required: false
+          description: a single user identifier or a comma-delimited list of identifiers; the output will include all records whose owner property matches any one of the identifiers given.
+          examples:
+            "Select records with a particular ID":
+              value: "rlp3"
+            "Select records having either one of the three given ids":
+              value: "rlp3,ava1,nist:op"
+        - in: query
+          name: status_state
+          schema:
+            type: string
+            enum: ["edit", "processing", "ready", "submitted", "accepted", "in press", "published", "unwell"]
+          required: false
+          description: a single status state name or a comma-delimited list of names; the output will include all records whose status.state property matches any one of the names given.
       responses:
         "200":
           description: >-
@@ -72,6 +148,16 @@ paths:
           "application/json":
             schema:
               "$ref": "#/components/schemas/CreateRecordRequest"
+            examples:
+              "create-min":
+                summary: minimum required input
+                value:
+                  name: mydap1
+              "create-data":
+                summary: providing some initial data
+                value:
+                  name: mydap2
+                  data: { "title": "My Second DAP" }
       responses:
         "201":
           description: >-
@@ -188,6 +274,10 @@ paths:
           "application/json":
             schema:
               type: object
+            examples:
+              "replace-data":
+                summary: replace the data contents
+                value: { "title": "My Second DAP", "keywords": ["testing", "AppScan"] }
       responses:
         "200":
           description: >-
@@ -239,6 +329,10 @@ paths:
           "application/json":
             schema:
               type: object
+            examples:
+              "update-data":
+                summary: merge given properties into the data contents
+                value: { "title": "My Second DAP", "keywords": ["testing", "AppScan"] }
       responses:
         "200":
           description:  The DAP record with the given identifier was found and it data content was updated and returned
@@ -343,6 +437,13 @@ paths:
               oneOf:
                 - type: object
                 - type: string
+            examples:
+              "replace-data-title":
+                summary: replace the value of a top-level NERDm property
+                value: "\"My Second DMP\""
+              "replace-data-keywords":
+                summary: replace the value of a top-level NERDm property
+                value: ["testing", "AppScan"]
       responses:
         "200":
           description: >-
@@ -351,7 +452,7 @@ paths:
             submitted as required by policy or convention.
           content:
             "application/json":
-            description: the type of the output is the type defined for the property in the NERDm schema
+              description: the type of the output is the type defined for the property in the NERDm schema
               schema:
                 oneOf:
                   - type: object
@@ -429,6 +530,10 @@ paths:
           "application/json":
             schema:
               type: string
+            examples:
+              "replace-name":
+                summary: replace the current name
+                value: "\"mySpecialDAP\""
       responses:
         "200":
           description:  the record was found, the name was successfully changed and the new name returned
@@ -500,6 +605,10 @@ paths:
           "application/json":
             schema:
               type: string
+            examples:
+              "switch-owner":
+                summary: Switch the current owner
+                value: "\"ava1\""
       responses:
         "200":
           description:  the record was found, the name was successfully changed and the new owner returned
@@ -561,6 +670,16 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+            examples:
+              "finalize":
+                summary: finalize the record
+                value:
+                  action: "finalize"
+                  message: "all editing complete"
+              "submit":
+                summary: submit the record
+                value:
+                  action: "submit"
     put:
       summary: "apply an action to the record"
       description: >-
@@ -615,6 +734,15 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+        "409":
+          description:
+            The requested record is not in an editable state or in a sufficient state to apply
+            the action.  For example, this is returned in response to a finalize or submit action
+            request if the record does include the minimum required data.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
     patch:
       summary: "update the status message"
       description: >-
@@ -658,6 +786,15 @@ paths:
         "401":
           description: >-
             The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "409":
+          description:
+            The requested record is not in an editable state or in a sufficient state to apply
+            the action.  For example, this is returned in response to a finalize or submit action
+            request if the record does include the minimum required data.  
           content:
             "application/json":
               schema:
@@ -728,6 +865,12 @@ paths:
           "application/json":
             schema:
               "$ref": "#/components/schemas/ACLs"
+            examples:
+              "replace-acls":
+                summary: replace all permissions
+                value:
+                  read: [ "me", "you", "him", "her" ]
+                  write: [ "me", "her" ]
       responses:
         "200":
           description:  the updated ACLs (inluding the ones that were not updated)
@@ -788,6 +931,12 @@ paths:
           "application/json":
             schema:
               "$ref": "#/components/schemas/ACLs"
+            examples:
+              "update-acls":
+                summary: replace all permissions
+                value:
+                  read: [ "you", "him", "her" ]
+                  write: [ "her" ]
       responses:
         "200":
           description:  the updated ACLs (inluding the ones that were not updated)
@@ -888,6 +1037,10 @@ paths:
           "application/json":
             schema:
               type: string
+            examples:
+              "add-user-to-perm":
+                summary: add a user to the list granted a permission
+                value: "\"ava1\""
       responses:
         "200":
           description:  a updated list of user and group identifiers with this permission
@@ -948,6 +1101,10 @@ paths:
             schema:
               type: array
               items: { type: string }
+            examples:
+              "replace-perm":
+                summary: replace users given a permission
+                value: [ "me", "you", "him", "her" ]
       responses:
         "200":
           description:  the updated list of user and group identifiers with this permission
@@ -1011,6 +1168,13 @@ paths:
                 - type: array 
                   items: { type: string }
                 - type: string
+            examples:
+              "update-to-perm":
+                summary: merge in users to be given a permission
+                value: [ "him", "her" ]
+              "add-to-perm":
+                summary: merge in users to be given a permission
+                value: [ "him" ]
       responses:
         "200":
           description:  the updated list of user and group identifiers with this permission

@@ -57,7 +57,7 @@ from .base import DBIOHandler
 from .search_sorter import SortByPerm
 
 __all__ = ["MIDASProjectHandler", "ProjectDataHandler"]
-SUPPORTED_FILTERS = set("name id owner status_state".split())
+SUPPORTED_FILTERS = set("perm name id owner status_state".split())
 
 class ProjectRecordHandler(DBIOHandler):
     """
@@ -706,10 +706,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         qstr = self._env.get('QUERY_STRING')
         if qstr:
             params = parse_qs(qstr)
-            perms = params.get('perm')
             filters = dict([(k,v) for k,v in params.items() if k in SUPPORTED_FILTERS])
-        if not perms:
-            perms = dbio.ACLs.OWN
 
         # split up filter values that are in comma-separated lists
         for prop,vals in filters.items():
@@ -717,6 +714,10 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             for v in vals:
                 out.extend(v.split(','))
             filters[prop] = out
+
+        perms = filters.pop('perm') if 'perm' in filters else None
+        if not perms:
+            perms = dbio.ACLs.OWN
 
         recs = self._sort_and_format_records(self._select_records(perms, **filters))
 
@@ -944,7 +945,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
         if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
             prec.acls.grant_perm_to(path, identity)
-            prec.save()
+            prec.save(dbio.ACLs.ADMIN)
             return self.send_json(prec.to_dict().get('acls', {}).get(path,[]))
 
         return self.send_error_resp(405, "POST not allowed on this permission type",
@@ -1011,7 +1012,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
             except dbio.NotAuthorized as ex:
                 return self.send_unauthorized()
 
-        prec.save()
+        prec.save(dbio.ACLs.ADMIN)
         acls = prec.to_dict().get('acls', {})
         if path:
             return self.send_json(acls.get(path, []))

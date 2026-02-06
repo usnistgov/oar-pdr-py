@@ -13,7 +13,7 @@ class TemplateResolver:
             self.roots = [Path(r) for r in roots]
         else:
             # default to package templates dir
-            self.roots = [(Path(__file__).resolve().parents[2] / "templates")]
+            self.roots = [(Path(__file__).resolve().parents[1] / "templates")]
 
     def resolve(self, format_subdir: str, template_filename: str) -> Path:
         cand = [r / format_subdir / template_filename for r in self.roots]
