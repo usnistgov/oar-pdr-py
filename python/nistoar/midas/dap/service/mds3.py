@@ -2717,6 +2717,8 @@ class DAPService(ProjectService):
                 if _prec.meta.get("software_included"):
                     options["security_review"] = True
                 self._extrevcli.submit(_prec.id, self.who.actor, version, **options)
+                if self._extrevcli.system_name == "nps1":
+                    self.apply_external_review(_prec.id, self._extrevcli.system_name, "requested")
 
                 # refresh, in case the record has changed
                 _prec = self.dbcli.get_record_for(id, ACLs.READ)
