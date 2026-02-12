@@ -93,7 +93,7 @@ class ACLs:
         """
         return iter(self._perms.get(perm_name, []))
 
-    def grant_perm_to(self, perm_name, *ids, _on_trans=False):
+    def grant_perm_to(self, perm_name, *ids, _on_trans=False, _need_perm=None):
         """
         add the user or group identities to the list having the given permission.  
         :param str perm_name:  the permission to be granted
@@ -101,7 +101,7 @@ class ACLs:
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to grant this permission
         """
-        if not self._rec.authorized(self.ADMIN):
+        if not self._rec.authorized(self.ADMIN) and not (_need_perm and self._rec.authorized(_need_perm)):
             raise NotAuthorized(self._rec._cli.user_id, "grant permission")
         if perm_name == self.PUBLISH and not _on_trans and not self._rec.is_superuser():
             raise NotAuthorized(self._rec._cli.user_id, "grant permission")
@@ -112,7 +112,7 @@ class ACLs:
             if id not in self._perms[perm_name]:
                 self._perms[perm_name].append(id)
 
-    def revoke_perm_from_all(self, perm_name, protect_owner: bool=True):
+    def revoke_perm_from_all(self, perm_name, protect_owner: bool=True, _need_perm=None):
         """
         remove all identities from the list having the given permission.  
         :param str perm_name:  the permission to be revoked from all identities
@@ -122,7 +122,7 @@ class ACLs:
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to grant the permission
         """
-        if not self._rec.authorized(self.ADMIN):
+        if not self._rec.authorized(self.ADMIN) and not (_need_perm and self._rec.authorized(_need_perm)):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
         if perm_name == self.PUBLISH and not self._rec.is_superuser() and \
            not self._rec.authorized(self.PUBLISH):
@@ -137,7 +137,7 @@ class ACLs:
         if perm_name in self._perms:
             self._perms[perm_name] = empty
 
-    def revoke_perm_from(self, perm_name, *ids, protect_owner: bool=True):
+    def revoke_perm_from(self, perm_name, *ids, protect_owner: bool=True, _need_perm=None):
         """
         remove the given identities from the list having the given permission.  For each given identity 
         that does not currently have the permission, nothing is done.  Note that by default, read and 
@@ -150,7 +150,7 @@ class ACLs:
         :raise NotAuthorized:  if the user attached to the underlying :py:class:`DBClient` is not 
                                authorized to grant this permission
         """
-        if not self._rec.authorized(self.ADMIN):
+        if not self._rec.authorized(self.ADMIN) and not (_need_perm and self._rec.authorized(_need_perm)):
             raise NotAuthorized(self._rec._cli.user_id, "revoke permission")
         if perm_name == self.PUBLISH and not self._rec.is_superuser() and \
            not self._rec.authorized(self.PUBLISH):
@@ -1417,7 +1417,7 @@ class DBClient(ABC):
         if not rec:
             raise ObjectNotFound(act.subject)
         rec = ProtectedRecord(coll, rec, self)
-        if not rec.authorized(ACLs.WRITE):
+        if not rec.authorized(ACLs.WRITE) and not rec.authorized(ACLs.PUBLISH):
             raise NotAuthorized(rec.id, "record action for id="+rec.id)
 
         self._save_action_data(act.to_dict())

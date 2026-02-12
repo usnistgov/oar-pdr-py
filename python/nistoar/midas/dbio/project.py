@@ -1245,7 +1245,7 @@ class ProjectService(MIDASSystem):
         :param list feedback:  a list of reviewer feedback.  If None, the previously saved feedback will 
                              be retained.  If an empty list and ``fbreplace`` is True (default), the 
                              previously save feedback will be dropped and replaced with an empty list.
-        :param boo request_changes:  if True, return this record to a state that allows the authors to 
+        :param bool request_changes:  if True, return this record to a state that allows the authors to 
                              make further edits.  (This would include changing the record state to 
                              "edit".)  This record must currently be in the "submitted" state, otherwise,
                              this parameter will be ignored.
@@ -1259,7 +1259,7 @@ class ProjectService(MIDASSystem):
 
         revmd = stat.pubreview(revsys, phase, revid, infourl, feedback, fbreplace, **extra_info)
         if not self._apply_external_review_updates(_prec, revmd, request_changes):
-            _prec.save()
+            _prec.save(ACLs.PUBLISH)
 
         msg = "external %s review phase in progress" % revsys
         if revmd.get('phase'):
@@ -1292,7 +1292,7 @@ class ProjectService(MIDASSystem):
         if self._sufficiently_reviewed(id, _prec=prec):
             self.log.info("%s: project is ready for publishing", id)
             prec.status.set_state(status.ACCEPTED)
-            prec.save()
+            prec.save(ACLs.PUBLISH)
 
             if publish:
                 self.publish(id)

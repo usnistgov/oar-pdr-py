@@ -243,7 +243,9 @@ class RecordStatus:
         revs = self._data.get(_pubreview_p, {})
         if not revs.get(revsys):
             return None
-        return deepcopy(revs[revsys])
+        out = deepcopy(revs[revsys])
+        out['system'] = revsys
+        return out
 
     def get_review_phases(self) -> Mapping[str,str]:
         """

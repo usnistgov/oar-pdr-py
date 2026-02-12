@@ -2815,6 +2815,9 @@ class DAPService(ProjectService):
         to shepherd the record through the review process.  Write access is revoked for users 
         that currently have it (saving who that is to an "_write" permission).  Curators and 
         reviewers will be given read access.
+
+        :param list[str] readers:  a list of user ids that should be given read access (can be 
+                                   None or an empty list)
         """
         if readers is None:
             readers = []
@@ -2862,10 +2865,10 @@ class DAPService(ProjectService):
         """
         for perm in [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]:
             who = list(prec.acls.iter_perm_granted("_"+perm))
-            prec.acls.revoke_perm_from_all(perm)               # take out the reviewers
-            prec.acls.grant_perm_to(perm, *who)                # restore the original editors
+            prec.acls.revoke_perm_from_all(perm, _need_perm=ACLs.PUBLISH)  # take out the reviewers
+            prec.acls.grant_perm_to(perm, *who, _need_perm=ACLs.PUBLISH)   # restore the original editors
             if not for_review:
-                prec.acls.revoke_perm_from_all("_"+perm)
+                prec.acls.revoke_perm_from_all("_"+perm, _need_perm=ACLs.PUBLISH)
 
         # revoke update permissions in the file manager
         if self._fmcli:
