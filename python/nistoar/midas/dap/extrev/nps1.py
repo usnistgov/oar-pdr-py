@@ -22,13 +22,20 @@ class NPSExternalReviewClient(ExternalReviewClient):
     dictionary provided at construction time:
 
     ``draft_url_template``
-        (*str*) *required*. a string template for forming a URL where a reviewer can view the draft
+        _str_ (required). a string template for forming a URL where a reviewer can view the draft
         landing page for the DAP.  The template should include one "%s" insert point where the draft
         DAP ID can be inserted.
     ``published_url_template``
-        (*str*) *required*. a string template for forming a URL where the DAP will be viewable once
+        _str_ (required). a string template for forming a URL where the DAP will be viewable once
         it is published.  The template should include one "%s" insert point where the public
         DAP ID can be inserted.
+    ``nps_endpoint``
+        _str_ (required). the endpoint URL for the NPS service
+    ``tokenService``
+        _dict_ (required).  The configuration data that describes the service for retrieving an 
+        authentication token for use with the NPS service.  The sub-properties looked for in this 
+        dictionary the same as those documented for 
+        :py:func:`~nistoar.nsd.sync.syncer.get_nsd_auth_token`.  
     """
     system_name = "nps1"
 
