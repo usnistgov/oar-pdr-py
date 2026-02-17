@@ -2712,11 +2712,15 @@ class DAPService(ProjectService):
             _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)
             version = _prec.data.get('version') or _prec.data.get('@version') or '1.0.0'
             try:
-                options["title"] = _prec.data.get("title")
-                options["description"] = "\n\n".join(_prec.data.get("description", []))
+                revopts = dict((k,v) for k,v in options.items()
+                                     if k in ["instructions", "changes", "reviewers", "security_review"])
+                revopts["title"] = _prec.data.get("title")
+                revopts["description"] = "\n\n".join(_prec.data.get("description", []))
                 if _prec.meta.get("software_included"):
-                    options["security_review"] = True
-                self._extrevcli.submit(_prec.id, self.who.actor, version, **options)
+                    revopts["security_review"] = True
+                if ':' in _prec.id:
+                    revopts["pubid"] = "ark:/" + const.ARK_NAAN + '/' + re.sub(r':', '-', _prec.id)
+                self._extrevcli.submit(_prec.id, self.who.actor, version, **revopts)
 
                 # refresh, in case the record has changed
                 _prec = self.dbcli.get_record_for(id, ACLs.READ)
