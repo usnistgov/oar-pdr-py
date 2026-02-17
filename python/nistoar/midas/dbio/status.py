@@ -304,6 +304,7 @@ class RecordStatus:
             pubrev['@id'] = id
         if infourl:
             pubrev['info_at'] = infourl
+        pubrev['updated'] = time()
 
         oldrev = self._data.get(_pubreview_p, {}).get(revsys, {})
         oldfb = oldrev.get('feedback', [])

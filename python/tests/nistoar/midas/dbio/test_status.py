@@ -174,6 +174,7 @@ class TestRecordStatus(test.TestCase):
         self.assertEqual(rdata["@id"], "goob")
         self.assertEqual(rdata["info_at"], "/od/id/goob")
         self.assertEqual(rdata["phase"], "group-review")
+        self.assertTrue(rdata["updated"] > 0)
         self.assertNotIn("feedback", rdata)
 
         fb = {
