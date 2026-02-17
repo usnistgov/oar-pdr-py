@@ -561,10 +561,10 @@ class WSGIApp(metaclass=ABCMeta):
             who = self.authenticate(env)
         except Unauthenticated as ex:
             self.log.debug("Authentication failure: %s", str(ex))
-            self.send_error(401, "Authentication Failure")
+            return Handler(path, env, start_resp).send_error(401, "Authentication Failure")
         except Exception as ex:
-            self.log.error("Unexpected failure while authenticating: %s", str(ex))
-            self.send_error(500, "Internal Server Error")
+            self.log.exception("Unexpected failure while authenticating: %s", str(ex))
+            return Handler(path, env, start_resp).send_error(500, "Internal Server Error")
 
         if self.base_ep:
             if path.startswith(self.base_ep):
