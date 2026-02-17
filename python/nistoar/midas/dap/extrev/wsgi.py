@@ -24,7 +24,7 @@ from ... import system
 deflog = logging.getLogger(system.system_abbrev)   \
                 .getChild('extrev').getChild('nps')
 
-DEF_BASE_PATH = '/extrev/nps/leg/'
+DEF_BASE_PATH = '/nps/leg/'
 DEF_DBIO_CLIENT_FACTORY_CLASS = dbio.InMemoryDBClientFactory
 DEF_DBIO_CLIENT_FACTORY_NAME  = "inmem"
 
@@ -69,16 +69,16 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
         try:
             if input.get('reviewResponse') is None:
                 # interpret a missing response as indicating that the review has started
-                self._svc.apply_external_review(id, "nps", "in progress", id)
+                self._svc.apply_external_review(id, "nps1", "in progress", id)
 
             elif input.get('reviewResponse'):
                 # review is approved
-                self._svc.approve(id, "nps", id)
+                self._svc.approve(id, "nps1", id)
 
             else:
                 # reviewer wants changes
                 fb = [{ "type": "req", "description": "Visit NPS for reviewer comments" }]
-                self._svc.apply_external_review(id, "nps", "paused", id, feedback=fb, request_changes=True)
+                self._svc.apply_external_review(id, "nps1", "paused", id, feedback=fb, request_changes=True)
 
             status = self._get_review_status_for(id)
         
@@ -101,7 +101,7 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
                 return self.send_unauthorized()
             except dbio.ObjectNotFound as ex:
                 return self.send_error_obj(404, "ID not found",
-                                           "Record with requested identifier not found", id)
+                                           "Record with requested identifier not found", {"id": path})
 
         try:
             return self._select_open_reviews()
@@ -110,7 +110,7 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
 
     def _get_review_status_for(self, id):
         prec = self._svc.dbcli.get_record_for(id, dbio.ACLs.PUBLISH)  # may raise exc
-        rev = prec.status.get_review_from("nps")
+        rev = prec.status.get_review_from("nps1")
         if not rev:
             rev = {}
         return rev
@@ -120,7 +120,7 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
 
         out = []
         for prec in recs:
-            rev = prec.status.get_review_from("nps")
+            rev = prec.status.get_review_from("nps1")
             if rev and rev.get('phase') != "approved":
                 out.append(rev)
 
@@ -167,14 +167,14 @@ class ExternalReviewApp(AuthenticatedWSGIApp):
         if config.get('base_ep_path'):
             baseep = config['base_ep_path']
         
-        super(ExternalReviewApp, self).__init__(config, log, baseep, "nps")
+        super(ExternalReviewApp, self).__init__(config, log, baseep, "nps1")
 
         if not dbio_client_factory:
             dbclsnm = self.cfg.get('dbio', {}).get('factory')
             if not dbclsnm:
                 dbclsnm = DEF_DBIO_CLIENT_FACTORY_NAME
             dbcls = self.DB_FACTORY_CLASSES.get(dbclsnm)
-            if dbcls:
+            if not dbcls:
                 dbcls = DEF_DBIO_CLIENT_FACTORY_CLASS
             dbio_client_factory = dbcls(self.cfg.get('dbio', {}))
 
@@ -192,4 +192,7 @@ class ExternalReviewApp(AuthenticatedWSGIApp):
     def handle_path_request(self, path: str, env: Mapping, start_resp: Callable, who = None):
         svcapp = LegacyNPSServiceApp(self.svcfact, self.log, self.cfg.get('dap', {}))
         return svcapp.create_handler(env, start_resp, path, who).handle()
+
+# The default WSGI application
+app = ExternalReviewApp
 

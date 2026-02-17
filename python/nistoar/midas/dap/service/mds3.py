@@ -2717,8 +2717,6 @@ class DAPService(ProjectService):
                 if _prec.meta.get("software_included"):
                     options["security_review"] = True
                 self._extrevcli.submit(_prec.id, self.who.actor, version, **options)
-                if self._extrevcli.system_name == "nps1":
-                    self.apply_external_review(_prec.id, self._extrevcli.system_name, "requested")
 
                 # refresh, in case the record has changed
                 _prec = self.dbcli.get_record_for(id, ACLs.READ)
@@ -2732,7 +2730,7 @@ class DAPService(ProjectService):
                 self._try_save(_prec)
 
             except Exception as ex:
-                message = "Unexpected trouble submitting for review: %s", str(ex)
+                message = "Unexpected trouble submitting for review: " + str(ex)
                 self.log.exception(message)
                 # possibly notify
                 _prec.status.set_state(status.UNWELL)
@@ -2791,6 +2789,11 @@ class DAPService(ProjectService):
         elif self.cfg.get('disable_review'):
             options['do_review'] = False
             return status.ACCEPTED
+
+        if self._extrevcli and options['do_review'] and self._extrevcli.system_name in [ "nps1" ]:
+            # mark review as requested as the legacy NPS will not respond immediately
+            # need to do this before changing permissions
+            self.apply_external_review(prec.id, self._extrevcli.system_name, "requested", _prec=prec)
 
         try:
             # reset permissions

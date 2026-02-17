@@ -51,6 +51,10 @@ services:
             nerdstorage:
               type: fsbased
               store_dir: /data/midas/nerdm
+            external_review:
+              name: simulated
+              as_system: nps1
+            reviewer_ids: [ "npsop" ]
 
    dmp: 
       about: 

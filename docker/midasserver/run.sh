@@ -16,6 +16,7 @@ SED_RE_OPT=r
 PACKAGE_NAME=oar-pdr-py
 DEFAULT_CONFIGFILE=$dockerdir/midasserver/midas-dmpdap_conf.yml
 NSD_CONFIGFILE=$dockerdir/midasserver/midas-dmpdapnsd_conf.yml
+NPS_CONFIGFILE=$dockerdir/midasserver/midas-npsfb_conf.yml
 
 set -e
 
@@ -58,8 +59,15 @@ ARGUMENTS
   -P, --add-people-service      Include the staff directory service within the application.
                                 This will trigger use of a MongoDB database, but it 
                                 does not effect the DBIO backend (use -M for this).  
+  -R, --add-nps-feedback        Include a service listening for review feedback from an 
+                                NPS system (using the default configuration, unless -r 
+                                is set)
+  -r FILE, --nps-config-file FILE   use the given FILE as the NPS Feedback service config
+                                file (implies -R)
   -p, --port NUM                The port that the service should listen to 
                                 (default: 9091)
+  --nps-port NUM                The port that the NPS feedback service should listen on
+                                (default: 9092)
   -N, --with-notifier           Also launch the DBIO client notifier server
   --notifier-url URL            The URL of an externally running client notifier server 
                                 to use (don't use with -N)
@@ -86,6 +94,7 @@ function build_server_image {
 }
 
 PORT=9091
+NPSPORT=9092
 DOPYBUILD=
 DODOCKBUILD=
 CONFIGFILE=
@@ -109,7 +118,7 @@ while [ "$1" != "" ]; do
         -B|--bg|--detach)
             DETACH="--detach"
             ;;
-        -c)
+        -c|--config-file)
             shift
             CONFIGFILE=$1
             ;;
@@ -126,7 +135,7 @@ while [ "$1" != "" ]; do
         -B|--bg|--detach)
             DETACH="--detach"
             ;;
-        -l)
+        -l|--log-file)
             shift
             LOGFILE=$1
             ;;
@@ -138,6 +147,18 @@ while [ "$1" != "" ]; do
             ;;
         -P|--add-people-service)
             ADDNSD=1
+            ;;
+        -R|--add-nps-feedback)
+            ADDNPS=1
+            ;;
+        -r|--nps-config-file)
+            shift
+            ADDNPS=1
+            NPS_CONFIGFILE=$1
+            ;;
+        --nps-config-file=*)
+            ADDNPS=1
+            NPS_CONFIGFILE=`echo $1 | sed -e 's/[^=]*=//'`
             ;;
         -d|--people-data-dir)
             shift
@@ -200,6 +221,7 @@ while [ "$1" != "" ]; do
     esac
     shift
 done
+NETOPTS="-p 127.0.0.1:${PORT}:${PORT}/tcp"
 if [ -z "$PPLDATADIR" ]; then
     PPLDATADIR=$repodir/python/tests/nistoar/nsd/data
 else
@@ -245,6 +267,12 @@ configext=`echo $CONFIGFILE | sed -e 's/^.*\.//' | tr A-Z a-z`
 configparent=`dirname $CONFIGFILE`
 configfile=`(cd $configparent; pwd)`/`basename $CONFIGFILE`
 VOLOPTS="$VOLOPTS -v ${configfile}:/app/midas-config.${configext}:ro"
+[ -z "$ADDNPS" ] || {
+    configparent=`dirname $NPS_CONFIGFILE`
+    configfile=`(cd $configparent; pwd)`/`basename $NPS_CONFIGFILE`
+    VOLOPTS="$VOLOPTS -v ${configfile}:/app/npsfb-config.${configext}:ro"
+    NETOPTS="$NETOPTS -p 127.0.0.1:${NPSPORT}:${NPSPORT}/tcp"
+}
 ENVOPTS="$ENVOPTS -e OAR_MIDASSERVER_CONFIG=/app/midas-config.${configext}"
 [ -z "$notifierurl" ] || {
     ENVOPTS="$ENVOPTS -e OAR_CLINOTIF_URL=$notifierurl"
@@ -285,7 +313,6 @@ fi
     ENVOPTS="$ENVOPTS -e OAR_WORKING_DIR=/data/midas"
 }
 
-NETOPTS=
 STOP_MONGO=true
 true ${DBTYPE:=inmem}
 if [ "$DBTYPE" = "mongo" -o -n "$ADDNSD" ]; then
@@ -305,7 +332,7 @@ if [ "$DBTYPE" = "mongo" -o -n "$ADDNSD" ]; then
     }
     export OAR_MONGODB_DBDIR=`cd $STOREDIR; pwd`/mongo
 
-    NETOPTS="--network=mongo_default --link midas_mongodb:mongodb"
+    NETOPTS="--network=mongo_default --link midas_mongodb:mongodb -p 8765:8765"
     ENVOPTS="$ENVOPTS -e OAR_MONGODB_HOST=mongodb -e OAR_MONGODB_USER=oarop"
 
     [ "$ACTION" = "stop" ] || {
@@ -337,9 +364,10 @@ if [ "$ACTION" = "stop" ]; then
     stop_server || true
     $STOP_MONGO
 else
-    echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp \
-               -p 8765:8765 --rm --name=$CONTAINER_NAME $DETACH $D\
+    echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS \
+               --rm --name=$CONTAINER_NAME $DETACH $DETACH \
                $PACKAGE_NAME/midasserver $DBTYPE
-    docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp -p 8765:8765 --rm --name=$CONTAINER_NAME $DETACH $PACKAGE_NAME/midasserver $DBTYPE
+    docker run $ENVOPTS $VOLOPTS $NETOPTS --rm --name=$CONTAINER_NAME \
+               $DETACH $PACKAGE_NAME/midasserver $DBTYPE
 fi
 
