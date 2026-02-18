@@ -33,6 +33,8 @@ class CSVExporter(Exporter):
         """
         Render a single JSON input into a single CSV output
         """
+        if template_name and template_name.startswith("export_report"):
+            return self._render_report_template(json_payload, filename, template_name)
         import csv
         import io
         
@@ -192,6 +194,22 @@ class CSVExporter(Exporter):
         csv_text = output.getvalue()
         output.close()
 
+        return {
+            "format": self.format_name,
+            "filename": f"{filename}{self.file_extension}",
+            "mimetype": "text/csv",
+            "text": csv_text,
+            "file_extension": self.file_extension,
+        }
+
+    def _render_report_template(self, json_payload: Any, filename: str, template_name: str):
+        template_path = self.resolve_template_path("csv", template_name)
+        preppy_template = preppy.getModule(str(template_path))
+        if isinstance(json_payload, MappingABC):
+            data_for_template = json_payload.get("data", json_payload)
+        else:
+            data_for_template = json_payload
+        csv_text = preppy_template.get(data_for_template)
         return {
             "format": self.format_name,
             "filename": f"{filename}{self.file_extension}",

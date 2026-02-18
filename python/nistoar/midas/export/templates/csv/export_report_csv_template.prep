@@ -1,0 +1,55 @@
+{{def(report)}}
+{{script}}
+def csv_escape(value):
+    if value is None:
+        return ""
+    s = str(value)
+    s = s.replace('"', '""')
+    s = s.replace("\r", " ").replace("\n", " ")
+    return f'"{s}"'
+
+def add_row(lines, section, key="", value="", index="", title="", rec_id="", filename="", reason=""):
+    row = [section, key, value, index, title, rec_id, filename, reason]
+    lines.append(",".join(csv_escape(item) for item in row))
+
+lines = []
+add_row(lines, "Section", "Key", "Value", "Index", "Title", "ID", "Filename", "Reason")
+add_row(lines, "meta", "export_date", report.get("export_date", ""))
+add_row(lines, "meta", "output_format", report.get("output_format", ""))
+add_row(lines, "meta", "output_filename", report.get("output_filename", ""))
+add_row(lines, "meta", "export_label", report.get("export_label", ""))
+
+summary = report.get("summary", {})
+add_row(lines, "summary", "total_inputs", summary.get("total_inputs", ""))
+add_row(lines, "summary", "exported_count", summary.get("exported_count", ""))
+add_row(lines, "summary", "failed_count", summary.get("failed_count", ""))
+
+for rec in report.get("exported", []):
+    add_row(
+        lines,
+        "exported",
+        "",
+        "",
+        rec.get("index", ""),
+        rec.get("title", ""),
+        rec.get("id", ""),
+        rec.get("filename", ""),
+        "",
+    )
+
+for rec in report.get("failed", []):
+    add_row(
+        lines,
+        "failed",
+        "",
+        "",
+        rec.get("index", ""),
+        rec.get("title", ""),
+        rec.get("id", ""),
+        rec.get("filename", ""),
+        rec.get("reason", ""),
+    )
+
+csv_text = "\n".join(lines)
+{{endscript}}
+{{csv_text}}

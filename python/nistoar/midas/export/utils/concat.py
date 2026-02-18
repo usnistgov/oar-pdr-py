@@ -59,40 +59,49 @@ def concat_pdf(rendered_results: List[Dict], output_filename: str) -> Dict:
     }
 
 
-def concat_csv(rendered_results: List[Dict], output_filename: str) -> Dict:
-    """
-    Join multiple CSV texts by merging headers and combining rows.
-    Rendered_results is a list of dicts that must contain the key 'text'
-    """
-    csv_texts = []
-    for result in rendered_results:
-        txt = result.get("text")
-        if not isinstance(txt, str):
-            raise TypeError("concat_csv expects all inputs to have a 'text' key.")
-        csv_texts.append(txt.strip())
-    
+def _extract_csv_text(result: Dict) -> str:
+    txt = result.get("text")
+    if not isinstance(txt, str):
+        raise TypeError("concat_csv expects all inputs to have a 'text' key.")
+    return txt.strip()
+
+
+def _concat_csv_data(rendered_results: List[Dict]) -> str:
+    if not rendered_results:
+        return ""
+    csv_texts = [_extract_csv_text(result) for result in rendered_results]
     if not csv_texts:
-        return {
-            "format": "csv",
-            "filename": f"{output_filename}.csv" if not output_filename.endswith(".csv") else output_filename,
-            "mimetype": "text/csv",
-            "text": "",
-            "file_extension": ".csv",
-        }
-    
+        return ""
     # Extract header from first CSV and combine all data rows
     lines = csv_texts[0].split('\n')
     header = lines[0] if lines else ""
     combined_rows = []
-    
     for csv_text in csv_texts:
         text_lines = csv_text.split('\n')
         # Skip header (first line) and add data rows
         for line in text_lines[1:]:
             if line.strip():  # Skip empty lines
                 combined_rows.append(line)
-    
-    combined_csv = header + '\n' + '\n'.join(combined_rows) if combined_rows else header
+    return header + '\n' + '\n'.join(combined_rows) if combined_rows else header
+
+
+def concat_csv(rendered_results: List[Dict], output_filename: str) -> Dict:
+    """
+    Join multiple CSV texts by merging headers and combining rows.
+    Rendered_results is a list of dicts that must contain the key 'text'
+    """
+    report_text = ""
+    data_results = rendered_results
+    if rendered_results and rendered_results[0].get("section") == "report":
+        report_text = _extract_csv_text(rendered_results[0])
+        data_results = rendered_results[1:]
+    data_text = _concat_csv_data(data_results)
+    if report_text and data_text:
+        combined_csv = report_text + "\n\n" + data_text
+    elif report_text:
+        combined_csv = report_text
+    else:
+        combined_csv = data_text
 
     return {
         "format": "csv",
