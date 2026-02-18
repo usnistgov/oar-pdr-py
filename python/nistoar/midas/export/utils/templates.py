@@ -12,8 +12,10 @@ class TemplateResolver:
         if roots:
             self.roots = [Path(r) for r in roots]
         else:
-            # default to package templates dir
-            self.roots = [(Path(__file__).resolve().parents[2] / "templates")]
+            # default to package templates dir (prefer export/templates, fall back to midas/templates)
+            export_templates = Path(__file__).resolve().parents[1] / "templates"
+            midas_templates = Path(__file__).resolve().parents[2] / "templates"
+            self.roots = [export_templates, midas_templates]
 
     def resolve(self, format_subdir: str, template_filename: str) -> Path:
         cand = [r / format_subdir / template_filename for r in self.roots]
