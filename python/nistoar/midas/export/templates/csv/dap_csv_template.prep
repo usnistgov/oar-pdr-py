@@ -1,0 +1,9 @@
+{{script}}
+# DAP CSV Template for Data Asset Plans  
+# This template renders DAP records in CSV format with essential fields
+# Required fields: Name, ID, Type, Owner, Status Fields, Data Fields
+{{endscript}}
+"Name","ID","Type","Owner","Status_State","Status_Action","Status_CreatedDate","Status_ModifiedDate","Status_Message","Title","DOI","Schema","ContactPoint_Name","ContactPoint_Email","Keywords","Theme","Authors","References","File_Count","Nonfile_Count","Meta_ResourceType","Meta_AssocPageType"
+{{for record in records}}
+"{{record.get('name', 'N/A').replace('"', '""')}}","{{record.get('id', 'N/A')}}","DAP","{{record.get('owner', 'N/A')}}","{{record.get('status', {}).get('state', 'N/A')}}","{{record.get('status', {}).get('action', 'N/A')}}","{{record.get('status', {}).get('createdDate', 'N/A')}}","{{record.get('status', {}).get('modifiedDate', 'N/A')}}","{{record.get('status', {}).get('message', 'N/A').replace('"', '""')}}","{{record.get('data', {}).get('title', 'N/A').replace('"', '""')}}","{{record.get('data', {}).get('doi', 'N/A')}}","{{record.get('data', {}).get('_schema', 'N/A')}}","{{record.get('data', {}).get('contactPoint', {}).get('fn', 'N/A')}}","{{record.get('data', {}).get('contactPoint', {}).get('hasEmail', 'N/A')}}","{{'; '.join(record.get('data', {}).get('keywords', []))}}","{{'; '.join(record.get('data', {}).get('theme', []))}}","{{'; '.join([author.get('fn', 'N/A') for author in record.get('data', {}).get('authors', [])])}}","{{'; '.join([ref.get('title', ref.get('citation', 'N/A')) for ref in record.get('data', {}).get('references', [])])}}","{{record.get('data', {}).get('file_count', 0)}}","{{record.get('data', {}).get('nonfile_count', 0)}}","{{record.get('meta', {}).get('resourceType', 'N/A')}}","{{record.get('meta', {}).get('assocPageType', 'N/A')}}"
+{{endfor}}

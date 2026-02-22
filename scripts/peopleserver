@@ -1,0 +1,16 @@
+#! /bin/bash
+#
+# peopleserver -- launch a docker container running a mock NSD web server
+#
+# Usage: peopleserver [-h|--help] [-b|--build] [-D|--docker-build] [-B|--bg] [-p|--port #]
+#                     [-c|--config-file FILE] [-N|--no-mongo] [DIR] [start|stop]
+#
+# Type "peopleserver -h" print help on arguments/options.
+#
+prog=`basename $0`
+execdir=`dirname $0`
+[ "$execdir" = "" -o "$execdir" = "." ] && execdir=$PWD
+export CODEDIR=`(cd $execdir/.. > /dev/null 2>&1; pwd)`
+export DOCKERDIR=$CODEDIR/docker
+
+exec $DOCKERDIR/peopleserver/run.sh "$@"

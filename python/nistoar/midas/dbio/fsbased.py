@@ -7,20 +7,25 @@ from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
 from . import base
+from .notifier import DBIOClientNotifier
 
 from nistoar.pdr.utils import read_json, write_json
 from nistoar.base.config import ConfigurationException, merge_config
+from nistoar.nsd.service import PeopleService, MongoPeopleService, create_people_service
+
+SUPPORTED_CONSTRAINTS = set("name id owner status_state".split())
 
 class FSBasedDBClient(base.DBClient):
     """
     an implementation of DBClient in which the data is persisted to flat files on disk.
     """
 
-    def __init__(self, dbroot: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS):
+    def __init__(self, dbroot: str, config: Mapping, projcoll: str, foruser: str = base.ANONYMOUS,
+                 peopsvc: PeopleService = None, notifier: DBIOClientNotifier = None):
         self._root = Path(dbroot)
         if not self._root.is_dir():
             raise base.DBIOException("FSBasedDBClient: %s: does not exist as a directory" % dbroot)
-        super(FSBasedDBClient, self).__init__(config, projcoll, self._root, foruser)
+        super(FSBasedDBClient, self).__init__(config, projcoll, self._root, foruser, peopsvc, notifier)
 
     def _ensure_collection(self, collname):
         collpath = self._root / collname
@@ -42,10 +47,12 @@ class FSBasedDBClient(base.DBClient):
         self._ensure_collection(collname)
         recpath = self._root / collname / (id+".json")
         exists = recpath.exists()
+        if not exists and not recpath.parents[0].exists():
+            recpath.parents[0].mkdir(parents=True)
         try: 
             write_json(data, str(recpath))
         except Exception as ex:
-            raise DBIOException(id+": Unable to write DB record: "+str(ex))
+            raise base.DBIOException(id+": Unable to write DB record: "+str(ex))
         return not exists
 
     def _next_recnum(self, shoulder):
@@ -104,7 +111,7 @@ class FSBasedDBClient(base.DBClient):
                     # skip over corrupted records
                     continue
                 except IOError as ex:
-                    raise DBIOException(recf+": file locking error: "+str(ex))
+                    raise base.DBIOException(recf+": file locking error: "+str(ex))
 
                 if rec.get('deactivated') and not incl_deact:
                     continue
@@ -128,7 +135,7 @@ class FSBasedDBClient(base.DBClient):
         except KeyError:
             raise base.DBIOException("_upsert(): record is missing 'id' property")
 
-    def select_records(self, perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+    def select_records(self, perm: base.Permissions=base.ACLs.OWN, **cnsts) -> Iterator[base.ProjectRecord]:
         if isinstance(perm, str):
             perm = [perm]
         if isinstance(perm, (list, tuple)):
@@ -141,16 +148,38 @@ class FSBasedDBClient(base.DBClient):
             for fn in files:
                 try:
                     recf = os.path.join(root, fn)
-                    rec = base.ProjectRecord(self._projcoll, read_json(recf), self)
+                    rec = read_json(recf)
                 except ValueError:
                     # skip over corrupted records
                     continue
                 except IOError as ex:
                     raise base.DBIOException(recf+": file locking error: "+str(ex))
+                if cnsts:
+                    # filter out records not matched by cnsts
+                    matched = True
+                    for prop in SUPPORTED_CONSTRAINTS:
+                        vals = cnsts.get(prop)
+                        if not vals:
+                            continue
+
+                        if prop == "status_state":
+                            if rec.get('status', {}).get('state') not in vals:
+                                matched = False
+                        elif rec.get(prop) not in vals:
+                            matched = False
+                    if not matched:
+                        continue
+                    
+                rec = base.ProjectRecord(self._projcoll, rec, self)
+
                 for p in perm:
                     if rec.authorized(p):
                         yield rec
                         break
+
+    def adv_select_records(self, perm: base.Permissions = base.ACLs.OWN,
+                           **cst) -> Iterator[base.ProjectRecord]:
+        raise NotImplementedError()
 
     def _save_action_data(self, actdata: Mapping):
         self._ensure_collection(base.PROV_ACT_LOG)
@@ -214,6 +243,19 @@ class FSBasedDBClient(base.DBClient):
         except Exception as ex:
             raise base.DBIOException(histrec['recid']+": Failed to write history entries: "+str(ex))
 
+    def client_for(self, projcoll: str, foruser: str = None):
+        """
+        create a new DBClient using the same backend as this one but attached to a different collection
+        (and possibly user).
+        :param str projcol:  the project collection name
+        :param str foruser:  the user this should be used on behalf of.  This controls what records the 
+                             client has access to.
+        """
+        if not foruser:
+            foruser = self.user_id
+        return self.__class__(str(self._root), self._cfg, projcoll, foruser)
+
+
 class FSBasedDBClientFactory(base.DBClientFactory):
     """
     a DBClientFactory that creates FSBasedDBClient instances in which records are stored in JSON
@@ -250,5 +292,13 @@ class FSBasedDBClientFactory(base.DBClientFactory):
 
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
         cfg = merge_config(config, deepcopy(self._cfg))
-        return FSBasedDBClient(self._dbroot, cfg, servicetype, foruser)
+
+        peopsvc = self._peopsvc
+        if not peopsvc:
+            peopsvc = self.create_people_service(cfg.get("people_service", {}))
+        notifier = self._notifier
+        if not notifier:
+            notifier = self._create_notifier_from_config(cfg)
+
+        return FSBasedDBClient(self._dbroot, cfg, servicetype, foruser, peopsvc, notifier)
 

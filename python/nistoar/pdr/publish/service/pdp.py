@@ -15,7 +15,7 @@ from .base import SimpleNerdmPublishingService
 from .. import (PublishingStateException, SIPConflictError, SIPNotFoundError, BadSIPInputError,
                 ConfigurationException, UnauthorizedPublishingRequest)
 from ..bagger import SIPBagger, SIPBaggerFactory, PDPBagger
-from ..prov import PubAgent, Action
+from ...utils.prov import Agent, Action
 from ..idmint import PDP0Minter
 from ....nerdm import utils as nerdutils
 from ....nerdm.validate import ValidationError
@@ -124,7 +124,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         return status.SIPStatus(sipid, {"cachedir": self.statusdir})
 
     @abstractmethod
-    def _get_id_shoulder(self, who: PubAgent, sipid: str, create: bool):
+    def _get_id_shoulder(self, who: Agent, sipid: str, create: bool):
         """
         determine the ID shoulder to be associated with a service request.  The ID shoulder (the prefix 
         to the local part of our identifiers) serves as a particular account for the client under which 
@@ -132,7 +132,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         the SIP.  This should raise an UnauthorizedPublishingRequest if client (given by who) is requesting
         a shoulder (as specified by sipid) they are not authorized for.  
 
-        :param PubAgent who:  the user agent making the request
+        :param Agent    who:  the user agent making the request
         :param str    sipid:  the requested SIP ID
         :param bool  create:  True if the user is requesting the publishing of a new SIP; False if 
                               requesting an update to a previously published SIP.
@@ -171,7 +171,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
     def _create_ingest_service(self):
         raise NotImplementedError()
 
-    def accept_resource_metadata(self, nerdm: Mapping, who: PubAgent=None, sipid: str=None, create:
+    def accept_resource_metadata(self, nerdm: Mapping, who: Agent=None, sipid: str=None, create:
                                  bool=None) -> str:
         """
         create or update an SIP for submission.  By default, a new SIP will be created if the input 
@@ -249,7 +249,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
             bagger = self._get_bagger_for(shoulder, sipid, minter)
             bagger.delete()
-            sts.start(self.convention, who.group)
+            sts.start(self.convention, who.agent_class)
 
         else:
             sts = self.status_of(sipid)
@@ -263,7 +263,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
             bagger = self._get_bagger_for(shoulder, sipid, minter)
             if sts.state == status.NOT_FOUND or sts.state == status.PUBLISHED:
-                sts.start(self.convention, who.group)
+                sts.start(self.convention, who.agent_class)
             elif sts.siptype != self.convention:
                 raise SIPConflictError(sipid, "SIP is already being handled under a different convention: "+
                                        sts.siptype)
@@ -285,7 +285,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         return sipid
 
-    def upsert_component_metadata(self, sipid: str, cmpmd: Mapping, who: PubAgent=None):
+    def upsert_component_metadata(self, sipid: str, cmpmd: Mapping, who: Agent=None):
         """
         add or update a component of the NERDm resource with the provided metadata.  If the record does not 
         have an "@id" property, a new component will be created and a component identifier will be assigend
@@ -333,7 +333,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         if sts.state == status.PUBLISHED:
             bagger.delete()
-            sts.start(self.convention, who.group)
+            sts.start(self.convention, who.agent_class)
 
         elif sts.state == status.NOT_FOUND:
             if not bagger.get_prepper().aip_exists():
@@ -341,7 +341,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                     "Unable to update SIP {0} with component data: SIP not yet created ({1}: {2})"
                     .format(sipid, sts.siptype, sts.state)
                 )
-            sts.start(self.convention, who.group)
+            sts.start(self.convention, who.agent_class)
 
         try:
             bagger.prepare(who=who)
@@ -355,7 +355,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                 
         return cmpid
 
-    def remove_component(self, sipid: str, cmpid: str, who: PubAgent=None):
+    def remove_component(self, sipid: str, cmpid: str, who: Agent=None):
         """
         remove the identified component from the SIP.  
 
@@ -384,7 +384,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         return False
             
 
-    def delete(self, sipid: str, who: PubAgent=None):
+    def delete(self, sipid: str, who: Agent=None):
         """
         delete the presence of the SIP from this service.  This will be called automatically by the 
         publish() method after successful submission of the SIP for publication; however, clients can 
@@ -428,7 +428,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         return True
 
-    def finalize(self, sipid: str, who: PubAgent=None) -> None:
+    def finalize(self, sipid: str, who: Agent=None) -> None:
         """
         process all SIP input to get it ready for publication.  The SIP metadata will be updated 
         accordingly (which will affect what is returned from :py:method:`describe`).  
@@ -473,7 +473,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             raise ex
 
 
-    def publish(self, sipid: str, who: PubAgent=None):
+    def publish(self, sipid: str, who: Agent=None):
         """
         submit the SIP for ingest and preservation into the PDR archive.  The SIP needs to be in 
         the PENDING state.  
@@ -826,7 +826,7 @@ class PDPublishingService(BagBasedPublishingService):
         the SIP.  This will raise an UnauthorizedPublishingRequest if client (given by who) is requesting
         a shoulder (as specified by sipid) they are not authorized for.  
 
-        :param PubAgent who:  the user agent making the request
+        :param Agent    who:  the user agent making the request
         :param str    sipid:  the requested SIP ID
         :param bool  create:  True if the user is requesting the publishing of a new SIP; False if 
                               requesting an update to a previously published SIP.
@@ -834,13 +834,15 @@ class PDPublishingService(BagBasedPublishingService):
         # return an ID shoulder to mint an ID under given the permissions configured for the
         # given client (who)
 
+        # The agent's class will corresponds to a class of clients allowed create publications under
+        # particular ID shoulders.  The supported clients are specified in the configuration.
         out = None
-        client_ctl = self.cfg.get('clients', {}).get(who.group)
+        client_ctl = self.cfg.get('clients', {}).get(who.agent_class)
         if client_ctl is None:
             client_ctl = self.cfg.get('clients', {}).get("default")
         if client_ctl is None:
-            raise UnauthorizedPublishingRequest("No default permissions available for client group, "+
-                                                who.group)
+            raise UnauthorizedPublishingRequest("No default permissions available for client agent, "+
+                                                who.agent_class)
 
         if sipid:
             # sipid must begin with a shoulder name (or the form NAME: or NAME-)
@@ -854,7 +856,7 @@ class PDPublishingService(BagBasedPublishingService):
             if isclientid and create and not client_ctl.get('localid_provider'):
                 raise UnauthorizedPublishingRequest(
                     "Client group, %s, is not allowed to request new SIP ID: %s"
-                    % (who.group, sipid)
+                    % (who.agent_class, sipid)
                 )
         else:
             # client is requesting a shoulder to be assigned
@@ -862,17 +864,17 @@ class PDPublishingService(BagBasedPublishingService):
             if not out:
                 raise UnauthorizedPublishingRequest(
                     "No default shoulder permitted for %s under SIP-type=%s"
-                    % (who.group, self.convention)
+                    % (who.agent_class, self.convention)
                 )
 
         shoulder = self.cfg.get('shoulders', {}).get(out)
         if not shoulder:
             self.log.warning("No handler configured for SIP shoulder=%s", out)
-        if not shoulder or who.group not in shoulder.get('allowed_clients', []):
+        if not shoulder or who.agent_class not in shoulder.get('allowed_clients', []):
             isdefault = "default " if out == client_ctl.get('default_shoulder') else ""
             raise UnauthorizedPublishingRequest(
                 "Client group '%s' is not permitted to publish to %sSIP shoulder, %s"
-                % (who.group, isdefault, out)
+                % (who.agent_class, isdefault, out)
             )
 
         return out

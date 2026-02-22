@@ -21,5 +21,4 @@ exit status codes:
 Higher exit values can be used for meanings more specific to the command invoked.  The value 200 is 
 raise if any unexpected, uncaught exception bubbles to the top of the execution stack.  
 """
-from .pdr import *
 

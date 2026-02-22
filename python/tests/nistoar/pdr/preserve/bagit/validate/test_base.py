@@ -76,11 +76,11 @@ class TestValidationIssue(test.TestCase):
                                      spec="Life must self-replicate", 
                                      passed=False, comments=["Little", "green"])
         self.assertEqual(issue.summary,
-                         "ERROR: Life 3.1 A1.1: Life must self-replicate")
+                         "REQUIREMENT: Life 3.1 A1.1: Life must self-replicate")
         self.assertEqual(str(issue),
-                     "ERROR: Life 3.1 A1.1: Life must self-replicate (Little)")
-        self.assertEqual(issue.description,
-           "ERROR: Life 3.1 A1.1: Life must self-replicate\n  Little\n  green")
+                "REQUIREMENT: Life 3.1 A1.1: Life must self-replicate (Little)")
+        self.assertEqual(issue.description, 
+      "REQUIREMENT: Life 3.1 A1.1: Life must self-replicate\n  Little\n  green")
 
 
 

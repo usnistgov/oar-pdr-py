@@ -15,6 +15,7 @@ SED_RE_OPT=r
 
 PACKAGE_NAME=oar-pdr-py
 DEFAULT_CONFIGFILE=$dockerdir/midasserver/midas-dmpdap_conf.yml
+NSD_CONFIGFILE=$dockerdir/midasserver/midas-dmpdapnsd_conf.yml
 
 set -e
 
@@ -46,9 +47,25 @@ ARGUMENTS
   -c FILE, --config-file FILE   Use a custom service configuration given in FILE.
                                 This file must be in YAML or JSON format.
                                 Defaut: docker/midasserver/midas-dmp_config.yml
+  -B, --bg                      Run the server in the background (returning the 
+                                command prompt after successful launch)
+  -l FILE, --log-file FILE      Send server messages to FILE, overriding the 
+                                configuration.  Default: midas.log
+                                in the data directory.
   -M, --use-mongodb             Use a MongoDB backend; DIR must also be provided.
                                 If not set, a file-based database (using JSON 
                                 files) will be used, stored under DIR/dbfiles.
+  -P, --add-people-service      Include the staff directory service within the application.
+                                This will trigger use of a MongoDB database, but it 
+                                does not effect the DBIO backend (use -M for this).  
+  -p, --port NUM                The port that the service should listen to 
+                                (default: 9091)
+  -N, --with-notifier           Also launch the DBIO client notifier server
+  --notifier-url URL            The URL of an externally running client notifier server 
+                                to use (don't use with -N)
+  --notifier-key KEY            The authorization key to use to identify the MIDAS server
+                                to the client notifier server.  If not set, a default will 
+                                be used.
   -h, --help                    Print this text to the terminal and then exit
 
 EOF
@@ -68,12 +85,19 @@ function build_server_image {
     $dockerdir/dockbuild.sh -d midasserver # > log
 }
 
+PORT=9091
 DOPYBUILD=
 DODOCKBUILD=
 CONFIGFILE=
+LOGFILE=
 USEMONGO=
 STOREDIR=
 DBTYPE=
+ADDNSD=
+DETACH=
+PPLDATADIR=
+VOLOPTS="-v $repodir/dist:/app/dist"
+ENVOPTS=
 while [ "$1" != "" ]; do
     case "$1" in
         -b|--build)
@@ -82,6 +106,9 @@ while [ "$1" != "" ]; do
         -D|--docker-build)
             DODOCKBUILD="-D"
             ;;
+        -B|--bg|--detach)
+            DETACH="--detach"
+            ;;
         -c)
             shift
             CONFIGFILE=$1
@@ -89,8 +116,63 @@ while [ "$1" != "" ]; do
         --config-file=*)
             CONFIGFILE=`echo $1 | sed -e 's/[^=]*=//'`
             ;;
+        -p)
+            shift
+            PORT=$1
+            ;;
+        --port=*)
+            PORT=`echo $1 | sed -e 's/[^=]*=//'`
+            ;;
+        -B|--bg|--detach)
+            DETACH="--detach"
+            ;;
+        -l)
+            shift
+            LOGFILE=$1
+            ;;
+        --log-file=*)
+            LOGFILE=`echo $1 | sed -e 's/[^=]*=//'`
+            ;;
         -M|--use-mongo)
             DBTYPE="mongo"
+            ;;
+        -P|--add-people-service)
+            ADDNSD=1
+            ;;
+        -d|--people-data-dir)
+            shift
+            PPLDATADIR=$1
+            ;;
+        --people-data-dir=*)
+            PPLDATADIR=`echo $1 | sed -e 's/[^=]*=//'`
+            ;;
+        --mount-volume=*)
+            vol=`echo $1 | sed -e 's/[^=]*=//'`
+            VOLOPTS="$VOLOPTS -v $vol"
+            ;;
+        -V)
+            shift
+            vol=$1
+            VOLOPTS="$VOLOPTS -v $vol"
+            ;;
+        -N|--with-notifier)
+            notifierurl=internal
+            ;;
+        --notifier-url)
+            shift
+            notifierurl=$1
+            ;;
+        --notifier-url=*)
+            shift
+            notifierurl=`echo $1 | sed -e 's/[^=]*=//'`
+            ;;
+        --notifier-key)
+            shift
+            notifierkey=$1
+            ;;
+        --notifier-key=*)
+            shift
+            notifierkey=`echo $1 | sed -e 's/[^=]*=//'`
             ;;
         -h|--help)
             usage
@@ -113,10 +195,17 @@ while [ "$1" != "" ]; do
                 false
             }
             STOREDIR=$1
+            [ -n "$DBTYPE" ] || DBTYPE=fsbased
             ;;
     esac
     shift
 done
+if [ -z "$PPLDATADIR" ]; then
+    PPLDATADIR=$repodir/python/tests/nistoar/nsd/data
+else
+    PPLDATADIR=`(cd $PPLDATADIR > /dev/null 2>&1; pwd)`
+fi
+[ -n "$PPLDATADIR" ] || 
 [ -n "$ACTION" ] || ACTION=start
 
 ([ -z "$DOPYBUILD" ] && [ -e "$repodir/dist/pdr" ]) || {
@@ -127,12 +216,23 @@ done
     echo ${prog}: Python library not found in dist directory: $repodir/dist
     false
 }
-VOLOPTS="-v $repodir/dist:/app/dist"
+
+[ -n "$PPLDATADIR" ] || PPLDATADIR=$repodir/docker/peopleserver/data
+ls $PPLDATADIR/*.json > /dev/null 2>&1 || {
+    # no JSON data found in datadir; reset the datadir to test data
+    echo "${prog}: no people data found; will load db with test data"
+    PPLDATADIR=$repodir/python/tests/nistoar/nsd/data
+}
+[ "$ACTION" = "stop" ] || echo "${prog}: loading staff directory DB from $PPLDATADIR"
+VOLOPTS="$VOLOPTS -v ${PPLDATADIR}:/data/nsd"
 
 # build the docker images if necessary
 (docker_images_built midasserver && [ -z "$DODOCKBUILD" ]) || build_server_image
 
-[ -n "$CONFIGFILE" ] || CONFIGFILE=$DEFAULT_CONFIGFILE
+[ -n "$CONFIGFILE" ] || {
+    CONFIGFILE=$DEFAULT_CONFIGFILE
+    [ -z "$ADDNSD" ] || CONFIGFILE=$NSD_CONFIGFILE
+}
 [ -f "$CONFIGFILE" ] || {
     echo "${prog}: Config file ${CONFIGFILE}: does not exist as a file"
     false
@@ -145,7 +245,26 @@ configext=`echo $CONFIGFILE | sed -e 's/^.*\.//' | tr A-Z a-z`
 configparent=`dirname $CONFIGFILE`
 configfile=`(cd $configparent; pwd)`/`basename $CONFIGFILE`
 VOLOPTS="$VOLOPTS -v ${configfile}:/app/midas-config.${configext}:ro"
-ENVOPTS="-e OAR_MIDASSERVER_CONFIG=/app/midas-config.${configext}"
+ENVOPTS="$ENVOPTS -e OAR_MIDASSERVER_CONFIG=/app/midas-config.${configext}"
+[ -z "$notifierurl" ] || {
+    ENVOPTS="$ENVOPTS -e OAR_CLINOTIF_URL=$notifierurl"
+    [ -z "$notifierkey" ] || ENVOPTS="$ENVOPTS -e OAR_CLINOTIF_KEY=$notifierkey"
+}
+
+[ -z "$LOGFILE" ] || {
+    dir=`dirname $LOGFILE`
+    lf=`basename $LOGFILE`
+    [ "$dir" = "." ] || {
+        [ -d "$dir" ] || {
+            echo "${prog}:" Log file parent directory does not exist: $dir
+            false
+        }
+        dir=`(cd $dir; echo $PWD)`
+        touch $dir/$lf
+        VOLOPTS="$VOLOPTS -v $dir/${lf}:/tmp/$lf"
+        ENVOPTS="$ENVOPTS -e OAR_LOG_FILE=/tmp/$lf"
+    }
+}
 
 if [ -d "$repodir/docs" ]; then
     VOLOPTS="$VOLOPTS -v $repodir/docs:/docs"
@@ -168,7 +287,8 @@ fi
 
 NETOPTS=
 STOP_MONGO=true
-if [ "$DBTYPE" = "mongo" ]; then
+true ${DBTYPE:=inmem}
+if [ "$DBTYPE" = "mongo" -o -n "$ADDNSD" ]; then
     DOCKER_COMPOSE="docker compose"
     (docker compose version > /dev/null 2>&1) || DOCKER_COMPOSE=docker-compose
     ($DOCKER_COMPOSE version  > /dev/null 2>&1) || {
@@ -180,7 +300,7 @@ if [ "$DBTYPE" = "mongo" ]; then
     source $dockerdir/midasserver/mongo/mongo.env
 
     [ -n "$STOREDIR" -o "$ACTION" = "stop" ] || {
-        echo ${prog}: DIR argument must be provided with -M/--use-mongo
+        echo ${prog}: DIR argument must be provided with -M/--use-mongo or -P/--add-people-service
         false
     }
     export OAR_MONGODB_DBDIR=`cd $STOREDIR; pwd`/mongo
@@ -217,7 +337,9 @@ if [ "$ACTION" = "stop" ]; then
     stop_server || true
     $STOP_MONGO
 else
-    echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
-    docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:9091:9091/tcp --rm --name=$CONTAINER_NAME $PACKAGE_NAME/midasserver $DBTYPE
+    echo '+' docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp \
+               -p 8765:8765 --rm --name=$CONTAINER_NAME $DETACH $D\
+               $PACKAGE_NAME/midasserver $DBTYPE
+    docker run $ENVOPTS $VOLOPTS $NETOPTS -p 127.0.0.1:${PORT}:${PORT}/tcp -p 8765:8765 --rm --name=$CONTAINER_NAME $DETACH $PACKAGE_NAME/midasserver $DBTYPE
 fi
 

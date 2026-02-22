@@ -2,7 +2,8 @@
 An implementation of an IDRegistry that tuned for use with the PDR
 """
 import os, logging, json, threading
-from collections import OrderedDict, Mapping, ChainMap
+from collections import OrderedDict
+from typing import Mapping, ChainMap
 from abc import ABCMeta, abstractmethod
 from typing import Callable
 from copy import deepcopy

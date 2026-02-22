@@ -29,6 +29,7 @@ echo Installing python libraries into $PY_LIBDIR...
 # None at this time
 
 $oarmd_pkg/scripts/install_extras.sh --install-dir=$INSTALL_DIR
+mkdir -p $INSTALL_DIR/etc/midas/schemas
 
 mkdir -p $INSTALL_DIR/var/logs
 echo cp -r $SOURCE_DIR/etc $INSTALL_DIR

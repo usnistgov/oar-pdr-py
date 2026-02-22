@@ -24,7 +24,8 @@ distribution mechanism.
 """
 from datetime import datetime
 from abc import ABCMeta, abstractmethod, abstractproperty
-from collections import Mapping, OrderedDict
+from collections import OrderedDict
+from collections.abc import Mapping
 import json
 
 from ... import pdr as _pdr

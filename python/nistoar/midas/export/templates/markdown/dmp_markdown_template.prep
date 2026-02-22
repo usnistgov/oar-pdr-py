@@ -1,0 +1,195 @@
+{{def(record)}}
+# Data Management Plan
+
+---
+
+## Basic Information
+
+**Title:**
+{{record['title']}}
+
+**Project Description:**
+{{record['projectDescription']}}
+
+**Start Date:**
+{{record['startDate']}}
+
+**Make DMP Searchable:**
+{{record['dmpSearchable']}}
+
+**Funding:**
+
+| Grant Source | Grant ID |
+| --- | --- |
+| {{record['funding']['grant_source']}} | {{record['funding']['grant_id']}} |
+
+---
+
+## Researchers
+
+**Contributors:**
+
+{{script}}
+def md_escape(x):
+    if isinstance(x, str):
+        # escape pipes so markdown doesn't think it's a new column
+        return x.replace('|', r'\|').replace('\n', ' ').strip()
+    return '' if x is None else str(x)
+
+lines = []
+lines.append("| Name | Surname | Primary Contact | Institution | ORG ID | Email | ORCID |")
+lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+
+for c in record.get('contributors', []):
+    row = "| {fn} | {ln} | {pc} | {inst} | {orgid} | {email} | {orcid} |".format(
+        fn=md_escape(c.get('firstName')),
+        ln=md_escape(c.get('lastName')),
+        pc=md_escape(c.get('primary_contact')),
+        inst=md_escape(c.get('institution')),
+        orgid=md_escape(c.get('groupOrgID')),
+        email=md_escape(c.get('emailAddress')),
+        orcid=md_escape(c.get('orcid')),
+    )
+    lines.append(row)
+
+contributors_table = "\n".join(lines)
+{{endscript}}
+{{contributors_table}}
+
+**Organization(s) Associated With This DMP:**
+
+{{script}}
+lines = []
+lines.append("| Group Name | Division Name | OU Name |")
+lines.append("| --- | --- | --- |")
+
+for ou in record.get('organizations', []):
+    row = "| {g} | {d} | {o} |".format(
+        g=md_escape(ou.get('groupName')),
+        d=md_escape(ou.get('divisionName')),
+        o=md_escape(ou.get('ouName')),
+    )
+    lines.append(row)
+
+orgs_table = "\n".join(lines)
+{{endscript}}
+{{orgs_table}}
+
+---
+
+## Keywords / Phrases
+
+{{for kw in record['keywords']}}
+- {{kw}}
+{{endfor}}
+
+---
+
+## Technical Requirements
+
+**Estimated Data Size:**
+{{script}}
+data_size = ''
+if 'dataSize' in record and type(record['dataSize']) is str:
+    data_size = record['dataSize']
+if 'sizeUnit' in record and type(record['sizeUnit']) is str:
+    if data_size:
+        data_size += ' '
+    data_size += record['sizeUnit']
+if 'dataSizeDescription' in record and type(record['dataSizeDescription']) is str:
+    if data_size:
+        data_size += ' '
+    data_size += record['dataSizeDescription']
+{{endscript}}
+{{data_size}}
+
+**Software Development:**
+{{record['softwareDevelopment']['development']}}
+
+**Software Use:**
+{{record['softwareDevelopment']['softwareUse']}} use
+
+**Requires Database?**
+{{record['softwareDevelopment']['softwareDatabase']}}
+
+**Website Interface?**
+{{record['softwareDevelopment']['softwareWebsite']}}
+
+**Technical resources equipment needed/used:**
+{{for resource in record['technicalResources']}}
+- {{resource}}
+{{endfor}}
+
+**Instruments needed/used:**
+
+{{script}}
+lines = []
+lines.append("| Instrument Name | Description / URL Landing Page |")
+lines.append("| --- | --- |")
+
+for inst in record.get('instruments', []):
+    row = "| {n} | {d} |".format(
+        n=md_escape(inst.get('name')),
+        d=md_escape(inst.get('description_url')),
+    )
+    lines.append(row)
+
+instruments_table = "\n".join(lines)
+{{endscript}}
+{{instruments_table}}
+
+---
+
+## Ethical Concerns
+
+**IRB number:**
+{{record['ethical_issues']['irb_number']}}
+
+**Any ethical issues?**
+{{record['ethical_issues']['ethical_issues_exist']}}
+
+**Describe any ethical issues (human subjects, etc.):**
+{{record['ethical_issues']['ethical_issues_description']}}
+
+**Ethical issues report:**
+{{record['ethical_issues']['ethical_issues_report']}}
+
+---
+
+## Security and Privacy
+
+**Data Sensitivity Level(s):**
+{{for item in record['security_and_privacy']['data_sensitivity']}}
+- {{item}}
+{{endfor}}
+
+**Controlled Unclassified Information (CUI):**
+{{for item in record['security_and_privacy']['cui']}}
+- {{item}}
+{{endfor}}
+
+---
+
+## Data Preservation and Accessibility
+
+{{record['dataDescription']}}
+
+**Categories of the data that will be generated:**
+{{for item in record['dataCategories']}}
+- {{item}}
+{{endfor}}
+
+---
+
+## Data Description
+
+**Preservation Description:**
+{{record['preservationDescription']}}
+
+**Data discoverability and accessibility plan:**
+{{record['dataAccess']}}
+
+**File path(s) / URL(s) for where data will be saved:**
+{{for item in record['pathsURLs']}}
+- {{item}}
+{{endfor}}

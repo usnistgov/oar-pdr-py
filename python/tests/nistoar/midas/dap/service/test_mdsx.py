@@ -4,7 +4,7 @@ import unittest as test
 from nistoar.midas.dbio import inmem, base, AlreadyExists
 from nistoar.midas.dbio import project as prj
 from nistoar.midas.dap.service import mdsx
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_broker.")
 loghdlr = None
@@ -27,23 +27,21 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 class TestDAPService(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mdsx"
-                },
-                "default": {
-                    "default_shoulder": "mdsx"
-                }
-            },
             "dbio": {
-                "allowed_project_shoulders": ["mdsx", "spc1"],
-                "default_shoulder": "mdsx",
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "midas": "mdsx"
+                    },
+                    "allowed_shoulders": {
+                        "midas": ["mdsx", "spc1"]
+                    }
+                }
             },
             "assign_doi": "always",
             "doi_naan": "88888"
@@ -59,7 +57,7 @@ class TestDAPService(test.TestCase):
         self.assertTrue(self.service.dbcli)
         self.assertEqual(self.service.cfg, self.cfg)
         self.assertEqual(self.service.who.actor, "nstr1")
-        self.assertEqual(self.service.who.group, "midas")
+        self.assertEqual(self.service.who.agent_class, "midas")
         self.assertTrue(self.service.log)
 
     def test_create_record(self):
@@ -97,7 +95,8 @@ class TestDAPService(test.TestCase):
                                            "softwarelink": "http://..." })  # misspelled key
         self.assertEqual(prec.name, "gurn")
         self.assertEqual(prec.id, "mdsx:0003")
-        self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data"})
+        self.assertEqual(prec.meta, {"creatorisContact": False, "resourceType": "data",
+                                     "agent_vehicle": 'midas'})
         for key in "_schema @context _extensionSchemas".split():
             self.assertIn(key, prec.data)
         self.assertEqual(prec.data['color'], "red")

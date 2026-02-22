@@ -6,6 +6,10 @@ about:
    title: "MIDAS Authoring Services"
    describedBy: "http://localhost:9091/midas/docs"
    href: "http://localhost:9091/midas/"
+authentication:
+   type: jwt
+   key: "tokensecret"
+   require_expiration: false
 services: 
    dap:
       about: 
@@ -14,16 +18,14 @@ services:
          describedBy: "http://localhost:9091/docs/dapsvc-elements.html"
          href:        "http://localhost:9091/midas/dap"
 
-      clients: 
-         midas: 
-            default_shoulder: mds3
-         default: 
-            default_shoulder: mds3
-
       dbio: 
          superusers:                [ "rlp3" ]
-         allowed_project_shoulders: ["mdsx", "mds3", "mds0", "pdr0"]
-         default_shoulder:          mdsx
+         project_id_minting:
+           default_shoulder:
+             public:  "mds3" 
+           allowed_shoulders:
+             midas: ["mdsx", "mds3", "mds0", "pdr0"]
+             public: ["mds3"]
 
       include_headers:
          "Access-Control-Allow-Origin": "*"
@@ -57,16 +59,18 @@ services:
          describedBy: "http://localhost:9091/docs/dmpsvc-elements.html"
          href:        "http://localhost:9091/midas/dmp"
 
-      clients: 
-          midas: 
-             default_shoulder: mdm1
-          default: 
-             default_shoulder: mdm1
+      default_perms:
+          read: [ "grp0:public" ]
 
       dbio: 
          superusers:                [ "rlp3" ]
-         allowed_project_shoulders: ["mdm0", "mdm1"]
-         default_shoulder:          mdm1
+         project_id_minting:
+           default_shoulder:
+             midas:  "mdm1"
+             public: "mdm1"
+           allowed_shoulders:
+             midas:  ["mdm0", "mdm1"]
+             public: ["mdm0", "mdm1"]
 
       include_headers:
          "Access-Control-Allow-Origin": "*"
@@ -79,3 +83,41 @@ services:
                 describedBy: "http://localhost:9091/docs/dmpsvc-elements.html"
                 href:        "http://localhost:9091/midas/dmp/mdm1"
                 version:     mdm1
+
+   nsdi:
+      about:
+         message:     "NSD Indexing Service"
+         title:       "NIST Staff Directory Indexing API"
+         describedBy: "http://localhost:9091/docs/nsdisvc-elements.html"
+         href:        "http://localhost:9091/midas/nsdi"
+      default_convention: v1
+      conventions: 
+         v1:
+            nsd:
+                service_endpoint: http://peopleserver:9092/
+            about: 
+                title:       "NIST Staff Directory Indexing API (version 1)"
+                describedBy: "http://localhost:9091/docs/nsdisvc-elements.html"
+                href:        "http://localhost:9091/midas/nsdi/v1"
+                version:     v1
+
+   doi:
+      about:
+         message:     "DOI Service is available"
+         title:       "DOI Conversion Service"
+         describedBy: "http://localhost:9091/docs/doisvc-elements.html"
+         href:        "http://localhost:9091/midas/doi"
+      default_convention: 2nerdm
+      doi_resolver:
+        app_name: "NIST Public Data Repository: pubserver (oar-pdr)"
+        app_version: "1.5+"
+        app_url: "https://data.nist.gov/"
+        email: "datasupport@nist.gov"
+      conventions:
+         "2nerdm":
+            about: 
+                title:       "NIST Staff Directory Indexing API (version 1)"
+                describedBy: "http://localhost:9091/docs/doisvc-elements.html"
+                href:        "http://localhost:9091/midas/doi/2nerdm"
+                version:     "2nerdm"
+

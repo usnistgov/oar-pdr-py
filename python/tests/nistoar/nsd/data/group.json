@@ -1,0 +1,20 @@
+[
+  {
+    "orG_Name": "Bureau of Western Mythology", 
+    "diV_ORG_ID": 5, 
+    "activE_YN": "Y", 
+    "oU_ORG_ID": 3, 
+    "orG_ID": 7, 
+    "orG_CD": "10000", 
+    "orG_ACRNM": "BWM"
+  }, 
+  {
+    "orG_Name": "Verterans' Tapdance Administration", 
+    "diV_ORG_ID": 5, 
+    "activE_YN": "Y", 
+    "oU_ORG_ID": 3, 
+    "orG_ID": 8, 
+    "orG_CD": "10001", 
+    "orG_ACRNM": "VTA"
+  }
+]

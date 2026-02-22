@@ -1,0 +1,1380 @@
+[
+    {
+        "id": "mds3:0005",
+        "name": "ltQt0",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679938411.5561934,
+            "state": "edit",
+            "action": "create",
+            "since": 1679938411.5563061,
+            "modified": 1679938411.5659344,
+            "message": "",
+            "createdDate": "2023-03-27T17:33:31",
+            "modifiedDate": "2023-03-27T17:33:31",
+            "sinceDate": "2023-03-27T17:33:31"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0005",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0005",
+            "author_count": 1,
+            "file_count": 0,
+            "nonfile_count": 1,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "website",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "supplement"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0012",
+        "name": "49YTg",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1680538921.9401906,
+            "state": "edit",
+            "action": "create",
+            "since": 1680538921.9403071,
+            "modified": 1680538921.9486463,
+            "message": "",
+            "createdDate": "2023-04-03T16:22:01",
+            "modifiedDate": "2023-04-03T16:22:01",
+            "sinceDate": "2023-04-03T16:22:01"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0012",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0012",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0003",
+        "name": "FNCSe",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679938086.9804242,
+            "state": "edit",
+            "action": "create",
+            "since": 1679938086.9805439,
+            "modified": 1679938086.9926965,
+            "message": "",
+            "createdDate": "2023-03-27T17:28:06",
+            "modifiedDate": "2023-03-27T17:28:06",
+            "sinceDate": "2023-03-27T17:28:06"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0003",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0003",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "website",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0009",
+        "name": "jkhU8",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1680101202.3273263,
+            "state": "edit",
+            "action": "create",
+            "since": 1680101202.3274434,
+            "modified": 1680101202.3360841,
+            "message": "",
+            "createdDate": "2023-03-29T14:46:42",
+            "modifiedDate": "2023-03-29T14:46:42",
+            "sinceDate": "2023-03-29T14:46:42"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0009",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0009",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "supplement"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0002",
+        "name": "UEx4X",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679937988.4756114,
+            "state": "edit",
+            "action": "update",
+            "since": 1679937988.475733,
+            "modified": 1679938176.443925,
+            "message": "",
+            "createdDate": "2023-03-27T17:26:28",
+            "modifiedDate": "2023-03-27T17:29:36",
+            "sinceDate": "2023-03-27T17:26:28"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0002",
+            "title": "NIST Public Data Repository",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0002",
+            "author_count": 2,
+            "file_count": 0,
+            "nonfile_count": 1,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0008",
+        "name": "1Xfll",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679968781.685702,
+            "state": "edit",
+            "action": "update",
+            "since": 1679968781.6858277,
+            "modified": 1679968852.8984482,
+            "message": "",
+            "createdDate": "2023-03-28T01:59:41",
+            "modifiedDate": "2023-03-28T02:00:52",
+            "sinceDate": "2023-03-28T01:59:41"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0008",
+            "title": "First Test Records",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0008",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0011",
+        "name": "Jus5X",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1680201987.3356998,
+            "state": "edit",
+            "action": "update",
+            "since": 1680201987.3358111,
+            "modified": 1680202022.189893,
+            "message": "",
+            "createdDate": "2023-03-30T18:46:27",
+            "modifiedDate": "2023-03-30T18:47:02",
+            "sinceDate": "2023-03-30T18:46:27"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0011",
+            "title": "First Test Data Publication",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0011",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "supplement"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0004",
+        "name": "WOXZC",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679938348.8702788,
+            "state": "edit",
+            "action": "create",
+            "since": 1679938348.8703954,
+            "modified": 1679938348.8850503,
+            "message": "",
+            "createdDate": "2023-03-27T17:32:28",
+            "modifiedDate": "2023-03-27T17:32:28",
+            "sinceDate": "2023-03-27T17:32:28"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0004",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0004",
+            "author_count": 1,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "website",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "supplement"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0001",
+        "name": "4KwN7",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679937446.3455176,
+            "state": "edit",
+            "action": "update",
+            "since": 1679937446.345629,
+            "modified": 1679937495.3010068,
+            "message": "",
+            "createdDate": "2023-03-27T17:17:26",
+            "modifiedDate": "2023-03-27T17:18:15",
+            "sinceDate": "2023-03-27T17:17:26"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0001",
+            "title": "test",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0001",
+            "author_count": 1,
+            "file_count": 0,
+            "nonfile_count": 1,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "website",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "supplement"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0006",
+        "name": "Zn56R",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679940712.0115032,
+            "state": "edit",
+            "action": "create",
+            "since": 1679940712.0116148,
+            "modified": 1679940712.0264406,
+            "message": "",
+            "createdDate": "2023-03-27T18:11:52",
+            "modifiedDate": "2023-03-27T18:11:52",
+            "sinceDate": "2023-03-27T18:11:52"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0006",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0006",
+            "author_count": 1,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0007",
+        "name": "fujv1",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679940955.5344484,
+            "state": "edit",
+            "action": "update",
+            "since": 1679940955.5357618,
+            "modified": 1679940976.5517614,
+            "message": "",
+            "createdDate": "2023-03-27T18:15:55",
+            "modifiedDate": "2023-03-27T18:16:16",
+            "sinceDate": "2023-03-27T18:15:55"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0007",
+            "title": "First Test Title",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0007",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0013",
+        "name": "mEce0",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1681410041.3312275,
+            "state": "edit",
+            "action": "create",
+            "since": 1681410041.3313427,
+            "modified": 1681410041.3385754,
+            "message": "",
+            "createdDate": "2023-04-13T18:20:41",
+            "modifiedDate": "2023-04-13T18:20:41",
+            "sinceDate": "2023-04-13T18:20:41"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0013",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0013",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0010",
+        "name": "0JVOG",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1680101238.133887,
+            "state": "edit",
+            "action": "update",
+            "since": 1680101238.133992,
+            "modified": 1680101338.1082172,
+            "message": "",
+            "createdDate": "2023-03-29T14:47:18",
+            "modifiedDate": "2023-03-29T14:48:58",
+            "sinceDate": "2023-03-29T14:47:18"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0010",
+            "title": "RBG Testing",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0010",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0005",
+        "name": "ltQt0",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679938411.5561934,
+            "state": "edit",
+            "action": "create",
+            "since": 1679938411.5563061,
+            "modified": 1679938411.5659344,
+            "message": "",
+            "createdDate": "2023-03-27T17:33:31",
+            "modifiedDate": "2023-03-27T17:33:31",
+            "sinceDate": "2023-03-27T17:33:31"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0005",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0005",
+            "author_count": 1,
+            "file_count": 0,
+            "nonfile_count": 1,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "website",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "supplement"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0012",
+        "name": "49YTg",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1680538921.9401906,
+            "state": "edit",
+            "action": "create",
+            "since": 1680538921.9403071,
+            "modified": 1680538921.9486463,
+            "message": "",
+            "createdDate": "2023-04-03T16:22:01",
+            "modifiedDate": "2023-04-03T16:22:01",
+            "sinceDate": "2023-04-03T16:22:01"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0012",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0012",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0003",
+        "name": "FNCSe",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679938086.9804242,
+            "state": "edit",
+            "action": "create",
+            "since": 1679938086.9805439,
+            "modified": 1679938086.9926965,
+            "message": "",
+            "createdDate": "2023-03-27T17:28:06",
+            "modifiedDate": "2023-03-27T17:28:06",
+            "sinceDate": "2023-03-27T17:28:06"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0003",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0003",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "website",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0009",
+        "name": "jkhU8",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1680101202.3273263,
+            "state": "edit",
+            "action": "create",
+            "since": 1680101202.3274434,
+            "modified": 1680101202.3360841,
+            "message": "",
+            "createdDate": "2023-03-29T14:46:42",
+            "modifiedDate": "2023-03-29T14:46:42",
+            "sinceDate": "2023-03-29T14:46:42"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0009",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0009",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "supplement"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0002",
+        "name": "UEx4X",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679937988.4756114,
+            "state": "edit",
+            "action": "update",
+            "since": 1679937988.475733,
+            "modified": 1679938176.443925,
+            "message": "",
+            "createdDate": "2023-03-27T17:26:28",
+            "modifiedDate": "2023-03-27T17:29:36",
+            "sinceDate": "2023-03-27T17:26:28"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0002",
+            "title": "NIST Public Data Repository",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0002",
+            "author_count": 2,
+            "file_count": 0,
+            "nonfile_count": 1,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0008",
+        "name": "1Xfll",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679968781.685702,
+            "state": "edit",
+            "action": "update",
+            "since": 1679968781.6858277,
+            "modified": 1679968852.8984482,
+            "message": "",
+            "createdDate": "2023-03-28T01:59:41",
+            "modifiedDate": "2023-03-28T02:00:52",
+            "sinceDate": "2023-03-28T01:59:41"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0008",
+            "title": "First Test Records",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0008",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0011",
+        "name": "Jus5X",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1680201987.3356998,
+            "state": "edit",
+            "action": "update",
+            "since": 1680201987.3358111,
+            "modified": 1680202022.189893,
+            "message": "",
+            "createdDate": "2023-03-30T18:46:27",
+            "modifiedDate": "2023-03-30T18:47:02",
+            "sinceDate": "2023-03-30T18:46:27"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0011",
+            "title": "First Test Data Publication",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0011",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "supplement"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0004",
+        "name": "WOXZC",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679938348.8702788,
+            "state": "edit",
+            "action": "create",
+            "since": 1679938348.8703954,
+            "modified": 1679938348.8850503,
+            "message": "",
+            "createdDate": "2023-03-27T17:32:28",
+            "modifiedDate": "2023-03-27T17:32:28",
+            "sinceDate": "2023-03-27T17:32:28"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0004",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0004",
+            "author_count": 1,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "website",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "supplement"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0001",
+        "name": "4KwN7",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679937446.3455176,
+            "state": "edit",
+            "action": "update",
+            "since": 1679937446.345629,
+            "modified": 1679937495.3010068,
+            "message": "",
+            "createdDate": "2023-03-27T17:17:26",
+            "modifiedDate": "2023-03-27T17:18:15",
+            "sinceDate": "2023-03-27T17:17:26"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0001",
+            "title": "test",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0001",
+            "author_count": 1,
+            "file_count": 0,
+            "nonfile_count": 1,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "website",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "supplement"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0006",
+        "name": "Zn56R",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679940712.0115032,
+            "state": "edit",
+            "action": "create",
+            "since": 1679940712.0116148,
+            "modified": 1679940712.0264406,
+            "message": "",
+            "createdDate": "2023-03-27T18:11:52",
+            "modifiedDate": "2023-03-27T18:11:52",
+            "sinceDate": "2023-03-27T18:11:52"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0006",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0006",
+            "author_count": 1,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0007",
+        "name": "fujv1",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1679940955.5344484,
+            "state": "edit",
+            "action": "update",
+            "since": 1679940955.5357618,
+            "modified": 1679940976.5517614,
+            "message": "",
+            "createdDate": "2023-03-27T18:15:55",
+            "modifiedDate": "2023-03-27T18:16:16",
+            "sinceDate": "2023-03-27T18:15:55"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0007",
+            "title": "First Test Title",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0007",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0013",
+        "name": "mEce0",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1681410041.3312275,
+            "state": "edit",
+            "action": "create",
+            "since": 1681410041.3313427,
+            "modified": 1681410041.3385754,
+            "message": "",
+            "createdDate": "2023-04-13T18:20:41",
+            "modifiedDate": "2023-04-13T18:20:41",
+            "sinceDate": "2023-04-13T18:20:41"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0013",
+            "title": "",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0013",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    },
+    {
+        "id": "mds3:0010",
+        "name": "0JVOG",
+        "acls": {
+            "read": [
+                "anonymous"
+            ],
+            "write": [
+                "anonymous"
+            ],
+            "admin": [
+                "anonymous"
+            ],
+            "delete": [
+                "anonymous"
+            ]
+        },
+        "owner": "anonymous",
+        "deactivated": null,
+        "status": {
+            "created": 1680101238.133887,
+            "state": "edit",
+            "action": "update",
+            "since": 1680101238.133992,
+            "modified": 1680101338.1082172,
+            "message": "",
+            "createdDate": "2023-03-29T14:47:18",
+            "modifiedDate": "2023-03-29T14:48:58",
+            "sinceDate": "2023-03-29T14:47:18"
+        },
+        "data": {
+            "@id": "ark:/88434/mds3-0010",
+            "title": "RBG Testing",
+            "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.7#",
+            "@type": [
+                "nrdp:PublicDataResource",
+                "dcat:Resource"
+            ],
+            "doi": "doi:10.18434/mds3-0010",
+            "author_count": 0,
+            "file_count": 0,
+            "nonfile_count": 0,
+            "reference_count": 0
+        },
+        "meta": {
+            "resourceType": "data",
+            "creatorisContact": true,
+            "willUpload": false,
+            "assocPageType": "stand-alone"
+        },
+        "curators": [],
+        "type": "dap"
+    }
+]

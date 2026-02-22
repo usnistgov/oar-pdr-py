@@ -1,0 +1,70 @@
+{
+    "keywords": {
+        "name": {
+            "operator": "%",
+            "value": "string"
+        },
+        "status": {
+            "state": [
+                {
+                    "operator": "=",
+                    "value": "string"
+                }
+            ],
+            "since": [
+                {
+                    "operator": ">",
+                    "value": "timestamp"
+                },
+                {
+                    "operator": "<",
+                    "value": "timestamp"
+                },
+                {
+                    "operator": "=",
+                    "value": "timestamp"
+                }
+            ]
+        },
+        "data": {
+            "title": {
+                "operator": "%",
+                "value": "string"
+            },
+            "projectDescription": {
+                "operator": "%",
+                "value": "string"
+            },
+            "organization": {
+                "ORG_ID": {
+                    "operator": "=",
+                    "value": "integer"
+                }
+            },
+            "primary_NIST_contact": {
+                "lastName": {
+                    "operator": "%",
+                    "value": "string"
+                }
+            },
+            "contributors": {
+                "contributor": {
+                    "lastName": {
+                        "operator": "%",
+                        "value": "string"
+                    }
+                }
+            },
+            "keyWords": {
+                "operator": "%",
+                "value": "string"
+            },
+            "meta": {
+                "resourceType ": {
+                    "operator ": "=",
+                    "value": "string"
+                }
+            }
+        }
+    }
+}

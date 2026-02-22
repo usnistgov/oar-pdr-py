@@ -3,7 +3,8 @@ This module provides a base implementations of the SIPBagger interface to suppor
 Publishing (PDP) API.  In this framework, SIP inputs are primarily in the form of NERDm metadata.
 """
 import os, re, logging, json
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from abc import abstractmethod, abstractproperty
 from copy import deepcopy
 from urllib.parse import urlparse
@@ -23,7 +24,7 @@ from ... import def_etc_dir
 from .base import SIPBagger
 from .prepupd import UpdatePrepService, PENDING_VERSION_SFX
 from ..idmint import PDPMinter
-from ..prov import Action, PubAgent, dump_to_history
+from ...utils.prov import Action, Agent, dump_to_history
 
 SIPEXT_RE = re.compile(core_schema_base + r'sip/(v[^/]+)#/definitions/\w+Submission')
 ARK_PFX_RE = re.compile(const.ARK_PFX_PAT)
@@ -139,14 +140,14 @@ class NERDmBasedBagger(SIPBagger):
         """
         return self.bagbldr.bag
 
-    def ensure_preparation(self, nodata: bool=False, who: PubAgent=None, _action: Action=None) -> None:
+    def ensure_preparation(self, nodata: bool=False, who: Agent=None, _action: Action=None) -> None:
         """
         create and update the output working bag directory to ensure it is 
         a re-organized version of the SIP, ready for updates.
 
         :param nodata bool: if True, do not copy (or link) data files to the output directory.  
                             In this implementation, this parameter is ignored
-        :param PubAgent who: an actor identifier object, indicating who is requesting this action.  This 
+        :param Agent    who: an actor identifier object, indicating who is requesting this action.  This 
                              will get recorded in the history data.  If None, an internal administrative 
                              identity will be assumed.  This identity may affect the identifier assigned.
         :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
@@ -188,7 +189,7 @@ class NERDmBasedBagger(SIPBagger):
         SIP that has never been submitted before; a new bag directory will be 
         created and identifiers will be assigned to it.  
 
-        :param PubAgent who: an actor identifier object, indicating who is requesting this action.  This 
+        :param Agent    who: an actor identifier object, indicating who is requesting this action.  This 
                              will get recorded in the history data.  If None, an internal administrative 
                              identity will be assumed.  This identity may affect the identifier assigned.
         :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
@@ -292,13 +293,13 @@ class NERDmBasedBagger(SIPBagger):
         """
         raise NotImplementedError()
 
-    def describe(self, relid: str = '', who: PubAgent = None, _action: Action=None) -> Mapping:
+    def describe(self, relid: str = '', who: Agent = None, _action: Action=None) -> Mapping:
         """
         return a NERDm description for the part of the dataset pointed to by the given identifier
         relative to the dataset's base identifier.
         :param str relid:  the relative identifier for the part of interest.  If an empty string
                            (default), the full NERDm record will be returned.
-        :param PubAgent who: an actor identifier object, indicating who is requesting the data.  This 
+        :param Agent  who: an actor identifier object, indicating who is requesting the data.  This 
                            request may trigger the restaging of previously published data, in which 
                            case who triggered it will get recorded.  If None, an internal administrative 
                            identity will be assumed.  
@@ -310,7 +311,7 @@ class NERDmBasedBagger(SIPBagger):
             self.prepare(False, who, _action=_action)
         return self.bagbldr.bag.describe(relid)
 
-    def set_res_nerdm(self, nerdm: Mapping, who: PubAgent = None, savefilemd: bool=True,
+    def set_res_nerdm(self, nerdm: Mapping, who: Agent = None, savefilemd: bool=True,
                       lock: bool=True, _action: Action=None) -> None:
         """
         set the resource metadata (which may optionally include file component metadata) for the SIP.  
@@ -334,7 +335,7 @@ class NERDmBasedBagger(SIPBagger):
         else:
             self._set_res_nerdm(nerdm, who, savefilemd, _action)
 
-    def _set_res_nerdm(self, nerdm: Mapping, who: PubAgent=None, savecompmd: bool=True,
+    def _set_res_nerdm(self, nerdm: Mapping, who: Agent=None, savecompmd: bool=True,
                        _action: Action=None) -> None:
         """
         set the resource metadata (which may optionally include file component metadata) for the SIP.  
@@ -487,7 +488,7 @@ class NERDmBasedBagger(SIPBagger):
         """
         return
 
-    def set_comp_nerdm(self, nerdm: Mapping, who: PubAgent=None, lock: bool=True,
+    def set_comp_nerdm(self, nerdm: Mapping, who: Agent=None, lock: bool=True,
                        _action: Action=None) -> None:
         """
         set the metadata for a component of the resource.  If the component represents a file or 
@@ -502,7 +503,7 @@ class NERDmBasedBagger(SIPBagger):
         else:
             return self._set_comp_nerdm(nerdm, who, _action=_action)
 
-    def _set_comp_nerdm(self, nerdm: Mapping, who: PubAgent=None, _action=None, tolatest=True) -> None:
+    def _set_comp_nerdm(self, nerdm: Mapping, who: Agent=None, _action=None, tolatest=True) -> None:
         nerdm = self._check_input_comp(nerdm, tolatest)   # copies nerdm
 
         hist = Action(Action.PUT, self.id, who, "Set some component metadata")
@@ -732,7 +733,7 @@ class NERDmBasedBagger(SIPBagger):
                 else:
                     cmpmd['@id'] += cmpmd['proxyFor']
 
-    def delete(self, who: PubAgent=None, lock=True):
+    def delete(self, who: Agent=None, lock=True):
         """
         delete the working bag from store; this sets the bagger to a virgin state.
         """
@@ -747,7 +748,7 @@ class NERDmBasedBagger(SIPBagger):
         else:
             self.bagbldr.destroy()
 
-    def ensure_doi(self, who: PubAgent=None, lock: bool=True, _action=None):
+    def ensure_doi(self, who: Agent=None, lock: bool=True, _action=None):
         """
         ensure that the NERDm resource metadata includes the `doi` property set according to this
         SIP's convention.  This method consults the value of the `assign_doi` configuration parameter:
@@ -793,7 +794,7 @@ class NERDmBasedBagger(SIPBagger):
         """
         raise NotImplementedError()
 
-    def finalize_version(self, who: PubAgent, incrfield: int=None, vermsg=None, _action=None) -> str:
+    def finalize_version(self, who: Agent, incrfield: int=None, vermsg=None, _action=None) -> str:
         """
         set the version that this dataset should be published under.  The version property is only 
         updated if it has not already been set; that is, only if it is marked with a version string 
@@ -805,7 +806,7 @@ class NERDmBasedBagger(SIPBagger):
 
         This method is intended to be called by :py:meth:`ensure_finalize`.
 
-        :param PubAgent  who:  the agent requesting the finalization
+        :param Agent     who:  the agent requesting the finalization
         :param int incrfield:  the position of the version field that should be incremented; if None, 
                                the field will be determined based on what appears to have changed.
         :param str    vermsg:  a message to record in the release history, indicating what changed 

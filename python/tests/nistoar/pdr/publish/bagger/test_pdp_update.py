@@ -12,8 +12,8 @@ from nistoar.pdr.publish.bagger import prepupd
 from nistoar.pdr.publish import idmint as minter
 from nistoar.pdr.publish import BadSIPInputError
 from nistoar.nerdm import constants as consts
-from nistoar.pdr.preserve.bagit import builder as bldr, utils as bagutils
-from nistoar.pdr.publish import prov
+from nistoar.pdr.preserve.bagit import builder as bldr
+from nistoar.pdr.utils import prov
 from nistoar.pdr.preserve.bagit.bag import NISTBag
 from nistoar.pdr.preserve.bagit.serialize import zip_deserialize
 
@@ -51,6 +51,10 @@ tdir = Path(tmpdir())
 distarchive = tdir / "distarchive"
 mdarchive = tdir / "mdarchive"
 
+uwsgi_opts = "--plugin python3"
+if os.environ.get("OAR_UWSGI_OPTS") is not None:
+    uwsgi_opts = os.environ['OAR_UWSGI_OPTS']
+
 def startServices():
     archdir = distarchive
     shutil.copytree(distarchdir, archdir)
@@ -61,9 +65,10 @@ def startServices():
     pidfile = tdir / "simdistrib{0}.pid".format(str(srvport))
     wpy = pdrtstdir / "distrib" / "sim_distrib_srv.py"
     assert wpy.exists()
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
-          "--wsgi-file {2} --set-ph archive_dir={3} --pidfile {4}"
-    cmd = cmd.format(str(tdir / "simdistrib.log"), srvport, str(wpy), str(archdir), pidfile)
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --set-ph archive_dir={4} --pidfile {5}"
+    cmd = cmd.format(str(tdir / "simdistrib.log"), uwsgi_opts, srvport,
+                     str(wpy), str(archdir), pidfile)
     os.system(cmd)
 
     archdir = mdarchive
@@ -74,9 +79,10 @@ def startServices():
     pidfile = tdir / "simrmm{0}.pid".format(str(srvport))
     wpy = pdrtstdir / "describe" / "sim_describe_svc.py"
     assert wpy.exists()
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
-          "--wsgi-file {2} --set-ph archive_dir={3} --pidfile {4}"
-    cmd = cmd.format(str(tdir / "simrmm.log"), srvport, str(wpy), str(archdir), pidfile)
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --set-ph archive_dir={4} --pidfile {5}"
+    cmd = cmd.format(str(tdir / "simrmm.log"), uwsgi_opts, srvport, str(wpy),
+                     str(archdir), pidfile)
     os.system(cmd)
     time.sleep(0.5)
 
@@ -123,7 +129,7 @@ def load_nerdm_from_aip(zipfname, destarch):
     sipid = re.sub(r'^ark:/\d+/', '', nerdm['ediid'])
     utils.write_json(nerdm, destarch / "records" / (sipid+".json"))
 
-tstag = prov.PubAgent("test", prov.PubAgent.AUTO, "tester")
+tstag = prov.Agent("test", prov.Agent.AUTO, "tester")
 
 class TestPDPBagger(test.TestCase):
 

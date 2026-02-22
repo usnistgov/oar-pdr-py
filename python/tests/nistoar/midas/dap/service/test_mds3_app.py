@@ -8,8 +8,7 @@ from nistoar.midas.dbio import inmem, base, AlreadyExists, InvalidUpdate, Object
 from nistoar.midas.dbio.wsgi import project as prj
 from nistoar.midas.dap.service import mds3
 from nistoar.midas.dap.nerdstore.inmem import InMemoryResourceStorage
-from nistoar.pdr.publish import prov
-from nistoar.pdr.utils import read_nerd
+from nistoar.pdr.utils import read_nerd, prov
 from nistoar.nerdm.constants import CORE_SCHEMA_URI
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_mds3.")
@@ -33,12 +32,14 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
 
 # test records
 testdir = pathlib.Path(__file__).parents[0]
 pdr2210 = testdir.parents[2] / 'pdr' / 'describe' / 'data' / 'pdr2210.json'
 ncnrexp0 = testdir.parents[2] / 'pdr' / 'publish' / 'data' / 'ncnrexp0.json'
+basedir = testdir.parents[5]
+modeldir = basedir / 'metadata' / 'model'
 
 class TestMDS3DAPApp(test.TestCase):
 
@@ -55,18 +56,16 @@ class TestMDS3DAPApp(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mds3"
-                },
-                "default": {
-                    "default_shoulder": "mds3"
-                }
-            },
             "dbio": {
                 "superusers": [ "rlp" ],
-                "allowed_project_shoulders": ["mds3", "pdr1"],
-                "default_shoulder": "mds3"
+                "project_id_minting": {
+                    "default_shoulder": {
+                        "midas": "mds3"
+                    },
+                    "allowed_shoulders": {
+                        "midas": ["mds3", "pdr1"]
+                    }
+                }
             },
             "assign_doi": "always",
             "doi_naan": "10.88888",
@@ -74,6 +73,11 @@ class TestMDS3DAPApp(test.TestCase):
 #                "type": "fsbased",
 #                "store_dir": os.path.join(tmpdir.name)
                 "type": "inmem",
+            },
+            "taxonomy_dir": modeldir,
+            "available_collections": {
+                "peanuts": { "@id": "ark:/88888/pdr0-goober", "title": "Peanuts!" },
+                "raisins": { "@id": "ark:/88888/pdr0-gurn", "title": "Raisinettes" }
             }
         }
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mds3": 0 }})
@@ -85,7 +89,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.rootpath = "/midas/dap/mds3"
 
     def create_record(self, name="goob", meta=None):
-        cli = self.dbfact.create_client(base.DAP_PROJECTS, self.cfg["dbio"], nistr.actor)
+        cli = self.dbfact.create_client(base.DAP_PROJECTS, self.cfg["dbio"], nistr)
         out = cli.create_record(name, "pdr1")
         if meta:
             out.meta = meta
@@ -104,7 +108,7 @@ class TestMDS3DAPApp(test.TestCase):
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectNameHandler))
         self.assertNotEqual(hdlr.cfg, {})
-        self.assertEqual(hdlr._path, "")
+        self.assertEqual(hdlr._path, "name")
         self.assertEqual(hdlr._id, "mdm1:0001")
 
     def test_get_name(self):
@@ -148,7 +152,7 @@ class TestMDS3DAPApp(test.TestCase):
         # TODO: this will succeed after we define the Software extension schema
         self.resp = []
         req['wsgi.input'] = StringIO(json.dumps({"meta": { "resourceType": "Software",
-                                                           "creatorisContact": "false",
+                                                           "creatorIsContact": "false",
                                                            "softwareLink": "https://sw.ex/gurn" },
                                                  "name": "Gurn's Opus" }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
@@ -162,7 +166,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['id'], "mds3:0001")
         self.assertEqual(resp['meta']["resourceType"], "Software")
         self.assertEqual(resp['meta']["softwareLink"], "https://sw.ex/gurn")
-        self.assertIs(resp['meta']["creatorisContact"], False)
+        self.assertIs(resp['meta']["creatorIsContact"], False)
         self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
         self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
         self.assertEqual(resp['data']['@type'],
@@ -170,8 +174,9 @@ class TestMDS3DAPApp(test.TestCase):
 
 
         self.resp = []
-        req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": {"fn": "Gurn Cranston"} },
-                                                 "meta": { "creatorisContact": "false",
+        req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": {"fn": "Gurn Cranston"},
+                                                           "keyword": [ "testing" ] },
+                                                 "meta": { "creatorIsContact": "false",
                                                            "softwareLink": "https://sw.ex/gurn" },
                                                  "name": "Gurn's Penultimate" }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
@@ -186,10 +191,11 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['id'], "mds3:0002")
         self.assertEqual(resp['meta']["resourceType"], "data")
         self.assertEqual(resp['meta']["softwareLink"], "https://sw.ex/gurn")
-        self.assertIs(resp['meta']["creatorisContact"], False)
+        self.assertIs(resp['meta']["creatorIsContact"], False)
         self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0002')
         self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0002')
-        self.assertNotIn('contactPoint', resp['data'])  # because ['data'] is just a summary
+        self.assertIn('authors', resp['data'])
+        self.assertIn('contactPoint', resp['data'])  # this is included in ['data'] summary
 
         self.resp = []
         path = resp['id'] + '/data'
@@ -213,7 +219,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertIn('_extensionSchemas', resp)
         self.assertEqual(len(resp.get('components',[])), 1)
         self.assertEqual(resp['components'][0]['accessURL'], "https://sw.ex/gurn")
-        self.assertEqual(len(resp), 8)
+        self.assertEqual(len(resp), 9)
 
     def test_put_patch(self):
         testnerd = read_nerd(pdr2210)
@@ -229,8 +235,9 @@ class TestMDS3DAPApp(test.TestCase):
             'REQUEST_METHOD': 'POST',
             'PATH_INFO': self.rootpath + path
         }
-        req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": res['contactPoint'] },
-                                                 "meta": { "creatorisContact": "false" },
+        req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": res['contactPoint'],
+                                                           "keyword": [ "testing" ] },
+                                                 "meta": { "creatorIsContact": "false" },
                                                  "name": "OptSortSph" }))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
@@ -243,10 +250,12 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertEqual(resp['name'], "OptSortSph")
         self.assertEqual(resp['id'], "mds3:0001")
         self.assertEqual(resp['meta']["resourceType"], "data")
-        self.assertIs(resp['meta']["creatorisContact"], False)
+        self.assertIs(resp['meta']["creatorIsContact"], False)
         self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
         self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
-        self.assertNotIn('contactPoint', resp['data'])  # because ['data'] is just a summary
+        self.assertEqual(resp['data']['keywords'], ['testing'])
+        self.assertIn('authors', resp['data'])
+        self.assertIn('contactPoint', resp['data'])  # this is included in ['data'] summary
         
         self.resp = []
         id = resp['id']
@@ -270,11 +279,12 @@ class TestMDS3DAPApp(test.TestCase):
                          [ "nrdp:PublicDataResource", "dcat:Resource" ])
         self.assertIn('_schema', resp)
         self.assertIn('_extensionSchemas', resp)
+        self.assertEqual(resp['keyword'], ['testing'])
         self.assertNotIn('components', resp)
         self.assertNotIn('authors', resp)
         self.assertNotIn('description', resp)
         self.assertNotIn('rights', resp)
-        self.assertEqual(len(resp), 7)
+        self.assertEqual(len(resp), 8)
 
         self.resp = []
         req = {
@@ -379,7 +389,7 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertNotIn("downloadURL", resp)
 
         self.resp = []
-        path = id + '/data/components[file_1]'
+        path = id + '/data/components/file_1'
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path
@@ -439,21 +449,508 @@ class TestMDS3DAPApp(test.TestCase):
         self.assertIn('description', resp)
         self.assertEqual(resp['rights'], "What ever.")
 
+    def test_delete(self):
+        testnerd = read_nerd(pdr2210)
+        res = deepcopy(testnerd)
+        del res['references']
+        del res['components']
+        del res['@id']
+        del res['_schema']
+        del res['_extensionSchemas']
+
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"data": { "contactPoint": res['contactPoint'],
+                                                           "keyword": [ "testing" ],
+                                                           "landingPage": "https://example.com/" },
+                                                 "meta": { "creatorIsContact": "false" },
+                                                 "name": "OptSortSph" }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "OptSortSph")
+        self.assertEqual(resp['id'], "mds3:0001")
+        self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
+        recid = resp['id']
+        
+        self.resp = []
+        path = recid + '/data'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['doi'], 'doi:10.88888/mds3-0001')
+        self.assertEqual(resp['contactPoint'],
+                         {"fn": "Zachary Levine", "@type": "vcard:Contact",
+                          "hasEmail": "mailto:zachary.levine@nist.gov"      })
+        self.assertEqual(resp['@type'],
+                         [ "nrdp:PublicDataResource", "dcat:Resource" ])
+        self.assertEqual(resp['landingPage'], "https://example.com/")
+        self.assertEqual(resp['keyword'], ["testing"])
+        
+        self.resp = []
+        path = recid + '/data/landingPage'
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "landingPage")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIs(resp, True)
 
         
+        self.resp = []
+        path = recid + '/data'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertNotIn("landingPage", resp)
+
+    def test_get_fs_info(self):
+        path = "pdr1:0001/file_space"
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, mds3.DAPProjectInfoHandler))
+        prec = self.create_record("goob")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIn('id', resp)
+        self.assertIn('action', resp)
+        self.assertEqual(resp['action'], '')
+        self.assertNotIn('file_count', resp)  # file manager not engaged
+
+    def test_review(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({
+            "name": "Gurn's Opus",
+            "data": {"title": "Goobers!"},
+            "meta": {"willUpload": True }
+        }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        id = resp['id']
+
+        self.resp = []
+        path = id + '/status/todo'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectStatusHandler))
+        self.assertEqual(hdlr._path, "todo")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+
+        self.assertIn("req", resp)
+        self.assertIn("warn", resp)
+        self.assertIn("rec", resp)
+        self.assertEqual(len(resp['req']), 2)
+        self.assertEqual(len(resp['warn']), 5)
+        self.assertEqual(len(resp['rec']), 0)
+
         
 
-                
+    def test_put_title(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Gurn's Opus" }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "Gurn's Opus")
+        self.assertEqual(resp['id'], "mds3:0001")
+        self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
+        self.assertEqual(resp['data']['@type'], [ "nrdp:PublicDataResource", "dcat:Resource" ])
+        self.assertEqual(resp['data'].get('title',''), '')
+        id = resp['id']
+
+        self.resp = []
+        path = id + '/data'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['doi'], 'doi:10.88888/mds3-0001')
+        self.assertEqual(resp['@type'], [ "nrdp:PublicDataResource", "dcat:Resource" ])
+        self.assertEqual(resp.get('title',''), '')
+
+        self.resp = []
+        path = id + '/data/title'
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO('"My way"')
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "title")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp, "My way")
+
+        self.resp = []
+        path = id + '/data'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['doi'], 'doi:10.88888/mds3-0001')
+        self.assertEqual(resp['@type'], [ "nrdp:PublicDataResource", "dcat:Resource" ])
+        self.assertEqual(resp.get('title',''), 'My way')
+
+        self.resp = []
+        path = id
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['id'], 'mds3:0001')
+        self.assertEqual(resp['data']['@id'], 'ark:/88434/mds3-0001')
+        self.assertEqual(resp['data']['doi'], 'doi:10.88888/mds3-0001')
+        self.assertEqual(resp['data']['@type'], [ "nrdp:PublicDataResource", "dcat:Resource" ])
+        self.assertEqual(resp['data']['title'], 'My way')
+        self.assertEqual(len(resp['data']['authors']), 0)
+        
+    def test_topic(self):
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Gurn's Opus" }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['id'], "mds3:0001")
+        self.assertEqual(resp['data'].get('theme',[]), [])
+        id = resp['id']
+
+        self.resp = []
+        path = id + '/data/topic'
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path
+        }
+        topics = [
+            {"@id": mds3.NIST_THEMES+"Chemistry:%20Thermochemical%20properties"},
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"}
+        ]
+        req['wsgi.input'] = StringIO(json.dumps(topics))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+
+        self.resp = []
+        req['REQUEST_METHOD'] = 'GET'
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+
+        self.resp = []
+        topics = [
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics"},
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"},
+            {"scheme": mds3.NIST_THEMES.rstrip('#'), "tag": "Bioscience"}
+        ]
+        req['REQUEST_METHOD'] = 'PATCH'
+        req['wsgi.input'] = StringIO(json.dumps(topics))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 4)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[2]['tag'], "Statistics")
+        self.assertEqual(out[2]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[3]['tag'], "Bioscience")
+        self.assertEqual(out[3]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+
+        # PATCH an empty list => no change
+        self.resp = []
+        req['wsgi.input'] = StringIO("[]")
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 4)
+        self.assertEqual(out[0]['tag'], "Chemistry: Thermochemical properties")
+        self.assertEqual(out[0]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+        self.assertEqual(out[1]['tag'], "Statistics: Uncertainty")
+        self.assertEqual(out[1]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[2]['tag'], "Statistics")
+        self.assertEqual(out[2]['scheme'], mds3.FORENSICS_THEMES.rstrip('#'))
+        self.assertEqual(out[3]['tag'], "Bioscience")
+        self.assertEqual(out[3]['scheme'], mds3.NIST_THEMES.rstrip('#'))
+
+        self.resp = []
+        req['REQUEST_METHOD'] = 'DELETE'
+        del req['wsgi.input']
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+
+        self.resp = []
+        req['REQUEST_METHOD'] = 'GET'
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("404 ", self.resp[0])
+        
+        self.resp = []
+        req['REQUEST_METHOD'] = 'PUT'
+        topics = [
+            {"@id": mds3.NIST_THEMES+"Chemistry:%20Thermochemical%20properties"},
+            {"scheme": mds3.FORENSICS_THEMES.rstrip('#'), "tag": "Statistics: Uncertainty"}
+        ]
+        req['wsgi.input'] = StringIO(json.dumps(topics))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 2)
+
+        # POST doesn't work
+        self.resp = []
+        req['REQUEST_METHOD'] = 'POST'
+        req['wsgi.input'] = StringIO(json.dumps({"@id": mds3.NIST_THEMES+"Physics"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("405 ", self.resp[0])
+
+        # empty the list by PUTing an empty list
+        self.resp = []
+        req['REQUEST_METHOD'] = 'PUT'
+        req['wsgi.input'] = StringIO("[]")
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 0)
+
+        req['REQUEST_METHOD'] = 'GET'
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "topic")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 0)
+        
+    def test_isPartOf(self):
+        # create a record
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Gurn's Opus" }))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectSelectionHandler))
+        self.assertNotEqual(hdlr.cfg, {})
+        self.assertEqual(hdlr._path, "")
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['id'], "mds3:0001")
+        self.assertNotIn('isPartOf', resp['data'])
+        id = resp['id']
+
+        # make part of two collections
+        self.resp = []
+        path = id + '/data/isPartOf'
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path
+        }
+        colls = [{"label": "peanuts"}, {"label": "raisins"}]
+        req['wsgi.input'] = StringIO(json.dumps(colls))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "isPartOf")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['@id'], "ark:/88888/pdr0-goober")
+        self.assertEqual(out[1]['@id'], "ark:/88888/pdr0-gurn")
+
+        # make sure the update got saved
+        self.resp = []
+        req['REQUEST_METHOD'] = 'GET'
+        del req['wsgi.input']
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), out)
+
+        # delete one of the collections memberships
+        self.resp = []
+        path = id + '/data/isPartOf/peanuts'
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+
+        self.resp = []
+        path = id + '/data/isPartOf'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['@id'], "ark:/88888/pdr0-gurn")
+
+        # replace all memberships
+        self.resp = []
+        path = id + '/data/isPartOf'
+        req = {
+            'REQUEST_METHOD': 'PUT',
+            'PATH_INFO': self.rootpath + path
+        }
+        colls = [{"label": "peanuts"}]
+        req['wsgi.input'] = StringIO(json.dumps(colls))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        self.assertTrue(isinstance(hdlr, prj.ProjectDataHandler))
+        self.assertEqual(hdlr._path, "isPartOf")
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        out = self.body2dict(body)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['@id'], "ark:/88888/pdr0-goober")
+        
+        # delete everything
+        self.resp = []
+        path = id + '/data/isPartOf'
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+
+        self.resp = []
+        path = id + '/data/isPartOf'
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("404 ", self.resp[0])
 
         
-        
-
-        
-
-        
-
-
-                         
 if __name__ == '__main__':
     test.main()
         

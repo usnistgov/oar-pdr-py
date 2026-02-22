@@ -10,7 +10,8 @@ gov.nist.oar.bags.preservation.bags package provided by the oar-dist-service
 repository).  
 """
 import os, re
-from collections import Sequence, Mapping, OrderedDict
+from collections import OrderedDict
+from collections.abc import Sequence, Mapping
 from urllib.parse import urlparse
 from copy import deepcopy
 

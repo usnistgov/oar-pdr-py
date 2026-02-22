@@ -9,6 +9,6 @@ is) to provide access to the different MIDAS _project_ types--namely, DMP and
 non-project collections in the DBIO layer--namely, the groups endpoint (which tracks the user 
 groups used for access control).
 """
-from .base import SubApp, Handler, DBIOHandler
 from .project import MIDASProjectApp
+from .base import ServiceApp, Handler, DBIOHandler, Agent
 

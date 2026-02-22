@@ -2,10 +2,10 @@ logfile: pdp.log
 authorized: 
   - auth_key: "NCNRTOKEN"
     user:     "gurn"
-    group:    "ncnr"
+    client:    "ncnr"
   - auth_key: "DRAFTTOKEN"
     user:     "draft"
-    group:    "test"
+    client:    "test"
 
 conventions: 
   pdp0:

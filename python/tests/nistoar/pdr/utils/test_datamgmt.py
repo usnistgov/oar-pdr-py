@@ -3,11 +3,13 @@ import unittest as test
 
 from nistoar.testing import *
 import nistoar.pdr.utils.datamgmt as utils
+from nistoar.pdr.exceptions import StateException
 
 testdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 testdatadir = os.path.join(testdir, 'data')
 testdatadir3 = os.path.join(testdir, 'preserve', 'data')
 testdatadir2 = os.path.join(testdatadir3, 'simplesip')
+testdatadir4 = os.path.join(testdir, 'distrib', 'data')
 
 class TestMimeTypeLoading(test.TestCase):
 
@@ -164,9 +166,49 @@ class TestRmtree(test.TestCase):
         self.assertTrue(os.path.exists(root))
         self.assertFalse(os.path.exists(top))
 
+class TestZipFiles(test.TestCase):
 
+    def setUp(self):
+        self.tf = Tempfiles()
 
-    
+    def tearDown(self):
+        self.tf.clean()
+
+    def test_unpack_zip_into(self):
+        dest = self.tf.mkdir("bags")
+        bagzip = os.path.join(testdatadir4, "pdr1010.mbag0_3-2.zip")
+        root = os.path.join(dest, "pdr1010.mbag0_3-2")
+        self.assertTrue(not os.path.exists(root))
+        
+        utils.unpack_zip_into(bagzip, dest)
+
+        self.assertTrue(os.path.exists(root))
+        self.assertTrue(os.path.join(root, "stuff"))
+
+    def test_unpack_zip_into_fails(self):
+        dest = os.path.join(self.tf.root, "goob")
+        self.assertTrue(not os.path.exists(dest))
+        bagzip = os.path.join(testdatadir4, "pdr1010.mbag0_3-2.zip")
+
+        try:
+            utils.unpack_zip_into(bagzip, dest)
+            self.fail("Failed to detect non-existent destination for zip")
+        except StateException as ex:
+            self.assertIn("zipfile", str(ex))
+
+        try:
+            utils.unpack_zip_into(bagzip, dest, "bag")
+            self.fail("Failed to detect non-existent destination for zip")
+        except StateException as ex:
+            self.assertNotIn("zipfile", str(ex))
+            self.assertIn("bag", str(ex))
+
+        dest = self.tf.mkdir("bags")
+        with self.assertRaises(FileNotFoundError):
+            utils.unpack_zip_into("goob.zip", dest)
+
+                          
+            
 
 
 if __name__ == '__main__':

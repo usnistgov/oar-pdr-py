@@ -3,11 +3,11 @@ from collections import OrderedDict
 from io import StringIO
 from pathlib import Path
 import unittest as test
-import yaml
+import yaml, jwt
 
 from nistoar.midas.dbio import inmem, fsbased, base
 from nistoar.midas import wsgi as app
-from nistoar.pdr.publish import prov
+from nistoar.pdr.utils import prov
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_wsgiapp.")
 loghdlr = None
@@ -16,8 +16,10 @@ def setUpModule():
     global loghdlr
     global rootlog
     rootlog = logging.getLogger()
+    rootlog.setLevel(logging.DEBUG)
     loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_wsgiapp.log"))
     loghdlr.setLevel(logging.DEBUG)
+    loghdlr.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     rootlog.addHandler(loghdlr)
 
 def tearDownModule():
@@ -30,7 +32,11 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-nistr = prov.PubAgent("midas", prov.PubAgent.USER, "nstr1")
+nistr = prov.Agent("midas", prov.Agent.USER, "nstr1", "midas")
+
+nistoardir = Path(__file__).parents[1]
+peopledatadir = nistoardir / "nsd" / "data"
+assert peopledatadir.is_dir()
 
 class TestAbout(test.TestCase):
 
@@ -60,6 +66,7 @@ class TestAbout(test.TestCase):
         self.assertEqual(self.app.data['message'], "Service is available")
         for key in self.data.keys():
             self.assertEqual(self.app.data[key], self.data[key])
+        self.assertEqual(prov.Agent.ANONYMOUS, "anonymous")
 
     def test_add_stuff(self):
         self.assertNotIn("hairdos",  self.app.data)
@@ -128,7 +135,111 @@ class TestAbout(test.TestCase):
         self.assertIn("404 ", self.resp[0])
 
 
-class TestSubAppFactory(test.TestCase):
+class TestDevAbout(test.TestCase):
+
+    def start(self, status, headers=None, extup=None):
+        self.resp.append(status)
+        for head in headers:
+            self.resp.append("{0}: {1}".format(head[0], head[1]))
+
+    def body2dict(self, body):
+        return json.loads("\n".join(self.tostr(body)), object_pairs_hook=OrderedDict)
+
+    def tostr(self, resplist):
+        return [e.decode() for e in resplist]
+
+    def setUp(self):
+        self.data = {
+            "goob": "gurn",
+            "foo": {
+                "bar": [1, 2, 3]
+            }
+        }
+        self.clifact = inmem.InMemoryDBClientFactory({})
+        self.app = app.DevAbout(rootlog, self.clifact, self.data)
+        self.workdir = None
+        self.resp = []
+
+    def tearDown(self):
+        if self.workdir and os.path.exists(self.workdir):
+            shutil.rmtree(self.workdir)
+
+    def test_ctor(self):
+        self.assertEqual(sorted(list(self.app.data.keys())), "foo goob message".split())
+        self.assertEqual(self.app.data['message'], "Service is available")
+        for key in self.data.keys():
+            self.assertEqual(self.app.data[key], self.data[key])
+
+    def test_get(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+
+        data = self.body2dict(body)
+        self.assertEqual(sorted(list(self.app.data.keys())), "foo goob message".split())
+        self.assertEqual(data['message'], "Service is available")
+        for key in self.data.keys():
+            self.assertEqual(data[key], self.data[key])
+        
+        self.data['message'] = "Services are ready"
+        self.app = app.About(rootlog, self.data)
+        self.resp = []
+        body = self.app(req, self.start)
+        data = self.body2dict(body)
+        self.assertEqual(sorted(list(self.app.data.keys())), "foo goob message".split())
+        self.assertEqual(self.app.data['message'], "Services are ready")
+        for key in self.data.keys():
+            self.assertEqual(self.app.data[key], self.data[key])
+
+    def test_delete(self):
+        self.assertEqual(self.app._dbfact._db[base.DMP_PROJECTS], {})  # empty to start
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': '/'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+
+        data = self.body2dict(body)
+        self.assertEqual(sorted(list(self.app.data.keys())), "foo goob message".split())
+        self.assertEqual(data['message'], "Database reset")
+        self.assertEqual(self.app._dbfact._db[base.DMP_PROJECTS], {})  # empty to start
+
+        self.resp = []
+        self.app._dbfact._db[base.DMP_PROJECTS]["dmp:1"] = {"name": "goob"}
+        self.assertNotEqual(self.app._dbfact._db[base.DMP_PROJECTS], {})  # empty to start
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+
+        data = self.body2dict(body)
+        self.assertEqual(sorted(list(self.app.data.keys())), "foo goob message".split())
+        self.assertEqual(data['message'], "Database reset")
+        self.assertEqual(self.app._dbfact._db[base.DMP_PROJECTS], {})  # empty to start
+
+    def test_wrong_dbcli(self):
+        self.workdir = os.path.join(tmpdir.name, 'dbfiles')
+        if not os.path.exists(self.workdir):
+            os.mkdir(self.workdir)
+        self.clifact = fsbased.FSBasedDBClientFactory({}, self.workdir)
+        self.app = app.DevAbout(rootlog, self.clifact, self.data)
+
+        req = {
+            'REQUEST_METHOD': 'DELETE',
+            'PATH_INFO': '/'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("500 ", self.resp[0])
+
+        self.app = app.DevAbout(rootlog, None, self.data)
+        self.resp = []
+        body = self.app(req, self.start)
+        self.assertIn("405 ", self.resp[0])
+
+
+class TestServiceAppFactory(test.TestCase):
 
     def setUp(self):
         self.config = {
@@ -188,7 +299,7 @@ class TestSubAppFactory(test.TestCase):
                 }
             }
         }
-        self.fact = app.SubAppFactory(self.config, app._MIDASSubApps)
+        self.fact = app.ServiceAppFactory(self.config, app._MIDASServiceApps)
 
     def test_ctor_register(self):
         self.assertTrue(bool(self.fact.cfg))
@@ -196,7 +307,7 @@ class TestSubAppFactory(test.TestCase):
         self.assertIn("dmp/mdm1", self.fact.subapps)
         self.assertNotIn("dap", self.fact.subapps)
 
-        self.fact.register_subapp("dap", app._MIDASSubApps["dmp/mdm1"])
+        self.fact.register_subapp("dap", app._MIDASServiceApps["dmp/mdm1"])
         self.assertIn("dmp/mdm1", self.fact.subapps)
         self.assertIn("dap", self.fact.subapps)
         self.assertIs(self.fact.subapps["dmp/mdm1"], self.fact.subapps["dap"])
@@ -326,19 +437,18 @@ class TestMIDASApp(test.TestCase):
                         "describedBy": "https://midas3.nist.gov/midas/apidocs",
                         "href": "http://midas3.nist.gov/midas/dmp"
                     },
-                    "clients": {
-                        "midas": {
-                            "default_shoulder": "mdm1"
-                        },
-                        "default": {
-                            "default_shoulder": "mdm0"
-                        }
-                    },
                     "dbio": {
                         "default_convention": "mdm1",
                         "superusers": [ "rlp" ],
-                        "allowed_project_shoulders": ["mdm1", "spc1"],
-                        "default_shoulder": "mdm0"
+                        "project_id_minting": {
+                            "default_shoulder": {
+                                "midas": "mdm0",
+                                "public": "mdm0"
+                            },
+                            "allowed_shoulders": {
+                                "midas": ["mdm1", "spc1" ]
+                            }
+                        }
                     },
                     "conventions": {
                         "mdm1": {
@@ -369,16 +479,18 @@ class TestMIDASApp(test.TestCase):
                     },
                     "project_name": "drafts",
                     "type": "dmp/mdm1",
-                    "clients": {
-                        "default": {
-                            "default_shoulder": "mds3"
-                        }
-                    },
                     "dbio": {
                         "default_convention": "mds3",
                         "superusers": [ "rlp" ],
-                        "allowed_project_shoulders": ["mds3", "pdr0"],
-                        "default_shoulder": "mds3"
+                        "project_id_minting": {
+                            "default_shoulder": {
+                                "midas": "mds3",
+                                "public": "mds3"
+                            },
+                            "allowed_shoulders": {
+                                "midas": ["mds3", "pdr0" ]
+                            }
+                        }
                     },
                 },
                 "pyu": {
@@ -386,7 +498,7 @@ class TestMIDASApp(test.TestCase):
                         "describedBy": "https://midas3.nist.gov/midas/apidocs/pyu",
                         "href": "http://midas3.nist.gov/midas/pyu"
                     }
-                }
+                },
             }
         }
         self.clifact = inmem.InMemoryDBClientFactory({})
@@ -394,7 +506,7 @@ class TestMIDASApp(test.TestCase):
         self.data = self.clifact._db
 
     def test_ctor(self):
-        self.assertEqual(self.app.base_ep, ['midas'])
+        self.assertEqual(self.app.base_ep, '/midas/')
         self.assertIn("dmp/mdm1", self.app.subapps)
         self.assertIn("dmp/mdm1", self.app.subapps)
         self.assertNotIn("dmp/mdm2", self.app.subapps)
@@ -486,13 +598,13 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mdm0:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "dmp")
 
         self.assertEqual(self.data["dmp"]["mdm0:0001"]["name"], "gary")
         self.assertEqual(self.data["dmp"]["mdm0:0001"]["data"], {"color": "red"})
         self.assertEqual(self.data["dmp"]["mdm0:0001"]["id"], "mdm0:0001")
-        self.assertEqual(self.data["dmp"]["mdm0:0001"]["owner"], "anonymous")
+        self.assertEqual(self.data["dmp"]["mdm0:0001"]["owner"], prov.Agent.ANONYMOUS)
 
         self.resp = []
         req = {
@@ -506,7 +618,7 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mdm0:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "dmp")
 
         self.resp = []
@@ -545,7 +657,7 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "bob")
         self.assertEqual(data["data"], {"color": "red", "size": "grande"})
         self.assertEqual(data["id"], "mdm0:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "dmp")
 
         self.resp = []
@@ -587,13 +699,13 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mds3:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "drafts")
 
         self.assertEqual(self.data["drafts"]["mds3:0001"]["name"], "gary")
         self.assertEqual(self.data["drafts"]["mds3:0001"]["data"], {"color": "red"})
         self.assertEqual(self.data["drafts"]["mds3:0001"]["id"], "mds3:0001")
-        self.assertEqual(self.data["drafts"]["mds3:0001"]["owner"], "anonymous")
+        self.assertEqual(self.data["drafts"]["mds3:0001"]["owner"], prov.Agent.ANONYMOUS)
 
         self.resp = []
         req = {
@@ -607,11 +719,14 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["name"], "gary")
         self.assertEqual(data["data"], {"color": "red"})
         self.assertEqual(data["id"], "mds3:0001")
-        self.assertEqual(data["owner"], "anonymous")
+        self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "drafts")
+
 
 midasserverdir = Path(__file__).parents[4] / 'docker' / 'midasserver'
 midasserverconf = midasserverdir / 'midas-dmpdap_conf.yml'
+nsdserverconf = midasserverdir / 'midas-dmpdapnsd_conf.yml'
+doiserverconf = midasserverconf
 
 class TestMIDASServer(test.TestCase):
     # This tests midas wsgi app with the configuration provided in docker/midasserver
@@ -641,6 +756,10 @@ class TestMIDASServer(test.TestCase):
         self.config['working_dir'] = self.workdir
         self.config['services']['dap']['conventions']['mds3']['nerdstorage']['store_dir'] = \
             os.path.join(self.workdir, 'nerdm')
+        cliagents = {'ark:/88434/tl0-0001': ["Unit testing agent"]}
+        self.config['authentication'] = { "key": "XXXXX", "algorithm": "HS256", "require_expiration": False,
+                                          'client_agents': cliagents }
+
         self.clifact = fsbased.FSBasedDBClientFactory({}, self.dbdir)
         self.app = app.MIDASApp(self.config, self.clifact)
 
@@ -653,6 +772,7 @@ class TestMIDASServer(test.TestCase):
         self.assertIn("dmp/mdm1", self.app.subapps)
         self.assertIn("dap/mdsx", self.app.subapps)
         self.assertIn("dap/mds3", self.app.subapps)
+        self.assertIn("doi/2nerdm", self.app.subapps)
 
         self.assertEqual(self.app.subapps["dmp/mdm1"].svcfact._prjtype, "dmp")
         self.assertEqual(self.app.subapps["dap/mdsx"].svcfact._prjtype, "dap")
@@ -661,6 +781,51 @@ class TestMIDASServer(test.TestCase):
         self.assertTrue(os.path.isdir(self.workdir))
         self.assertTrue(os.path.isdir(os.path.join(self.workdir, 'dbfiles')))
         self.assertTrue(not os.path.exists(os.path.join(self.workdir, 'dbfiles', 'nextnum')))
+
+    def test_authenticate(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/dmp'
+        }
+        who = self.app.authenticate(req)
+        self.assertEqual(who.agent_class, "public")
+        self.assertEqual(who.actor, prov.Agent.ANONYMOUS)
+        self.assertEqual(who.delegated, ('(unknown)',))
+
+        req['HTTP_AUTHORIZATION'] = "Bearer goober"  # bad token
+        req['HTTP_OAR_CLIENT_ID'] = 'ark:/88434/tl0-0001'
+        who = self.app.authenticate(req)
+        self.assertEqual(who.agent_class, "invalid")
+        self.assertEqual(who.actor, prov.Agent.ANONYMOUS)
+        self.assertEqual(who.delegated, ("Unit testing agent",))
+
+        token = jwt.encode({"sub": "fed@nist.gov"}, self.config['authentication']['key'], algorithm="HS256")
+        req['HTTP_AUTHORIZATION'] = "Bearer "+token
+        who = self.app.authenticate(req)
+        self.assertEqual(who.agent_class, "nist")
+        self.assertEqual(who.actor, "fed")
+        self.assertEqual(who.delegated, ("Unit testing agent",))
+        self.assertIsNone(who.get_prop("email"))
+
+        token = jwt.encode({"sub": "fed", "userEmail": "fed@nist.gov", "OU": "61"},
+                           self.config['authentication']['key'], algorithm="HS256")
+        req['HTTP_AUTHORIZATION'] = "Bearer "+token
+        who = self.app.authenticate(req)
+        self.assertEqual(who.agent_class, "nist")
+        self.assertEqual(who.actor, "fed")
+        self.assertEqual(who.delegated, ("Unit testing agent",))
+        self.assertEqual(who.get_prop("email"), "fed@nist.gov")
+        self.assertEqual(who.get_prop("OU"), "61")
+
+        token = jwt.encode({"sub": "dbio:admin", "userEmail": "fed@nist.gov", "OU": "61"},
+                           self.config['authentication']['key'], algorithm="HS256")
+        req['HTTP_AUTHORIZATION'] = "Bearer "+token
+        who = self.app.authenticate(req)
+        self.assertEqual(who.agent_class, "nist")
+        self.assertEqual(who.actor, "dbio:admin")
+        self.assertEqual(who.delegated, ("Unit testing agent",))
+        self.assertEqual(who.get_prop("email"), "fed@nist.gov")
+        self.assertEqual(who.get_prop("OU"), "61")
 
     def test_create_dmp(self):
         req = {
@@ -738,7 +903,7 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(data['id'], 'mds3:0001')
         self.assertEqual(data['name'], "first")
         self.assertTrue(data['data']['title'].startswith("Microscopy of "))
-        self.assertEqual(data['data']['author_count'], 0)
+        self.assertEqual(len(data['data']['authors']), 0)
 
         self.resp = []
         authors = [
@@ -835,8 +1000,8 @@ class TestMIDASServer(test.TestCase):
         data = self.body2dict(body)
         self.assertEqual(data['id'], 'mds3:0001')
         self.assertEqual(data['name'], "first")
-        self.assertEqual(data['data']['author_count'], 2)
-        self.assertNotIn('authors', data['data'])   # not included in summary
+        self.assertIn('authors', data['data'])
+        self.assertEqual(len(data['data']['authors']), 2)
         
     def test_put_landingpage(self):
         req = {
@@ -1106,10 +1271,121 @@ class TestMIDASServer(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         data = self.body2dict(body)
         self.assertEqual(data.get('components',[]), [])
+
+    @test.skipIf("doi" not in os.environ.get("OAR_TEST_INCLUDE",""),
+                 "kindly skipping doi service checks")
+    def test_doi2nerdm_ref(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/doi/2nerdm/ref/10.18434/mds2-2525'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['@id'], "doi:10.18434/mds2-2525")
+        self.assertIn('title', data)
+        self.assertIn('citation', data)
+
+        
+
+@test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
+class TestMIDASNSDServer(test.TestCase):
+    # This tests midas wsgi app with the configuration provided in docker/midasserver
+    # In particular it tests the examples given in the README
+
+    def start(self, status, headers=None, extup=None):
+        self.resp.append(status)
+        for head in headers:
+            self.resp.append("{0}: {1}".format(head[0], head[1]))
+
+    def body2dict(self, body):
+        return json.loads("\n".join(self.tostr(body)), object_pairs_hook=OrderedDict)
+
+    def tostr(self, resplist):
+        return [e.decode() for e in resplist]
+
+    def setUp(self):
+        self.resp = []
+        self.workdir = os.path.join(tmpdir.name, 'midasdata')
+        self.dbdir = os.path.join(self.workdir, 'dbfiles')
+        if not os.path.exists(self.dbdir):
+            if not os.path.exists(self.workdir):
+                os.mkdir(self.workdir)
+            os.mkdir(self.dbdir)
+        with open(nsdserverconf) as fd:
+            self.config = yaml.safe_load(fd)
+        self.config['working_dir'] = self.workdir
+        self.config['services']['dap']['conventions']['mds3']['nerdstorage']['store_dir'] = \
+            os.path.join(self.workdir, 'nerdm')
+        self.config['services']['nsd']['db_url'] = os.environ.get("MONGO_TESTDB_URL",
+                                                                  "mongodb://admin:admin@localhost/testdb")
+        self.config['services']['nsd']['data']['dir'] = str(peopledatadir)
+        cliagents = {'ark:/88434/tl0-0001': ["Unit testing agent"]}
+        self.config['authentication'] = { "key": "XXXXX", "algorithm": "HS256", "require_expiration": False,
+                                          'client_agents': cliagents }
+
+        self.clifact = fsbased.FSBasedDBClientFactory({}, self.dbdir)
+        self.app = app.MIDASApp(self.config, self.clifact)
+        self.app.load_people_from(peopledatadir)
+
+    def tearDown(self):
+        if os.path.exists(self.workdir):
+            shutil.rmtree(self.workdir)
+
+    def test_set_up(self):
+        self.assertTrue(self.app.subapps)
+        self.assertIn("dmp/mdm1", self.app.subapps)
+        self.assertIn("dap/mdsx", self.app.subapps)
+        self.assertIn("dap/mds3", self.app.subapps)
+        self.assertIn("nsd/nsd1", self.app.subapps)
+        self.assertIn("nsd/oar1", self.app.subapps)
+        
+    def test_nsd_oar1(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/nsd/oar1'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertTrue(data)
         
         
+    def test_orgs(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/nsd/oar1/Orgs'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertTrue(isinstance(data, list))
+        self.assertEqual(len(data), 8)
         
-        
+    def test_status(self):
+        req = {
+            "REQUEST_METHOD": "GET",
+            "PATH_INFO": "/midas/nsd/oar1/"
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+
+        self.assertEqual(resp['status'], "ready")
+        self.assertEqual(resp['person_count'], 4)
+        self.assertEqual(resp['org_count'], 8)
+        self.assertTrue(resp['message'].startswith("Ready"))
+
+        self.resp = []
+        req['PATH_INFO'] = "/midas/nsd/nsd1/"
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+
+        self.assertEqual(resp['status'], "ready")
+        self.assertEqual(resp['person_count'], 4)
+        self.assertEqual(resp['org_count'], 8)
+        self.assertTrue(resp['message'].startswith("Ready"))
 
         
         

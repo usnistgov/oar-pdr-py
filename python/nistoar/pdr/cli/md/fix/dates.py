@@ -6,7 +6,7 @@ import logging, argparse, sys, os, re, json, time, math
 from datetime import datetime
 
 from nistoar.nerdm.convert import latest
-from nistoar.pdr.cli import PDRCommandFailure
+from nistoar.pdr.utils.cli import CommandFailure
 from ..trans._comm import define_comm_trans_opts, process_svcep_args, define_comm_md_opts
 from ..trans._comm import _get_record_for_cmd, _write_record_for_cmd
 
@@ -87,7 +87,7 @@ def execute(args, config=None, log=None):
 
     _process_args(args, config, cmd, log)
 
-    # may raise PDRCommandFailure
+    # may raise CommandFailure
     nerdm = _get_record_for_cmd(args, cmd, config, log)
 
     for prop in args.dprops:
@@ -98,12 +98,12 @@ def execute(args, config=None, log=None):
 def _process_args(args, config, cmd, log):
     args.date = _parse_date(args.date, config, cmd, log)
     if not args.dprops:
-        raise PDRCommandFailure(cmd, "One of -f, -i, -m, -r, or -a must be specified", 2)
+        raise CommandFailure(cmd, "One of -f, -i, -m, -r, or -a must be specified", 2)
     process_svcep_args(args, config, cmd, log)
 
 def _parse_date(date_parts, config, cmd, log):
     if len(date_parts) == 0:
-        raise PDRCommandFailure(cmd, "No date value provided", 2)
+        raise CommandFailure(cmd, "No date value provided", 2)
     try:
         if len(date_parts) > 3:
             raise ValueError("too many date arguments provided")
@@ -140,7 +140,7 @@ def _parse_date(date_parts, config, cmd, log):
             return date_parts[0]
 
     except ValueError as ex:
-        raise PDRCommandFailure(cmd, "Illegal date-time syntax: "+" ".join(date_parts), 2)
+        raise CommandFailure(cmd, "Illegal date-time syntax: "+" ".join(date_parts), 2)
 
     date = date_parts[0]
     if len(date_parts) > 1:
@@ -153,7 +153,7 @@ def _parse_date(date_parts, config, cmd, log):
     try:
         return normalize_date_str(date) # may raise ValueError
     except ValueError as ex:
-        raise PDRCommandFailure(cmd, " ".join(date_parts) + ": " +str(ex), 2)
+        raise CommandFailure(cmd, " ".join(date_parts) + ": " +str(ex), 2)
 
 def normalize_date_str(dt):
     if re.match(r'\d{4}(\-((0\d)|(1[012])))?$', dt):

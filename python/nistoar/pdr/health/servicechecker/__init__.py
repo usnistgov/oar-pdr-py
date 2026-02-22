@@ -2,7 +2,7 @@
 A module that can check the health of running services by sending test queries.  
 """
 import re, textwrap
-from collections import Sequence
+from collections.abc import Sequence
 
 import requests
 try:

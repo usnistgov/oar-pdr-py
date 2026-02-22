@@ -22,7 +22,8 @@ configured preppers, given the PDR-ID and AIP-ID corresponding to the SIP.
 """
 import os, shutil, json, logging, re
 from abc import ABCMeta, abstractmethod, abstractproperty
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from zipfile import ZipFile
 from time import mktime
 

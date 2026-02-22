@@ -1,0 +1,389 @@
+{{def(record)}}
+<!DOCTYPE document SYSTEM "rml.dtd">
+<!-- Data Asset Plan PDF Template -->
+<document filename="dap_export.pdf">
+  <template showBoundary = "1">
+
+    <pageTemplate id="main">
+      <frame  id="second" x1="15" y1="15" width="565" height="815" overlapAttachedSpace="1"/>
+    </pageTemplate>
+  
+  </template>
+
+  <stylesheet>
+
+    <paraStyle 
+      name="mainBanner" 
+      fontName="Helvetica" 
+      fontSize="35" 
+      textColor="#000000"
+    />
+
+    <paraStyle 
+      name="Heading" 
+      fontName="Helvetica" 
+      fontSize="20" 
+      spaceBefore="20"
+      bottomPadding="20"
+      textColor="#000000"
+    />
+
+    <paraStyle 
+      name="data" 
+      fontName="Helvetica" 
+      fontSize="12" 
+      spaceAfter = "10"
+    />
+
+    <paraStyle name="table_normal" fontName="Helvetica" fontSize="11" leading="13"/>
+
+    <blockTableStyle id="dapTableStyle" spaceAfter="10">
+      <!-- This sets a font for every cell from the start of the -->
+      <!-- second row down to the bottom right hand corner -->
+      <blockFont name="Helvetica" size="11" start="0,1" stop="-1,-1"/>
+      
+      <!-- This sets a font for the first row -->
+      <blockFont name="Helvetica-BoldOblique" size="11" start="0,0" />
+      
+      <!-- This sets a textColor for all the text in the table -->
+      <blockTextColor colorName="black"/>      
+      
+      <!-- This sets a background color for the first row -->
+      <blockBackground colorName="#d6e0f5" start="0,0" />
+      
+      <!-- This sets a background color for the rest of the table -->
+      <blockBackground colorName="#ededed" start="0,1" stop="-1,-1"/>
+
+      <!-- Use of linestyles -->
+      <lineStyle kind="GRID" colorName="#dddcd7" start="0,1" stop="-1,-1"/>
+	   
+    </blockTableStyle>
+
+    <blockTableStyle id="dapBanner" spaceAfter="10">     
+      
+      <!-- This sets a background color for the first row -->
+      <blockBackground colorName="#ffffff" start="0,0" />
+      <lineStyle kind="LINEBELOW" colorName="#707b7c" start="0,0" stop="-1,0" thickness="7"/>
+      
+	   
+    </blockTableStyle>
+
+    <blockTableStyle id="SubHeading" spaceAfter="10">     
+      
+      <!-- This sets a background color for the first row -->
+      <blockBackground colorName="#ffffff" start="0,0" />
+      <lineStyle kind="LINEBELOW" colorName="#1A52BC" start="0,0" stop="-1,0" thickness="5"/>
+      
+	   
+    </blockTableStyle>
+  </stylesheet>
+
+  <story>
+
+    <!-- =======TABLE======== -->
+    <blockTable style="dapBanner" >
+    	<tr>
+    		<td ><para style="mainBanner"><b>Data Asset Plan (DAP)</b></para> </td>
+    	</tr>
+    </blockTable>
+
+    <para style="data">     
+      <br/> 
+    </para>
+
+    <!-- ======= SECTION: Basic Information ======== -->
+    <!-- =========================================== -->
+
+    <!-- =======TABLE======== -->
+    <blockTable style="SubHeading" >
+    	<tr>
+    		<td ><para style="Heading"><b>Basic Information</b></para> </td>
+    	</tr>
+    </blockTable>
+
+    <para style="data">     
+      <br/> 
+    </para>    
+
+    <para style="data">
+     <b>Title:</b> 
+     <br/>
+     {{record.get('title', 'N/A')}}
+    </para>
+
+    <para style="data">
+      <b>DOI:</b>
+      <br/>
+      {{record.get('doi', 'N/A')}}
+    </para>
+
+    <para style="data">
+      <b>ID:</b>
+      <br/>
+      {{record.get('@id', record.get('id', 'N/A'))}}
+    </para>
+
+    <para style="data">
+      <b>Resource Type:</b>
+      <br/>
+      {{record.get('_schema', 'N/A')}}
+    </para>
+
+    <!-- ======= SECTION: Authors/Contributors ======== -->
+    <!-- ============================================== -->
+    {{if record.get('authors')}}
+    <para style="data">     
+      <br/> 
+    </para>
+    <!-- =======TABLE======== -->
+    <blockTable style="SubHeading" >
+    	<tr>
+    		<td ><para style="Heading"><b>Authors/Contributors</b></para> </td>
+    	</tr>
+    </blockTable>
+
+    <para style="data">     
+      <br/> 
+    </para>
+
+    <!-- =======TABLE======== -->
+    <blockTable style="dapTableStyle">
+    	<tr>
+    		<td align="LEFT">          <para><b>Name</b></para>                       </td>
+    		<td align="LEFT">          <para><b>Organization</b></para>               </td>
+        <td align="LEFT">          <para><b>Division/Group</b></para>             </td>
+        <td align="LEFT">          <para><b>ORCID</b></para>                       </td>
+    	</tr>    
+      {{for author in record['authors']}}
+        <tr>
+            <td><para style="table_normal">{{author.get('fn', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{author.get('affiliation', [{}])[0].get('title', 'N/A') if author.get('affiliation') else 'N/A'}}</para></td>
+            <td><para style="table_normal">{{', '.join(author.get('affiliation', [{}])[0].get('subunits', [])) if author.get('affiliation') and author['affiliation'][0].get('subunits') else 'N/A'}}</para></td>
+            <td><para style="table_normal">{{author.get('orcid', 'N/A')}}</para></td>
+        </tr>
+      {{endfor}}  
+    </blockTable>
+    <para style="data">     
+      <br/> 
+    </para>
+    {{endif}}
+
+    <!-- ======= SECTION: Data Files and Components ======== -->
+    <!-- ================================================== -->
+    <para style="data">     
+      <br/> 
+    </para>
+    <!-- =======TABLE======== -->
+    <blockTable style="SubHeading" >
+    	<tr>
+    		<td ><para style="Heading"><b>Data Files and Components</b></para> </td>
+    	</tr>
+    </blockTable>
+
+    <para style="data">     
+      <br/> 
+    </para>
+
+    <para style="data">
+      <b>File Count:</b>
+      <br/>
+      {{record.get('file_count', 0)}}
+    </para>
+
+    <para style="data">
+      <b>Non-File Count:</b>
+      <br/>
+      {{record.get('nonfile_count', 0)}}
+    </para>
+
+    <para style="data">
+      <b>Reference Count:</b>
+      <br/>
+      {{record.get('reference_count', 0)}}
+    </para>
+
+    {{if record.get('components')}}
+    <!-- =======TABLE======== -->
+    <blockTable style="dapTableStyle">
+    	<tr>
+    		<td align="LEFT">          <para><b>Component Title</b></para>            </td>
+    		<td align="LEFT">          <para><b>Type</b></para>                       </td>
+        <td align="LEFT">          <para><b>File Path</b></para>                  </td>
+        <td align="LEFT">          <para><b>Size</b></para>                       </td>
+    	</tr>    
+      {{for comp in record['components']}}
+        <tr>
+            <td><para style="table_normal">{{comp.get('title', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{comp.get('@type', ['Unknown'])[0] if comp.get('@type') else 'Unknown'}}</para></td>
+            <td><para style="table_normal">{{comp.get('filepath', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{comp.get('size', 'N/A')}}</para></td>
+        </tr>
+      {{endfor}}  
+    </blockTable>
+    <para style="data">     
+      <br/> 
+    </para>
+    {{endif}}
+
+    <!-- ======= SECTION: Keywords / Phrases ======== -->
+    <!-- ============================================ -->
+    {{if record.get('keywords') or record.get('theme')}}
+    <para style="data">     
+      <br/> 
+    </para>
+    <!-- =======TABLE======== -->
+    <blockTable style="SubHeading" >
+    	<tr>
+    		<td ><para style="Heading"><b>Keywords / Topics</b></para> </td>
+    	</tr>
+    </blockTable>
+
+    <para style="data">     
+      <br/> <br/>
+    </para>
+
+    <!-- =======TABLE======== -->
+    <blockTable style="dapTableStyle">
+    	<tr>
+    		<td align="LEFT">          <para><b>Keywords / Topics</b></para>         </td>
+    	</tr>    
+      {{for kw in record.get('keywords', []) + record.get('theme', [])}}
+        <tr>
+            <td><para style="table_normal">{{kw.get('tag', kw) if isinstance(kw, dict) else kw}}</para></td>
+        </tr>
+      {{endfor}}  
+    </blockTable>
+    <para style="data">     
+      <br/> 
+    </para>
+    {{endif}}
+
+    <!-- ======= SECTION: Access and Distribution ======== -->
+    <!-- ================================================ -->
+    <para style="data">     
+      <br/> 
+    </para>
+    <!-- =======TABLE======== -->
+    <blockTable style="SubHeading" >
+    	<tr>
+    		<td ><para style="Heading"><b>Access and Distribution</b></para> </td>
+    	</tr>
+    </blockTable>
+
+    <para style="data">     
+      <br/> 
+    </para>
+
+    {{if record.get('accessLevel')}}
+    <para style="data">
+      <b>Access Level:</b>
+      <br/>
+      {{record['accessLevel']}}
+    </para>
+    {{endif}}
+
+    {{if record.get('rights')}}
+    <para style="data">
+      <b>Rights:</b>
+      <br/>
+      {{record['rights']}}
+    </para>
+    {{endif}}
+
+    {{if record.get('license')}}
+    <para style="data">
+      <b>License:</b>
+      <br/>
+      {{record['license']}}
+    </para>
+    {{endif}}
+
+    <!-- ======= SECTION: Publication Information ======== -->
+    <!-- ================================================ -->
+    {{if record.get('isPartOf') or record.get('references')}}
+    <para style="data">     
+      <br/> 
+    </para>
+    <!-- =======TABLE======== -->
+    <blockTable style="SubHeading" >
+    	<tr>
+    		<td ><para style="Heading"><b>Publication Information</b></para> </td>
+    	</tr>
+    </blockTable>
+
+    <para style="data">     
+      <br/> 
+    </para>
+
+    {{if record.get('isPartOf')}}
+    <para style="data">
+      <b>Part Of:</b>
+      <br/>
+      {{record['isPartOf'].get('title', 'N/A') if isinstance(record['isPartOf'], dict) else record['isPartOf']}}
+    </para>
+    {{endif}}
+
+    {{if record.get('references')}}
+    <para style="data">
+      <b>References:</b>
+    </para>
+
+    <!-- =======TABLE======== -->
+    <blockTable style="dapTableStyle">
+    	<tr>
+    		<td align="LEFT">          <para><b>Title</b></para>                      </td>
+    		<td align="LEFT">          <para><b>Citation</b></para>                   </td>
+        <td align="LEFT">          <para><b>Publication Year</b></para>           </td>
+        <td align="LEFT">          <para><b>Volume/Pages</b></para>               </td>
+    	</tr>    
+      {{for ref in record['references']}}
+        <tr>
+            <td><para style="table_normal">{{ref.get('title', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{ref.get('citation', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{ref.get('publishYear', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{ref.get('vol', '') + ('(' + ref.get('volNumber', '') + ')' if ref.get('volNumber') else '') + (' ' + ref.get('pages', '') if ref.get('pages') else '') if ref.get('vol') or ref.get('pages') else 'N/A'}}</para></td>
+        </tr>
+      {{endfor}}  
+    </blockTable>
+    <para style="data">     
+      <br/> 
+    </para>
+    {{endif}}
+    {{endif}}
+
+    <!-- ======= SECTION: Contact Information ======== -->
+    <!-- ============================================= -->
+    {{if record.get('contactPoint')}}
+    <para style="data">     
+      <br/> 
+    </para>
+    <!-- =======TABLE======== -->
+    <blockTable style="SubHeading" >
+    	<tr>
+    		<td ><para style="Heading"><b>Contact Information</b></para> </td>
+    	</tr>
+    </blockTable>
+
+    <para style="data">     
+      <br/> 
+    </para>
+
+    <para style="data">
+      <b>Contact:</b>
+      <br/>
+      {{record['contactPoint'].get('fn', 'N/A') if isinstance(record['contactPoint'], dict) else record['contactPoint']}}
+    </para>
+
+    {{if isinstance(record['contactPoint'], dict) and record['contactPoint'].get('hasEmail')}}
+    <para style="data">
+      <b>Email:</b>
+      <br/>
+      {{record['contactPoint']['hasEmail']}}
+    </para>
+    {{endif}}
+    {{endif}}
+
+    <!-- *********************  END  ********************* -->
+  </story>
+
+</document>

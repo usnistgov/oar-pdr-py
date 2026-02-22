@@ -42,6 +42,7 @@ except ImportError:
         sys.path.insert(0, oarpath)
     import nistoar
 
+import nistoar.midas
 from nistoar.base import config
 from nistoar.midas.dbio import MongoDBClientFactory, InMemoryDBClientFactory, FSBasedDBClientFactory
 from nistoar.midas import wsgi
@@ -82,8 +83,18 @@ else:
 workdir = _dec(uwsgi.opt.get("oar_working_dir"))
 if workdir:
     cfg['working_dir'] = workdir
+nsdcfg = cfg.get('services',{}).get("nsd")
+
+if uwsgi.opt.get("oar_log_file"):
+    cfg["logfile"] = _dec(uwsgi.opt.get("oar_log_file"))
 
 config.configure_log(config=cfg)
+
+# Is there a client notification service running we should talk to?
+if uwsgi.opt.get('dbio_clinotif_config_file'):
+    cnscfg = config.resolve_configuration(_dec(uwsgi.opt['dbio_clinotif_config_file']))
+    cfg.setdefault('dbio', {})
+    cfg['dbio']['client_notifier'] = cnscfg
 
 # setup the MIDAS database backend
 dbtype = _dec(uwsgi.opt.get("oar_midas_db_type"))
@@ -91,6 +102,28 @@ if not dbtype:
     dbtype = cfg.get("dbio", {}).get("factory")
 if not dbtype:
     dbtype = DEF_MIDAS_DB_TYPE
+
+dburl = None
+if dbtype == "mongo" or nsdcfg:
+    # determinne the DB URL
+    dbcfg = cfg.get("dbio", {})
+    dburl = os.environ.get("OAR_MONGODB_URL")
+    if not dburl:
+        dburl = dbcfg.get("db_url")
+    if not dburl:
+        # Build the DB URL from its pieces with env vars taking precedence over the config
+        port = ":%s" % os.environ.get("OAR_MONGODB_PORT", dbcfg.get("port", "27017"))
+        user = os.environ.get("OAR_MONGODB_USER", dbcfg.get("user"))
+        cred = ""
+        if user:
+            pasw = os.environ.get("OAR_MONGODB_PASS", dbcfg.get("pw", os.environ.get("OAR_MONGODB_USER")))
+            cred = "%s:%s@" % (user, pasw)
+        host = os.environ.get("OAR_MONGODB_HOST", dbcfg.get("host", "localhost"))
+        dburl = "mongodb://%s%s%s/midas" % (cred, host, port)
+
+    # print(f"dburl: {dburl}")
+    if nsdcfg:
+        nsdcfg["db_url"] = dburl
 
 if dbtype == "fsbased":
     # determine the DB's root directory
@@ -111,20 +144,31 @@ if dbtype == "fsbased":
     if not os.path.exists(dbdir):
         os.mkdir(dbdir)
     factory = FSBasedDBClientFactory(cfg.get("dbio", {}), dbdir)
+
 elif dbtype == "mongo":
-    dburl = os.environ.get("OAR_MONGODB_URL")
-    if not dburl:
-        port = ":%s" % os.environ.get("OAR_MONGODB_PORT", "27017")
-        cred = ""
-        if os.environ.get("OAR_MONGODB_USER"):
-            pasw = os.environ.get("OAR_MONGODB_PASS", os.environ.get("OAR_MONGODB_USER"))
-            cred = "%s:%s@" % (os.environ.get("OAR_MONGODB_USER"), pasw)
-        dburl = "mongodb://%s%s%s/midas" % (cred, os.environ.get("OAR_MONGODB_HOST", "localhost"), port)
     factory = MongoDBClientFactory(cfg.get("dbio", {}), dburl)
+
 elif dbtype == "inmem":
     factory = InMemoryDBClientFactory(cfg.get("dbio", {}))
+    nscfg = cfg.get("services", {}).get("dap",{}).get("conventions",{}). \
+                get("mds3",{}).get("nerdstorage",{})
+    if nscfg:
+        nscfg['type'] = "inmem"
 else:
     raise RuntimeError("Unsupported database type: "+dbtype)
 
 application = wsgi.app(cfg, factory)
-logging.info("MIDAS service ready with "+dbtype+" backend")
+
+if nsdcfg:
+    try:
+        application.load_people_from()
+    except ConfigurationException as ex:
+        logging.warning("Unable to initialize NSD database: %s", str(ex))
+
+msg = f"MIDAS service (v{nistoar.midas.__version__}) ready with {dbtype} backend"
+print(msg)
+logging.info(msg)
+if nsdcfg:
+    logging.info("...and NSD service built-in")
+if cfg.get('dbio', {}).get('client_notifier'):
+    logging.info("...and with client notifier")

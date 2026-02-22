@@ -1,6 +1,7 @@
 
 import os, pdb, requests, logging, time, json
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from io import StringIO
 import unittest as test
 from copy import deepcopy

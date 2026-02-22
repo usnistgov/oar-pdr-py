@@ -14,10 +14,12 @@ from nistoar.pdr.exceptions import ConfigurationException, StateException
 
 from . import inmem
 from . import fsbased
+from . import fmfs
 
 _def_store_map = {
     "inmem":    inmem.InMemoryResourceStorage,
-    "fsbased":  fsbased.FSBasedResourceStorage
+    "fsbased":  fsbased.FSBasedResourceStorage,
+    "fmfs":     fmfs.FMFSResourceStorage
 }
 
 class NERDResourceStorageFactory:

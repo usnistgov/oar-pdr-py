@@ -1,0 +1,13 @@
+{
+    "filter": {
+        "$and": [
+            {
+                "data.title": "Standard Reference Materials"
+            }
+        ]
+    },
+    "permissions": [
+        "read",
+        "write"
+    ]
+}

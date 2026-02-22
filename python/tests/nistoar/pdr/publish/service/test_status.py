@@ -210,16 +210,16 @@ class TestSIPStatus(test.TestCase):
         self.assertEqual(self.status._cachefile, "/tmp/sipstatus/ffff.json")
 
     def test_agent(self):
-        self.assertEqual(self.status.agent_groups, [])
-        self.status.agent_groups.append('goober')
-        self.assertEqual(self.status.agent_groups, [])
+        self.assertEqual(self.status.authorized_agents, [])
+        self.status.authorized_agents.append('goober')
+        self.assertEqual(self.status.authorized_agents, [])
         self.assertFalse(self.status.any_authorized('goober'))
         self.assertFalse(self.status.any_authorized(''))
         
-        self.status.add_agent_group('goober')
-        self.assertEqual(self.status.agent_groups, ['goober'])
-        self.status.add_agent_group('gurn')
-        self.assertEqual(self.status.agent_groups, ['goober', 'gurn'])
+        self.status.add_authorized_agent('goober')
+        self.assertEqual(self.status.authorized_agents, ['goober'])
+        self.status.add_authorized_agent('gurn')
+        self.assertEqual(self.status.authorized_agents, ['goober', 'gurn'])
 
         self.assertTrue(self.status.any_authorized('goober'))
         self.assertTrue(self.status.any_authorized('gurn'))
@@ -248,19 +248,19 @@ class TestSIPStatus(test.TestCase):
         self.assertEqual(status.SIPStatus.requests(self.cfg, 'hank'), [])
         self.assertEqual(status.SIPStatus.requests(self.cfg, ''), [])
 
-        self.status.add_agent_group("hank", True)
+        self.status.add_authorized_agent("hank", True)
         self.assertEqual(status.SIPStatus.requests(self.cfg), ['ffff'])
         self.assertEqual(status.SIPStatus.requests(self.cfg, 'hank'), ['ffff'])
         self.assertEqual(status.SIPStatus.requests(self.cfg, ''), [])
 
         stat = status.SIPStatus("goob", self.cfg)
-        stat.add_agent_group("gurn")
+        stat.add_authorized_agent("gurn")
         sips = status.SIPStatus.requests(self.cfg)
         self.assertIn('ffff', sips)
         self.assertIn('goob', sips)
         self.assertEqual(status.SIPStatus.requests(self.cfg, 'hank'), ['ffff'])
         self.assertEqual(status.SIPStatus.requests(self.cfg, 'gurn'), ['goob'])
-        stat.add_agent_group("hank")
+        stat.add_authorized_agent("hank")
         sips = status.SIPStatus.requests(self.cfg)
         self.assertIn('ffff', sips)
         self.assertIn('goob', sips)
@@ -351,7 +351,7 @@ class TestSIPStatus(test.TestCase):
         self.assertEqual(self.status.data['user']['message'], 
                          status.user_message[status.PROCESSING])
         self.assertEqual(self.status.data['gurn'], 'goob')
-        self.assertEqual(self.status.agent_groups, [])
+        self.assertEqual(self.status.authorized_agents, [])
 
         self.status.update(status.FAILED)
         self.assertNotEqual(self.status.data['user']['state'], 'processing')
@@ -359,7 +359,7 @@ class TestSIPStatus(test.TestCase):
         self.status.start("goob1", "gurn", "chugging...")
         self.assertEqual(self.status.data['user']['state'], 'processing')
         self.assertEqual(self.status.data['user']['message'], "chugging...")
-        self.assertEqual(self.status.agent_groups, ['gurn'])
+        self.assertEqual(self.status.authorized_agents, ['gurn'])
 
     def test_user_export(self):
         self.status.start('goob')

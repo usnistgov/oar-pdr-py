@@ -12,6 +12,10 @@ basedir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.pat
 port = 9091
 baseurl = "http://localhost:{0}/".format(port)
 
+uwsgi_opts = "--plugin python3"
+if os.environ.get("OAR_UWSGI_OPTS") is not None:
+    uwsgi_opts = os.environ['OAR_UWSGI_OPTS']
+
 def startService(authmeth=None):
     adir = artifactdir(__name__)
     tdir = tmpdir()
@@ -21,9 +25,9 @@ def startService(authmeth=None):
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
     wpy = "python/tests/nistoar/pdr/describe/sim_describe_svc.py"
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
-          "--wsgi-file {2} --pidfile {3}"
-    cmd = cmd.format(os.path.join(adir,"simsrv.log"), srvport,
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --pidfile {4}"
+    cmd = cmd.format(os.path.join(adir,"simsrv.log"), uwsgi_opts, srvport,
                      os.path.join(basedir, wpy), pidfile)
     os.system(cmd)
     time.sleep(0.5)
@@ -380,7 +384,7 @@ class TestPDRIDHandler(test.TestCase):
     def test_bad_format(self):
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "ark:/88434/mds2-2107/pdr:v/",
+            'PATH_INFO': "ark:/88434/mds2-2107/pdr:v",
             'QUERY_STRING': "format=datacite"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
@@ -390,7 +394,7 @@ class TestPDRIDHandler(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "ark:/88434/mds2-2107/pdr:v/",
+            'PATH_INFO': "ark:/88434/mds2-2107/pdr:v",
             'HTTP_ACCEPT': "text/csv"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
@@ -400,7 +404,7 @@ class TestPDRIDHandler(test.TestCase):
     def test_get_releaseset(self):
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "ark:/88434/mds2-2106/pdr:v/"
+            'PATH_INFO': "ark:/88434/mds2-2106/pdr:v"
         }
         hdlr = self.gethandler(req['PATH_INFO'], req)
         body = self.tostr( hdlr.handle() )

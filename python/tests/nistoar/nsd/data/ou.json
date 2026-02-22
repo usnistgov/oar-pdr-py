@@ -1,0 +1,30 @@
+[
+  {
+    "orG_Name": "Department of Leftovers", 
+    "orG_CD": "01", 
+    "orG_ID": 1, 
+    "activE_YN": "Y", 
+    "orG_ACRNM": "DOL"
+  }, 
+  {
+    "orG_Name": "Department of Covers", 
+    "orG_CD": "02", 
+    "orG_ID": 2, 
+    "activE_YN": "Y", 
+    "orG_ACRNM": "DOC"
+  }, 
+  {
+    "orG_Name": "Department of Failure", 
+    "orG_CD": "03", 
+    "orG_ID": 3, 
+    "activE_YN": "Y", 
+    "orG_ACRNM": "DOF"
+  }, 
+  {
+    "orG_Name": "Department of Spies", 
+    "orG_CD": "04", 
+    "orG_ID": 4, 
+    "activE_YN": "Y", 
+    "orG_ACRNM": "DOS"
+  }
+]

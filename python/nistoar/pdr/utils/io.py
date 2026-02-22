@@ -1,7 +1,8 @@
 """
 Utility functions and classes for file reading and writing
 """
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 from pathlib import Path
 import json, os, threading
 try:

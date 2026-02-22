@@ -2,83 +2,234 @@
 A web service interface to various MIDAS project records.  
 
 A _project record_ is a persistable record that is compliant with the MIDAS Common Database project 
-data model, where examples of "project record" types include DMP records and data publication drafts.
+data model, where examples of a "project record" types include DMP records and data publication drafts.
 The :py:class:`MIDASProjectApp` encapsulates the handling of requests to create and manipulate project 
-records.  If desired, this class can be specialized for a particular project type, and the easiest way 
-to do that is by sub-classing the :py:class:`~nistoar.midas.dbio.wsgi.project.ProjectRecordBroker` and 
-passing that class to the :py:class:`MIDASProjectApp` constructor.  This is because the 
-:py:class:`~nistoar.midas.dbio.wsgi.project.ProjectRecordBroker` class isolates the business logic for 
-retrieving and manipulating project records.  
+records.  If desired, this class can be specialized for a particular project type; as an example, see
+:py:mod:`nistoar.midas.dap.service.mds3`.
+
+This implementation uses the simple :py:mod:`nistoar-internal WSGI 
+framework<nistoar.pdr.publish.service.wsgi>` to handle the specific web service endpoints.  The 
+:py:class:`MIDASProjectApp` is the router for the Project collection endpoint: it analyzes the relative 
+URL path and delegates the handling to a more specific handler class.  In particular, these endpoints
+are handled accordingly:
+
+``/`` -- :py:class:`ProjectSelectionHandler`
+     responds to to project search queries to find project records matching search criteria (GET) 
+     as well as accepts requests to create new records (POST).
+
+``/{projid}`` -- :py:class:`ProjectHandler`
+     returns the full project record (GET) or deletes it (DELETE).
+
+``/{projid}/name`` -- :py:class:`ProjectNameHandler`
+     returns (GET) or updates (PUT) the user-supplied name of the record.
+
+``/{projid}/owner`` -- :py:class:`ProjectNameHandler`
+     returns ID of current owner (GET) or reassigns ownership to given ID (PUT).
+
+``/{projid}/data[/...]`` -- :py:class:`ProjectDataHandler`
+     returns (GET), updates (PUT, PATCH), or clears (DELETE) the data content of the record.  This
+     implementation supports updating individual parts of the data object via PUT, PATCH, DELETE 
+     based on the path relative to ``data``.   Subclasses (e.g. with the 
+     :py:mod:`DAP specialization<nistoar.midas.dap.service.mds3>`) may also support POST for certain
+     array-type properties within ``data``.  
+
+``/{projid}/acls[/...]`` -- :py:class:`ProjectACLsHandler`
+     returns (GET) or updates (PUT, PATCH, POST, DELETE) access control lists for the record.
+
+``/{projid}/*`` -- :py:class`ProjectInfoHandler`
+     returns other non-editable parts of the record via GET (including the ``meta`` property).
 """
 from logging import Logger
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence, Callable
+from typing import Iterator, List
 from urllib.parse import parse_qs
+import json, re
 
-from nistoar.pdr.publish.service.wsgi import SubApp, Handler  # same infrastructure as publishing service
-from nistoar.pdr.publish.prov import PubAgent
-from nistoar.pdr.utils.webrecord import WebRecorder
+from nistoar.web.rest import ServiceApp, Handler, Agent
+from nistoar.web.formats import Format, FormatSupport, Unacceptable, UnsupportedFormat
+from nistoar.pdr.utils.validate import ValidationResults
+from nistoar.web.formats import JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
+from nistoar.midas.export.export import run as export_run
 from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 from .base import DBIOHandler
+from .search_sorter import SortByPerm
 
 __all__ = ["MIDASProjectHandler", "ProjectDataHandler"]
+SUPPORTED_FILTERS = set("perm name id owner status_state".split())
 
 class ProjectRecordHandler(DBIOHandler):
     """
     base handler class for all requests on project records.  
     """
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, path: str="", config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, path: str="", config: dict=None, log: Logger=None):
         """
         Initialize this handler with the request particulars.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str      path:  the relative path to be handled by this handler; typically, some starting 
                                portion of the original request path has been stripped away to handle 
                                produce this value.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
 
-        super(ProjectRecordHandler, self).__init__(subapp, service.dbcli, wsgienv, start_resp, who,
+        super(ProjectRecordHandler, self).__init__(svcapp, service.dbcli, wsgienv, start_resp, who,
                                                    path, config, log)
         self.svc = service
+
+    def _format_records_as(self, records: List[Mapping], format):
+        """
+        Handle export requests for non-JSON formats with validation and error handling.
+
+        Validates records before formatting and skips invalid records while logging warnings.
+        Returns partial results if some records are valid, or error if all fail validation.
+
+        :param records: List of record dictionaries to format
+        :param format: Format object with name and content type
+        :return: Formatted response via send_ok() or send_error_resp()
+        """
+        format_type = format.name
+
+        # Validate and filter records
+        valid_records = []
+        for rec in records:
+            try:
+                # Basic validation - records must have an ID
+                if not rec.get('id'):
+                    raise ValueError("Record missing 'id' field")
+                # Add more validation as needed
+                valid_records.append(rec)
+            except Exception as ex:
+                self.log.warning(f"Skipping malformed record {rec.get('id', 'unknown')}: {str(ex)}")
+
+        # If all records failed validation, return error
+        if not valid_records:
+            return self.send_error_resp(400, "All records failed validation",
+                                        f"No valid records could be formatted as {format_type}")
+
+        # Log if some records were skipped
+        if len(valid_records) < len(records):
+            self.log.warning(f"Skipped {len(records) - len(valid_records)} invalid records during {format_type} export")
+
+        try:
+            # Detect record type for template selection
+            template_name = self._determine_template_name(valid_records, format_type)
+
+            result = export_run(
+                input_data=valid_records,
+                output_format=format_type,
+                output_directory=None,
+                template_name=template_name
+            )
+
+            content = result.get('bytes', result.get('text'))
+            if not content and result.get('path'):
+                # deliver content from a file
+                pass
+
+            if content:
+                return self.send_ok(content, contenttype=format.ctype)
+
+            # unable to comply
+            return self.send_error_resp(500, "Export format error",
+                             f"Failed to convert records into requested format, {format_type}")
+
+        except Exception as ex:
+            self.log.exception(f"Exception during {format_type} export: {str(ex)}")
+            return self.send_error_resp(500, "Export failed",
+                                        f"Failure during export formatting: {str(ex)}")
+
+    def _determine_template_name(self, records: list, format_type: str) -> str:
+        """
+        Determine appropriate template name based on record type and format.
+
+        Checks multiple indicators to detect record type:
+        1. Explicit 'type' field (dmp/dap)
+        2. ID prefix patterns (mdm1=DMP, mds3=DAP)
+        3. Metadata content
+        4. Default fallback to DMP
+
+        :param records: List of record dictionaries
+        :param format_type: Output format (pdf, csv, markdown)
+        :return: Template name string (e.g., 'dmp_pdf_template')
+        """
+        if not records:
+            return None
+
+        # Check first record to determine type
+        first_record = records[0]
+
+        # Convert ProjectRecord to dict if necessary
+        if hasattr(first_record, 'to_dict'):
+            record_dict = first_record.to_dict()
+        else:
+            record_dict = first_record
+
+        # Method 1: Check record type field directly
+        record_type = record_dict.get('type', '').lower()
+        if record_type in ['dmp', 'dap']:
+            return f"{record_type}_{format_type}_template"
+
+        # Method 2: Check ID prefix patterns
+        record_id = record_dict.get('id', '')
+        if record_id.startswith('mdm1'):  # DMP records
+            return f"dmp_{format_type}_template"
+        elif record_id.startswith('mds3'):  # DAP records
+            return f"dap_{format_type}_template"
+
+        # Method 3: Check metadata for type indicators
+        meta = record_dict.get('meta', {})
+        if 'dmp' in str(meta).lower():
+            return f"dmp_{format_type}_template"
+        elif 'dap' in str(meta).lower():
+            return f"dap_{format_type}_template"
+
+        # Default fallback - assume DMP for backward compatibility
+        return f"dmp_{format_type}_template"
+
+    def free(self):
+        self.svc.free()
+
 
 class ProjectHandler(ProjectRecordHandler):
     """
     handle access to the whole project record
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, id: str, config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, id: str, config: dict=None, log: Logger=None):
         """
         Initialize this handler with the request particulars.  This constructor is called 
-        by the webs service SubApp.  
+        by the webs service ServiceApp.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
 
-        super(ProjectHandler, self).__init__(service, subapp, wsgienv, start_resp, who, "", config, log)
+        super(ProjectHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, "", config, log)
 
         self._id = id
         if not id:
@@ -86,47 +237,92 @@ class ProjectHandler(ProjectRecordHandler):
             raise ValueError("Missing ProjectRecord id")
 
     def do_OPTIONS(self, path):
-        return self.send_options(["GET"])
+        return self.send_options(["GET", "DELETE"])
 
-    def do_GET(self, path, ashead=False):
+    def do_GET(self, path, ashead=False, format=None):
+        """
+        Respond to a GET request for a single project record.
+        Supports JSON (default) and export formats (PDF, CSV, Markdown).
+
+        :param str path:  a path to the portion of the data to get
+        :param bool ashead:  if True, the request is actually a HEAD request
+        :param str format:  optional format override for testing
+        """
+        # Setup format support
+        supp_fmts = FormatSupport()
+        JSONSupport.add_support(supp_fmts, ["text/json", "application/json"], asdefault=True)
+        supp_fmts.support(Format("pdf", "application/pdf"))
+        supp_fmts.support(Format("markdown", "text/markdown"), ["text/markdown", "text/plain"])
+        supp_fmts.support(Format("csv", "text/csv"))
+        self._set_default_format_support(supp_fmts)
+
+        # Select format (via query parameter or Accept header)
+        try:
+            fmt = self.select_format(format)
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
+        # Get record
         try:
             prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
-            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
+            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found",
                                         self._id, ashead=ashead)
 
+        # Format output
+        if fmt.name in ["pdf", "csv", "markdown"]:
+            return self._format_records_as([prec.to_dict()], fmt)
+
         return self.send_json(prec.to_dict(), ashead=ashead)
-    
+
+    def do_DELETE(self, path):
+        try:
+            prec = self.svc.get_record(self._id)
+            out = prec.to_dict()
+            self.svc.delete_record(self._id)
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
+                                        self._id)
+        except NotImplementedError as ex:
+            return self.send_error(501, "Not Implemented")
+
+        return self.send_json(out)
+
 
 class ProjectInfoHandler(ProjectRecordHandler):
     """
     handle retrieval of simple parts of a project record.  Only GET requests are allowed via this handler.
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, id: str, attribute: str, config: dict={}, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, id: str, attribute: str, config: dict={}, log: Logger=None):
         """
         Initialize this handler with the request particulars.  This constructor is called 
-        by the webs service SubApp.  
+        by the webs service ServiceApp.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
         :param str attribute:  a recognized project model attribute
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
 
-        super(ProjectInfoHandler, self).__init__(service, subapp, wsgienv, start_resp, who, attribute,
+        super(ProjectInfoHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, attribute,
                                                  config, log)
         self._id = id
         if not id:
@@ -162,40 +358,71 @@ class ProjectInfoHandler(ProjectRecordHandler):
 
 class ProjectNameHandler(ProjectRecordHandler):
     """
-    handle retrieval/update of a project records mnumonic name
+    handle retrieval/update of a project records owner or mnemonic name
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable,
-                 who: PubAgent, id: str, config: dict=None, log: Logger=None):
+    MAX_NAME_LENGTH = 1024
+    ALLOWED_PROPS = ["name", "owner"]
+
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
+                 who: Agent, id: str, prop: str, config: dict=None, log: Logger=None):
         """
         Initialize this handler with the request particulars.  This constructor is called 
-        by the webs service SubApp.  
+        by the webs service ServiceApp.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
+        :param str      prop:  the project record property to be updated; restricted to "name" or "owner"
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
-        
-        super(ProjectNameHandler, self).__init__(service, subapp, wsgienv, start_resp, who, "", config, log)
+        if prop not in self.ALLOWED_PROPS:
+            raise ValueError("ProjectNameHandler(): Disallowed prop: "+str(prop))
+        super(ProjectNameHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, prop, config, log)
                                                    
         self._id = id
         if not id:
             # programming error
             raise ValueError("Missing ProjectRecord id")
 
+        # allow output in JSON (default) or plain text
+        fmtsup = JSONSupport()
+        TextSupport.add_support(fmtsup)
+        self._set_default_format_support(fmtsup)
+
+        # allows client to request format via query parameter "format"
+        self._set_format_qp("format")
+
+    def acceptable(self):
+        # not sure if this is really needed
+        if super(ProjectNameHandler, self).acceptable():
+            return True
+        return "text/plain" in self.get_accepts()
+        
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "PUT"])
 
     def do_GET(self, path, ashead=False):
+        if path not in self.ALLOWED_PROPS:
+            self.log.error("ProjectNameHandler: unexpected property request (programmer error?): %s", path)
+            return self.send_error(500, "Internal Server Error")
+
+        try:
+            format = self.select_format()
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
         try:
             prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
@@ -204,56 +431,93 @@ class ProjectNameHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found", "Record with requested identifier not found", 
                                         self._id, ashead=ashead)
 
-        return self.send_json(prec.name, ashead=ashead)
+        if format.name == "text":
+            return self.send_ok(getattr(prec, path), contenttype=format.ctype, ashead=ashead)
+        else:
+            return self.send_json(getattr(prec, path), ashead=ashead)
 
     def do_PUT(self, path):
+        if path not in self.ALLOWED_PROPS:
+            self.log.error("ProjectNameHandler: unexpected property request (programmer error?): %s", path)
+            return self.send_error(500, "Internal Server Error")
+
         try:
-            name = self.get_json_body()
+            format = self.select_format()
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
+        rctype = self._env.get('CONTENT_TYPE', 'application/json')
+        if rctype == "application/x-www-form-urlencoded":  # default for python requests
+            rctype = "application/json"
+        try:
+            if rctype == "text/plain":
+                name = self.get_text_body(self.MAX_NAME_LENGTH+1)
+            elif "/json" in rctype:
+                name = self.get_json_body()
+            else:
+                self.log.debug("Attempt to change %s with unsupported content type: %s", path, rctype)
+                return self.send_error_resp(415, "Unsupported Media Type",
+                                            "Input content-type is not supported", self._id)
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
+        if len(name) > self.MAX_NAME_LENGTH:
+            return self.send_error_resp(400, "Value length too long"
+                                        "Supplied value is tool long for "+path, self._id)
+
         try:
-            prec = self.svc.get_record(self._id)
-            prec.name = name
-            if not prec.authorized(dbio.ACLs.ADMIN):
-                raise dbio.NotAuthorized(self._dbcli.user_id, "change record name")
-            prec.save()
-            return self.send_json(prec.name)
+            if path == "owner":
+                newname = self.svc.reassign_record(self._id, name)  # may raise NotAuthorized
+
+            elif path == "name":
+                newname = self.svc.rename_record(self._id, name)  # may raise NotAuthorized, AlreadyExists
+
         except dbio.NotAuthorized as ex:
             return self.send_unauthorized()
         except dbio.ObjectNotFound as ex:
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
+        except (dbio.InvalidUpdate, dbio.AlreadyExists) as ex:
+            return self.send_error_resp(400, "Invalid Input", str(ex), self._id)
 
+        if format.name == "text":
+            return self.send_ok(newname, contenttype=format.ctype)
+        else:
+            return self.send_json(newname)
+
+        
 class ProjectDataHandler(ProjectRecordHandler):
     """
     handle retrieval/update of a project record's data content
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, id: str, datapath: str, config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, id: str, datapath: str, config: dict=None, log: Logger=None):
         """
         Initialize this data request handler with the request particulars.  This constructor is called 
-        by the webs service SubApp in charge of the project record interface.  
+        by the webs service ServiceApp in charge of the project record interface.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
         :param str  datapath:  the subpath pointing to a particular piece of the project record's data;
                                this will be a '/'-delimited identifier pointing to an object property 
                                within the data object.  This will be an empty string if the full data 
                                object is requested.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
-        super(ProjectDataHandler, self).__init__(service, subapp, wsgienv, start_resp, who, datapath,
+        super(ProjectDataHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, datapath,
                                                  config, log)
         self._id = id
         if not id:
@@ -261,7 +525,7 @@ class ProjectDataHandler(ProjectRecordHandler):
             raise ValueError("Missing ProjectRecord id")
 
     def do_OPTIONS(self, path):
-        return self.send_options(["GET", "PUT", "PATCH"])
+        return self.send_options(["GET", "PUT", "PATCH", "DELETE"])
 
     def do_GET(self, path, ashead=False):
         """
@@ -281,7 +545,32 @@ class ProjectDataHandler(ProjectRecordHandler):
                                             "No data found at requested property", self._id, ashead=ashead)
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id, ashead=ashead)
+        except dbio.PartNotAccessible as ex:
+            return self.send_error_resp(405, "Data property not retrieveable",
+                                  "Requested data property cannot be retrieved independently of its ancestor")
         return self.send_json(out, ashead=ashead)
+
+    def do_DELETE(self, path):
+        """
+        respond to a DELETE request.  This is used to clear the value of a particular property 
+        within the project data or otherwise reset the project data to its initial defaults.
+        :param str path:  a path to the portion of the data to clear
+        """
+        try:
+            cleared = self.svc.clear_data(self._id, path)
+        except dbio.NotAuthorized as ex:
+            return self._send_unauthorized()
+        except dbio.PartNotAccessible as ex:
+            return self.send_error_resp(405, "Data part not deletable",
+                                        "Requested part of data cannot be deleted")
+        except dbio.ObjectNotFound as ex:
+            if ex.record_part:
+                return self.send_error_resp(404, "Data property not found",
+                                            "No data found at requested property", self._id, ashead=ashead)
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found", self._id, ashead=ashead)
+
+        return self.send_json(cleared, "Cleared", 201)
 
     def do_PUT(self, path):
         try:
@@ -303,7 +592,6 @@ class ProjectDataHandler(ProjectRecordHandler):
                                         "Requested part of data cannot be updated")
         except dbio.NotEditable as ex:
             return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit")
-                                        
 
         return self.send_json(data)
 
@@ -337,77 +625,202 @@ class ProjectSelectionHandler(ProjectRecordHandler):
     handle collection-level access searching for project records and creating new ones
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable,
-                 who: PubAgent, config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
+                 who: Agent, iftype: str=None, config: dict=None, log: Logger=None):
         """
         Initialize this record request handler with the request particulars.  This constructor is called 
-        by the webs service SubApp in charge of the project record interface.  
+        by the webs service ServiceApp in charge of the project record interface.  
 
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
+        :param str    iftype:  a name for the search interface type that is requested.  Recognized values
+                               include ":selected" which supports Mongo-like filter syntax.  If not provided,
+                               a simple query-parameter-based filter syntax is used.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
-        super(ProjectSelectionHandler, self).__init__(service, subapp, wsgienv, start_resp, who, "",
+        if iftype is None:
+            iftype = ""
+        super(ProjectSelectionHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, iftype,
                                                       config, log)
+        self._set_format_qp("format")
 
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "POST"])
 
-    def do_GET(self, path, ashead=False):
+    def _select_records(self, perms, **constraints) -> Iterator[ProjectRecord]:
+        """
+        submit a search query in a project specific way.  This method is provided as a 
+        hook to subclasses that may need to specialize the search strategy or manipulate the results.  
+        This implementation passes the query directly to the generic DBClient instance.
+        :return:  a generator that iterates through the matched records
+        """
+        return self._dbcli.select_records(perms, **constraints)
+    
+    def _select_records_by_ids(self, ids: Sequence[str], perms) -> Iterator[ProjectRecord]:
+        """
+        submit a search query in a project specific way.  This method is provided as a 
+        hook to subclasses that may need to specialize the search strategy or manipulate the results.  
+        This implementation passes the query directly to the generic DBClient instance.
+        :return:  a generator that iterates through the records corresponding to the provided ids.
+        """
+        return self._dbcli.select_records_by_ids(ids, perms)
+
+    def _sort_and_format_records(self, records: Iterator[ProjectRecord]) -> list:
+        """
+        Helper method to sort records by permission and convert to dictionaries.
+        :param records: Iterator of ProjectRecord objects
+        :return: List of record dictionaries sorted by permission
+        """
+        sortd = SortByPerm()
+        for rec in records:
+            sortd.add_record(rec)
+        return [rec.to_dict() for rec in sortd.sorted()]
+
+    def do_GET(self, path, ashead=False, format=None):
         """
         respond to a GET request, interpreted as a search for records accessible by the user
         :param str path:  a path to the portion of the data to get.  This is the same as the `datapath`
                           given to the handler constructor.  This will always be an empty string.
         :param bool ashead:  if True, the request is actually a HEAD request for the data
         """
+        # Set supported output formats
+        supp_fmts = FormatSupport()
+        JSONSupport.add_support(supp_fmts, ["text/json", "application/json"], asdefault=True)
+        supp_fmts.support(Format("pdf", "application/pdf"))
+        supp_fmts.support(Format("markdown", "text/markdown"), ["text/markdown", "text/plain"])
+        supp_fmts.support(Format("csv", "text/csv"))
+        self._set_default_format_support(supp_fmts)
+        
         perms = []
+        params = {}
+        filters = {}
+        fmt = self.select_format(format)   # may raise UnsupportedFormat, Unacceptable
+        
         qstr = self._env.get('QUERY_STRING')
         if qstr:
             params = parse_qs(qstr)
-            perms = params.get('perm')
+            filters = dict([(k,v) for k,v in params.items() if k in SUPPORTED_FILTERS])
+
+        # split up filter values that are in comma-separated lists
+        for prop,vals in filters.items():
+            out = []
+            for v in vals:
+                out.extend(v.split(','))
+            filters[prop] = out
+
+        perms = filters.pop('perm') if 'perm' in filters else None
         if not perms:
             perms = dbio.ACLs.OWN
 
-        # sort the results by the best permission type permitted
-        selected = OrderedDict()
-        for rec in self._dbcli.select_records(perms):
-            maxperm = ''
-            if rec.owner == self._dbcli.user_id:
-                maxperm = "owner"
-            elif rec.authorized(dbio.ACLs.ADMIN):
-                maxperm = dbio.ACLs.ADMIN
-            elif rec.authorized(dbio.ACLs.WRITE):
-                maxperm = dbio.ACLs.WRITE
+        recs = self._sort_and_format_records(self._select_records(perms, **filters))
+
+        # Handle empty results based on format
+        if not recs:
+            if fmt.name == "json":
+                # Empty JSON array is valid RESTful response
+                return self.send_json([], ashead=ashead)
             else:
-                maxperm = dbio.ACLs.READ
+                # Cannot export empty result set to PDF/CSV/Markdown
+                return self.send_error_resp(400, "Cannot export empty result set",
+                                            "No records match the specified filters")
 
-            if maxperm not in selected:
-                selected[maxperm] = []
-            selected[maxperm].append(rec)
+        if fmt.name in ["pdf", "csv", "markdown"]:
+            return self._format_records_as(recs, fmt)
 
-        # order the matched records based on best permissions
-        out = []
-        for perm in ["owner", dbio.ACLs.ADMIN, dbio.ACLs.WRITE, dbio.ACLs.READ]:
-            for rec in selected.get(perm, []):
-                out.append(rec.to_dict())
-
-        return self.send_json(out, ashead=ashead)
+        # Default: send in the default format, json
+        return self.send_json(recs, ashead=ashead)
 
     def do_POST(self, path):
         """
         create a new project record given some initial data
         """
         try:
-            newdata = self.get_json_body()
+            input = self.get_json_body()
         except self.FatalError as ex:
+            print("fatal Error")
             return self.send_fatal_error(ex)
 
+        path = path.rstrip('/')
+        if not path:
+            # create a record
+
+            # support foruser query parameter to set owner
+            foruser = None
+            if 'QUERY_STRING' in self._env:
+                params = parse_qs(self._env['QUERY_STRING'])
+                foruser = params.get('foruser')
+                if foruser:
+                    if len(foruser) > 1:
+                        return send_error_resp(400, "Bad foruser param",
+                                               "foruser parameter may only be applied once")
+                    foruser = None if len(foruser) == 0 else foruser[0]
+            if foruser:
+                input.setdefault("meta", OrderedDict())
+                if foruser.lower() == "true" and input.get("owner"):
+                    input["meta"]["foruser"] = input['owner']
+                else:
+                    input["meta"]["foruser"] = foruser
+
+            return self.create_record(input)
+
+        elif path == ':selected':
+            # respond to an advanced search
+            try: 
+                return self.adv_select_records(input)
+            except SyntaxError as syntax:
+                return self.send_error(400, "Wrong query structure for filter")
+            except ValueError as value:
+                return self.send_error(204, "No Content")
+            except AttributeError as attribute:
+                return self.send_error(400, "Attribute Error, not a json")
+        
+        else:
+            return self.send_error(400, "Selection resource not found")
+
+    def adv_select_records(self, input: Mapping):
+        """
+        submit a record search 
+        :param dict filter:   the search constraints for the search.
+        """
+        filter = input.get("filter", {})
+        perms = input.get("permissions", [])
+        if not perms:
+            perms = [ dbio.ACLs.OWN ]
+
+        # sort the results by the best permission type permitted
+        sortd = SortByPerm()
+        for rec in self._adv_select_records(filter, perms):
+            sortd.add_record(rec)
+
+        out = [rec.to_dict() for rec in sortd.sorted()]
+        if not out:
+            raise ValueError("Empty Set")
+        else:
+            return self.send_json(out)
+
+    def _adv_select_records(self, filter, perms) -> Iterator[ProjectRecord]:
+        """
+        submit the advanced search query in a project-specific way. This method is provided as a 
+        hook to subclasses that may need to specialize the search strategy or manipulate the results.  
+        This base implementation passes the query directly to the generic DBClient instance.
+        :return:  a generator that iterates through the matched records
+        """
+        return self._dbcli.adv_select_records(filter, perms)
+
+    def create_record(self, newdata: Mapping):
+        """
+        create a new record
+        :param dict newdata:  the initial data for the record.  This data is expected to conform to
+                              the DBIO record schema (with ``data`` and ``meta`` content appropriate 
+                              for the project type). 
+        """
         if not newdata.get('name'):
             return self.send_error_resp(400, "Bad POST input", "No mneumonic name provided")
 
@@ -430,18 +843,19 @@ class ProjectACLsHandler(ProjectRecordHandler):
     handle retrieval/update of a project record's data content
     """
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, id: str, datapath: str="", config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, id: str, datapath: str="", config: dict=None, log: Logger=None):
         """
         Initialize this data request handler with the request particulars.  This constructor is called 
-        by the webs service SubApp in charge of the project record interface.  
+        by the webs service ServiceApp in charge of the project record interface.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
         :param str  permpath:  the subpath pointing to a particular permission ACL; it can either be
                                simply a permission name, PERM (e.g. "read"), or a p
@@ -449,12 +863,12 @@ class ProjectACLsHandler(ProjectRecordHandler):
                                within the data object.  This will be an empty string if the full data 
                                object is requested.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
-        super(ProjectACLsHandler, self).__init__(service, subapp, wsgienv, start_resp, who, datapath,
+        super(ProjectACLsHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, datapath,
                                                  config, log)
         self._id = id
         if not id:
@@ -491,7 +905,12 @@ class ProjectACLsHandler(ProjectRecordHandler):
         if len(parts) < 2:
             return self.send_json(acl, ashead=ashead)
 
-        return self.send_json(parts[1] in acl, ashead=ashead)
+        # parts[1] is a particular user the client is interested in
+        if parts[1] in [":user", "midas:user"]:
+            # this indicates the currently authenticated user
+            parts[1] = self.who.actor
+
+        return self.send_json(parts[1] in acl, ashead=ashead)  # returns true or false
 
     def do_POST(self, path):
         """
@@ -526,34 +945,52 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
         if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
             prec.acls.grant_perm_to(path, identity)
-            prec.save()
+            prec.save(dbio.ACLs.ADMIN)
             return self.send_json(prec.to_dict().get('acls', {}).get(path,[]))
 
         return self.send_error_resp(405, "POST not allowed on this permission type",
                                     "Updating specified permission is not allowed")
-        
+
     def do_PUT(self, path):
         """
         replace the list of identities in a particular ACL.  This handles PUT ID/acls/PERM; 
         `path` should be set to PERM.  Note that previously set identities are removed. 
         """
-        # make sure a permission type, and only a permission type, is specified
-        path = path.strip('/')
-        if not path or '/' in path:
-            return self.send_error_resp(405, "PUT not allowed", "Unable set ACL membership")
-
+        return self._do_update_acls(path, "PUT")
+        
+    def _do_update_acls(self, path, meth):
+        # update specified ACLs
         try:
-            identities = self.get_json_body()
+            input = self.get_json_body()
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
-        if isinstance(identities, str):
-            identities = [identities]
-        if not isinstance(identities, list):
-            return self.send_error_resp(400, "Wrong input data type"
-                                        "Input data is not a string providing a user/group list")
+        path = path.strip('/')
+        if not path:
+            # requesting bulk update to multiple permissions
+            if not isinstance(input, Mapping):
+                return self.send_error_resp(400, "Wrong input data type"
+                                            "Input data is not an ACLs object with permission properties")
+        else:
+            # requesting update to to a single permission
+            if '/' in path:
+                return self.send_error_resp(405, "PATCH not allowed",
+                                            "ACL PATCH request should not a member name")
+            input = { path: input }
 
+        # validate the input
         # TODO: ensure input value is a bona fide user or group name
+        bad = []
+        for perm in input:
+            if isinstance(input[perm], str):
+                input[perm] = [ input[perm] ]
+            if not isinstance(input[perm], list):
+                bad.append(perm)
+        if bad:
+            return self.send_error_resp(400, "Wrong input data type",
+                                        f"Input permission{'s' if len(bad) > 1 else ''} "+
+                                        f"{','.join(bad)} {'are' if len(bad) > 1 else 'is'} "+
+                                        "not a list of user/group identities")
 
         try:
             prec = self.svc.get_record(self._id)
@@ -563,62 +1000,32 @@ class ProjectACLsHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
 
-        if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
+        for perm in input:
+            if perm not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
+                return self.send_error_resp(405, "PATCH not allowed on provided permission type",
+                                            "Updating non-standard permission is not allowed")
+            identities = input[perm]
             try:
-                prec.acls.revoke_perm_from_all(path)
-                prec.acls.grant_perm_to(path, *identities)
-                prec.save()
-                return self.send_json(prec.to_dict().get('acls', {}).get(path,[]))
+                if meth == "PUT":
+                    prec.acls.revoke_perm_from_all(perm)
+                prec.acls.grant_perm_to(perm, *identities)
             except dbio.NotAuthorized as ex:
                 return self.send_unauthorized()
 
-        return self.send_error_resp(405, "PUT not allowed on this permission type",
-                                    "Updating specified permission is not allowed")
-        
+        prec.save(dbio.ACLs.ADMIN)
+        acls = prec.to_dict().get('acls', {})
+        if path:
+            return self.send_json(acls.get(path, []))
+        return self.send_json(acls)
 
     def do_PATCH(self, path):
         """
-        fold given list of identities into a particular ACL.  This handles PATCH ID/acls/PERM; 
-        `path` should be set to PERM.
+        fold given lists of identities into ACLs.  This handles these paths:
+          *  PATCH ID/acls/PERM (`path` is set to PERM): fold the given list of IDs into the PERM list
+          *  PATCH ID/acls (`path` is an empty string): input is an object with ACL names (permissions)
+             to update.
         """
-        try:
-            # input is a list of user and/or group identities to add the PERM ACL
-            identities = self.get_json_body()
-        except self.FatalError as ex:
-            return self.send_fatal_error(ex)
-
-        # make sure path is a permission type (PERM), and only a permission type
-        path = path.strip('/')
-        if not path or '/' in path:
-            return self.send_error_resp(405, "PATCH not allowed",
-                                        "ACL PATCH request should not a member name")
-
-        if isinstance(identities, str):
-            identities = [identities]
-        if not isinstance(identities, list):
-            return self.send_error_resp(400, "Wrong input data type"
-                                        "Input data is not a list of user/group identities")
-
-        # TODO: ensure input value is a bona fide user or group name
-
-        try:
-            prec = self.svc.get_record(self._id)
-        except dbio.NotAuthorized as ex:
-            return self.send_unauthorized()
-        except dbio.ObjectNotFound as ex:
-            return self.send_error_resp(404, "ID not found",
-                                        "Record with requested identifier not found", self._id)
-
-        if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
-            try:
-                prec.acls.grant_perm_to(path, *identities)
-                prec.save()
-                return self.send_json(prec.to_dict().get('acls', {}).get(path, []))
-            except dbio.NotAuthorized as ex:
-                return self.send_unauthorized()
-
-        return self.send_error_resp(405, "PATCH not allowed on this permission type",
-                                    "Updating specified permission is not allowed")
+        return self._do_update_acls(path, "PATCH")
         
     def do_DELETE(self, path):
         """
@@ -650,7 +1057,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
             try:
                 prec.acls.revoke_perm_from(parts[0], parts[1])
                 prec.save()
-                return self.send_ok()
+                return self.send_ok(message="ID removed")
             except dbio.NotAuthorized as ex:
                 return self.send_unauthorized()
 
@@ -661,20 +1068,25 @@ class ProjectStatusHandler(ProjectRecordHandler):
     """
     handle status requests and actions
     """
-    _requestable_actions = [ ProjectService.STATUS_ACTION_FINALIZE, ProjectService.STATUS_ACTION_SUBMIT ] 
+    _requestable_actions = [
+        ProjectService.STATUS_ACTION_FINALIZE,
+        ProjectService.STATUS_ACTION_SUBMIT,
+        ProjectService.STATUS_ACTION_REVISE
+    ]
 
-    def __init__(self, service: ProjectService, subapp: SubApp, wsgienv: dict, start_resp: Callable, 
-                 who: PubAgent, id: str, datapath: str="", config: dict=None, log: Logger=None):
+    def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable, 
+                 who: Agent, id: str, datapath: str="", config: dict=None, log: Logger=None):
         """
         Initialize this data request handler with the request particulars.  This constructor is called 
-        by the webs service SubApp in charge of the project record interface.  
+        by the webs service ServiceApp in charge of the project record interface.  
 
         :param ProjectService service:  the ProjectService instance to use to get and update
                                the project data.
-        :param SubApp subapp:  the web service SubApp receiving the request and calling this constructor
+        :param ServiceApp svcapp:  the web service ServiceApp receiving the request and calling this 
+                               constructor
         :param dict  wsgienv:  the WSGI request context dictionary
         :param Callable start_resp:  the WSGI start-response function used to send the response
-        :param PubAgent  who:  the authenticated user making the request.  
+        :param Agent     who:  the authenticated user making the request.  
         :param str        id:  the ID of the project record being requested
         :param str  permpath:  the subpath pointing to a particular permission ACL; it can either be
                                simply a permission name, PERM (e.g. "read"), or a p
@@ -682,12 +1094,12 @@ class ProjectStatusHandler(ProjectRecordHandler):
                                within the data object.  This will be an empty string if the full data 
                                object is requested.
         :param dict   config:  the handler's configuration; if not provided, the inherited constructor
-                               will extract the configuration from `subapp`.  Normally, the constructor
+                               will extract the configuration from ``svcapp``.  Normally, the constructor
                                is called without this parameter.
         :param Logger    log:  the logger to use within this handler; if not provided (typical), the 
-                               logger attached to the SubApp will be used.  
+                               logger attached to the ServiceApp will be used.  
         """
-        super(ProjectStatusHandler, self).__init__(service, subapp, wsgienv, start_resp, who, datapath,
+        super(ProjectStatusHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, datapath,
                                                    config, log)
         self._id = id
         if not id:
@@ -717,12 +1129,17 @@ class ProjectStatusHandler(ProjectRecordHandler):
         elif path == "action":
             out = out.action
         elif path == "message":
-            out = out.action
+            out = out.message
+        elif path == "todo":
+            return self.review()
+                
         elif path:
             return self.send_error_resp(404, "Status property not accessible",
                                         "Requested status property is not accessible", self._id, ashead=ashead)
+        else:
+            out = out.to_dict()
             
-        return self.send_json(out.to_dict(), ashead=ashead)
+        return self.send_json(out, ashead=ashead)
 
     def do_PUT(self, path):
         """
@@ -737,10 +1154,14 @@ class ProjectStatusHandler(ProjectRecordHandler):
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
+        if not isinstance(req.get('action_options'), (Mapping, type(None))):
+            return self.send_error_resp(400, "Bad Input",
+                                        "Bad value for action_options property: not a dictionary")
+        
         if not req.get('action'):
             return self.send_error_resp(400, "Invalid input: missing action property"
                                         "Input record is missing required action property")
-        return self._apply_action(req['action'], req.get('message'))
+        return self._apply_action(req['action'], req.get('message'), req.get('action_options'))
 
     def do_PATCH(self, path):
         """
@@ -755,17 +1176,25 @@ class ProjectStatusHandler(ProjectRecordHandler):
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
-        # if action is not set, the message will just get updated.
-        return self._apply_action(req.get('action'), req.get('message'))
+        if not isinstance(req.get('action_options'), (Mapping, type(None))):
+            return self.send_error_resp(400, "Bad Input",
+                                        "Bad value for action_options property: not a dictionary")
         
-    def _apply_action(self, action, message=None):
+        # if action is not set, the message will just get updated.
+        return self._apply_action(req.get('action'), req.get('message'), req.get('action_options'))
+        
+    def _apply_action(self, action: str, message: str=None, options: Mapping=None):
+        if action:
+            action = action.lower()
         try:
             if message and action is None:
                 stat = self.svc.update_status_message(self._id, message)
             elif action == 'finalize':
                 stat = self.svc.finalize(self._id, message)
             elif action == 'submit':
-                stat = self.svc.submit(self._id, message)
+                stat = self.svc.submit(self._id, message, options)
+            elif action == 'revise':
+                stat = self.svc.revise(self._id, message, options)
             else:
                 return self.send_error_resp(400, "Unrecognized action",
                                             "Unrecognized action requested")
@@ -783,11 +1212,69 @@ class ProjectStatusHandler(ProjectRecordHandler):
 
         return self.send_json(stat.to_dict())
 
+    def review(self, ashead=False):
+        """
+        run the review operation on the project record and send the results back to the client
+        """
+        try:
+
+            res = self.svc.review(self._id)
+            if res is None:
+                return self.send_error_resp(404, "todo property not accessible",
+                                            "Status property, todo, is not accessible",
+                                            self._id, ashead=ashead)
+
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found", self._id)
         
+        if res is None:
+            return self.send_error_resp(404, "todo property not accessible",
+                                        "Status property, todo, is not accessible", self._id, ashead=ashead)
+
+        return self.send_json(self.__class__.export_review(res))
+
+    @classmethod
+    def export_review(cls, res: ValidationResults) -> Mapping:
+        """
+        return JSON-encodable version of review results appropriate for sending back to web clients
+        """
+        # subjre = re.compile("#(\w\S*)$")
         
-class MIDASProjectApp(SubApp):
+        # convert ValidationResults to todo export JSON
+        todo = { "req": [], "warn": [], "rec": [] }
+        for issue in res.failed():
+            label = issue.label.split(maxsplit=1)
+            jissue = { "id": f"{issue.profile}@{issue.profile_version} {label[0]}", "subject": "" }
+            if len(label) > 1:
+                jissue["subject"] = label[1]
+            if len(issue.comments) > 0:
+                jissue["summary"] = issue.comments[0]
+                jissue["details"] = [ issue.specification ] + list(issue.comments[1:])
+            else:
+                jissue["summary"] = issue.specification
+                jissue["details"] = []
+
+            if issue._type & issue.REQ:
+                todo["req"].append(jissue)
+            elif issue._type & issue.WARN:
+                todo["warn"].append(jissue)
+            elif issue._type & issue.REC:
+                todo["rec"].append(jissue)
+
+        todo['req'].sort(key=lambda e: e.get("id"))
+        todo['warn'].sort(key=lambda e: e.get("id"))
+        todo['rec'].sort(key=lambda e: e.get("id"))
+
+        return todo
+
+            
+        
+class MIDASProjectApp(ServiceApp):
     """
-    a base web app for an interface handling project record
+    a base web app for an interface handling project record.
     """
     _selection_handler = ProjectSelectionHandler
     _update_handler = ProjectHandler
@@ -799,18 +1286,18 @@ class MIDASProjectApp(SubApp):
     # _history_handler = ProjectHistoryHandler
 
     def __init__(self, service_factory: ProjectServiceFactory, log: Logger, config: dict={}):
-        super(MIDASProjectApp, self).__init__(service_factory._prjtype, log, config)
+        super(MIDASProjectApp, self).__init__(service_factory.project_type, log, config)
         self.svcfact = service_factory
 
-    def create_handler(self, env: dict, start_resp: Callable, path: str, who: PubAgent) -> Handler:
+    def create_handler(self, env: dict, start_resp: Callable, path: str, who: Agent) -> Handler:
         """
         return a handler instance to handle a particular request to a path
         :param Mapping env:  the WSGI environment containing the request
         :param Callable start_resp:  the start_resp function to use initiate the response
-        :param str path:     the path to the resource being requested.  This is usually 
-                             relative to a parent path that this SubApp is configured to 
+        :param str    path:  the path to the resource being requested.  This is usually 
+                             relative to a parent path that this ServiceApp is configured to 
                              handle.  
-        :param PubAgent who  the authenticated user agent making the request
+        :param Agent   who:  the authenticated user agent making the request
         """
 
         # create a service on attached to the user
@@ -823,13 +1310,16 @@ class MIDASProjectApp(SubApp):
             if not idattrpart[0]:
                 # path is empty: this is used to list all available projects or create a new one
                 return self._selection_handler(service, self, env, start_resp, who)
+            elif idattrpart[0][0] == ":":
+                # path starts with ":" (e.g. ":selected"); this indicates a search resource
+                return self._selection_handler(service, self, env, start_resp, who, idattrpart[0])
             else:
                 # path is just an ID: 
                 return self._update_handler(service, self, env, start_resp, who, idattrpart[0])
             
-        elif idattrpart[1] == "name":
-            # path=ID/name: get/change the mnumonic name of record ID
-            return self._name_update_handler(service, self, env, start_resp, who, idattrpart[0])
+        elif idattrpart[1] == "name" or idattrpart[1] == "owner":
+            # path=ID/name: get/change the owner or the mnemonic name of record ID
+            return self._name_update_handler(service, self, env, start_resp, who, idattrpart[0], idattrpart[1])
         elif idattrpart[1] == "data":
             # path=ID/data[/...]: get/change the content of record ID
             if len(idattrpart) == 2:
@@ -868,7 +1358,7 @@ class MIDASProjectApp(SubApp):
     def factory_for(cls, project_coll):
         """
         return a factory function that instantiates this class connected to the given DBIO collection.  
-        This is intended for plugging this SubApp into the main WSGI app as is.  
+        This is intended for plugging this ServiceApp into the main WSGI app as is.  
         :param str project_coll:  the name of the DBIO project collection to use for creating and 
                                   updating project records.
         """
