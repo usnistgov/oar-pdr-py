@@ -3,7 +3,8 @@ Module providing client-side support for the DataCite DOI service and PDR's use 
 and updating DOIs.  
 """
 import os, sys, shutil, logging, json
-from collections import Mapping, Sequence, OrderedDict
+from collections import OrderedDict
+from typing import Mapping, Sequence
 from pathlib import Path
 
 from nistoar.pdr.exceptions import (StateException, ConfigurationException, PDRException, NERDError)

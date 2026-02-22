@@ -2,7 +2,8 @@
 Module providing client-side support for the RMM ingest service.  
 """
 import os, sys, shutil, logging, requests
-from collections import Mapping, Sequence, OrderedDict
+from collections import OrderedDict
+from typing import Mapping, Sequence
 from pathlib import Path
 
 from nistoar.pdr.exceptions import (StateException, ConfigurationException, PDRException,
