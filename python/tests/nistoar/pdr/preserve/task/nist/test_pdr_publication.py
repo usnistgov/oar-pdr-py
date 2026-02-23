@@ -19,34 +19,38 @@ assert storedir.is_dir()
 port = 9091
 prefixes = ["10.88434", "10.88888"]
 
+uwsgi_opts = "--plugin python3"
+if os.environ.get("OAR_UWSGI_OPTS") is not None:
+    uwsgi_opts = os.environ['OAR_UWSGI_OPTS']
+
 def startServices(authmeth=None):
     tdir = tmpdir.name
     srvport = port
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
     wpy = "python/tests/nistoar/pdr/distrib/sim_distrib_srv.py"
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
-          "--wsgi-file {2} --pidfile {3}"
+    cmd = "uwsgi --daemonize {0} --http-socket :{1} " \
+          "--wsgi-file {2} --pidfile {3} {4}"
     cmd = cmd.format(os.path.join(tdir,"simdistsrv.log"), srvport,
-                     os.path.join(basedir, wpy), pidfile)
+                     os.path.join(basedir, wpy), pidfile, uwsgi_opts)
     os.system(cmd)
 
     srvport += 1
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     wpy = "python/tests/nistoar/pdr/ingest/rmm/sim_ingest_srv.py"
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
+    cmd = "uwsgi --daemonize {0} --http-socket :{1} " \
           "--wsgi-file {2} --set-ph auth_key=critic --set-ph auth_meth=header --pidfile {3}"
     cmd = cmd.format(os.path.join(tdir,"simingsrv.log"), srvport,
-                     os.path.join(basedir, wpy), pidfile)
+                     os.path.join(basedir, wpy), pidfile, uwsgi_opts)
     os.system(cmd)
 
     srvport += 1
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     mocksvr = ormdir / "python" / "tests" / "nistoar" / "doi" / "sim_datacite_srv.py"
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
+    cmd = "uwsgi --daemonize {0} --http-socket :{1} " \
           "--wsgi-file {2} --pidfile {3} --set-ph prefixes={4}"
     cmd = cmd.format(os.path.join(tdir,"simsdcrv.log"), srvport, mocksvr,
-                     pidfile, ",".join(prefixes))
+                     pidfile, ",".join(prefixes), uwsgi_opts)
     os.system(cmd)
 
     time.sleep(0.5)
@@ -162,8 +166,13 @@ class TestPDRBagFinalization(test.TestCase):
         self.assertTrue((self.ingestdir/"succeeded"/"mds2-7223.json").exists())
         self.assertTrue((self.dcdir/"published"/"mds2-7223.json").exists())
 
-        
-        
+    def test_fail_on_incomplete(self):
+        self.cfg['ingest']['rmm']['fail_on_incomplete'] = True
+        self.cfg['ingest']['rmm']['service_endpoint'] = 'http://localhost:9092/nerdum/'
+        self.pub = pdr.PDRPublication(self.cfg)
+
+        with self.assertRaises(fw.AIPPublicationException):
+            self.pub.apply(self.mgr)
 
 
 if __name__ == '__main__':

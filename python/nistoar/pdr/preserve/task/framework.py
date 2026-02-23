@@ -1,6 +1,6 @@
 """
-This module provides the base classes that define a framework for managing a processing task.
-The Preservation Task Framework provides a model for how the process for preserving products is organized.  
+This module provides the base classes that define a framework for managing a preservation task.
+The Preservation Task Framework provides a model for how the preserving of products is organized.  
 The process can be a long-running one which can experience various errors along the way.  This framework
 allows one to execute the process in a variety ways--such as, synchronously via the command line or 
 asynchronously via a web service.  If the process fails along the way, the framework can allow the process
@@ -602,7 +602,7 @@ class PreservationTask(PreservationStepsAware):
         return True if this AIP has been serialized and submitted to long-term storage.  (The 
         transfer may still be underway.)
         """
-        return self._statemgr.state == self.SUBMITTED
+        return self._statemgr.steps_completed & self.SUBMITTED > 0
 
     def archived(self):
         """

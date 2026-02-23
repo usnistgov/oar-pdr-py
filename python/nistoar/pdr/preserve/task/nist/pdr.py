@@ -28,28 +28,37 @@ class PDRBagFinalization(fw.AIPFinalization):
     part of the final publishing step.  
 
     This implementation supports the following configuration parameters:
-    :allow_replace:  allow an AIP to replace a previously preserved AIP with the same version number
-                   (default: False).  Use with caution.
-    :repo_access:  a configuration dictionary that describe access points to the public side of the 
-                   repository.  This is used to interrogate details of previous publications of a
-                   dataset.  
-    :bag_builder:  a configuration dictionary for configuring the 
-                   :py:class:`~nistoar.pdr.preserve.bagit.builder.BagBuilder` instance that will be 
-                   used to make the final updates.
-    :ingest:       (dict) a configuration dictionary for the ingest functions that require preparation.
-                   recognized keys include ``rmm`` and ``doi`` (see more detail below).
+
+    ``allow_replace``  
+           (bool) allow an AIP to replace a previously preserved AIP with the same version number
+           (default: False).  Use with caution.
+    ``repo_access``  
+           a configuration dictionary that describe access points to the public side of the 
+           repository.  This is used to interrogate details of previous publications of a
+           dataset.  
+    ``bag_builder``  
+           a configuration dictionary for configuring the 
+           :py:class:`~nistoar.pdr.preserve.bagit.builder.BagBuilder` instance that will be 
+           used to make the final updates.
+    ``ingest`` 
+           (dict) a configuration dictionary for the ingest functions that require preparation.
+           recognized keys include ``rmm`` and ``doi`` (see more detail below).
 
     The ``ingest`` configuration dictionary is also used by the PDRPublication class; the parameters 
     used here include:
-    :doi:   a configuration dictionary for configuring the DOI minting client used to stage the 
-            DataCite record
-    :rmm:   a configuration dictionary for configuring the ingest client used to stage the 
-            NERDm record
+
+    ``doi`` 
+           a configuration dictionary for configuring the DOI minting client used to stage the 
+           DataCite record
+    ``rmm``
+           a configuration dictionary for configuring the ingest client used to stage the 
+           NERDm record
     """
 
     def __init__(self, config=None):
         """
         instantiate the finalization step
+
         :param dict config:  the configuration for this step; if not provided, defaults will apply.
         """
         if config is None:
@@ -262,15 +271,20 @@ class PDR1AIPArchiving(fw.AIPArchiving):
     all files appear in the final bucket via a sleep-poll loop.
 
     This implementation supports the following configuration parameters:
-    :store_dir:   (str) the storage transfer directory that files are copied to 
-    :public_bucket:  (str) the S3 address representing the final storage bucket where the files should
-                  eventually arrive to be considered complete.  
-    :allow_overwrite:  (bool) If False (default) do not allow pre-existing files with the same names as
-                  any being transfered from that staging area to be replaced; if any such files are 
-                  found in the transfer directory, the preservation step will fail.  If True, such files
-                  will be replaced.  
-    :polling:     (dict) a configuration dictionary that describes how the sleep-polling cycle evolves
-                  over time.
+
+    ``store_dir``   
+         (str) the storage transfer directory that files are copied to 
+    ``public_bucket``
+         (str) the S3 address representing the final storage bucket where the files should
+         eventually arrive to be considered complete.  
+    ``allow_overwrite``  
+         (bool) If False (default) do not allow pre-existing files with the same names as
+         any being transfered from that staging area to be replaced; if any such files are 
+         found in the transfer directory, the preservation step will fail.  If True, such files
+         will be replaced.  
+    ``polling``
+         (dict) a configuration dictionary that describes how the sleep-polling cycle evolves
+         over time.
     """
     cksexts = ["sha256"]
 
@@ -487,19 +501,35 @@ class PDRPublication(fw.AIPPublication):
     into the PDR.  
 
     This implementaion supports the following configuraiton parameters:
-    :store:    (dict) the configuration for an AIPStoreClient that will deliver the serialized AIPs
-                   to long-term storage.
-    :ingest:   (dict) a configuration dictionary for the ingest functions that require preparation.
-                   recognized keys include ``rmm`` and ``doi`` (see more detail below).
+
+    ``store``    
+            (dict) the configuration for an AIPStoreClient that will deliver the serialized AIPs
+            to long-term storage.
+    ``ingest``
+            (dict) a configuration dictionary for the ingest functions that require preparation.
+            recognized keys include ``rmm`` and ``doi`` (see more detail below).
 
     The ``ingest`` configuration dictionary is also used by the PDRPublication class; the parameters 
     used here include:
-    :doi:   a configuration dictionary for configuring the DOI minting client used to submit the 
+
+    ``doi``
+            a configuration dictionary for configuring the DOI minting client used to submit the 
             DataCite record; see the :py:class:`~nistoar.pdr.ingest.dc.client.DOIMintingClient` class
-            for the supported sub-parameters.
-    :rmm:   a configuration dictionary for configuring the ingest client used to submit the 
+            for the supported sub-parameters.  In addition, a sub-paramter called ``fail_on_incomplete``,
+            described below, is supported.
+    ``rmm``
+            a configuration dictionary for configuring the ingest client used to submit the 
             NERDm record; see the :py:class:`~nistoar.pdr.ingest.rmm.client.IngestClient` class
-            for the supported sub-parameters.
+            for the supported sub-parameters.  In addition, a sub-paramter called ``fail_on_incomplete``,
+            described below, is supported.
+
+    The ``ingest`` sub-sections both can also include this following sub-parameter:
+    ``fail_on_incomplete``  
+            If ``False`` (default), if the ingest attempt fails, processing will continue
+            (after logging the error and, if configured, a notification sent); if ``True``,
+            a failure results in an 
+            :py:class:`~nistoar.pdr.preserve.task.framework.AIPPublicationException` is 
+            raised, causing processing to stop.  
     """
 
     def __init__(self, config=None, notifier=None):
@@ -520,22 +550,22 @@ class PDRPublication(fw.AIPPublication):
 
         icfg = self.cfg.get('ingest', {})
         self._ingester = None
-        ingcfg = icfg.get('rmm')
-        if ingcfg and ingcfg.get('service_endpoint'):
-            self._ingester = RMMIngestClient(ingcfg)
+        self._ingcfg = icfg.get('rmm')
+        if self._ingcfg and self._ingcfg.get('service_endpoint'):
+            self._ingester = RMMIngestClient(self._ingcfg)
         if not self._ingester:
             raise ConfigurationException("ingest.rmm not configured")
 
         self._doiminter = None
-        dmcfg = icfg.get('doi')
-        if dmcfg and dmcfg.get('datacite_api'):
-            self._doiminter = DOIMintingClient(dmcfg)
+        self._dmcfg = icfg.get('doi')
+        if self._dmcfg and self._dmcfg.get('datacite_api'):
+            self._doiminter = DOIMintingClient(self._dmcfg)
 
     def apply(self, statemgr: fw.PreservationStateManager):
         """
         apply the final publication step.  This implementation assumes details specific to the NIST
         PDR system as well as the use of ingest staging done during the finalization step (as with 
-        :py:class:`PDRBagFinalization`.  
+        :py:class:`PDRBagFinalization`).  
         """
         log = statemgr.log.getChild("publication")
         aipid = statemgr.aipid
@@ -553,6 +583,8 @@ class PDRPublication(fw.AIPPublication):
                 log.info("Submitted NERDm record to RMM")
             except Exception as ex:
                 msg = f"Failed to ingest record with name={aipid} into RMM: {str(ex)}"
+                if self._ingcfg.get('fail_on_incomplete'):
+                    raise fw.AIPPublicationException(msg)
                 log.exception(msg)
                 log.info("Ingest service endpoint: %s", self._ingester.endpoint)
 
@@ -570,6 +602,8 @@ class PDRPublication(fw.AIPPublication):
                 log.info("Submitted DOI record to DataCite")
             except Exception as ex:
                 msg = f"Failed to submit DOI record with name={aipid} to DataCite: {str(ex)}"
+                if self._dmcfg.get('fail_on_incomplete'):
+                    raise fw.AIPPublicationException(msg)
                 log.exception(msg)
                 log.info("DOI minter service endpoint: %s", self._doiminter.dccli._ep)
 
@@ -591,21 +625,26 @@ class RepositoryAccess:
 
     This class looks for the following configuration parameters:
 
-    :distrib_service:   a description of the repository's distribution service, used for interrogating
-                        previously published datasets via their AIP bags.  The dictionary value
-                        requires only one sub-parameter, ``service_endpoint``, that gives the REST
-                        service's base URL.
-    :metadata_service:  a description of the repository's metadata service, used for interrogating
-                        previously published datasets via their NERDm records.  (This is used to 
-                        find publications that did not previously get published via the preservation
-                        service and which, therefore, has no associated bags.)  The dictionary value
-                        requires only one sub-parameter, ``service_endpoint``, that gives the REST
-                        service's base URL.
-    :headbag_cache:     a local directory that is use for caching head bags that have gone through the
-                        preservation service.
-    :store_dir:         a local directory providing the gateway to long-term storage of public AIP bags. 
-    :restricted_store_dir:  a local directory providing the gateway to long-term storage of restricted-
-                        access AIP bags.
+    ``distrib_service`` 
+         a description of the repository's distribution service, used for interrogating
+         previously published datasets via their AIP bags.  The dictionary value
+         requires only one sub-parameter, ``service_endpoint``, that gives the REST
+         service's base URL.
+    ``metadata_service``  
+         a description of the repository's metadata service, used for interrogating
+         previously published datasets via their NERDm records.  (This is used to 
+         find publications that did not previously get published via the preservation
+         service and which, therefore, has no associated bags.)  The dictionary value
+         requires only one sub-parameter, ``service_endpoint``, that gives the REST
+         service's base URL.
+    ``headbag_cache`` 
+         a local directory that is use for caching head bags that have gone through the
+         preservation service.
+    ``store_dir``
+         a local directory providing the gateway to long-term storage of public AIP bags. 
+    ``restricted_store_dir``
+         a local directory providing the gateway to long-term storage of restricted-
+         access AIP bags.
     """
 
     def __init__(self, config, log=None):
@@ -624,6 +663,7 @@ class RepositoryAccess:
     def latest_headbag(self, aipid, include_in_process=True):
         """
         return the name of the latest headbag available for the dataset with the given AIP identifier
+
         :param str aipid:                the identifier of AIP of interest
         :param bool include_in_process:  if True (default), this method will also consult local caches 
                                          for bags that may still be going through the preservation 
