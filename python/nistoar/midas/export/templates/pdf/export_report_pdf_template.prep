@@ -1,0 +1,89 @@
+{{def(report)}}
+<!DOCTYPE document SYSTEM "rml.dtd">
+<document filename="export_report.pdf">
+  <template>
+    <pageTemplate id="main">
+      <frame id="main" x1="36" y1="36" width="540" height="756"/>
+    </pageTemplate>
+  </template>
+
+  <stylesheet>
+    <paraStyle name="Heading" fontName="Helvetica-Bold" fontSize="16" spaceAfter="12"/>
+    <paraStyle name="Subheading" fontName="Helvetica-Bold" fontSize="12" spaceBefore="10" spaceAfter="8"/>
+    <paraStyle name="Normal" fontName="Helvetica" fontSize="9" spaceAfter="4"/>
+    <blockTableStyle id="summaryTable" spaceAfter="12">
+      <blockFont name="Helvetica" size="9" start="0,0" stop="-1,-1"/>
+      <blockFont name="Helvetica-Bold" size="9" start="0,0" stop="-1,0"/>
+      <blockBackground colorName="#ededed" start="0,0" stop="-1,0"/>
+      <lineStyle kind="GRID" colorName="#cccccc" start="0,0" stop="-1,-1"/>
+    </blockTableStyle>
+  </stylesheet>
+
+  <story>
+    <para style="Heading">Export Report</para>
+    <para style="Normal">Export date: {{report['export_date']}}</para>
+    <para style="Normal">{{report['export_label']}}</para>
+
+    <para style="Subheading">Summary</para>
+    <blockTable style="summaryTable" colWidths="120,120,120">
+      <tr>
+        <td>Total Inputs</td><td>Exported</td><td>Failed</td>
+      </tr>
+      <tr>
+        <td>{{report['summary']['total_inputs']}}</td>
+        <td>{{report['summary']['exported_count']}}</td>
+        <td>{{report['summary']['failed_count']}}</td>
+      </tr>
+    </blockTable>
+
+    <para style="Subheading">Contents</para>
+    {{script}}
+def xml_escape(x):
+    if x is None:
+        return ""
+    s = str(x)
+    return (s.replace("&", "&amp;")
+             .replace("<", "&lt;")
+             .replace(">", "&gt;"))
+
+lines = []
+exported = report.get('exported', [])
+for rec in exported:
+    title = rec.get('title') or rec.get('filename') or f"Record {rec.get('index','')}"
+    rec_id = rec.get('id')
+    label = xml_escape(title)
+    if rec_id:
+        label = f"{label} ({xml_escape(rec_id)})"
+    lines.append(f"<para style='Normal'>{label}</para>")
+
+contents_block = "\n".join(lines) if lines else "<para style='Normal'>No records were exported.</para>"
+    {{endscript}}
+    {{contents_block}}
+
+    {{script}}
+lines = []
+failed = report.get('failed', [])
+if failed:
+    lines.append("<para style='Subheading'>Failed Records</para>")
+    rows = []
+    rows.append("<tr><td>Record</td><td>Reason</td></tr>")
+    for rec in failed:
+        title = rec.get('title') or rec.get('filename') or f"Record {rec.get('index','')}"
+        rec_id = rec.get('id')
+        label = xml_escape(title)
+        if rec_id:
+            label = f"{label} ({xml_escape(rec_id)})"
+        reason = xml_escape(rec.get('reason') or "")
+        rows.append(f"<tr><td>{label}</td><td>{reason}</td></tr>")
+    table = (
+        "<blockTable style='summaryTable' colWidths='260,260'>"
+        + "".join(rows)
+        + "</blockTable>"
+    )
+    lines.append(table)
+
+failed_block = "\n".join(lines)
+    {{endscript}}
+    {{failed_block}}
+  </story>
+</document>

@@ -162,7 +162,7 @@
     <para style="data">
       <b>Project Description:</b>
       <br/>
-      {{record['projectDescription']}}
+      {{record.get('projectDescription', '')}}
     </para>
 
     <para style="data">
@@ -200,7 +200,7 @@
     <para style="data">
       <b>Project Description:</b>
       <br/>
-      {{record['projectDescription']}}
+      {{record.get('projectDescription', '')}}
     </para>
 
 
