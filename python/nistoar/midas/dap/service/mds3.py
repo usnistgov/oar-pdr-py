@@ -42,6 +42,7 @@ from nistoar.pdr.utils import build_mime_type_map, read_json
 from nistoar.pdr.utils.prov import Agent, Action
 from nistoar.pdr.utils.validate import ValidationResults, ALL, REQ
 from nistoar.nsd import NSDServerError
+import nistoar.taxonomy as taxonomy
 
 from . import validate
 from .. import nerdstore
