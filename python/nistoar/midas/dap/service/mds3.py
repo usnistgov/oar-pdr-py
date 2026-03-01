@@ -239,6 +239,12 @@ class DAPService(ProjectService):
         (*str*) __optional__.  the path to a directory where taxonomy definition files can be 
         found.  If not provided, it defaults to the etc directory.  This parameter is used primarily
         within unit tests.  
+    ``taxonomy_file_pattern``
+        (*str*) __optional__.  a Python regular expression that should be used to select taxonomy 
+        definition files.  Note that this often does not need to be specified if the directory 
+        already contains a ``taxonomyLocations.yml`` file.  Note also that the pattern does not need 
+        to be perfect as the underlying scanner will skip over files whose contents do not match
+        a recognized definition format.
     ``disable_review``
         (*bool*) __optional__.  If True, external reviews will be disabled allowing a record to be 
         immediately accepted for publishing.  Default: False.
@@ -310,6 +316,7 @@ class DAPService(ProjectService):
         self._minnerdmver = minnerdmver
 
         self._taxondir = self.cfg.get('taxonomy_dir', os.path.join(def_etc_dir, "schemas"))
+        self._taxcache = None
 #        if 'auto_publish' not in self.cfg:
 #            self.cfg['auto_publish'] = False
 
@@ -2047,32 +2054,26 @@ class DAPService(ProjectService):
         return out
             
 
-    _recognized_taxons = {
-        NIST_THEMES:      "theme-taxonomy.json",
-        FORENSICS_THEMES: "forensics-taxonomy.json",
-        # CHIPS_THEMES: "chipsmetrology-taxonomy.json"
-    }
     def _moderate_topic_item(self, val: Mapping, terms: Mapping, doval=True):
         keep = "@id scheme tag".split()
         out = OrderedDict(p for p in val.items() if p[0] in keep)
 
-        def topic_in_taxon(tag, taxon):
-            parentchild = [t.strip() for t in tag.rsplit(':', 1)]
-            if len(parentchild) == 1:
-                parentchild = [None, parentchild[0]]
-            for v in taxon.get('vocab', []):
-                if not v.get('deprecatedSince') and \
-                   v.get('parent') == parentchild[0] and v.get('term') == parentchild[1]:
-                    return True
-            return False
+        def ensure_taxcache():
+            if not self._taxcache:
+                self._taxcache = taxonomy.open_taxonomy_cache(self._taxondir,
+                                                              self.cfg.get('taxonomy_file_pattern'),
+                                                              self.log.getChild('taxonomies'))
+                if self._taxcache.count() == 0:
+                    self.log.error("Failed to locate any taxonomies; unable to validate topic values.")
 
         if '@id' in out:
             # convert @id to scheme + tag, if possible
             matched = []
             if not out.get('scheme'):
-                matched = [s for s in self._recognized_taxons if out['@id'].startswith(s)]
+                ensure_taxcache()
+                matched = [s for s in self._taxcache.ids() if out['@id'].startswith(s+'#')]
                 if matched:
-                    out['scheme'] = matched[0].rstrip('#').rstrip('/')
+                    out['scheme'] = matched[0].rstrip('/')
             elif out['@id'].startswith(out['scheme']+'#'):
                 matched = [out['scheme']]
 
@@ -2096,14 +2097,15 @@ class DAPService(ProjectService):
                 # missing scheme or tag
                 t = out.get('tag') or out.get('@id') or out.get('scheme') or "(unspecified)"
                 raise InvalidUpdate("Unrecognized topic term: "+t, sys=self)
-            if not self._recognized_taxons.get(out['scheme']+'#'):
+
+            ensure_taxcache()
+            if out['scheme'] not in self._taxcache.ids():
                 raise InvalidUpdate("Unrecognized topic scheme: "+out['scheme'], sys=self)
             if out['scheme'] not in terms:
                 # read in taxonomy file to make sure tag is defined
-                terms[out['scheme']] = read_json(os.path.join(self._taxondir,
-                                                              self._recognized_taxons[out['scheme']+'#']))
+                terms[out['scheme']] = self._taxcache.load_taxonomy(out['scheme'])
                      
-            if not topic_in_taxon(out['tag'], terms[out['scheme']]):
+            if not terms[out['scheme']].match_label(out['tag']):
                 raise InvalidUpdate(f"term, {out['tag']}, not found in taxonomy, {out['scheme']}")
 
         if out:
