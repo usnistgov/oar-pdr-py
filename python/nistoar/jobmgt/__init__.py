@@ -72,7 +72,7 @@ The state of each job is persisted as part of its queue as a dictionary with the
 """
 import logging, os, shutil, threading, json, sys, time, asyncio, queue
 from asyncio import subprocess as sp
-from typing import List, Callable, Union, Sequence, Mapping
+from typing import List, Callable, Union, Sequence, Mapping, Iterator
 from types import ModuleType
 from collections import OrderedDict
 from copy import deepcopy
@@ -301,6 +301,21 @@ class JobQueue:
     """
     def __init__(self, queuename: str, queuedir: Union[Path,str], execmodule: Union[ModuleType,str],
                  config: Mapping=None, log: Logger=None, resume: bool=True):
+        """
+        instantiate the queue
+
+        :param str     queuename:   a name to give the queue
+        :param str|Path queuedir:   a directory where this queue can cache Job states
+        :param str|Module execmodule:  the module, either as a module instance or a dot-delimited
+                                    string naming it, to containing the ``process()`` function that
+                                    executes the process on a job's data.
+        :param dict       config:   the configuration for the queue.  
+        :param Logger        log:   the Logger to use for messages while launching jobs.  If a job
+                                    is set to send its log messages to standard output, then those 
+                                    messages will be caught and also sent to this log.  
+        :param bool       resume:   if True (default), any jobs found in ``queuedir`` will be 
+                                    placed back into the queue and rerun.  
+        """
         self.name = queuename
         if isinstance(queuedir, str):
             queuedir = Path(queuedir)
@@ -429,6 +444,18 @@ class JobQueue:
         if not statefile.is_file():
             return None
         return Job.from_state_file(statefile)
+
+    def data_ids(self) -> Iterator[str]:
+        """
+        return an iteration of the data identifiers for jobs submitted to this queue (but not 
+        yet cleaned up)
+        """
+        for f in os.listdir(self.qdir):
+            if not f.endswith(".json") or f.startswith(".") or f.startswith('_'):
+                continue
+            did = f[:-1*len(".json")]
+            if os.path.isfile(os.path.join(self.qdir, f)):
+                yield did
 
     def run_queued(self):
         """
