@@ -491,7 +491,7 @@ class PDR1AIPArchiving(fw.AIPArchiving):
             statemgr.record_progress("All files successfully archived.")
         
     def _findbyprefix(self, prefix: str, location: str = None):
-        # Qery AWS S3 bucket for files starting with prefix
+        # Query AWS S3 bucket for files starting with prefix
         return []
     
 

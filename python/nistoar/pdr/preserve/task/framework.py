@@ -674,7 +674,7 @@ class PreservationTaskFactory(metaclass=ABCMeta):
 
     def create_task(self, aipid: str, config: Mapping, logger: Logger=None) -> PreservationTask:
         """
-        create the fully configured :py:class:`PreservationTask` that preserve a given AIP.  
+        create the fully configured :py:class:`PreservationTask` that can preserve the given AIP.  
         :param str      aipid:  the identifier of the AIP to preserve.  The ``config`` must 
                                 indicate where this AIP is located.
         :param Mapping config:  the configuration that controls construction of this task and
@@ -690,8 +690,8 @@ class PreservationTaskFactory(metaclass=ABCMeta):
     def recreate_task(self, aipid: str, config: Mapping, logger: Logger=None) -> PreservationTask:
         """
         recreate the task from its existing persisted state so that it can be resumed, canceled, or
-        cleaned-up (e.g. after a system failure).  This function will only look at the configuration
-        will only look at the ``state_manager`` property to determine where/how the current can 
+        cleaned-up (e.g. after a system failure).  This function will only look at the 
+        ``state_manager`` configuration property to determine where/how the current can 
         be found; all other properties will be overridden by the configuration persisted when the 
         task was originally created.
 
