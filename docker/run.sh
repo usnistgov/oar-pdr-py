@@ -122,7 +122,7 @@ while [ "$1" != "" ]; do
             wordin python $comptypes || comptypes="$comptypes python"
             pyargs=(${pyargs[@]} $1)
             ;;
-        build|install|test|shell|pdpserver)
+        build|install|test|shell|testshell|pdpserver)
             cmds="$cmds $1"
             ;;
         *)
@@ -191,9 +191,9 @@ if wordin python $comptypes; then
                         "${args[@]}"  "${pyargs[@]}"
     fi
 
-    if wordin shell $cmds; then
+    if { echo $cmds | grep -qs shell; }; then
         cmd="testshell"
-        if wordin install $cmds; then
+        if { echo $cmds | grep -qs install; }; then
             cmd="installshell"
         fi
         echo '+' docker run -ti --rm $volopt "${dargs[@]}" "${envargs[@]}" $PKGNAME/pdrpytest $cmd \
