@@ -75,6 +75,7 @@ class TestMDS3DAPApp(test.TestCase):
                 "type": "inmem",
             },
             "taxonomy_dir": modeldir,
+            "taxonomy_file_pattern": "taxonomy.*\.json",
             "available_collections": {
                 "peanuts": { "@id": "ark:/88888/pdr0-goober", "title": "Peanuts!" },
                 "raisins": { "@id": "ark:/88888/pdr0-gurn", "title": "Raisinettes" }
