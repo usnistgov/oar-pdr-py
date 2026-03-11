@@ -93,7 +93,7 @@ class TestNPSExternalReviewClient(test.TestCase):
         cli = NPSExternalReviewClient(GOOD_CFG)
 
         result = cli.submit(
-            id="REC001",
+            id="REC:001",
             submitter=OWNER["nistId"],
             title="A Test Title",
             description="Test Description",
@@ -110,14 +110,14 @@ class TestNPSExternalReviewClient(test.TestCase):
         # Check that requests.post was called with expected headers and payload
         args, kwargs = mock_post.call_args
         url = args[0]
-        self.assertTrue(url.endswith("/review/REC001"))
+        self.assertTrue(url.endswith("/review/1"))
         headers = kwargs["headers"]
         self.assertEqual(headers["Authorization"], "Bearer token123")
         self.assertEqual(headers["Content-Type"], "application/json")
 
         payload = json.loads(kwargs["data"])
         # DataSetID and reviewer list
-        self.assertEqual(payload["dataSetID"], "REC001")
+        self.assertEqual(payload["dataSetID"], 1)
         self.assertEqual(payload["reviewers"][0]["contactTypeId"], 7)
         self.assertEqual(payload["reviewers"][1]["contactTypeId"], 21)
         self.assertEqual(payload["instructions"], ["Do something extra"])

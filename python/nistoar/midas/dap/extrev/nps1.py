@@ -1,7 +1,7 @@
 """
 An implementation of the ExternalReviewClient that talks to the NPS (version 1)
 """
-import json
+import json, re
 from typing import List, Dict, Any
 from collections import OrderedDict
 
@@ -12,6 +12,7 @@ from nistoar.nsd.service import PeopleService
 from nistoar.nsd.sync.syncer import get_nsd_auth_token
 from nistoar.midas.dap.extrev import ExternalReviewClient, ExternalReviewException
 
+mdsid_re = re.compile(r'')
 
 class NPSExternalReviewClient(ExternalReviewClient):
     """
@@ -194,6 +195,15 @@ class NPSExternalReviewClient(ExternalReviewClient):
         # Set the review reason if not given
         if not review_reason:
             review_reason = self.select_review_reason(changes, version)
+
+        m = re.search(r':\d+$', id)
+        if m:
+            # NPS1: use only record number portion of ID
+            try:
+                id = int(id.rsplit(':', 1)[-1])
+            except ValueError as ex:
+                # should not happen
+                pass
 
         # Build the request payload
         payload = {
