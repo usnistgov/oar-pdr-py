@@ -1,7 +1,7 @@
 """
 An implementation of the ExternalReviewClient that talks to the NPS (version 1)
 """
-import json
+import json, re
 from typing import List, Dict, Any
 from collections import OrderedDict
 
@@ -12,6 +12,7 @@ from nistoar.nsd.service import PeopleService
 from nistoar.nsd.sync.syncer import get_nsd_auth_token
 from nistoar.midas.dap.extrev import ExternalReviewClient, ExternalReviewException
 
+mdsid_re = re.compile(r'')
 
 class NPSExternalReviewClient(ExternalReviewClient):
     """
@@ -22,13 +23,20 @@ class NPSExternalReviewClient(ExternalReviewClient):
     dictionary provided at construction time:
 
     ``draft_url_template``
-        (*str*) *required*. a string template for forming a URL where a reviewer can view the draft
+        _str_ (required). a string template for forming a URL where a reviewer can view the draft
         landing page for the DAP.  The template should include one "%s" insert point where the draft
         DAP ID can be inserted.
     ``published_url_template``
-        (*str*) *required*. a string template for forming a URL where the DAP will be viewable once
+        _str_ (required). a string template for forming a URL where the DAP will be viewable once
         it is published.  The template should include one "%s" insert point where the public
         DAP ID can be inserted.
+    ``nps_endpoint``
+        _str_ (required). the endpoint URL for the NPS service
+    ``tokenService``
+        _dict_ (required).  The configuration data that describes the service for retrieving an 
+        authentication token for use with the NPS service.  The sub-properties looked for in this 
+        dictionary the same as those documented for 
+        :py:func:`~nistoar.nsd.sync.syncer.get_nsd_auth_token`.  
     """
     system_name = "nps1"
 
@@ -187,6 +195,15 @@ class NPSExternalReviewClient(ExternalReviewClient):
         # Set the review reason if not given
         if not review_reason:
             review_reason = self.select_review_reason(changes, version)
+
+        m = re.search(r':\d+$', id)
+        if m:
+            # NPS1: use only record number portion of ID
+            try:
+                id = int(id.rsplit(':', 1)[-1])
+            except ValueError as ex:
+                # should not happen
+                pass
 
         # Build the request payload
         payload = {

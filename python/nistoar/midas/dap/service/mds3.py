@@ -2715,11 +2715,15 @@ class DAPService(ProjectService):
             _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)
             version = _prec.data.get('version') or _prec.data.get('@version') or '1.0.0'
             try:
-                options["title"] = _prec.data.get("title")
-                options["description"] = "\n\n".join(_prec.data.get("description", []))
+                revopts = dict((k,v) for k,v in options.items()
+                                     if k in ["instructions", "changes", "reviewers", "security_review"])
+                revopts["title"] = _prec.data.get("title")
+                revopts["description"] = "\n\n".join(_prec.data.get("description", []))
                 if _prec.meta.get("software_included"):
-                    options["security_review"] = True
-                self._extrevcli.submit(_prec.id, self.who.actor, version, **options)
+                    revopts["security_review"] = True
+                if ':' in _prec.id:
+                    revopts["pubid"] = "ark:/" + const.ARK_NAAN + '/' + re.sub(r':', '-', _prec.id)
+                self._extrevcli.submit(_prec.id, self.who.actor, version, **revopts)
 
                 # refresh, in case the record has changed
                 _prec = self.dbcli.get_record_for(id, ACLs.READ)
@@ -2733,7 +2737,7 @@ class DAPService(ProjectService):
                 self._try_save(_prec)
 
             except Exception as ex:
-                message = "Unexpected trouble submitting for review: %s", str(ex)
+                message = "Unexpected trouble submitting for review: " + str(ex)
                 self.log.exception(message)
                 # possibly notify
                 _prec.status.set_state(status.UNWELL)
@@ -2793,6 +2797,11 @@ class DAPService(ProjectService):
             options['do_review'] = False
             return status.ACCEPTED
 
+        if self._extrevcli and options['do_review'] and self._extrevcli.system_name in [ "nps1" ]:
+            # mark review as requested as the legacy NPS will not respond immediately
+            # need to do this before changing permissions
+            self.apply_external_review(prec.id, self._extrevcli.system_name, "requested", _prec=prec)
+
         try:
             # reset permissions
             self._set_review_permissions(prec)
@@ -2818,6 +2827,9 @@ class DAPService(ProjectService):
         to shepherd the record through the review process.  Write access is revoked for users 
         that currently have it (saving who that is to an "_write" permission).  Curators and 
         reviewers will be given read access.
+
+        :param list[str] readers:  a list of user ids that should be given read access (can be 
+                                   None or an empty list)
         """
         if readers is None:
             readers = []
@@ -2865,10 +2877,10 @@ class DAPService(ProjectService):
         """
         for perm in [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]:
             who = list(prec.acls.iter_perm_granted("_"+perm))
-            prec.acls.revoke_perm_from_all(perm)               # take out the reviewers
-            prec.acls.grant_perm_to(perm, *who)                # restore the original editors
+            prec.acls.revoke_perm_from_all(perm, _need_perm=ACLs.PUBLISH)  # take out the reviewers
+            prec.acls.grant_perm_to(perm, *who, _need_perm=ACLs.PUBLISH)   # restore the original editors
             if not for_review:
-                prec.acls.revoke_perm_from_all("_"+perm)
+                prec.acls.revoke_perm_from_all("_"+perm, _need_perm=ACLs.PUBLISH)
 
         # revoke update permissions in the file manager
         if self._fmcli:

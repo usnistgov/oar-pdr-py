@@ -16,7 +16,7 @@ class SimulatedExternalReviewClient(ExternalReviewClient):
     """
     system_name = "simulated"
 
-    def __init__(self, config, autoapprove: bool=True, projsvc: ProjectService = None):
+    def __init__(self, config, autoapprove: bool=False, projsvc: ProjectService = None):
         """
         initialize the client
         :param dict config:  the configuration operating this external review client
@@ -25,6 +25,8 @@ class SimulatedExternalReviewClient(ExternalReviewClient):
         super(SimulatedExternalReviewClient, self).__init__(config)
         self.projsvc = projsvc
         self.autoapp = autoapprove
+        if config.get('as_system'):
+            self.system_name = config['as_system']
 
         self.cbsvc = None
         cbcfg = self.cfg.get("call_back")

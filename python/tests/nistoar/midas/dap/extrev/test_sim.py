@@ -25,7 +25,7 @@ class TestSimulatedExternalReviewClient(test.TestCase):
         self.assertEqual(revcli.projs, {})
 
         revcli = sim.SimulatedExternalReviewClient(self.cfg)
-        self.assertTrue(revcli.autoapp)
+        self.assertFalse(revcli.autoapp)
         self.assertIsNone(revcli.projsvc)
         self.assertEqual(revcli.projs, {})
 
@@ -46,7 +46,7 @@ class TestSimulatedExternalReviewClient(test.TestCase):
         with self.assertRaises(sim.ExternalReviewException):
             revcli.submit(id, "goober")
 
-        revcli = sim.SimulatedExternalReviewClient(self.cfg)
+        revcli = sim.SimulatedExternalReviewClient(self.cfg, True)
         revcli.submit(id, "adm", "1.0.1", instructions="keep it")
         self.assertIn(id, revcli.projs)
         self.assertEqual(revcli.projs[id]['submitter'], 'adm')

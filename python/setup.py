@@ -17,7 +17,8 @@ CLASSIFIERS = [
 
 SCRIPTS = [
     'pdrhealthcheck.py', 'nsdsync.py', 'midasadm', 'pdr',
-    'resolver-uwsgi.py', 'pdp-uwsgi.py', 'midas-uwsgi.py', 'websocket_server.py', 'fm-uwsgi.py'
+    'resolver-uwsgi.py', 'pdp-uwsgi.py', 'midas-uwsgi.py', 'websocket_server.py', 'fm-uwsgi.py',
+    'npsfeedback-uwsgi.py'
 ]
 
 TESTSCRIPTS = [

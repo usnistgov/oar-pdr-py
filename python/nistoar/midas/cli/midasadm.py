@@ -57,7 +57,7 @@ if __name__ == "__main__":
         logging.getLogger(f"{prog} {ex.cmd}").critical("Config error: "+str(ex))
         sys.exit(4)
     except Exception as ex:
-        logging.getLogger(f"{prog} {ex.cmd}").exception(ex)
+        logging.getLogger(f"{prog}").exception(ex)
         sys.exit(200)
 
 
