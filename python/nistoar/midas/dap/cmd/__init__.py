@@ -9,6 +9,7 @@ This module defines a set of subcommands to a command called (by default) "dap".
 include
   - ``regpub``:   register a previously published DAP into the DBIO
   - ``prepupd``:  prepare a previously published DAP for editing
+  - ``get``:      retrieve and display DAP records in JSON format
   - ``setstate``: update the state of a DAP record
   - ``revreq``:   request a review of an external reviewer system
   - ``review``:   submit feedback to a DAP record on behalf of an external reviewer
@@ -18,11 +19,13 @@ from collections.abc import Mapping
 from logging import Logger
 from importlib import import_module
 from argparse import ArgumentParser
+from copy import deepcopy
 
 from nistoar.pdr.utils import cli
 from nistoar.pdr.utils.prov import Agent
 from nistoar.midas.cli import get_agent
 from nistoar.base.config import ConfigurationException
+from nistoar.base import config as cfgmod
 from nistoar.midas.dap.nerdstore import NERDResourceStorageFactory
 from nistoar.midas.dbio import FSBasedDBClientFactory, MongoDBClientFactory, InMemoryDBClientFactory
 
@@ -86,7 +89,7 @@ class DAPCmd(cli.CommandSuite):
             # interpret configuration by the standard cli convention
             return super().extract_config_for_cmd(config, cmdname, cmd)
 
-        if not cfg.get('conventions'):
+        if not config.get('conventions'):
             return config
 
         out = deepcopy(config)
@@ -97,7 +100,7 @@ class DAPCmd(cli.CommandSuite):
         if not convention and os.environ.get('OAR_DAP_CONVENTION'):
             convention = os.environ['OAR_DAP_CONVENTION']
         if not convention:
-            convention = cfg.get('default_convention')
+            convention = config.get('default_convention')
         if not convention:
             convs = list(config['conventions'].keys())
             if len(convs) == 1:
@@ -129,7 +132,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 
                                                 interface into it 
     """
-    from . import regpub, setstate, review, revreq
+    from . import regpub, setstate, review, revreq, get
 
     subparser.description = description
     p = subparser
@@ -141,8 +144,9 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
         as_cmd = default_name
     out = DAPCmd(as_cmd, subparser)
     out.load_subcommand(regpub)
+    out.load_subcommand(get)
     out.load_subcommand(setstate)
-#    out.load_subcommand(revreq)
+    out.load_subcommand(revreq)
     out.load_subcommand(review)
 
     return out
