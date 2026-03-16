@@ -126,6 +126,8 @@ def execute(args, config: Mapping=None, log: Logger=None):
             svc.apply_external_review(args.dbid, args.revsys, args.phase, args.revid,
                                       args.infourl, feedback, args.change, args.replace)
 
+    except ObjectNotFound as ex:
+        raise CommandFailure(args.cmd, f"{args.dsid}: DAP not found ({str(ex)})", 1) from ex        
     except NotAuthorized as ex:
         raise CommandFailure(args.cmd, f"Unexpected authorization failure: {str(ex)}", 9) from ex
     except Exception as ex:
