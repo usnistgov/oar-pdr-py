@@ -221,8 +221,8 @@ class NPSExternalReviewClient(ExternalReviewClient):
         if instructions:
             payload["instructions"] = instructions
 
-        # NPS expects a POST to {nps_endpoint}/review/{record_id}
-        url = f"{self.nps_endpoint.rstrip('/')}/review/{id}"
+        # NPS expects a POST to {nps_endpoint}/DataSet/SubmitDataset/{record_id}
+        url = f"{self.nps_endpoint.rstrip('/')}/DataSet/SubmitDataset/{id}"
 
         # Send the request
         token = self._get_token()

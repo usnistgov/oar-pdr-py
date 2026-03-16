@@ -110,7 +110,7 @@ class TestNPSExternalReviewClient(test.TestCase):
         # Check that requests.post was called with expected headers and payload
         args, kwargs = mock_post.call_args
         url = args[0]
-        self.assertTrue(url.endswith("/review/1"))
+        self.assertTrue(url.endswith("/DataSet/SubmitDataset/1"))
         headers = kwargs["headers"]
         self.assertEqual(headers["Authorization"], "Bearer token123")
         self.assertEqual(headers["Content-Type"], "application/json")
