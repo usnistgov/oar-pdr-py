@@ -66,8 +66,8 @@ class TestCLISuite(test.TestCase):
 
     def resetLogfile(self):
         rootlog = logging.getLogger()
-        if cfgmod._log_handler:
-            rootlog.removeHandler(cfgmod._log_handler)
+#        if cfgmod._log_handler:
+#            rootlog.removeHandler(cfgmod._log_handler)
         if self.logfile and os.path.exists(self.logfile):
             os.remove(self.logfile)
         self.logfile = None
