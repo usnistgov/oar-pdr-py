@@ -165,6 +165,7 @@ class TestRecordStatus(test.TestCase):
         stat = status.RecordStatus("goob", {})
         sdata = stat.to_dict()
         self.assertNotIn("external_review", sdata)
+        self.assertEqual(stat.get_review_systems(), [])
 
         stat.pubreview("nps", "group-review", "goob", "/od/id/goob")
         sdata = stat.to_dict()
@@ -196,6 +197,10 @@ class TestRecordStatus(test.TestCase):
         self.assertEqual(rdata["feedback"][0]["reviewer"], "jerry")
         self.assertEqual(rdata["feedback"][0]["type"], "warn")
         self.assertTrue(rdata["feedback"][0]["description"])
+
+        self.assertEqual(stat.get_review_systems(), ['nps'])
+        rdata['system'] = 'nps'
+        self.assertEqual(stat.get_review_from('nps'), rdata)
 
         fb = {
             "reviewer": "gary",
@@ -269,6 +274,15 @@ class TestRecordStatus(test.TestCase):
         self.assertEqual(rdata["phase"], "tech")
         self.assertNotIn("gurn", rdata)
         self.assertNotIn("feedback", rdata)
+
+        syss = stat.get_review_systems()
+        self.assertIn('nps', syss)
+        self.assertIn('elrs', syss)
+        self.assertEqual(len(syss), 2)
+        stat.delete_review_from("elrs")
+        self.assertIsNone(stat.get_review_from("elrs"))
+        stat.pubreview("elrs", "snoop")
+        self.assertIsNotNone(stat.get_review_from("elrs"))
 
         stat.publish("gurn", "1.2.0")
         sdata = stat.to_dict()
