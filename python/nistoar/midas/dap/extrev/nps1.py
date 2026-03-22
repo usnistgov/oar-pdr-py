@@ -221,8 +221,8 @@ class NPSExternalReviewClient(ExternalReviewClient):
         if instructions:
             payload["instructions"] = instructions
 
-        # NPS expects a POST to {nps_endpoint}/DataSet/SubmitDataset/{record_id}
-        url = f"{self.nps_endpoint.rstrip('/')}/DataSet/SubmitDataset/{id}"
+        # NPS expects a POST to {nps_endpoint}/DataSet/SubmitDataset
+        url = f"{self.nps_endpoint.rstrip('/')}/DataSet/SubmitDataset"
 
         # Send the request
         token = self._get_token()
@@ -245,5 +245,5 @@ class NPSExternalReviewClient(ExternalReviewClient):
             raise ExternalReviewException("Forbidden: Record is not currently in review.")
         else:
             raise ExternalReviewException(
-                f"NPS API error: {resp.status_code} {resp.reason}\n{resp.text}"
+                f"NPS API error: {resp.status_code} {resp.reason}\n  {url}"
             )
