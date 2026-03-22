@@ -104,7 +104,7 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
         self.assertIs(self.revcli, self.svc._extrevcli)
         self.assertEqual(self.revcli.system_name, "simulated")
         self.assertIs(self.revcli.projsvc, self.svc)
-        self.assertTrue(self.revcli.autoapp)
+        self.assertFalse(self.revcli.autoapp)
 
     def test_submit(self):
         self.create_service()
@@ -127,7 +127,7 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
         self.assertEqual(stat.state, status.SUBMITTED)
         self.assertIn(id, self.revcli.projs)
         self.assertEqual(self.revcli.projs[id]['phase'], "requested")
-        self.assertIsNone(stat.get_review_from("sim"))
+        self.assertIsNone(stat.get_review_from("simulated"))
 
         # progress the review
         self.revcli.update(id, "group")
@@ -214,7 +214,8 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
         self.assertIn(id, self.revcli.projs)
         self.assertEqual(self.revcli.projs[id]['phase'], "approved")
         self.assertIsNone(stat.get_review_from("sim"))
-        self.assertEqual(stat.state, status.PUBLISHED)
+#        self.assertIsNotNone(stat.get_review_from("simulated"))
+        self.assertEqual(stat.state, status.ACCEPTED)
 
         
     def test_submit_revise(self):

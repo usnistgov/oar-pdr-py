@@ -1321,7 +1321,7 @@ class ProjectService(MIDASSystem):
             revsys = [ revsys ]
 
         for sys in revsys:
-            self.apply_external_review(id, sys, "canceled", revid, infourl, feedback=[])
+            self.apply_external_review(id, sys, "canceled", revid, infourl, feedback=[], _prec=prec)
 
         return prec
 

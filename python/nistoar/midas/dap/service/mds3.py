@@ -2729,7 +2729,7 @@ class DAPService(ProjectService):
                 _prec = self.dbcli.get_record_for(id, ACLs.READ)
 
             except ExternalReviewException as ex:
-                message = "Failed to submit to external review system: %s", str(ex)
+                message = "Failed to submit to external review system: " + str(ex)
                 self.log.error(message)
                 # possibly notify
                 _prec.status.set_state(status.UNWELL)

@@ -12,6 +12,7 @@ include
   - ``get``:      retrieve and display DAP records in JSON format
   - ``setstate``: update the state of a DAP record
   - ``revreq``:   request a review of an external reviewer system
+  - ``unsubmit``: pull a record submitted for review back to an editable state
   - ``review``:   submit feedback to a DAP record on behalf of an external reviewer
 """
 import os, argparse, logging
@@ -132,7 +133,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 
                                                 interface into it 
     """
-    from . import regpub, setstate, review, revreq, get
+    from . import regpub, setstate, review, revreq, get, unsubmit
 
     subparser.description = description
     p = subparser
@@ -147,6 +148,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     out.load_subcommand(get)
     out.load_subcommand(setstate)
     out.load_subcommand(revreq)
+    out.load_subcommand(unsubmit)
     out.load_subcommand(review)
 
     return out

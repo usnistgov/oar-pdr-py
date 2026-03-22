@@ -109,6 +109,15 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
             return self.send_unauthorized()
 
     def _get_review_status_for(self, id):
+        # nps1 review ID is an integer
+        try:
+            recn = int(id)
+            while recn < 1000:
+                id = "0"+id
+                recn *= 10
+        except ValueError:
+            pass
+            
         prec = self._svc.dbcli.get_record_for(id, dbio.ACLs.PUBLISH)  # may raise exc
         rev = prec.status.get_review_from("nps1")
         if not rev:
