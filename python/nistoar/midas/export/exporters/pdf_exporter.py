@@ -11,19 +11,19 @@ DEFAULT_PDF_TEMPLATE = "dmp_pdf_template.prep"  # Fallback to DMP template for c
 _XML_ILLEGAL = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
 
 
+def _escape_xml(obj):
+    if isinstance(obj, str):
+        return saxutils.escape(_XML_ILLEGAL.sub('', obj))
+    if isinstance(obj, dict):
+        return {k: _escape_xml(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_escape_xml(v) for v in obj]
+    return obj
+
 
 class PDFExporter(Exporter):
     format_name = "pdf"
     file_extension = ".pdf"
-
-    def _escape_xml(obj):
-        if isinstance(obj, str):
-            return saxutils.escape(_XML_ILLEGAL.sub('', obj))
-        if isinstance(obj, dict):
-            return {k: _escape_xml(v) for k, v in obj.items()}
-        if isinstance(obj, list):
-            return [_escape_xml(v) for v in obj]
-        return obj   # int, float, bool, None — left untouched
 
     def render(self, input_type: str, payload: Any, filename: str, template_name: str = None):
         """
@@ -61,7 +61,7 @@ class PDFExporter(Exporter):
 
         # Load template and parse
         data_for_template = json_payload.get("data", json_payload)
-        data_for_template = self._escape_xml(data_for_template)
+        data_for_template = _escape_xml(data_for_template)
         rml_xml_text = preppy_template.get(data_for_template)
         pdf_bytes = trml2pdf.parseString(rml_xml_text)
 
