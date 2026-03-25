@@ -1538,7 +1538,7 @@ class DBClientFactory(ABC):
         :param dict          config:  the DBClient configuration (see the
                                       :py:mod:`dbio module documentation<nistoar.midas.dbio>` for 
                                       a description of the configuration schema)
-        :param PeoplService peopsvc:  a PeopleService to use to look up people in the organization.  If
+        :param PeopleService peopsvc:  a PeopleService to use to look up people in the organization.  If
                                       not provided, an attempt will be made to create one from the 
                                       configuration (via its ``people_service`` parameter). 
         :param DBIOClientNotifier notifier:  a DBIOClientNotifier to use for sending alerts to 
