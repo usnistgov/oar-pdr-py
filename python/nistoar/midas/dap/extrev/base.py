@@ -11,7 +11,18 @@ class ExternalReviewException(MIDASException):
     """
     a base exception for issues when interacting with an external review system
     """
-    pass
+    def __init__(self, message: str, sysname: str=None, statuscode: int=None):
+        """
+        initialize the exception
+
+        :param str message:  the description of what caused the exception
+        :param str  system:  the name of the external review system being engaged
+        :param int statuscode:  the HTTP status code that the service responded with (when applicable)
+        """
+        super(ExternalReviewException, self).__init__(message)
+        self.system = sysname
+        self.status = statuscode
+
 
 class ExternalReviewClient(ABC):
     """
