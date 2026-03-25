@@ -313,6 +313,9 @@ class DAPService(ProjectService):
         self._mediatypes = None
         self._formatbyext = None
         self._extrevcli = extrevcli
+        if self._extrevcli and not getattr(self._extrevcli, 'people_service', None) and \
+           self.dbcli.people_service:
+            self._extrevcli.people_service = self.dbcli.people_service
 
         self._minnerdmver = minnerdmver
 

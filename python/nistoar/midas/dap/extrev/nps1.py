@@ -11,6 +11,7 @@ from nistoar.base.config import ConfigurationException
 from nistoar.nsd.service import PeopleService
 from nistoar.nsd.sync.syncer import get_nsd_auth_token
 from nistoar.midas.dap.extrev import ExternalReviewClient, ExternalReviewException
+from nistoar.nsd.service import PeopleService
 
 mdsid_re = re.compile(r'')
 
@@ -94,6 +95,18 @@ class NPSExternalReviewClient(ExternalReviewClient):
         draft_url = self._drafturl_tmpl % record_id
         pub_url = self._puburl_tmpl % (pubid if pubid else record_id)
         return draft_url, pub_url
+
+    @property
+    def people_service(self):
+        """
+        the instance of a PeopleService that will be used for resolving user IDs, or None if not 
+        available.
+        """
+        return self.ps
+
+    @people_service.setter
+    def people_service(self, svc: PeopleService):
+        self.ps = svc
 
     def select_review_reason(self, changes: List[str] = None, version: str = None) -> str:
         """
