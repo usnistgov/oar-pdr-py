@@ -1,7 +1,7 @@
 """
 An implementation of the ExternalReviewClient that talks to the NPS (version 1)
 """
-import json, re
+import json, re, logging
 from typing import List, Dict, Any
 from collections import OrderedDict
 
@@ -235,15 +235,21 @@ class NPSExternalReviewClient(ExternalReviewClient):
         try:
             resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
         except Exception as ex:
-            raise ExternalReviewException(f"Failed to POST to NPS: {ex}")
+            raise ExternalReviewException(f"Failed to POST to NPS: {ex}", self.system_name)
 
         if resp.status_code == 200:
             return resp.json()
         elif resp.status_code == 401:
-            raise ExternalReviewException("Unauthorized: Check the NPS API token and permissions.")
+            raise ExternalReviewException("Unauthorized: Check the NPS API token and permissions.",
+                                          self.system_name, resp.status_code)
         elif resp.status_code == 403:
-            raise ExternalReviewException("Forbidden: Record is not currently in review.")
+            raise ExternalReviewException("Forbidden: Record is not currently in review.",
+                                          self.system_name, resp.status_code)
         else:
+            if resp.status_code == 400:
+                log = logging.getLogger("ExternalReviewClient."+self.system_name)
+                log.info("POSTed input: \n%s", json.dumps(payload))
             raise ExternalReviewException(
-                f"NPS API error: {resp.status_code} {resp.reason}\n  {url}"
+                f"NPS API error: {resp.status_code} {resp.reason}\n  {url}",
+                self.system_name, resp.status_code
             )
