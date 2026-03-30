@@ -11,7 +11,7 @@ from nistoar.base.config import ConfigurationException
 from nistoar.nsd.service import PeopleService
 from nistoar.nsd.sync.syncer import get_nsd_auth_token
 from nistoar.midas.dap.extrev import ExternalReviewClient, ExternalReviewException
-from nistoar.nsd.service import PeopleService
+from nistoar.nsd.service import PeopleService, NSDException
 
 mdsid_re = re.compile(r'')
 
@@ -40,6 +40,7 @@ class NPSExternalReviewClient(ExternalReviewClient):
         :py:func:`~nistoar.nsd.sync.syncer.get_nsd_auth_token`.  
     """
     system_name = "nps1"
+    log_name = "ExternalReviewClient."+system_name
 
     _review_reasons = {
         "NEWREC":  "New Record",
@@ -132,11 +133,22 @@ class NPSExternalReviewClient(ExternalReviewClient):
         """
         reviewer = {
             "nistId": user["nistId"],
-            "firstName": user["firstName"],
-            "lastName": user["lastName"],
-            "eMail": user["eMail"],
+            "firstName": user.get("firstName", ""),
+            "lastName": user.get("lastName", ""),
+            "eMail": user.get("eMail", ""),
             "contactTypeId": 7 if is_owner else 21
         }
+        if self.ps:
+            # override with our own query to the people db
+            try:
+                person = self.ps.get_person_by_eid(reviewer['nistId'])
+                reviewer['firstName'] = person.get('firstName', reviewer['firstName'])
+                reviewer['lastName'] = person.get('lastName', reviewer['lastName'])
+                reviewer['eMail'] = person.get('emailAddress', reviewer['eMail'])
+            except NSDException as ex:
+                log = logging.getLogger(self.log_name)
+                log.error("Trouble accessing people service info for NPS: "+str(ex))
+            
         return reviewer
 
     def submit(self, id: str, submitter: str, version: str=None, **options):
@@ -185,23 +197,11 @@ class NPSExternalReviewClient(ExternalReviewClient):
         # Compose the reviewers list
         reviewers = []
         # First reviewer: record owner (submitter)
-        submitter_info = None
         if reviewers_opt:
             # If explicit reviewers are provided, first one is owner
-            submitter_info = reviewers_opt[0]
-        elif self.ps:
-            # Try to use PeopleService to resolve
-            submitter_info = self.ps.get_person(submitter)
+            reviewers.append(self._prepare_reviewer(reviewers_opt[0], is_owner=True))
         else:
-            # Fallback to submitter as is
-            submitter_info = {
-                "nistId": submitter,
-                "firstName": "",
-                "lastName": "",
-                "eMail": ""
-            }
-        reviewers.append(self._prepare_reviewer(submitter_info, is_owner=True))
-        # Add any other reviewers as tech reviewers (contactTypeId=21)
+            reviewers.append(self._prepare_reviewer({"nistId": submitter}, is_owner=True))
         for user in reviewers_opt[1:]:
             reviewers.append(self._prepare_reviewer(user, is_owner=False))
 
@@ -222,7 +222,7 @@ class NPSExternalReviewClient(ExternalReviewClient):
         payload = {
             "dataSetID": id,
             "itSecurityReview": bool(security_review),
-            "submitterID": submitter_info["nistId"],
+            "submitterID": reviewers[0]['nistId'],
             "pdR_URL": pub_url,
             "dataPub_URL": draft_url,
             "title": title,
@@ -260,7 +260,7 @@ class NPSExternalReviewClient(ExternalReviewClient):
                                           self.system_name, resp.status_code)
         else:
             if resp.status_code == 400:
-                log = logging.getLogger("ExternalReviewClient."+self.system_name)
+                log = logging.getLogger(self.log_name)
                 log.info("POSTed input: \n%s", json.dumps(payload))
             raise ExternalReviewException(
                 f"NPS API error: {resp.status_code} {resp.reason}\n  {url}",

@@ -194,30 +194,31 @@ class TestNPSExternalReviewClient(test.TestCase):
     def test_submit_uses_people_service(self, mock_token, mock_post):
         # Prepare a mock PeopleService
         ps = MagicMock()
-        ps.get_person.return_value = {
-            "nistId": "123987",
+        ps.get_person_by_eid.return_value = {
+            "peopleID": "123987",
+            "nistUsername": "jld1",
             "firstName": "Diogo",
             "lastName": "Jota",
-            "eMail": "diogo.jota@nist.gov"
+            "emailAddress": "diogo.jota@nist.gov"
         }
 
         cli = NPSExternalReviewClient(GOOD_CFG, peopsvc=ps)
 
         mock_post.return_value = fake_response(json_data={"done": True})
-        result = cli.submit(id="PSTEST1", submitter="123987")
+        result = cli.submit(id="PSTEST1", submitter="jld1")
 
         # Ensure get_person was called with the submitter ID
-        ps.get_person.assert_called_once_with("123987")
+        ps.get_person_by_eid.assert_called_once_with("jld1")
 
         # The reviewer info in the payload must match what the PeopleService returned
         payload = json.loads(mock_post.call_args[1]["data"])
         reviewer = payload["reviewers"][0]
-        assert reviewer["nistId"] == "123987"
+        assert reviewer["nistId"] == "jld1"
         assert reviewer["firstName"] == "Diogo"
         assert reviewer["lastName"] == "Jota"
         assert reviewer["eMail"] == "diogo.jota@nist.gov"
         assert reviewer["contactTypeId"] == 7  # Owner
-        assert payload["submitterID"] == "123987"
+        assert payload["submitterID"] == "jld1"
         assert result == {"done": True}
 
 
