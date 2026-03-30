@@ -141,14 +141,27 @@ class NPSExternalReviewClient(ExternalReviewClient):
         if self.ps:
             # override with our own query to the people db
             try:
-                person = self.ps.get_person_by_eid(reviewer['nistId'])
+                if isinstance(reviewer['nistId'], int):
+                    # id is the integer person record ID
+                    person = self.get_person(reviewer['nistId'])
+                elif isinstance(reviewer['nistId'], str):
+                    # id is the enterprise ID
+                    person = self.ps.get_person_by_eid(reviewer['nistId'])
+                    reviewer['nistId'] = person['peopleID']
+                else:
+                    raise ValueError("user['nistId']: unsupported type: "+type(user['nistId']))
+
                 reviewer['firstName'] = person.get('firstName', reviewer['firstName'])
                 reviewer['lastName'] = person.get('lastName', reviewer['lastName'])
                 reviewer['eMail'] = person.get('emailAddress', reviewer['eMail'])
+
             except NSDException as ex:
                 log = logging.getLogger(self.log_name)
                 log.error("Trouble accessing people service info for NPS: "+str(ex))
-            
+
+        elif isinstance(reviewer['nistId'], str):
+            raise NSDException("No people service configured available to lookup int people ID")
+
         return reviewer
 
     def submit(self, id: str, submitter: str, version: str=None, **options):

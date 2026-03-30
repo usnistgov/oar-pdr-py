@@ -1,6 +1,7 @@
 import unittest as test
 from unittest.mock import patch, MagicMock
 import json
+from copy import deepcopy
 
 from nistoar.midas.dap.extrev.nps1 import NPSExternalReviewClient
 from nistoar.midas.dap.extrev import ExternalReviewException
@@ -8,13 +9,13 @@ from nistoar.base.config import ConfigurationException
 
 # Example reviewers
 OWNER = {
-    "nistId": "900123",
+    "nistId": 900123,
     "firstName": "Isaac",
     "lastName": "Newton",
     "eMail": "Isaac.Newton@nist.gov"
 }
 TECH1 = {
-    "nistId": "900124",
+    "nistId": 900124,
     "firstName": "Alan",
     "lastName": "Turing",
     "eMail": "alan.turing@nist.gov"
@@ -133,11 +134,11 @@ class TestNPSExternalReviewClient(test.TestCase):
 
         res = cli.submit(
             id="X12",
-            submitter="OWNERX12"
+            submitter=123
         )
         payload = json.loads(mock_post.call_args[1]["data"])
-        self.assertEqual(payload["submitterID"], "OWNERX12")
-        self.assertEqual(payload["reviewers"][0]["nistId"], "OWNERX12")
+        self.assertEqual(payload["submitterID"], 123)
+        self.assertEqual(payload["reviewers"][0]["nistId"], 123)
         self.assertEqual(payload["reviewers"][0]["contactTypeId"], 7)
 
     # submit: no token
@@ -155,7 +156,7 @@ class TestNPSExternalReviewClient(test.TestCase):
         mock_post.return_value = fake_response(status=401, reason="Unauthorized")
         cli = NPSExternalReviewClient(GOOD_CFG)
         with self.assertRaises(ExternalReviewException) as cm:
-            cli.submit(id="RECFAIL", submitter="X")
+            cli.submit(id="RECFAIL", submitter=123)
         self.assertIn("Unauthorized", str(cm.exception))
 
     # submit: http 403 forbidden
@@ -165,7 +166,7 @@ class TestNPSExternalReviewClient(test.TestCase):
         mock_post.return_value = fake_response(status=403, reason="Forbidden")
         cli = NPSExternalReviewClient(GOOD_CFG)
         with self.assertRaises(ExternalReviewException) as cm:
-            cli.submit(id="RECFORBID", submitter="X")
+            cli.submit(id="RECFORBID", submitter=123)
         self.assertIn("Forbidden", str(cm.exception))
 
     # submit: http 500 (other error)
@@ -175,7 +176,7 @@ class TestNPSExternalReviewClient(test.TestCase):
         mock_post.return_value = fake_response(status=500, reason="Internal Server Error", json_data={"error": "fail"})
         cli = NPSExternalReviewClient(GOOD_CFG)
         with self.assertRaises(ExternalReviewException) as cm:
-            cli.submit(id="RECSERVER", submitter="X")
+            cli.submit(id="RECSERVER", submitter=123)
         self.assertIn("NPS API error", str(cm.exception))
         self.assertIn("Internal Server Error", str(cm.exception))
 
@@ -185,7 +186,7 @@ class TestNPSExternalReviewClient(test.TestCase):
     def test_submit_requests_error(self, mock_token, mock_post):
         cli = NPSExternalReviewClient(GOOD_CFG)
         with self.assertRaises(ExternalReviewException) as cm:
-            cli.submit(id="RECNETERR", submitter="X")
+            cli.submit(id="RECNETERR", submitter=123)
         self.assertIn("Failed to POST to NPS", str(cm.exception))
 
     # submit: people service used to look up submitter
@@ -196,29 +197,30 @@ class TestNPSExternalReviewClient(test.TestCase):
         ps = MagicMock()
         ps.get_person_by_eid.return_value = {
             "peopleID": "123987",
-            "nistUsername": "jld1",
+            "nistUsername": "drj2",
             "firstName": "Diogo",
             "lastName": "Jota",
             "emailAddress": "diogo.jota@nist.gov"
         }
+        ps.get_person.return_value = deepcopy(ps.get_person_by_eid.return_value)
 
         cli = NPSExternalReviewClient(GOOD_CFG, peopsvc=ps)
 
         mock_post.return_value = fake_response(json_data={"done": True})
-        result = cli.submit(id="PSTEST1", submitter="jld1")
+        result = cli.submit(id="PSTEST1", submitter="drj2")
 
         # Ensure get_person was called with the submitter ID
-        ps.get_person_by_eid.assert_called_once_with("jld1")
+        ps.get_person_by_eid.assert_called_once_with("drj2")
 
         # The reviewer info in the payload must match what the PeopleService returned
         payload = json.loads(mock_post.call_args[1]["data"])
         reviewer = payload["reviewers"][0]
-        assert reviewer["nistId"] == "jld1"
+        assert reviewer["nistId"] == "123987"
         assert reviewer["firstName"] == "Diogo"
         assert reviewer["lastName"] == "Jota"
         assert reviewer["eMail"] == "diogo.jota@nist.gov"
         assert reviewer["contactTypeId"] == 7  # Owner
-        assert payload["submitterID"] == "jld1"
+        assert payload["submitterID"] == "123987"
         assert result == {"done": True}
 
 
