@@ -32,7 +32,7 @@ from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, No
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
                                   ProjectSelectionHandler, ServiceApp)
-from ...dbio import status, ANONYMOUS, restore
+from ...dbio import status, ANONYMOUS, PUBLIC_GROUP, restore
 from ..review import DAPReviewer, DAPNERDmReviewValidator
 from ..extrev import ExternalReviewException, create_external_review_client
 from nistoar.base.config import ConfigurationException, merge_config
@@ -2807,7 +2807,7 @@ class DAPService(ProjectService):
 
         try:
             # reset permissions
-            self._set_review_permissions(prec)
+            self._set_review_permissions(prec, PUBLIC_GROUP)  # TODO: confine to assigned reviewers
             # don't save until submission process is complete
 
         except FileManagerException as ex:
@@ -2836,14 +2836,16 @@ class DAPService(ProjectService):
         """
         if readers is None:
             readers = []
+        elif isinstance(readers, str):
+            readers = [readers]
 
         # record away who has write access
-        for perm in [ ACLs.WRITE, ACLs.DELETE, ACLs.ADMIN, ACLs.READ ]:
-            if prec.status.state == status.EDIT or prec.status.state == status.READY or \
-               len(list(prec.acls.iter_perm_granted("_"+perm))) == 0:
-                who = list(prec.acls.iter_perm_granted(perm))
-                prec.acls.revoke_perm_from_all("_"+perm)
-                prec.acls.grant_perm_to("_"+perm, *who)
+        if len(list(prec.acls.iter_perm_granted(ACLs.PUBLISH))) == 0:
+            # a publishing/reviewing process is not currently engaged
+            for perm in [ ACLs.WRITE, ACLs.DELETE, ACLs.ADMIN, ACLs.READ ]:
+                if len(list(prec.acls.iter_perm_granted("_"+perm))) == 0:
+                    who = list(prec.acls.iter_perm_granted(perm))
+                    prec.acls.grant_perm_to("_"+perm, *who)
 
         # revoke update permissions in the file manager
         if self._fmcli:
@@ -2856,7 +2858,7 @@ class DAPService(ProjectService):
         # revoke permissions that can change the record
         prec.acls.revoke_perm_from_all(ACLs.WRITE)
         prec.acls.revoke_perm_from_all(ACLs.DELETE)
-        prec.acls.revoke_perm_from_all(ACLs.ADMIN)
+        prec.acls.revoke_perm_from_all(ACLs.ADMIN, False)
 
         # give PUBLISH permission to reviewer IDs
         if self.cfg.get("reviewer_ids"):
@@ -2878,11 +2880,16 @@ class DAPService(ProjectService):
                                  fully reset to the permissions as if going either to a published 
                                  state or a complete edit state (because publishing was canceled).
         """
-        for perm in [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]:
-            who = list(prec.acls.iter_perm_granted("_"+perm))
-            prec.acls.revoke_perm_from_all(perm, _need_perm=ACLs.PUBLISH)  # take out the reviewers
-            prec.acls.grant_perm_to(perm, *who, _need_perm=ACLs.PUBLISH)   # restore the original editors
-            if not for_review:
+        if for_review:
+            # just give original writers their write permission
+            who = list(prec.acls.iter_perm_granted("_"+ACLs.WRITE))
+            prec.acls.grant_perm_to(ACLs.WRITE, *who, _need_perm=ACLs.PUBLISH)
+
+        else:
+            for perm in [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]:
+                who = list(prec.acls.iter_perm_granted("_"+perm))
+                prec.acls.revoke_perm_from_all(perm, _need_perm=ACLs.PUBLISH)  # take out the reviewers
+                prec.acls.grant_perm_to(perm, *who, _need_perm=ACLs.PUBLISH)   # restore the original editors
                 prec.acls.revoke_perm_from_all("_"+perm, _need_perm=ACLs.PUBLISH)
 
         # revoke update permissions in the file manager

@@ -13,6 +13,7 @@ include
   - ``setstate``: update the state of a DAP record
   - ``revreq``:   request a review of an external reviewer system
   - ``unsubmit``: pull a record submitted for review back to an editable state
+  - ``revperm``:  set or unset a record's permissions for review.
   - ``review``:   submit feedback to a DAP record on behalf of an external reviewer
 """
 import os, argparse, logging
