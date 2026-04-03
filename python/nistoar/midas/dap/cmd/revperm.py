@@ -78,8 +78,11 @@ def execute(args, config: Mapping=None, log: Logger=None):
     if not args.dbid:
         raise CommandFailure(args.cmd, "DAP ID not specified", 2)
 
+    if args.for_review:
+        args.unset = True
+
     if args.readers:
-        if args.unset or args.for_review:
+        if args.unset:
             log.warning("Unset requested; --reader values ignored.")
         else:
             for i in range(len(args.readers)):
@@ -97,7 +100,7 @@ def execute(args, config: Mapping=None, log: Logger=None):
     try:
         prec = svc.get_record(args.dbid)
 
-        if args.unset or args.for_review:
+        if args.unset:
             svc._unset_review_permissions(prec, args.for_review)
         else:
             svc._set_review_permissions(prec, args.readers)
