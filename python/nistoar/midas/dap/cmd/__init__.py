@@ -134,7 +134,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 
                                                 interface into it 
     """
-    from . import regpub, setstate, review, revreq, get, unsubmit
+    from . import regpub, setstate, review, revreq, get, unsubmit, revperm
 
     subparser.description = description
     p = subparser
@@ -150,6 +150,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     out.load_subcommand(setstate)
     out.load_subcommand(revreq)
     out.load_subcommand(unsubmit)
+    out.load_subcommand(revperm)
     out.load_subcommand(review)
 
     return out
