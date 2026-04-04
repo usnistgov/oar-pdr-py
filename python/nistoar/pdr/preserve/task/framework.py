@@ -508,6 +508,7 @@ class PreservationTask(PreservationStepsAware):
     def finalize(self) -> bool:
         """
         If it has not already been done, finalize the AIP in preparation for full preservation.
+
         This represents the first step in the preservation process.  If this step was already 
         completed, the function returns immediately.
 
@@ -533,6 +534,7 @@ class PreservationTask(PreservationStepsAware):
         """
         Validate that the AIP is ready for preservation.  This is the second step in the preservation
         process, coming after finalization.  
+
         :param bool as_is:  if False, ensure that the AIP has been finalized first; otherwise,
                   the validater will be forced to run on the AIP without regard to its state. 
         :return:  True if it was necessary to execute the step because it had not be carried out 
@@ -554,7 +556,9 @@ class PreservationTask(PreservationStepsAware):
     def validated(self) -> bool:
         """
         return True if the AIP is considered currently valid according to the configured preservation
-        requirements.  Note that this task may configured to always run the validater regardless before
+        requirements.  
+
+        Note that this task may configured to always run the validater regardless before
         serialization; if this is the case, this will always return False.
         """
         self._statemgr.state == self.VALIDATED
@@ -563,6 +567,7 @@ class PreservationTask(PreservationStepsAware):
         """
         Complete all preservation steps up through serialization.  If the AIP has already been 
         serialized completely, this function returns immediately.  
+
         :return:  True if it was necessary to execute the step because it had not be carried out 
                   previously, or False because it was already completed.  
                   :rtype: bool
@@ -582,10 +587,12 @@ class PreservationTask(PreservationStepsAware):
 
     def archive(self) -> bool:
         """
-        Complete all preservation steps up through archiving.  Archiving--the process of committing 
-        the serialized AIP to long-term storage--is itself inherently asynchronous, so this function 
-        will start that process.  If the AIP has already been submitted for archiving, this function 
-        returns immediately.  
+        Complete all preservation steps up through archiving.  
+
+        Archiving--the process of committing the serialized AIP to long-term storage--is itself 
+        inherently asynchronous, so this function will start that process.  If the AIP has already 
+        been submitted for archiving, this function returns immediately.  
+
         :return:  True if it was necessary to execute the step because it had not be carried out 
                   previously, or False because it was already completed.  
                   :rtype: bool
@@ -614,6 +621,7 @@ class PreservationTask(PreservationStepsAware):
         """
         Complete all preservation steps up through publishing.  If the AIP has already been published,
         this function returns immediately.  
+
         :param bool ensure_archived:  if True (default), make sure that the archiving process has 
                   been completed before publishing; if it is not, an Excpetion raised  If False, 
                   attempt to release the AIP while archiving is underway.
@@ -645,19 +653,24 @@ class PreservationTaskFactory(metaclass=ABCMeta):
     The factory methods require a configuration dictionary that complies with an expected 
     base structure that includes the following properties:
 
-    :state_manager:  properties that configure the :py:class:`PreservationStateManager` to use
-                     within the task.  (Some of the properties may be ignored by 
-                     :py:meth:`recreate_task`.)
-    :finalize:       properties that configure the :py:class:`AIPFinalizaiton` instance to use
-                     (may be ignored by :py:meth:`recreate_task`).
-    :validate:       properties that configure the :py:class:`AIPValidation` instance to use
-                     (may be ignored by :py:meth:`recreate_task`).
-    :serialize:      properties that configure the :py:class:`AIPSerialization` instance to use
-                     (may be ignored by :py:meth:`recreate_task`).
-    :archive:        properties that configure the :py:class:`AIPArchiving` instance to use
-                     (may be ignored by :py:meth:`recreate_task`).
-    :publish:        properties that configure the :py:class:`AIPPublication` instance to use
-                     (may be ignored by :py:meth:`recreate_task`).
+    ``state_manager``
+         properties that configure the :py:class:`PreservationStateManager` to use
+         within the task.  (Some of the properties may be ignored by :py:meth:`recreate_task`.)
+    ``finalize``:       
+         properties that configure the :py:class:`AIPFinalizaiton` instance to use
+         (may be ignored by :py:meth:`recreate_task`).
+    ``validate``       
+         properties that configure the :py:class:`AIPValidation` instance to use
+         (may be ignored by :py:meth:`recreate_task`).
+    ``serialize``
+         properties that configure the :py:class:`AIPSerialization` instance to use
+         (may be ignored by :py:meth:`recreate_task`).
+    ``archive``
+         properties that configure the :py:class:`AIPArchiving` instance to use
+         (may be ignored by :py:meth:`recreate_task`).
+    ``publish``
+         properties that configure the :py:class:`AIPPublication` instance to use
+         (may be ignored by :py:meth:`recreate_task`).
 
     Each of the above properties have dictionary values which can include the ``type`` property.
     This property identifies the class that should be instantiated to handle its part of the 
@@ -671,44 +684,56 @@ class PreservationTaskFactory(metaclass=ABCMeta):
     dictionaries to ensure that the steps work together--i.e. that a step can find the outputs of 
     the previous step.  
     """
+    def __init__(self, config: Mapping=None):
+        """
+        initialize the factory.  
 
-    def create_task(self, aipid: str, config: Mapping, logger: Logger=None) -> PreservationTask:
+        The given configuration will be treated as the default configuration.  It will be 
+        merged with the configuration provided to the factory methods, :py:meth:`create_task` 
+        or :py:meth:`recreate_task` with the latter taking precedence.  
+        """
+        self.cfg = config
+
+    def create_task(self, aipid: str, config: Mapping, logger: Logger=None, startover=False,
+                    statemgr: PreservationStateManager=None) -> PreservationTask:
         """
         create the fully configured :py:class:`PreservationTask` that can preserve the given AIP.  
-        :param str      aipid:  the identifier of the AIP to preserve.  The ``config`` must 
-                                indicate where this AIP is located.
-        :param Mapping config:  the configuration that controls construction of this task and
-                                the behavior of the steps.
-        :param Logger  logger:  the logger to use during preservation
-        :return:  the configured :py:class:`PreservationTask`
-        :raise ConfigurationException:  if the task cannot be created due to insufficient or 
-                                incorrect configuration
-        :raise PreservationException:  if any other failure occurs while assembling the task.
-        """
-        pass
-
-    def recreate_task(self, aipid: str, config: Mapping, logger: Logger=None) -> PreservationTask:
-        """
-        recreate the task from its existing persisted state so that it can be resumed, canceled, or
-        cleaned-up (e.g. after a system failure).  This function will only look at the 
-        ``state_manager`` configuration property to determine where/how the current can 
-        be found; all other properties will be overridden by the configuration persisted when the 
-        task was originally created.
 
         :param str      aipid:  the identifier of the AIP to preserve.  The ``config`` must 
                                 indicate where this AIP is located.
         :param Mapping config:  the configuration that controls construction of this task and
                                 the behavior of the steps.
         :param Logger  logger:  the logger to use during preservation
+        :param bool startover:  if False (default), if the state of an incomplete preservation 
+                                task is detected, the task will be set to resume where it left off.  
+                                If true, that state will be purged and the preservation process will
+                                be restarted from scratch.
+        :param PreservationStateManager statemgr:  the state manager to use in the task.  If not 
+                                provided, one will be created based on the given configuration.  While
+                                it may depend on the implementation, this parameter will be ignored if 
+                                ``startover`` is ``True``.  
         :return:  the configured :py:class:`PreservationTask`
         :raise ConfigurationException:  if the task cannot be created due to insufficient or 
                                 incorrect configuration
         :raise PreservationException:  if any other failure occurs while assembling the task.
         """
-        pass
+        config = merge_config(config, deepcopy(self.cfg))
+
+        if not statemgr or startover:
+            statemgr = self._create_state_manager(aipid, config.get('state_manager', {}),
+                                                  logger, startover)
+
+        steps = []
+        steps.append(self._create_finalizer(config.get('finalize')))
+        steps.append(self._create_finalizer(config.get('validate')))
+        steps.append(self._create_finalizer(config.get('serialize')))
+        steps.append(self._create_finalizer(config.get('arhive')))
+        steps.append(self._create_finalizer(config.get('publish')))
+        return PreservationTask(statemgr, *steps)
 
     @abstractmethod
-    def _create_state_manager(self, aipid: str, config: Mapping, logger: Logger) -> PreservationStateManager:
+    def _create_state_manager(self, aipid: str, config: Mapping,
+                              logger: Logger, startover=False) -> PreservationStateManager:
         raise NotImplementedError()
 
     @abstractmethod

@@ -8,16 +8,19 @@ from logging import Logger
 from pathlib import Path
 from collections import OrderedDict
 from typing import List
+from copy import deepcopy
 
 from .. import framework as fw
 from nistoar.pdr.preserve.bagit import BagBuilder, BagWriteError, BagItException
-from nistoar.pdr.exceptions import ConfigurationException
+from nistoar.base.config import ConfigurationException, merge_config
 import nistoar.pdr.preserve.bagit.utils as bagutils
 from nistoar.pdr.preserve import PreservationStateError
 import nistoar.id.versions as verutils
 from nistoar.pdr.ingest import RMMIngestClient, DOIMintingClient
 from nistoar.pdr.distrib import (BagDistribClient, RESTServiceClient,
                                  DistribResourceNotFound, DistribServiceException)
+from ..validate import *
+from ..serialize import *
 
 DEF_MBAG_VERSION = bagutils.DEF_MBAG_VERSION
 
@@ -704,7 +707,44 @@ class RepositoryAccess:
 
         return bagutils.find_latest_head_bag(candidates)
 
-                    
-            
+class PDRPreservationTaskFactory(PreservationTaskFactory):
+    """
+    a factory for creating a :py:class:`PreservationTask` injected with necessary 
+    :py:class:PreservationStep instances appropriate for preserving SIPs submitted for 
+    publication to the NIST PDR.  
+    """
+    def_supported_types = ["pdr", "def"]
+
+    def _create_state_manager(self, aipid: str, config: Mapping,
+                              logger: Logger, startover=False) -> PreservationStateManager:
+        if config.get('type', 'def') not in self.def_supported_types + ["json"]:
+            raise ConfigurationException("Unsupported state manager type: "+str(config.get('type')))
+        return JSONPreservationStateManager(config, aipid, clear_task=restart)
+        
+    def _create_finalizer(self, config: Mapping) -> AIPFinalization:
+        if config.get('type', 'def') not in self.def_supported_types:
+            raise ConfigurationException("Unsupported finalize step type: "+str(config.get('type')))
+        return PDRBagFinalization(config)
+
+    def _create_validater(self, config: Mapping) -> AIPValidation:
+        if config.get('type', 'def') not in self.def_supported_types:
+            raise ConfigurationException("Unsupported validate step type: "+str(config.get('type')))
+        return NISTBagValidation(config)
+
+    def _create_serializer(self, config: Mapping) -> AIPSerialization:
+        if config.get('type', 'def') not in self.def_supported_types:
+            raise ConfigurationException("Unsupported validate step type: "+str(config.get('type')))
+        return NISTBagSerialization(config)
+
+    def _create_archiver(self, config: Mapping) -> AIPArchiving:
+        if config.get('type', 'def') not in self.def_supported_types:
+            raise ConfigurationException("Unsupported validate step type: "+str(config.get('type')))
+        return PDR1AIPArchiving(config)
+
+    def _create_publisher(self, config: Mapping) -> AIPPublication:
+        if config.get('type', 'def') not in self.def_supported_types:
+            raise ConfigurationException("Unsupported validate step type: "+str(config.get('type')))
+        return PDRPublication(config)
+
 
         
