@@ -53,7 +53,7 @@ class PreservationStatus(PreservationStepsAware):
         (str) the version of the AIP that is being (or was) preserved
 
     These properties will not be set if preservation has not started or is currently underway, but 
-    rather only after preservatin has finished:
+    rather only after preservation has finished:
 
     ``comptime``:
         (float) the epoch time when the last preservation effort finished, successful or not.  
@@ -225,6 +225,15 @@ class AIP1PreservationService(PreservationService):
     
     This class supports the following configuration parameters:
 
+    This implementation manages state via various files persisted on disk (with locations defined by 
+    configuration but by default rooted under ``pdr/preserve``), including:
+      *  preservation state -- (default: _sip_``/_state.json``) tracks progress of the preservation
+         process through its steps (see the :py:mod:`preservation task 
+         framework<nistoar.pdr.preserve.task.framework>`
+      *  job execution state -- (default: ``_jobs/``_sip_``.json``) tracks the asynchronous execution
+         of the process executing the preservation. 
+      *  preservation history -- (default: ``_history/``_sip_``_history.json``) a history of 
+         completed preservation processes.  
     """
 
     self._state_file = "_state.json"
@@ -306,7 +315,7 @@ class AIP1PreservationService(PreservationService):
         return self.historydir/f"{aipid}_history.json"
 
     def _open_presstatemgr(self, aipid, aipdir=None):
-        iddir = self.inprogdir/aipid
+        iddir = aipdir or self.inprogdir/aipid
         if not iddir.is_dir():
             return None
         return JSONPreservationStateManager(self.cfg.get('state_manager', {}), aipid, 
@@ -320,10 +329,10 @@ class AIP1PreservationService(PreservationService):
         """
         # each active AIP has a directory under the in-progress dir with a name matching its ID
         for did in os.listdir(self.inprogdir):
-            dir = Path(did)
-            if not dir.is_dir() or (dir/self._state_file).is_file():
+            dir = self.inprogdir/did
+            if not dir.is_dir() or dir.name.startswith('_') or not (dir/self._state_file).is_file():
                 continue
-            yield did
+            yield did.name
 
     def status_of(self, aipid) -> PreservationStatus:
         """
@@ -439,6 +448,7 @@ class AIP1PreservationService(PreservationService):
         workparent = str(self.inprogdir/aipid)
         smcfg['working_dir'] = str(workparent/"work")
         smcfg['stage_dir']   = str(workparent/"stage")
+        smcfg['persist_in']  = str(workparent/"_state.json")
         try:
             for dir in (workparent, smcfg['working_dir'], smcfg['stage_dir']):
                 if not os.path.isdir(dir):
@@ -447,14 +457,14 @@ class AIP1PreservationService(PreservationService):
             raise PreservationException(f"{str(dir)}: failed to create directory: {str(ex)}")
 
         pstate = JSONPreservationStateManager(smcfg, aipid, aipdir, self.log, # need SIPStatus
-                                              persistin=workparent/"_state.json")
+                                              clear_state=startover)
         pstate._data['version'] = version
         pstate._cache()
 
         # submit job
         jcfg = {
             "status_manager": smcfg,
-            "process": self.cfg.get('process', {})
+            "process": self.cfg.get('task', {}),
             "logfile": str(workparent/"preservation.log")
         }
         self.jobq.submit(aipid, [aipdir, self._state_file_for(aipid)], jcfg)

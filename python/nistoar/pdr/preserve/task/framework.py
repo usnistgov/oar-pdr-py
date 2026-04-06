@@ -725,10 +725,10 @@ class PreservationTaskFactory(metaclass=ABCMeta):
 
         steps = []
         steps.append(self._create_finalizer(config.get('finalize')))
-        steps.append(self._create_finalizer(config.get('validate')))
-        steps.append(self._create_finalizer(config.get('serialize')))
-        steps.append(self._create_finalizer(config.get('arhive')))
-        steps.append(self._create_finalizer(config.get('publish')))
+        steps.append(self._create_validater(config.get('validate')))
+        steps.append(self._create_serializer(config.get('serialize')))
+        steps.append(self._create_archiver(config.get('arhive')))
+        steps.append(self._create_publisher(config.get('publish')))
         return PreservationTask(statemgr, *steps)
 
     @abstractmethod

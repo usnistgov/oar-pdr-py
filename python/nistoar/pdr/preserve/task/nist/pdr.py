@@ -689,13 +689,13 @@ class RepositoryAccess:
             self.log.warning("headbag queries are less accurate without access to distribution service")
 
         if include_in_process:
-            locals = (
+            locales = (
                 self.cfg.get('store_dir'),
                 self.cfg.get('restricted_store_dir'),
                 self.cfg.get('headbag_cache')
             )
 
-            for loc in locals:
+            for loc in locales:
                 if loc and os.path.isdir(loc):
                     bags = [f for f in os.listdir(loc)
                               if f.startswith(aipid+".") and bagutils.is_legal_bag_name(f)]
