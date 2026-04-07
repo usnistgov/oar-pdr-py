@@ -1,4 +1,4 @@
-import os, json, pdb, logging, tempfile, shutil
+import os, json, pdb, logging, tempfile, shutil, time
 from pathlib import Path
 import unittest as test
 
@@ -16,6 +16,41 @@ cksfiles = []
 basedir = pdrdir.parents[3]
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_archiving.")
+port = 9091
+baseurl = "http://localhost:{0}/".format(port)
+
+uwsgi_opts = "--plugin python3"
+if os.environ.get("OAR_UWSGI_OPTS") is not None:
+    uwsgi_opts = os.environ['OAR_UWSGI_OPTS']
+
+def startService(authmeth=None):
+    tdir = tmpdir.name
+    srvport = port
+    if authmeth == 'header':
+        srvport += 1
+    pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
+    
+    wpy = "python/tests/nistoar/pdr/distrib/sim_distrib_srv.py"
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --pidfile {4}"
+    cmd = cmd.format(os.path.join(tdir,"simsrv.log"), uwsgi_opts, srvport,
+                     os.path.join(basedir, wpy), pidfile)
+    status = os.system(cmd) == 0
+    time.sleep(0.5)
+    return status
+
+def stopService(authmeth=None):
+    tdir = tmpdir.name
+    srvport = port
+    if authmeth == 'header':
+        srvport += 1
+    pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
+    
+    cmd = "uwsgi --stop {0}".format(os.path.join(tdir,
+                                                 "simsrv"+str(srvport)+".pid"))
+    os.system(cmd)
+    time.sleep(1)
+
 loghdlr = None
 rootlog = None
 def setUpModule():
@@ -35,8 +70,10 @@ def setUpModule():
             fd.write(csum)
             fd.write("\n")
         cksfiles.append(cf)
+    startService()
 
 def tearDownModule():
+    stopService()
     global loghdlr
     if loghdlr:
         if rootlog:
@@ -62,6 +99,11 @@ class TestPDR1AIPArchiving(test.TestCase):
         self.cfg = {
             "store_dir": self.storedir,
             "public_bucket": self.bucket,
+            "repo_access": {
+                "distrib_service": {
+                    "service_endpoint": "http://localhost:9091"
+                }
+            },
             "polling": {
                 "cycle_time": 5,
                 "wait_for_completion": False
@@ -190,7 +232,26 @@ class TestPDR1AIPArchiving(test.TestCase):
         copied.sort()
         self.assertEqual(len(copied), len(self.archfiles))
         self.assertEqual(copied, sorted([f.name for f in self.archfiles]))
-        
+
+    def test_findaipsfor(self):
+        repo = pdr.RepositoryAccess(self.cfg.get('repo_access'))
+        archfiles = self.arch._findaipsfor(repo, "pdr2210", "1.0")
+        self.assertEqual(len(archfiles), 2)
+        self.assertTrue(all(isinstance(f, str) and f.endswith('.zip') for f in archfiles))
+
+    def test_aip_available(self):
+        repo = pdr.RepositoryAccess(self.cfg.get('repo_access'))
+        self.assertTrue(self.arch._aip_available(repo, "pdr2210.1_0.mbag0_3-1.zip"))
+
+    def test_publicaips(self):
+        repo = pdr.RepositoryAccess(self.cfg.get('repo_access'))
+        aipfiles = ["pdr2210.1_0.mbag0_3-0.zip", "pdr2210.1_0.mbag0_3-1.zip"]
+        found = self.arch._publicaips(repo, aipfiles)
+        self.assertTrue(isinstance(found, set))
+        self.assertEqual(len(aipfiles), 2)
+        for aip in aipfiles:
+            self.assertIn(aip, found)
+
 
 
 if __name__ == '__main__':

@@ -3,11 +3,11 @@ Implementations of the presersvation task framework that are specific to the NIS
 and how it handles preservation.
 """
 
-import os, time, datetime, logging, json, shutil
+import os, re, time, logging, shutil
 from logging import Logger
 from pathlib import Path
 from collections import OrderedDict
-from typing import List
+from typing import List, Mapping
 from copy import deepcopy
 
 from .. import framework as fw
@@ -15,6 +15,7 @@ from nistoar.pdr.preserve.bagit import BagBuilder, BagWriteError, BagItException
 from nistoar.base.config import ConfigurationException, merge_config
 import nistoar.pdr.preserve.bagit.utils as bagutils
 from nistoar.pdr.preserve import PreservationStateError
+from nistoar.pdr.preserve.bagit.utils import parse_bag_name
 import nistoar.id.versions as verutils
 from nistoar.pdr.ingest import RMMIngestClient, DOIMintingClient
 from nistoar.pdr.distrib import (BagDistribClient, RESTServiceClient,
@@ -301,6 +302,8 @@ class PDR1AIPArchiving(fw.AIPArchiving):
         self.cfg = config
         self.storedir = self.cfg.get("store_dir")
         if not self.storedir:
+            self.storedir = self.cfg.get("repo_access", {}).get('store_dir')
+        if not self.storedir:
             raise ConfiguationException("Missing required config parameter: store_dir")
         self.storedir = Path(self.storedir)
         if not self.storedir.is_dir() or not os.access(self.storedir, os.W_OK):
@@ -441,14 +444,21 @@ class PDR1AIPArchiving(fw.AIPArchiving):
         pcfg = self.cfg.get("polling", {})
         if not pcfg.get("wait_for_completion", True):
             return
+
+        racfg = self.cfg.get('repo_access')
+        if not racfg:
+            raise ConfigurationException("Unable to monitor transfer without 'repo_access' config")
+        if not racfg.get('store_dir'):
+            racfg['store_dir'] = self.storedir
+        repo = RepositoryAccess(racfg, log)
+
         statemgr.record_progress("Archiving files: waiting for arrival in public bucket")
         
-        aipfiles = [os.path.basename(f) for f in statemgr.get_serialized_files()]
+        aipfiles = set(os.path.basename(f) for f in statemgr.get_serialized_files())
         if not aipfiles:
             log.warn("%s: No AIP files to wait for", statemgr.aipid)
             return
 
-        prefix = os.path.commonprefix(aipfiles)
         cycletime = pcfg.get("cycle_time", 600)
         if not isinstance(cycletime, (int, float)):
             log.warn("config param polling.cycle_time not a number; defaulting to 10 min.")
@@ -463,14 +473,8 @@ class PDR1AIPArchiving(fw.AIPArchiving):
         waittime = cycletime
         while aipfiles:
             try:
-                likefiles = self._findbyprefix(prefix)
-                fails = 0
-                for i in range(len(aipfiles)):
-                    f = aipfiles.pop(0)
-                    if f in likefiles:
-                        found.append(f)
-                    else:
-                        aipfiles.append(f)
+                found = self_publicaips(repo, aipfiles)
+                aipfiles = aipfiles.difference(found)
             except Exception as ex:
                 log.warn("Trouble polling for migrated files: %s", str(ex))
                 fails += 1
@@ -493,10 +497,36 @@ class PDR1AIPArchiving(fw.AIPArchiving):
         if not aipfiles:
             statemgr.record_progress("All files successfully archived.")
         
-    def _findbyprefix(self, prefix: str, location: str = None):
-        # Query AWS S3 bucket for files starting with prefix
-        return []
-    
+    def _publicaips(self, repo, aipfiles):
+        idvers = set()
+        aips = set(aipfiles)
+        found = set()
+        for aip in aips:
+            if aip in found:
+                continue
+            try:
+                id, ver = parse_bag_name(aip)[0:2]
+                ver = re.sub(r'_', '.', ver)
+            except ValueError:
+                # non-complient name; look for it explicitly
+                log.warning("Waiting on AIP file with non-standard name: %s", aip)
+                if self._aip_available(repo, aip):
+                    found.add(aip)
+            else:
+                # find all AIPs matching id, ver
+                if (id, ver) not in idvers:
+                    matched = set(a for a in self._findaipsfor(repo, id, ver) if a in aips)
+                    found.update(matched)
+                idvers.add((id, ver))
+
+        return found
+
+    def _findaipsfor(self, repo, id, ver):
+        return [a['name'] for a in repo.available_aips_for(id, ver) if a.get('name')]
+
+    def _aip_available(self, repo, aipfile):
+        return repo.aip_available(aipfile)
+                    
 
 class PDRPublication(fw.AIPPublication):
     """
@@ -707,7 +737,31 @@ class RepositoryAccess:
 
         return bagutils.find_latest_head_bag(candidates)
 
-class PDRPreservationTaskFactory(PreservationTaskFactory):
+    def available_aips_for(self, aipid, version):
+        """
+        return a list of descriptions of AIP files that are available for the given AIP ID and version
+        """
+        if not self.distrib:
+            raise ConfigurationException("No access to distribution service available "+
+                                         "(distrib_service was not set)")
+
+        distrib = BagDistribClient(aipid, self.distrib)
+        try:
+            return distrib.describe_for_version(version)
+        except DistribResourceNotFound:
+            return []
+
+    def aip_available(self, aipfile):
+        if not self.distrib:
+            raise ConfigurationException("No access to distribution service available "+
+                                         "(distrib_service was not set)")
+
+        aipres = "/".join(['_aip', aipfile])
+        return self.distrib.is_available(aipres)
+        
+        
+
+class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
     """
     a factory for creating a :py:class:`PreservationTask` injected with necessary 
     :py:class:PreservationStep instances appropriate for preserving SIPs submitted for 
@@ -715,33 +769,41 @@ class PDRPreservationTaskFactory(PreservationTaskFactory):
     """
     def_supported_types = ["pdr", "def"]
 
+    def __init__(self, config: Mapping=None):
+        super(PDRPreservationTaskFactory, self).__init__(config)
+        if self.cfg.get('repo_access'):
+            for step in ['archive', 'finalize']:
+            if not self.cfg.get(step, {}).get('repo_access'):
+                self.cfg.setdefault(step, {})
+                self.cfg[step]['repo_access'] = self.cfg['repo_access']
+
     def _create_state_manager(self, aipid: str, config: Mapping,
-                              logger: Logger, startover=False) -> PreservationStateManager:
+                              logger: Logger, startover=False) -> fw.PreservationStateManager:
         if config.get('type', 'def') not in self.def_supported_types + ["json"]:
             raise ConfigurationException("Unsupported state manager type: "+str(config.get('type')))
         return JSONPreservationStateManager(config, aipid, clear_task=restart)
         
-    def _create_finalizer(self, config: Mapping) -> AIPFinalization:
+    def _create_finalizer(self, config: Mapping) -> fw.AIPFinalization:
         if config.get('type', 'def') not in self.def_supported_types:
             raise ConfigurationException("Unsupported finalize step type: "+str(config.get('type')))
         return PDRBagFinalization(config)
 
-    def _create_validater(self, config: Mapping) -> AIPValidation:
+    def _create_validater(self, config: Mapping) -> fw.AIPValidation:
         if config.get('type', 'def') not in self.def_supported_types:
             raise ConfigurationException("Unsupported validate step type: "+str(config.get('type')))
         return NISTBagValidation(config)
 
-    def _create_serializer(self, config: Mapping) -> AIPSerialization:
+    def _create_serializer(self, config: Mapping) -> fw.AIPSerialization:
         if config.get('type', 'def') not in self.def_supported_types:
             raise ConfigurationException("Unsupported validate step type: "+str(config.get('type')))
         return NISTBagSerialization(config)
 
-    def _create_archiver(self, config: Mapping) -> AIPArchiving:
+    def _create_archiver(self, config: Mapping) -> fw.AIPArchiving:
         if config.get('type', 'def') not in self.def_supported_types:
             raise ConfigurationException("Unsupported validate step type: "+str(config.get('type')))
         return PDR1AIPArchiving(config)
 
-    def _create_publisher(self, config: Mapping) -> AIPPublication:
+    def _create_publisher(self, config: Mapping) -> fw.AIPPublication:
         if config.get('type', 'def') not in self.def_supported_types:
             raise ConfigurationException("Unsupported validate step type: "+str(config.get('type')))
         return PDRPublication(config)

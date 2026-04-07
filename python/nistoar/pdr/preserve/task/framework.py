@@ -689,8 +689,8 @@ class PreservationTaskFactory(metaclass=ABCMeta):
         initialize the factory.  
 
         The given configuration will be treated as the default configuration.  It will be 
-        merged with the configuration provided to the factory methods, :py:meth:`create_task` 
-        or :py:meth:`recreate_task` with the latter taking precedence.  
+        merged with the configuration provided to the factory method, :py:meth:`create_task`,
+        with the latter taking precedence.  
         """
         self.cfg = config
 
