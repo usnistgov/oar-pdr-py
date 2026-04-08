@@ -264,14 +264,19 @@ class NPSExternalReviewClient(ExternalReviewClient):
             raise ExternalReviewException(f"Failed to POST to NPS: {ex}", self.system_name) from ex
 
         if resp.status_code == 200:
-            try:
-                return resp.json()
-            except requests.exceptions.InvalidJSONError as ex:
-                log = logging.getLogger(self.log_name)
-                log.exception(ex)
-                log.warning("Unexpected error decoding JSON response:\n  %s", resp.text)
-                raise ExternalReviewException("Unexpected JSON-decoding error in response to successful "+
-                                              "submission: "+str(ex)) from ex
+            if resp.text:
+                try:
+                    return resp.json()
+                except requests.exceptions.InvalidJSONError as ex:
+                    log = logging.getLogger(self.log_name)
+                    log.exception(ex)
+                    log.warning("Unexpected error decoding JSON response:\n  %s", resp.text)
+                    raise ExternalReviewException("Unexpected JSON-decoding error in response to successful "+
+                                                  "submission: "+str(ex)) from ex
+            else:
+                log.error("NPS sent empty response: not a good sign!")
+                log.debug("Message sent: %s", json.dumps(payload, indent=2))
+                return {}
         elif resp.status_code == 401:
             raise ExternalReviewException("Unauthorized: Check the NPS API token and permissions.",
                                           self.system_name, resp.status_code)
