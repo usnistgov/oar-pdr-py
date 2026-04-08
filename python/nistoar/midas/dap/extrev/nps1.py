@@ -266,7 +266,7 @@ class NPSExternalReviewClient(ExternalReviewClient):
         if resp.status_code == 200:
             try:
                 return resp.json()
-            except requests.exception.InvalidJSONError as ex:
+            except requests.exceptions.InvalidJSONError as ex:
                 log = logging.getLogger(self.log_name)
                 log.exception(ex)
                 log.warning("Unexpected error decoding JSON response:\n  %s", resp.text)
