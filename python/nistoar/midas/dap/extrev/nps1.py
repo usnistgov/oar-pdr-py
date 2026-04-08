@@ -274,6 +274,7 @@ class NPSExternalReviewClient(ExternalReviewClient):
                     raise ExternalReviewException("Unexpected JSON-decoding error in response to successful "+
                                                   "submission: "+str(ex)) from ex
             else:
+                log = logging.getLogger(self.log_name)
                 log.error("NPS sent empty response: not a good sign!")
                 log.debug("Message sent: %s", json.dumps(payload, indent=2))
                 return {}
