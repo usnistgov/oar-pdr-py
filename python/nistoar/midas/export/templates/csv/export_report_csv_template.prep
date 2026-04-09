@@ -10,7 +10,7 @@ def csv_escape(value):
 
 def add_row(lines, section, key="", value="", index="", title="", rec_id="", filename="", reason=""):
     row = [section, key, value, index, title, rec_id, filename, reason]
-    lines.append(",".join(csv_escape(item) for item in row))
+    lines.append("#" + ",".join(csv_escape(item) for item in row))
 
 lines = []
 add_row(lines, "Section", "Key", "Value", "Index", "Title", "ID", "Filename", "Reason")
