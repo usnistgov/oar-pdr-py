@@ -156,25 +156,25 @@
     <para style="data">
      <b>Title:</b> 
      <br/>
-     {{record['title']}}
+     {{record.get('title', 'Not Provided')}}
     </para>
 
     <para style="data">
       <b>Project Description:</b>
       <br/>
-      {{record.get('projectDescription', '')}}
+      {{record.get('projectDescription', 'Not Provided')}}
     </para>
 
     <para style="data">
       <b>Start Date:</b>
       <br/>
-      {{record['startDate']}}
+      {{record.get('startDate', 'Not Provided')}}
     </para>
 
     <para style="data">
       <b>Make DMP Searchable:</b>
       <br/>
-      {{record['dmpSearchable']}}
+      {{record.get('dmpSearchable', 'Not Provided')}}
     </para>
 
     <para style="data">
@@ -189,8 +189,8 @@
     	</tr>
 
       <tr>
-          <td><para style="table_normal">{{record['funding']['grant_source']}}</para></td>
-          <td><para style="table_normal">{{record['funding']['grant_id']}}</para></td>
+          <td><para style="table_normal">{{record.get('funding', {}).get('grant_source', 'Not Provided')}}</para></td>
+          <td><para style="table_normal">{{record.get('funding', {}).get('grant_id', 'Not Provided')}}</para></td>
       </tr>
     </blockTable>
     <para style="data">     
@@ -200,7 +200,7 @@
     <para style="data">
       <b>Project Description:</b>
       <br/>
-      {{record.get('projectDescription', '')}}
+      {{record.get('projectDescription', 'Not Provided')}}
     </para>
 
 
@@ -238,15 +238,15 @@
         <td align="LEFT">          <para><b>e-mail</b></para>                     </td>
         <td align="LEFT">          <para><b>ORCID</b></para>                      </td>
     	</tr>    
-      {{for contrib in record['contributors']}}
+      {{for contrib in record.get('contributors', [])}}
         <tr>
-            <td><para style="table_normal">{{contrib['firstName']}}</para></td>
-            <td><para style="table_normal">{{contrib['lastName']}}</para></td>
-            <td><para style="table_normal">{{contrib['primary_contact']}}</para></td>
-            <td><para style="table_normal">{{contrib['institution']}}</para></td>
-            <td><para style="table_normal">{{contrib['groupOrgID']}}</para></td>
-            <td><para style="table_normal">{{contrib['emailAddress']}}</para></td>
-            <td><para style="table_normal">{{contrib['orcid']}}</para></td>
+            <td><para style="table_normal">{{contrib.get('firstName', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{contrib.get('lastName', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{contrib.get('primary_contact', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{contrib.get('institution', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{contrib.get('groupOrgID', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{contrib.get('emailAddress', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{contrib.get('orcid', 'Not Provided')}}</para></td>
         </tr>
       {{endfor}}  
     </blockTable>
@@ -268,11 +268,11 @@
     		<td align="LEFT">          <para><b>Division Name</b></para>      </td>
         <td align="LEFT">          <para><b>OU Name</b></para>            </td>
     	</tr>    
-      {{for ou in record['organizations']}}
+      {{for ou in record.get('organizations', [])}}
         <tr>
-            <td><para style="table_normal">{{ou['groupName']}}</para></td>
-            <td><para style="table_normal">{{ou['divisionName']}}</para></td>
-            <td><para style="table_normal">{{ou['ouName']}}</para></td>
+            <td><para style="table_normal">{{ou.get('groupName', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{ou.get('divisionName', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{ou.get('ouName', 'Not Provided')}}</para></td>
         </tr>
       {{endfor}}  
     </blockTable>
@@ -305,7 +305,7 @@
     	<tr>
     		<td align="LEFT">          <para><b>Keywords / Phrases</b></para>         </td>
     	</tr>    
-      {{for kw in record['keywords']}}
+      {{for kw in record.get('keywords', [])}}
         <tr>
             <td><para style="table_normal">{{kw}}</para></td>
         </tr>
@@ -355,25 +355,25 @@
     <para style="data">
       <b>Software Development:</b>
       <br/>
-      {{record['softwareDevelopment']['development']}}
+      {{record.get('softwareDevelopment', {}).get('development', 'Not Provided')}}
     </para>
 
     <para style="data">
       <b>Software developed for this project will be for:</b>
       <br/>
-      {{record['softwareDevelopment']['softwareUse']}} use
+      {{record.get('softwareDevelopment', {}).get('softwareUse', 'Not Provided')}} use
     </para>
 
     <para style="data">
       <b>Does the software development require a database?</b>
       <br/>
-      {{record['softwareDevelopment']['softwareDatabase']}}
+      {{record.get('softwareDevelopment', {}).get('softwareDatabase', 'Not Provided')}}
     </para>
 
     <para style="data">
       <b>Will the software development produce a website interface?</b>
       <br/>
-      {{record['softwareDevelopment']['softwareWebsite']}}
+      {{record.get('softwareDevelopment', {}).get('softwareWebsite', 'Not Provided')}}
     </para>
 
     <para style="data">     
@@ -386,7 +386,7 @@
     	<tr>
     		<td align="LEFT">          <para><b>Technical resources equipment needed/used</b></para>         </td>
     	</tr>    
-      {{for resource in record['technicalResources']}}
+      {{for resource in record.get('technicalResources', [])}}
         <tr>
             <td><para style="table_normal">{{resource}}</para></td>
         </tr>
@@ -409,10 +409,10 @@
     		<td align="LEFT">          <para><b>Instrument Name</b></para>                        </td>
         <td align="LEFT">          <para><b>Description / URL Landing Page</b></para>         </td>
     	</tr>    
-      {{for instrument in record['instruments']}}
+      {{for instrument in record.get('instruments', [])}}
         <tr>
-            <td><para style="table_normal">{{instrument['name']}}</para></td>
-            <td><para style="table_normal">{{instrument['description_url']}}</para></td>
+            <td><para style="table_normal">{{instrument.get('name', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{instrument.get('description_url', 'Not Provided')}}</para></td>
         </tr>
       {{endfor}}  
     </blockTable>
@@ -442,25 +442,25 @@
     <para style="data">
       <b>IRB number:</b>
       <br/>
-      {{record['ethical_issues']['irb_number']}}
+      {{record.get('ethical_issues', {}).get('irb_number', 'Not Provided')}}
     </para>
 
     <para style="data">
       <b>Are there any ethical issues related to the data that this DMP describes?</b>
       <br/>
-      {{record['ethical_issues']['ethical_issues_exist']}}
+      {{record.get('ethical_issues', {}).get('ethical_issues_exist', 'Not Provided')}}
     </para>
 
     <para style="data">
       <b>Describe any ethical issues raised in this project (human subjects etc)</b>
       <br/>
-      {{record['ethical_issues']['ethical_issues_description']}}
+      {{record.get('ethical_issues', {}).get('ethical_issues_description', 'Not Provided')}}
     </para>
 
     <para style="data">
       <b>Ethical issues report:</b>
       <br/>
-      {{record['ethical_issues']['ethical_issues_report']}}
+      {{record.get('ethical_issues', {}).get('ethical_issues_report', 'Not Provided')}}
     </para>
 
 
@@ -488,7 +488,7 @@
     	<tr>
     		<td align="LEFT">          <para><b>Data Sensitivity Level(s)</b></para>         </td>
     	</tr>    
-      {{for item in record['security_and_privacy']['data_sensitivity']}}
+      {{for item in record.get('security_and_privacy', {}).get('data_sensitivity', [])}}
         <tr>
             <td><para style="table_normal">{{item}}</para></td>
         </tr>
@@ -506,7 +506,7 @@
     	<tr>
     		<td align="LEFT">          <para><b>Controlled Unclassified Information (CUI)</b></para>         </td>
     	</tr>    
-      {{for item in record['security_and_privacy']['cui']}}
+      {{for item in record.get('security_and_privacy', {}).get('cui', [])}}
         <tr>
             <td><para style="table_normal">{{item}}</para></td>
         </tr>
@@ -536,7 +536,7 @@
     </para>
 
     <para style="data">      
-      {{record['dataDescription']}}
+      {{record.get('dataDescription', 'Not Provided')}}
     </para>
     <para style="data">     
       <br/> 
@@ -547,7 +547,7 @@
     	<tr>
     		<td align="LEFT">          <para><b>Categories of the data that will be generated</b></para>         </td>
     	</tr>    
-      {{for item in record['dataCategories']}}
+      {{for item in record.get('dataCategories', [])}}
         <tr>
             <td><para style="table_normal">{{item}}</para></td>
         </tr>
@@ -579,13 +579,13 @@
     <para style="data">
       <b>Preservation Description:</b>
       <br/>
-      {{record['preservationDescription']}}
+      {{record.get('preservationDescription', 'Not Provided')}}
     </para>
 
     <para style="data">
       <b>Data discoverablity and accessiblity plan:</b>
       <br/>
-      {{record['dataAccess']}}
+      {{record.get('dataAccess', 'Not Provided')}}
     </para>
 
     <para style="data">     
@@ -597,7 +597,7 @@
     	<tr>
     		<td align="LEFT">          <para><b>File path(s) / URL(s) for where data will be saved</b></para>         </td>
     	</tr>    
-      {{for item in record['pathsURLs']}}
+      {{for item in record.get('pathsURLs', [])}}
         <tr>
             <td><para style="table_normal">{{item}}</para></td>
         </tr>

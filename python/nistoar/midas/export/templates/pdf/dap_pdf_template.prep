@@ -108,25 +108,25 @@
     <para style="data">
      <b>Title:</b> 
      <br/>
-     {{record.get('title', 'N/A')}}
+     {{record.get('title', 'Not Provided')}}
     </para>
 
     <para style="data">
       <b>DOI:</b>
       <br/>
-      {{record.get('doi', 'N/A')}}
+      {{record.get('doi', 'Not Provided')}}
     </para>
 
     <para style="data">
       <b>ID:</b>
       <br/>
-      {{record.get('@id', record.get('id', 'N/A'))}}
+      {{record.get('@id', record.get('id', 'Not Provided'))}}
     </para>
 
     <para style="data">
       <b>Resource Type:</b>
       <br/>
-      {{record.get('_schema', 'N/A')}}
+      {{record.get('_schema', 'Not Provided')}}
     </para>
 
     <!-- ======= SECTION: Authors/Contributors ======== -->
@@ -154,12 +154,12 @@
         <td align="LEFT">          <para><b>Division/Group</b></para>             </td>
         <td align="LEFT">          <para><b>ORCID</b></para>                       </td>
     	</tr>    
-      {{for author in record['authors']}}
+      {{for author in record.get('authors', [])}}
         <tr>
-            <td><para style="table_normal">{{author.get('fn', 'N/A')}}</para></td>
-            <td><para style="table_normal">{{author.get('affiliation', [{}])[0].get('title', 'N/A') if author.get('affiliation') else 'N/A'}}</para></td>
-            <td><para style="table_normal">{{', '.join(author.get('affiliation', [{}])[0].get('subunits', [])) if author.get('affiliation') and author['affiliation'][0].get('subunits') else 'N/A'}}</para></td>
-            <td><para style="table_normal">{{author.get('orcid', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{author.get('fn', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{author.get('affiliation', [{}])[0].get('title', 'Not Provided') if author.get('affiliation') else 'Not Provided'}}</para></td>
+            <td><para style="table_normal">{{', '.join(author.get('affiliation', [{}])[0].get('subunits', [])) if author.get('affiliation') and author['affiliation'][0].get('subunits') else 'Not Provided'}}</para></td>
+            <td><para style="table_normal">{{author.get('orcid', 'Not Provided')}}</para></td>
         </tr>
       {{endfor}}  
     </blockTable>
@@ -211,12 +211,12 @@
         <td align="LEFT">          <para><b>File Path</b></para>                  </td>
         <td align="LEFT">          <para><b>Size</b></para>                       </td>
     	</tr>    
-      {{for comp in record['components']}}
+      {{for comp in record.get('components', [])}}
         <tr>
-            <td><para style="table_normal">{{comp.get('title', 'N/A')}}</para></td>
-            <td><para style="table_normal">{{comp.get('@type', ['Unknown'])[0] if comp.get('@type') else 'Unknown'}}</para></td>
-            <td><para style="table_normal">{{comp.get('filepath', 'N/A')}}</para></td>
-            <td><para style="table_normal">{{comp.get('size', 'N/A')}}</para></td>
+            <td><para style="table_normal">{{comp.get('title', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{comp.get('@type', ['Not Provided'])[0] if comp.get('@type') else 'Not Provided'}}</para></td>
+            <td><para style="table_normal">{{comp.get('filepath', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{comp.get('size', 'Not Provided')}}</para></td>
         </tr>
       {{endfor}}  
     </blockTable>
@@ -278,7 +278,7 @@
     <para style="data">
       <b>Access Level:</b>
       <br/>
-      {{record['accessLevel']}}
+      {{record.get('accessLevel', 'Not Provided')}}
     </para>
     {{endif}}
 
@@ -286,7 +286,7 @@
     <para style="data">
       <b>Rights:</b>
       <br/>
-      {{record['rights']}}
+      {{record.get('rights', 'Not Provided')}}
     </para>
     {{endif}}
 
@@ -294,7 +294,7 @@
     <para style="data">
       <b>License:</b>
       <br/>
-      {{record['license']}}
+      {{record.get('license', 'Not Provided')}}
     </para>
     {{endif}}
 
@@ -319,7 +319,7 @@
     <para style="data">
       <b>Part Of:</b>
       <br/>
-      {{record['isPartOf'].get('title', 'N/A') if isinstance(record['isPartOf'], dict) else record['isPartOf']}}
+      {{record['isPartOf'].get('title', 'Not Provided') if isinstance(record['isPartOf'], dict) else record.get('isPartOf', 'Not Provided')}}
     </para>
     {{endif}}
 
@@ -336,12 +336,12 @@
         <td align="LEFT">          <para><b>Publication Year</b></para>           </td>
         <td align="LEFT">          <para><b>Volume/Pages</b></para>               </td>
     	</tr>    
-      {{for ref in record['references']}}
+      {{for ref in record.get('references', [])}}
         <tr>
-            <td><para style="table_normal">{{ref.get('title', 'N/A')}}</para></td>
-            <td><para style="table_normal">{{ref.get('citation', 'N/A')}}</para></td>
-            <td><para style="table_normal">{{ref.get('publishYear', 'N/A')}}</para></td>
-            <td><para style="table_normal">{{ref.get('vol', '') + ('(' + ref.get('volNumber', '') + ')' if ref.get('volNumber') else '') + (' ' + ref.get('pages', '') if ref.get('pages') else '') if ref.get('vol') or ref.get('pages') else 'N/A'}}</para></td>
+            <td><para style="table_normal">{{ref.get('title', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{ref.get('citation', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{ref.get('publishYear', 'Not Provided')}}</para></td>
+            <td><para style="table_normal">{{ref.get('vol', '') + ('(' + ref.get('volNumber', '') + ')' if ref.get('volNumber') else '') + (' ' + ref.get('pages', '') if ref.get('pages') else '') if ref.get('vol') or ref.get('pages') else 'Not Provided'}}</para></td>
         </tr>
       {{endfor}}  
     </blockTable>
@@ -371,14 +371,14 @@
     <para style="data">
       <b>Contact:</b>
       <br/>
-      {{record['contactPoint'].get('fn', 'N/A') if isinstance(record['contactPoint'], dict) else record['contactPoint']}}
+      {{record['contactPoint'].get('fn', 'Not Provided') if isinstance(record['contactPoint'], dict) else record.get('contactPoint', 'Not Provided')}}
     </para>
 
-    {{if isinstance(record['contactPoint'], dict) and record['contactPoint'].get('hasEmail')}}
+    {{if isinstance(record.get('contactPoint'), dict) and record['contactPoint'].get('hasEmail')}}
     <para style="data">
       <b>Email:</b>
       <br/>
-      {{record['contactPoint']['hasEmail']}}
+      {{record['contactPoint'].get('hasEmail', 'Not Provided')}}
     </para>
     {{endif}}
     {{endif}}
