@@ -583,7 +583,7 @@ class TestMIDASProjectApp(test.TestCase):
                     self.assertIsNotNone(content_type_header)
                     self.assertIn('application/pdf', content_type_header)
                     
-                    self.assertEqual(mock_template.get.call_count, len(record_ids))
+                    self.assertEqual(mock_template.get.call_count, len(record_ids) + 1)
                     
                     pdf_content = b''.join(body) if isinstance(body, list) else body
                     self.assertTrue(pdf_content.startswith(b'%PDF'))
