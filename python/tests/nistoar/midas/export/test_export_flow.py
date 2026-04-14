@@ -645,7 +645,7 @@ class ExportFlowProjectRecordTest(test.TestCase):
         
         # Verify combined PDF bytes
         pdf_bytes = result["bytes"]
-        self.assertEqual(pdf_bytes, b"COMBINED-PDF-3-RECORDS")  # From our fake concat
+        self.assertEqual(pdf_bytes, b"COMBINED-PDF-4-RECORDS")  # 3 records + 1 report page
         self.assertIsInstance(pdf_bytes, (bytes, bytearray))
         
 
@@ -890,10 +890,10 @@ class ExportFlowProjectRecordTest(test.TestCase):
         self.assertEqual(result["mimetype"], "text/markdown")
         self.assertIn("text", result)
         
-        # Should have 4 markdown sections (2 DMP + 2 DAP)
+        # Should have 5 markdown sections (2 DMP + 2 DAP + 1 report)
         markdown_content = result["text"]
         markdown_sections = markdown_content.split("\n\n")
-        self.assertEqual(len(markdown_sections), 4)
+        self.assertEqual(len(markdown_sections), 5)
         
         # Each section should be our test markdown content
         for section in markdown_sections:

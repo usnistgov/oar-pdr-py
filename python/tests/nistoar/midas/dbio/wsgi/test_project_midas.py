@@ -466,7 +466,7 @@ class TestMIDASProjectAppMongo(test.TestCase):
                     self.assertIn('application/pdf', content_type_header)  
                     
                     
-                    self.assertEqual(mock_template.get.call_count, 2)
+                    self.assertEqual(mock_template.get.call_count, 3)
                     
                 
                     pdf_content = b''.join(body) if isinstance(body, list) else body
