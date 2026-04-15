@@ -837,7 +837,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
                                         "format must be one of: pdf, csv, markdown")
 
         perms = input.get("permissions") or dbio.ACLs.OWN
-        recs = self._sort_and_format_records(self._select_records_by_ids(ids, perms))
+        recs = self._sort_and_format_records(self._select_records(perms, id=ids))
         if not recs:
             return self.send_error_resp(400, "Cannot export empty result set",
                                         "No records match the specified IDs")
