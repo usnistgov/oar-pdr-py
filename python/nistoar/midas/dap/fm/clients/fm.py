@@ -90,7 +90,7 @@ class FileManager:
         # set up authentication
         kwargs = {}
         if self.authcfg.get('client_cert'):
-            kwargs['cert'] = (self.authcfg['client_cert'], self.athcfg['client_key'])
+            kwargs['cert'] = (self.authcfg['client_cert'], self.authcfg['client_key'])
         elif self.authcfg.get('user'):
             if self.authcfg.get('pw'):
                 # username/password required
