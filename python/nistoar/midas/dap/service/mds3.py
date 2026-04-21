@@ -31,7 +31,7 @@ from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, No
                      InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable, DBIORecordException,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
-                                  ProjectSelectionHandler, ServiceApp)
+                                  ProjectSelectionHandler, ProjectStatusHandler, ServiceApp)
 from ...dbio import status, ANONYMOUS, PUBLIC_GROUP, restore
 from ..review import DAPReviewer, DAPNERDmReviewValidator
 from ..extrev import ExternalReviewException, create_external_review_client
@@ -2712,6 +2712,8 @@ class DAPService(ProjectService):
         # that is is part of submission is completed.  This avoids a run condition if the framework
         # responds quickly.
         if options.get('do_review') and not self._extrevcli:
+            # Sorry, we can't start an external review if we don't have a client to its service
+            # We just can't.  We won't.
             options['do_review'] = False
         if self._extrevcli and options.get('do_review'):
             # refresh the record
@@ -2778,6 +2780,8 @@ class DAPService(ProjectService):
         """
         if not self._extrevcli:
             self.log.warning("No External Review system configured to handle DAP records!")
+        if options is None:
+            options = {}
 
         version = prec.data.get('version') or prec.data.get('@version') or '1.0.0'
         needreview = version == '1.0.0'
@@ -2910,6 +2914,7 @@ class DAPService(ProjectService):
         canceling all reviews are either canceled or completed but is still in a SUBMITTED state, the 
         record will be returned to the EDIT state.  
         """
+        self.log.debug("%s: Canceling %s review", id, revsys)
         prec = super().cancel_external_review(id, revsys, revid, infourl) # m.r ObjectNotFound/NotAuthorized
         if prec.status.state == status.SUBMITTED:
             # change a SUBMITTED record back to full edit status (as if never submitted)
@@ -3310,3 +3315,20 @@ class DAPProjectSelectionHandler(ProjectSelectionHandler):
         for rec in self._dbcli.select_constraint_records(filter, perms):
             yield to_DAPRec(rec, self._fmcli)
 
+class DAPProjectStatusHandler(ProjectStatusHandler):
+    """
+    handle status requests and actions.  This provides some special handling of external review 
+    status access
+    """
+
+    def external_review_status(self, prjstatus, revname=None):
+
+        # If nps1, ask NPS to refresh the status 
+        if revname == "nps1" and self.svc.extrevcli and \
+           self.svc.extrevcli.system_name == "nps1" and self.svc.extrevcli.refresh_status():
+            prjstatus = self.svc.get_status(self._id)
+            
+        return super().external_review_status(prjstatus, revname)
+
+                
+            

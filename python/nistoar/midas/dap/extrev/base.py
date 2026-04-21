@@ -2,6 +2,7 @@
 base and common classes for for managing external review clients
 """
 from abc import ABC, abstractmethod
+from typing import Mapping
 
 from nistoar.midas import MIDASException
 
@@ -37,12 +38,13 @@ class ExternalReviewClient(ABC):
         self.cfg = config or {}
 
     @abstractmethod
-    def submit(self, id: str, submitter: str, version: str=None, **options):
+    def submit(self, id: str, submitter: str, version: str=None, **options) -> Mapping:
         """
-        submit a specified DAP to this system for review.  The options supported depend on 
-        the implementation (and implementations should ignore any option parameters that 
-        it does not recognize; however, support for the following parameters are defined as 
-        follows:
+        submit a specified DAP to this system for review.  
+
+        The options supported depend on the implementation (and implementations should ignore 
+        any option parameters that it does not recognize); however, support for the following 
+        parameters are defined as follows:
         ``instructions``
              (*[str]*) a list of statements that should be passed as special instructions to 
              the reviewers.
@@ -56,15 +58,66 @@ class ExternalReviewClient(ABC):
              (*bool*) if True, this DAP includes content (e.g. software) that requires 
              review IT security review.  
 
-        :param str id:         the identifier for the DAP to submit to the review system
-        :param str submitter:  the identifier for the user submitting the DAP (this is 
-                               usually the owner of the record).
-        :param str version:    the version of the DAP being submitted.  This should be 
-                               provided when revising a previously published DAP; otherwise,
-                               the implementation may assume that the initial version is being 
-                               submitted.  
+        :param str          id:  the identifier for the DAP to submit to the review system
+        :param str   submitter:  the identifier for the user submitting the DAP (this is 
+                                 usually the owner of the record).
+        :param str     version:  the version of the DAP being submitted.  This should be 
+                                 provided when revising a previously published DAP; otherwise,
+                                 the implementation may assume that the initial version is being 
+                                 submitted.  
         :param Mapping options:  extra implementation-specific keyword parameters
+        :return:  a dictionary containing the data supported by :py:meth:`get_status`.
+                  :rtype: dict
         """
         raise NotImplemented()
 
+    @abstractmethod
+    def resubmit(self, id: str, revid: str, **options) -> Mapping:
+        """
+        resubmit an updated DAP (in response to reviewer feedback) to continue in previously 
+        started review process.
+
+        The options supported depend on the implementation (and implementations should ignore 
+        any option parameters that it does not recognize); however, support for the following 
+        parameters are defined as follows:
+        ``comments``
+             (*[str]*) a list of statements that should be passed as response to the reviewers'
+             feedback.  It can, for example, summarize the changes applied or how the changes 
+             addressed the feedback.  
+
+        :param str          id:  the identifier for the DAP to submit to the review system
+        :param str       revid:  an identifier for the open review process to resubmit to.  
+        :param Mapping options:  extra implementation-specific keyword parameters
+        :return:  a dictionary containing the data supported by :py:meth:`get_status`.
+                  :rtype: dict
+        """
+        raise NotImplemented()
+
+    @abstractmethod
+    def get_status(self, id: str, revid: str=None) -> Mapping:
+        """
+        request and return the status of the review for a given dataset as a dictionary.  
+
+        The exact contents for the returned dictionary is implementation-specific, but it should 
+        support the following properties:
+
+        ``id``
+            the MIDAS identifier for the record being reviewed
+        ``revid``
+            the identifier assigned by the review system for the current review being processed 
+            on the record.
+        ``phase``
+            an implementation-specific name for the phase that the review is currently in.
+        ``requestChanges``
+            True if the review is paused because changes were requested of the record's submitter
+        ``seeURL``
+            A URL that can be visited via a web browser to view the status of a review.
+        ``details``
+            a dictionary providing implementation-specific details about the review
+
+        :param str          id:  the identifier for the DAP to submit to the review system
+        :param str       revid:  an identifier for the open review process it is part of.  If not 
+                                 provided, an attempt to discover the process should be attempted.
+        """
+        raise NotImplemented()
 

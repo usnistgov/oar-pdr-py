@@ -1060,7 +1060,7 @@ class DBClient(ABC):
         """
         if self.name_exists(name, foruser or self.user_id):
             raise AlreadyExists(
-                "User {} has already defined a record with name={}".format(foruser, name))
+                "User {} has already defined a record with name={}".format(foruser or self.user_id, name))
 
         if foruser and foruser != self.user_id and self.user_id not in self._cfg.get("superusers", []) \
            and self._who.agent_class != Agent.ADMIN:

@@ -32,6 +32,8 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
     """
     the main handler receiving external review feedback
     """
+    system_name = "nps1"
+    
     def __init__(self, project_service: ProjectService, path: str, wsgienv: dict, start_resp: Callable,
                  who=None, log: Logger=None, config: Mapping={}, app=None):
         super(LegacyNPSFeedbackHandler, self).__init__(path, wsgienv, start_resp, who, config, log, app)
@@ -54,10 +56,12 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
 
     def do_POST(self, path):
         """
-        receive feedback: either approval or rejection
+        receive feedback: either approval or rejection.  
+
+        This replicates the legacy interface that NPS calls back to MIDAS with.
         """
         if not path:
-            return self.send_error_obj(404, "POST not allowed",
+            return self.send_error_obj(405, "POST not allowed",
                                        "Cannot POST to this resource without an ID")
         id = path
 
@@ -69,16 +73,16 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
         try:
             if input.get('reviewResponse') is None:
                 # interpret a missing response as indicating that the review has started
-                self._svc.apply_external_review(id, "nps1", "in progress", id)
+                self._svc.apply_external_review(id, self.system_name, "in progress", id)
 
             elif input.get('reviewResponse'):
                 # review is approved
-                self._svc.approve(id, "nps1", id)
+                self._svc.approve(id, self.system_name, id)
 
             else:
                 # reviewer wants changes
                 fb = [{ "type": "req", "description": "Visit NPS for reviewer comments" }]
-                self._svc.apply_external_review(id, "nps1", "paused", id, feedback=fb, request_changes=True)
+                self._svc.apply_external_review(id, self.system_name, "paused", id, feedback=fb, request_changes=True)
 
             status = self._get_review_status_for(id)
         
@@ -91,6 +95,65 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
 
         return self.send_json(status)
 
+    def do_PUT(self, path):
+        """
+        provide feedback on a particular DAP record
+        """
+        if not path:
+            return self.send_error_obj(405, "PUT not allowed",
+                                       "Cannot PUT to this resource without an ID")
+        id = path
+
+        try:
+            input = self.get_json_body()
+        except FatalError as ex:
+            return self.send_fatal_error(ex)
+
+        # check the input data
+        missing = [r for r in "phase systemID".split() if r not in input]
+        if missing:
+            return self.send_error_obj(400, "Bad Input",
+              f"Missing required propert{'ies' if len(missing) > 1 else 'y'} in input: {', '.join(missing)}")
+
+        if input.get('feedback') and \
+           not all(isinstance(f, Mapping) and f.get('description') for f in input['feedback']):
+            return self.send_error_obj(400, "Bad Input: feedback",
+                                       "feedback not a dictionary with at least a 'description' property")
+        if 'changesRequested' in input and not isinstance(input['changesRequested'], bool):
+            return self.send_error_obj(400, "Bad Input: changesRequested",
+                                       "changesRequested not a boolean")
+
+        try:
+            if input['phase'] == "canceled":
+                self._svc.cancel_external_review(id, self.system_name, str(input['systemID']),
+                                                 input.get('info_at'))
+            else:
+                if input['phase'] != "approved" or input.get('feedback'):
+                    if input['phase'] == "approved":
+                        input['changesRequested'] = False
+                    self._svc.apply_external_review(id, self.system_name, input['phase'], 
+                                                    str(input['systemID']), input.get('info_at'), 
+                                                    input.get('feedback'), input.get('changesRequested'))
+
+                if input['phase'] == "approved":
+                    self._svc.approve(id, self.system_name, str(input['systemID']), input.get('info_at'))
+
+            status = self._get_review_status_for(id)
+                
+        except ObjectNotFound as ex:
+            return self.send_error_obj(404, "ID Not Found", "No DAP record with requested ID")
+
+        except NotAuthorized as ex:
+            self.log.warning("%s: Premature review in progress? %s", id, str(ex))
+            return self.send_error_obj(401, "Not Authorized",
+                                       f"Record is not set to accept review feedback at this time")
+
+        except Exception as ex:
+            self.log.exception(ex)
+            return self.send_error_obj(500, "Server Error",
+                                       "Unexpected Server Error while accepting feedback")
+
+        return self.send_json(status)
 
     def do_GET(self, path, ashead=False):
 
@@ -119,7 +182,7 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
             pass
             
         prec = self._svc.dbcli.get_record_for(id, dbio.ACLs.PUBLISH)  # may raise exc
-        rev = prec.status.get_review_from("nps1")
+        rev = prec.status.get_review_from(self.system_name)
         if not rev:
             rev = {}
         return rev
@@ -129,7 +192,7 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
 
         out = []
         for prec in recs:
-            rev = prec.status.get_review_from("nps1")
+            rev = prec.status.get_review_from(self.system_name)
             if rev and rev.get('phase') != "approved":
                 out.append(rev)
 
@@ -167,6 +230,7 @@ class ExternalReviewApp(AuthenticatedWSGIApp):
         "fsbased":  dbio.FSBasedDBClientFactory,
         "mongo":    dbio.MongoDBClientFactory
     }
+    system_name = "nps1"
 
     def __init__(self, config: Mapping, dbio_client_factory: dbio.DBClientFactory=None, base_ep: str=None):
         log = deflog
@@ -176,7 +240,7 @@ class ExternalReviewApp(AuthenticatedWSGIApp):
         if config.get('base_ep_path'):
             baseep = config['base_ep_path']
         
-        super(ExternalReviewApp, self).__init__(config, log, baseep, "nps1")
+        super(ExternalReviewApp, self).__init__(config, log, baseep, self.system_name)
 
         if not dbio_client_factory:
             dbclsnm = self.cfg.get('dbio', {}).get('factory')
