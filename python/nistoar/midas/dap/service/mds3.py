@@ -2709,7 +2709,7 @@ class DAPService(ProjectService):
         statusdata = super().submit(id, message, options, _prec)
 
         # We save actually sumbitting to the external review framework until after all our "paperwork"
-        # that is is part of submission is completed.  This avoids a run condition if the framework
+        # that is is part of submission is completed.  This avoids a race condition if the framework
         # responds quickly.
         if options.get('do_review') and not self._extrevcli:
             # Sorry, we can't start an external review if we don't have a client to its service
@@ -2728,7 +2728,15 @@ class DAPService(ProjectService):
                     revopts["security_review"] = True
                 if ':' in _prec.id:
                     revopts["pubid"] = "ark:/" + const.ARK_NAAN + '/' + re.sub(r':', '-', _prec.id)
-                self._extrevcli.submit(_prec.id, self.who.actor, version, **revopts)
+
+                # determine if we need to resubmit for a review already in progress
+                rev = _prec.status.get_review_from(self._extrevcli.system_name)
+                if not rev or rev.get('phase') not in ['requested', 'canceled']:
+                    # review not started
+                    self._extrevcli.submit(_prec.id, self.who.actor, version, **revopts)
+                elif rev.get('phase') == 'paused':
+                    # reviewer requested changes
+                    self._extrevcli.resubmit(_prec.id, **revopts)
 
                 # refresh, in case the record has changed
                 _prec = self.dbcli.get_record_for(id, ACLs.READ)
@@ -2805,9 +2813,12 @@ class DAPService(ProjectService):
             return status.ACCEPTED
 
         if self._extrevcli and options['do_review'] and self._extrevcli.system_name in [ "nps1" ]:
-            # mark review as requested as the legacy NPS will not respond immediately
-            # need to do this before changing permissions
-            self.apply_external_review(prec.id, self._extrevcli.system_name, "requested", _prec=prec)
+            # is the author responding to feedback from reviewers?
+            rev = prec.status.get_review_from(self._extrevcli.system_name)
+            if not rev:
+                # mark review as requested as the legacy NPS will not respond immediately
+                # need to do this before changing permissions
+                self.apply_external_review(prec.id, self._extrevcli.system_name, "requested", _prec=prec)
 
         try:
             # reset permissions

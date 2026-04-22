@@ -127,7 +127,7 @@ class TestMDS3DAPServiceWithExtRev(test.TestCase):
         self.assertEqual(stat.state, status.SUBMITTED)
         self.assertIn(id, self.revcli.projs)
         self.assertEqual(self.revcli.projs[id]['phase'], "requested")
-        self.assertIsNone(stat.get_review_from("simulated"))
+        self.assertIsNotNone(stat.get_review_from("simulated"))  
 
         # progress the review
         self.revcli.update(id, "group")

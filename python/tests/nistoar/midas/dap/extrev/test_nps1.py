@@ -86,11 +86,16 @@ class TestNPSExternalReviewClient(test.TestCase):
         self.assertIn("XYZ789", pub_url2)
 
     # submit: success, all required fields
+    @patch("nistoar.midas.dap.extrev.nps1.requests.get")
     @patch("nistoar.midas.dap.extrev.nps1.requests.post")
     @patch("nistoar.midas.dap.extrev.nps1.get_nsd_auth_token")
-    def test_submit_success(self, mock_token, mock_post):
+    def test_submit_success(self, mock_token, mock_post, mock_get):
         mock_token.return_value = "token123"
         mock_post.return_value = fake_response(json_data={"result": "OK"})
+        mock_get.return_value = fake_response(json_data=[{
+            "submitterID": 123,
+            "phase": "in progress"
+        }])
         cli = NPSExternalReviewClient(GOOD_CFG)
 
         result = cli.submit(
@@ -106,7 +111,7 @@ class TestNPSExternalReviewClient(test.TestCase):
         )
 
         # Response returned
-        self.assertEqual(result, {"result": "OK"})
+        self.assertEqual(result.get('phase'), "in progress")
 
         # Check that requests.post was called with expected headers and payload
         args, kwargs = mock_post.call_args
@@ -125,11 +130,16 @@ class TestNPSExternalReviewClient(test.TestCase):
         self.assertEqual(payload["reviewReason"], "Data change (major)")
 
     # submit: no reviewers provided, fallback owner
+    @patch("nistoar.midas.dap.extrev.nps1.requests.get")
     @patch("nistoar.midas.dap.extrev.nps1.requests.post")
     @patch("nistoar.midas.dap.extrev.nps1.get_nsd_auth_token")
-    def test_submit_fallback_owner(self, mock_token, mock_post):
+    def test_submit_fallback_owner(self, mock_token, mock_post, mock_get):
         mock_token.return_value = "tok"
         mock_post.return_value = fake_response(json_data={"ok": True})
+        mock_get.return_value = fake_response(json_data=[{
+            "submitterID": 123,
+            "phase": "in progress"
+        }])
         cli = NPSExternalReviewClient(GOOD_CFG)
 
         res = cli.submit(
@@ -190,9 +200,10 @@ class TestNPSExternalReviewClient(test.TestCase):
         self.assertIn("Failed to POST to NPS", str(cm.exception))
 
     # submit: people service used to look up submitter
+    @patch("nistoar.midas.dap.extrev.nps1.requests.get")
     @patch("nistoar.midas.dap.extrev.nps1.requests.post")
     @patch("nistoar.midas.dap.extrev.nps1.get_nsd_auth_token", return_value="TTT")
-    def test_submit_uses_people_service(self, mock_token, mock_post):
+    def test_submit_uses_people_service(self, mock_token, mock_post, mock_get):
         # Prepare a mock PeopleService
         ps = MagicMock()
         ps.get_person_by_eid.return_value = {
@@ -206,6 +217,10 @@ class TestNPSExternalReviewClient(test.TestCase):
 
         cli = NPSExternalReviewClient(GOOD_CFG, peopsvc=ps)
 
+        mock_get.return_value = fake_response(json_data=[{
+            "submitterID": 123,
+            "phase": "in progress"
+        }])
         mock_post.return_value = fake_response(json_data={"done": True})
         result = cli.submit(id="PSTEST1", submitter="drj2")
 
@@ -215,13 +230,13 @@ class TestNPSExternalReviewClient(test.TestCase):
         # The reviewer info in the payload must match what the PeopleService returned
         payload = json.loads(mock_post.call_args[1]["data"])
         reviewer = payload["reviewers"][0]
-        assert reviewer["nistId"] == "123987"
-        assert reviewer["firstName"] == "Diogo"
-        assert reviewer["lastName"] == "Jota"
-        assert reviewer["eMail"] == "diogo.jota@nist.gov"
-        assert reviewer["contactTypeId"] == 7  # Owner
-        assert payload["submitterID"] == "123987"
-        assert result == {"done": True}
+        self.assertEqual(reviewer["nistId"], "123987")
+        self.assertEqual(reviewer["firstName"], "Diogo")
+        self.assertEqual(reviewer["lastName"], "Jota")
+        self.assertEqual(reviewer["eMail"], "diogo.jota@nist.gov")
+        self.assertEqual(reviewer["contactTypeId"], 7)  # Owner
+        self.assertEqual(payload["submitterID"], "123987")
+        self.assertEqual(result.get('phase'), 'in progress')
 
 
 if __name__ == '__main__':
