@@ -3,6 +3,7 @@ This distrib submodule provides a client interface to the PDR Distribution
 Service.
 """
 import os, sys, shutil, logging, json
+from collections import ChainMap
 
 import urllib.request, urllib.parse, urllib.error
 import requests
@@ -14,27 +15,30 @@ class RESTServiceClient(object):
     a generic public client interface to a REST service
     """
 
-    def __init__(self, baseurl):
+    def __init__(self, baseurl, defhdrs=None):
         """
         initialized the service to the given base URL
         """
         self.base = baseurl.rstrip('/')
+        self._hdrs = defhdrs if defhdrs else {}
 
-    def get_json(self, relurl):
+    def get_json(self, relurl, method='GET'):
         """
         retrieve JSON-encoded data from the specified endpoint.  An Exception
         is raised if the request resource does not exists or if its content
         is not retrievable as JSON.  
 
         :param str relurl:   a relative URL for the desired resource
+        :param str method:   the HTTP method to use (default: GET).  Note that the body of the request
+                             will always be empty, even if PUT, POST, or PATCH is specified.  
         """
         if not relurl.startswith('/'):
             relurl = '/'+relurl
-        hdrs = { "Accept": "application/json" }
+        hdrs = ChainMap({ "Accept": "application/json" }, self._hdrs)
 
         resp = None
         try:
-            resp = requests.get(self.base+relurl, headers=hdrs)
+            resp = requests.request(method, self.base+relurl, headers=hdrs)
 
             if resp.status_code >= 500:
                 raise DistribServerError(relurl, resp.status_code, resp.reason)
@@ -76,7 +80,8 @@ class RESTServiceClient(object):
             relurl = '/'+relurl
 
         try:
-            return urllib.request.urlopen(self.base+relurl)
+            req = urllib.request.Request(self.base+relurl, headers=self._hdrs)
+            return urllib.request.urlopen(req)
 
         except urllib.request.HTTPError as out:
             code = out.getcode()
@@ -111,7 +116,7 @@ class RESTServiceClient(object):
 
         resp = None
         try:
-            resp = requests.get(self.base+relurl, stream=True)
+            resp = requests.get(self.base+relurl, headers=self._hdrs, stream=True)
 
             if resp.status_code >= 500:
                 raise DistribServerError(relurl, resp.status_code, resp.reason)
@@ -137,11 +142,57 @@ class RESTServiceClient(object):
             if resp is not None:
                 resp.close()
 
-    def head(self, relurl):
+    def get_text(self, relurl, method='GET'):
         """
-        send a HEAD request to the given relative URL to determine if the 
-        resource it refers to is available.  
+        retrieve a plain-text response from the specified endpoint.  An Exception
+        is raised if the request resource does not exists.  
 
+        :param str relurl:   a relative URL for the desired resource
+        :param str method:   the HTTP method to use (default: GET).  Note that the body of the request
+                             will always be empty, even if PUT, POST, or PATCH is specified.  
+        """
+        if not relurl.startswith('/'):
+            relurl = '/'+relurl
+
+        resp = None
+        try:
+            resp = requests.request(method, self.base+relurl, headers=self._hdrs, allow_redirects=True)
+            
+            if resp.status_code >= 500:
+                raise DistribServerError(relurl, resp.status_code, resp.reason)
+            elif resp.status_code == 404:
+                raise DistribResourceNotFound(relurl, resp.reason)
+            elif resp.status_code >= 400:
+                raise DistribClientError(relurl, resp.status_code, resp.reason,
+                                         message="Unexpected client error (is URL correct?): "+
+                                         resp.text.strip())
+            elif resp.status_code != 200:
+                raise DistribServerError(relurl, resp.status_code, resp.reason,
+                               message="Unexpected response from server: {0} {1}"
+                                        .format(resp.status_code, resp.reason))
+
+            return resp.text.strip()
+
+        except requests.RequestException as ex:
+            raise DistribServerError(message="Trouble connecting to distribution"
+                                     +" service: "+ str(ex), cause=ex)
+        
+        finally:
+            if resp is not None:
+                resp.close()
+        
+
+    def get_status(self, relurl, method='HEAD'):
+        """
+        send a request (like HEAD or DELETE) to the given relative URL from which no response body 
+        is expected.  
+
+        The default request method is HEAD, which is used to determine if the 
+        resource it refered to by the URL exists.
+
+        :param str relurl:   a relative URL for the desired resource
+        :param str method:   the HTTP method to use (default: HEAD).  Note that the body of the request
+                             will always be empty, even if PUT, POST, or PATCH is specified.  
         :rtype tuple:  a 2-tuple including the integer response status (e.g. 
                        200, 404, etc) and the associated message.  
         :raises DistribServerError: if there is a failure while trying to 
@@ -152,7 +203,7 @@ class RESTServiceClient(object):
 
         resp = None
         try:
-            resp = requests.get(self.base+relurl, allow_redirects=True)
+            resp = requests.request(method, self.base+relurl, headers=self._hdrs, allow_redirects=True)
             return (resp.status_code, resp.reason)
 
         except requests.RequestException as ex:
@@ -171,7 +222,7 @@ class RESTServiceClient(object):
         an error connecting to the service.
         """
         try:
-            stat = self.head(relurl)[0]
+            stat = self.get_status(relurl)[0]
             return stat >= 200 and stat < 300
         except DistribServerError as ex:
             return False

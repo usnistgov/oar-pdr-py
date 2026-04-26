@@ -773,9 +773,9 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
         super(PDRPreservationTaskFactory, self).__init__(config)
         if self.cfg.get('repo_access'):
             for step in ['archive', 'finalize']:
-            if not self.cfg.get(step, {}).get('repo_access'):
-                self.cfg.setdefault(step, {})
-                self.cfg[step]['repo_access'] = self.cfg['repo_access']
+                if not self.cfg.get(step, {}).get('repo_access'):
+                    self.cfg.setdefault(step, {})
+                    self.cfg[step]['repo_access'] = self.cfg['repo_access']
 
     def _create_state_manager(self, aipid: str, config: Mapping,
                               logger: Logger, startover=False) -> fw.PreservationStateManager:
