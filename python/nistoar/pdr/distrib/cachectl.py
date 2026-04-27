@@ -9,6 +9,9 @@ slow and costly.  The Distribution Service provides an API for inspecting and ma
 of the cache.  
 """
 from typing import List, Mapping
+from urllib.parse import quote
+
+from .client import RESTServiceClient
 
 class CacheCtlClient:
     """
@@ -42,7 +45,7 @@ class CacheCtlClient:
 
         self._cli = RESTServiceClient(self.ep, self.authhdr)
 
-    @classpath
+    @classmethod
     def from_config(cls, config: Mapping):
         try:
             return cls(config['service_endpoint'], config.get('auth_key'))
@@ -124,10 +127,10 @@ class CacheCtlClient:
         may be returned, representing its presence (past or current) in different volumes, normally only
         one of them will currently is cached (i.e. actually exists presently in its volume).  
         """
-        return self._cli.get_json(f"/objects/{aipid}/{objname}")
+        return self._cli.get_json(quote(f"/objects/{aipid}/{objname}"))
 
     def ensure_cached(self, aipid: str, objname: str=None, version: str=None,
-                      recache: bool=False) -> List[Mapping]:
+                      recache: bool=False):
         """
         ensure a given dataset, or object from a dataset, is cached.  In general, caching is 
         asynchronous; this request will place the dataset or specific object onto a caching 
@@ -141,9 +144,6 @@ class CacheCtlClient:
         :param bool recache:  if True and an object currently exists in the cache, it will be deleted 
                               and reloaded from long-term storage.  This is desired, for example, if 
                               the dataset has been recently updated.  
-        :return:  a list of descriptions similar to that returned by :py:meth:`objects_for` which will
-                  indicate the current cached status of each of the files in the dataset.
-                  :rtype: List[Mapping]
         """
         which = f"/objects/{aipid}/"
         if objname:
@@ -156,8 +156,10 @@ class CacheCtlClient:
             param.append("recache=1")
         if params:
             params = "?" + "&".join(params)
+        else:
+            params = ""
         
-        return self._cli.get_json(f"{which}:cached{params}", "PUT")
+        self._cli.get_text(quote(f"{which}:cached{params}"), "PUT")
         
 
     def uncache(self, aipid, objname=None):
@@ -173,7 +175,7 @@ class CacheCtlClient:
             which += f"{objname}/"
         which += ":cached"
 
-        status, reason = self._cli.get_status(which, 'DELETE')
+        status, reason = self._cli.get_status(quote(which), 'DELETE')
         if status >= 500:
             raise DistribServerError(status, "Unexpected Server failure: "+reason)
         elif status < 200 or status >= 300:
@@ -220,7 +222,7 @@ class CacheCtlClient:
         """
         answer = self._cli.get_text("/monitor/running")
         if isinstance(answer, str):
-            return answer.lower() == "true"
+            return answer.strip().lower() == "true"
 
         return False
 
@@ -242,7 +244,7 @@ class CacheCtlClient:
         """
         stop the monitoring thread.
         """
-        status, reason = get_status("/monitor/running", "DELETE")
+        status, reason = self._cli.get_status("/monitor/running", "DELETE")
 
         if status >= 500:
             raise DistribServerError(status, "Unexpected Server failure: "+reason)

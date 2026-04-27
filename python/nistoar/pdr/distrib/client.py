@@ -22,7 +22,7 @@ class RESTServiceClient(object):
         self.base = baseurl.rstrip('/')
         self._hdrs = defhdrs if defhdrs else {}
 
-    def get_json(self, relurl, method='GET'):
+    def get_json(self, relurl, method='GET', okstatus=None):
         """
         retrieve JSON-encoded data from the specified endpoint.  An Exception
         is raised if the request resource does not exists or if its content
@@ -30,7 +30,10 @@ class RESTServiceClient(object):
 
         :param str relurl:   a relative URL for the desired resource
         :param str method:   the HTTP method to use (default: GET).  Note that the body of the request
-                             will always be empty, even if PUT, POST, or PATCH is specified.  
+                             will always be empty, even if PUT, POST, or PATCH is specified.
+        :param int okstatus: the HTTP status required for successful retrieval; if given, an exception
+                             is raised if the returned HTTPS status does not equal this value; otherwise,
+                             any status between 200 and 299 will be expected for success.
         """
         if not relurl.startswith('/'):
             relurl = '/'+relurl
@@ -40,20 +43,22 @@ class RESTServiceClient(object):
         try:
             resp = requests.request(method, self.base+relurl, headers=hdrs)
 
-            if resp.status_code >= 500:
-                raise DistribServerError(relurl, resp.status_code, resp.reason)
-            elif resp.status_code == 404:
-                raise DistribResourceNotFound(relurl, resp.reason)
-            elif resp.status_code == 406:
-                raise DistribClientError(relurl, resp.status_code, resp.reason,
-                                         message="JSON data not available from"+
-                                         " this URL (is URL correct?)")
-            elif resp.status_code >= 400:
-                raise DistribClientError(relurl, resp.status_code, resp.reason)
-            elif resp.status_code != 200:
-                raise DistribServerError(relurl, resp.status_code, resp.reason,
-                               message="Unexpected response from server: {0} {1}"
-                                        .format(resp.status_code, resp.reason))
+            if not okstatus or resp.status_code != okstatus:
+                if resp.status_code >= 500:
+                    raise DistribServerError(relurl, resp.status_code, resp.reason)
+                elif resp.status_code == 404:
+                    raise DistribResourceNotFound(relurl, resp.reason)
+                elif resp.status_code == 406:
+                    raise DistribClientError(relurl, resp.status_code, resp.reason,
+                                             message="JSON data not available from"+
+                                             " this URL (is URL correct?)")
+                elif resp.status_code >= 400:
+                    raise DistribClientError(relurl, resp.status_code, resp.reason)
+                elif (okstatus and resp.status_code != okstatus) or \
+                     (resp.status_code < 200 or resp.status_code >= 300):
+                    raise DistribServerError(relurl, resp.status_code, resp.reason,
+                                   message="Unexpected response from server: {0} {1}"
+                                            .format(resp.status_code, resp.reason))
 
             return resp.json()
         except ValueError as ex:
@@ -142,7 +147,7 @@ class RESTServiceClient(object):
             if resp is not None:
                 resp.close()
 
-    def get_text(self, relurl, method='GET'):
+    def get_text(self, relurl, method='GET', okstatus=None):
         """
         retrieve a plain-text response from the specified endpoint.  An Exception
         is raised if the request resource does not exists.  
@@ -150,6 +155,9 @@ class RESTServiceClient(object):
         :param str relurl:   a relative URL for the desired resource
         :param str method:   the HTTP method to use (default: GET).  Note that the body of the request
                              will always be empty, even if PUT, POST, or PATCH is specified.  
+        :param int okstatus: the HTTP status required for successful retrieval; if given, an exception
+                             is raised if the returned HTTPS status does not equal this value; otherwise,
+                             any status between 200 and 299 will be expected for success.
         """
         if not relurl.startswith('/'):
             relurl = '/'+relurl
@@ -157,21 +165,24 @@ class RESTServiceClient(object):
         resp = None
         try:
             resp = requests.request(method, self.base+relurl, headers=self._hdrs, allow_redirects=True)
+            msg = (resp.text or resp.reason).strip()
             
-            if resp.status_code >= 500:
-                raise DistribServerError(relurl, resp.status_code, resp.reason)
-            elif resp.status_code == 404:
-                raise DistribResourceNotFound(relurl, resp.reason)
-            elif resp.status_code >= 400:
-                raise DistribClientError(relurl, resp.status_code, resp.reason,
-                                         message="Unexpected client error (is URL correct?): "+
-                                         resp.text.strip())
-            elif resp.status_code != 200:
-                raise DistribServerError(relurl, resp.status_code, resp.reason,
-                               message="Unexpected response from server: {0} {1}"
-                                        .format(resp.status_code, resp.reason))
+            if not okstatus or resp.status_code != okstatus:
+                if resp.status_code >= 500:
+                    raise DistribServerError(relurl, resp.status_code, msg)
+                elif resp.status_code == 404:
+                    raise DistribResourceNotFound(relurl, msg)
+                elif resp.status_code >= 400:
+                    raise DistribClientError(relurl, resp.status_code, resp.reason,
+                                             message="Unexpected client error (is URL correct?): "+
+                                             resp.text.strip())
+                elif (okstatus and resp.status_code != okstatus) or \
+                     (resp.status_code < 200 or resp.status_code >= 300):
+                    raise DistribServerError(relurl, resp.status_code, resp.reason,
+                                   message="Unexpected response from server: {0} {1}"
+                                            .format(resp.status_code, resp.reason))
 
-            return resp.text.strip()
+            return msg
 
         except requests.RequestException as ex:
             raise DistribServerError(message="Trouble connecting to distribution"
