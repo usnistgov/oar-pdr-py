@@ -248,13 +248,13 @@ class AIP1PreservationService(PreservationService):
         :param module|str execmod:  the :py:mod:`~nistoar.jobmgt` execution module, containing the 
                              required ``process()`` funtion to use.  If not provided (typically),
                              use the default preservation job module 
-                             (:py:mod:`nistoar.pdr.preserve.framework.jobexec) will be used.
+                             (:py:mod:`nistoar.pdr.preserve.task.jobexec) will be used.
                              Either a module (dot-delimited) name or an imported module object can 
                              be used as a value. 
         """
         super(JobQueuePreservationService, self).__init__(config, log)
         if not execmod:
-            from .framework import jobexec
+            from .task import jobexec
             execmod = jobexec
 
         workdir = self.cfg.get('working_dir')   # typically the "pdr" parent directory
@@ -342,7 +342,7 @@ class AIP1PreservationService(PreservationService):
         pstatefile = self._state_file_for(aipid)
         if statefile.exists():
             pstate = read_json(statefile)
-            job = self.jobq.get_job(aipid)
+            job = self.presq.get_job(aipid)
             if pstate.get('version'):
                 info['version'] = pstate['version']
             if job:
@@ -467,7 +467,7 @@ class AIP1PreservationService(PreservationService):
             "process": self.cfg.get('task', {}),
             "logfile": str(workparent/"preservation.log")
         }
-        self.jobq.submit(aipid, [aipdir, self._state_file_for(aipid)], jcfg)
+        self.presq.submit(aipid, [aipdir, self._state_file_for(aipid)], jcfg)
 
         # return status
         return self.status_of(aipid)
