@@ -120,7 +120,7 @@ def parse_bag_name_02(name, nistprof="0.2"):
     parse a bag name into its parts according to convention specified in the 
     NIST BagIt Profile, versions 0.2-0.3.
     """
-    m = BAGNAME02_RE.match(name)
+    m = BAGNAME02_RE.match(os.path.basename(name))
     if m is None:
         if nistprof is None:  nistprof = "0.2"
         raise ValueError("Not recognized as a bag name according to profile "+
@@ -134,7 +134,7 @@ def parse_bag_name_02(name, nistprof="0.2"):
     return out
 
 def parse_bag_name_04(name, nistprof="0.4"):
-    m = BAGNAME04_RE.match(name)
+    m = BAGNAME04_RE.match(os.path.basename(name))
     if m is None:
         if nistprof is None:  nistprof = "0.4"
         raise ValueError("Not recognized as a bag name according to profile "+

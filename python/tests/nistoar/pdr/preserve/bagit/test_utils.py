@@ -259,6 +259,10 @@ class TestBagUtils(test.TestCase):
         parts = bagut.parse_bag_name_02("3812EF103.mbag2_12-100")
         self.assertEqual(parts, ["3812EF103", "", "2_12", "100", ""])
 
+        # allow input bagname to include a leading (ignored) directory path
+        parts = bagut.parse_bag_name_02("/oar/data/pdr/bags/3812EF103.mbag2_12-100")
+        self.assertEqual(parts, ["3812EF103", "", "2_12", "100", ""])        
+
         try:
             parts = bagut.parse_bag_name_02("3812EF103.1_3_4.mbag2_12-100")
             self.fail("Thinks this is an okay 0.2 name: "+name)
@@ -278,6 +282,10 @@ class TestBagUtils(test.TestCase):
         parts = bagut.parse_bag_name_04("mds3812.12_3_1_0.mbag0_2-14.tar.gz")
         self.assertEqual(parts, ["mds3812", "12_3_1_0", "0_2", "14", "tar.gz"])
         parts = bagut.parse_bag_name_04("3812EF103.1.mbag2_12-100")
+        self.assertEqual(parts, ["3812EF103", "1", "2_12", "100", ""])
+
+        # allow input bagname to include a leading (ignored) directory path
+        parts = bagut.parse_bag_name_04("/var/lib/pdr/3812EF103.1.mbag2_12-100")
         self.assertEqual(parts, ["3812EF103", "1", "2_12", "100", ""])
 
         try:
@@ -316,6 +324,10 @@ class TestBagUtils(test.TestCase):
         parts = bagut.parse_bag_name("3812EF103.mbag2_12-100")
         self.assertEqual(parts, ["3812EF103", "", "2_12", "100", ""])
         
+        # allow input bagname to include a leading (ignored) directory path
+        parts = bagut.parse_bag_name("/var/lib/pdr/3812EF103.1.mbag2_12-100")
+        self.assertEqual(parts, ["3812EF103", "1", "2_12", "100", ""])
+
         with self.assertRaises(ValueError):
             bagut.parse_bag_name("3812EF103.1.2.3.mbag0_3-1.zip")
         with self.assertRaises(ValueError):
