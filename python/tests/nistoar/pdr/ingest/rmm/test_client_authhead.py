@@ -16,6 +16,10 @@ port = 9091
 url = "http://localhost:{0}/nerdm/".format(port)
 endpt = url
 
+uwsgi_opts = "--plugin python3"
+if os.environ.get("OAR_UWSGI_OPTS") is not None:
+    uwsgi_opts = os.environ['OAR_UWSGI_OPTS']
+
 def startService(authmeth=None):
     tdir = tmpdir()
     srvport = port
@@ -24,10 +28,10 @@ def startService(authmeth=None):
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
     wpy = "python/tests/nistoar/pdr/ingest/rmm/sim_ingest_srv.py"
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
-          "--wsgi-file {2} --set-ph auth_key=critic --set-ph auth_meth=header " \
-          "--pidfile {3}"
-    cmd = cmd.format(os.path.join(tdir,"simsrv.log"), srvport,
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --set-ph auth_key=critic --set-ph auth_meth=header " \
+          "--pidfile {4}"
+    cmd = cmd.format(os.path.join(tdir,"simsrv.log"), uwsgi_opts, srvport,
                      os.path.join(basedir, wpy), pidfile)
     os.system(cmd)
     time.sleep(0.5)

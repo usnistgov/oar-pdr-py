@@ -22,15 +22,19 @@ basedir = pdrdir.parents[3]
 ormdir = basedir / "metadata"
 mocksvr = ormdir / "python" / "tests" / "nistoar" / "doi" / "sim_datacite_srv.py"
 
+uwsgi_opts = "--plugin python3"
+if os.environ.get("OAR_UWSGI_OPTS") is not None:
+    uwsgi_opts = os.environ['OAR_UWSGI_OPTS']
+
 def startService():
     tdir = tmpdir()
     srvport = port
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
     wpy = "python/nistoar/doi/tests/sim_datacite_srv.py"
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
-          "--wsgi-file {2} --pidfile {3} --set-ph prefixes={4}"
-    cmd = cmd.format(os.path.join(tdir,"simsrv.log"), srvport, mocksvr,
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --pidfile {4} --set-ph prefixes={5}"
+    cmd = cmd.format(os.path.join(tdir,"simsrv.log"), uwsgi_opts, srvport, mocksvr,
                      pidfile, ",".join(prefixes))
     os.system(cmd)
     time.sleep(0.2)

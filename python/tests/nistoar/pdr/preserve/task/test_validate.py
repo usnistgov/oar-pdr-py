@@ -9,37 +9,6 @@ pdrdir = Path(__file__).resolve().parents[2]
 storedir = pdrdir / "distrib" / "data"
 basedir = pdrdir.parents[3]
 
-port = 9091
-baseurl = "http://localhost:{0}/".format(port)
-
-def startService(authmeth=None):
-    tdir = tmpdir()
-    srvport = port
-    if authmeth == 'header':
-        srvport += 1
-    pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
-    
-    wpy = "python/tests/nistoar/pdr/distrib/sim_distrib_srv.py"
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
-          "--wsgi-file {2} --pidfile {3}"
-    cmd = cmd.format(os.path.join(tdir,"simsrv.log"), srvport,
-                     os.path.join(basedir, wpy), pidfile)
-    status = os.system(cmd) == 0
-    time.sleep(0.5)
-    return status
-
-def stopService(authmeth=None):
-    tdir = tmpdir()
-    srvport = port
-    if authmeth == 'header':
-        srvport += 1
-    pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
-    
-    cmd = "uwsgi --stop {0}".format(os.path.join(tdir,
-                                                 "simsrv"+str(srvport)+".pid"))
-    os.system(cmd)
-    time.sleep(1)
-
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_state.")
 testbag = Path(tmpdir.name) / "mds2-7223.1_0_0.mbag0_4-0"
 loghdlr = None
