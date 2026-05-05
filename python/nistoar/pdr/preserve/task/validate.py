@@ -198,7 +198,7 @@ class NISTBagValidation(fw.AIPValidation):
 
     def _save_results(self, info, res, statemgr):
         outdir = statemgr.get_working_dir()
-        log = statemgr.log.getLogger('validate')
+        log = statemgr.log.getChild('validate')
         if not outdir:
             log.debug("Won't record validation results; no working directory available")
             return
