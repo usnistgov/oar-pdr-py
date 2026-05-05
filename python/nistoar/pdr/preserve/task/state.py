@@ -41,9 +41,9 @@ class JSONPreservationStateManager(PreservationStateManager):
                  stat: status.SIPStatus=None, clear_state: bool=False, persistin: Path=None):
         """
         Create the state manager
+        :param dict    config:  the dictionary for configuring this instance
         :param str      aipid:  the ID of the AIP being preserved
         :param str     aiploc:  the location (as a file path or a URI) of the AIP
-        :param dict    config:  the dictionary for configuring this instance
         :param Logger  logger:  the logger to use in this state manager
         :param SIPStatus stat:  an SIPStatus tracking the overall publishing status; if provided,
                                 it will be updated messages about what's happening with preservation.
@@ -245,7 +245,7 @@ class JSONPreservationStateManager(PreservationStateManager):
         Set the list of files that were (or will be) created from serializing the AIP.
 
         This is typically called by a AIPSerialization implementation to report where it wrote (or 
-        will write) its files.  The AIPArchiving step can then use :py:meth:`get_serialized_aip_files`
+        will write) its files.  The AIPArchiving step can then use :py:meth:`get_serialized_files`
         to get the list of files to archive.  This should be a complete list--not a partial one.
         The files are not required to exist at these locations at the time this function is called.  
 

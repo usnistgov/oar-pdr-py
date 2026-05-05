@@ -17,12 +17,17 @@ interface:
   4. :py:class:`AIPArchiving` -- committing the serialized bag files to long-term storage
   5. :py:class:`AIPPublication` -- releasing the AIP to external systems, namely to a repository system 
      through which the AIP can be accessed.  
+  6. :py:class:`AIPCleanup` -- removing any remaining preservation artifacts and possibly the input SIP
+     (Submission Information Package)
 
-These steps are managed via an instance of the :py:class:`PreservationTask` class.  
+These steps are managed via an instance of the :py:class:`PreservationTask` class, calling each step 
+in sequence.  The state of a task--which steps have been completed and where to find intermediate 
+products--is handled by a :py:class:`PreservationStateManager` instance which is passed into the step
+when it is executed.  
 """
+import logging, os
 from collections.abc import Mapping
 from abc import ABCMeta, abstractmethod, abstractproperty
-import logging
 from logging import Logger
 from typing import List
 
@@ -61,6 +66,9 @@ class PreservationStepsAware:
 
     def _label_for_step(cls, state):
         return cls._step_label[cls._last_step_in(state)]
+
+    def _all_steps_completed(cls, state):
+        return (cls._all_steps & state) == cls._all_steps
         
 class PreservationStateManager(PreservationStepsAware, metaclass=ABCMeta):
     """
@@ -130,6 +138,13 @@ class PreservationStateManager(PreservationStepsAware, metaclass=ABCMeta):
         a label indicating the latest completed stage of preservation
         """
         return self._label_for_step(self.steps_completed)
+
+    @property
+    def all_completed(self) -> bool:
+        """
+        True if all preservation steps have been completed
+        """
+        return self._all_steps_completed(self.steps_completed)
 
     @abstractmethod
     def mark_completed(self, step: int, message=None):
@@ -281,7 +296,7 @@ class PreservationStep(metaclass=ABCMeta):
     To apply a step, an instance is passed via its functions a PreservationStateManager instance
     which encapsulates the AIP being preserved as well as the state of its progress
     """
-    def run(self, statemgr: PreservationStateManager, ignore_cleanup_error: bool=True):
+    def run(self, statemgr: PreservationStateManager, ignore_cleanup_error: bool=True, *kw):
         """
         Apply the preservation processing step.  This is normally done by first calling 
         :py:meth:`revert` to clean up from a previously (failed) attempt, then 
@@ -294,6 +309,7 @@ class PreservationStep(metaclass=ABCMeta):
         :param bool ignore_cleanup_error:  if True (default), any errors that occur while calling 
                                        :py:meth:`clean_up` will be caught.  Regardless of this 
                                        value, the exception will be logged as a warning.  
+        :param kw:  extra implementation-specific keyword arguments.  
         :raise PreservationException:  if an error occurred preventing the completion of this
                                        step.
         """
@@ -307,10 +323,15 @@ class PreservationStep(metaclass=ABCMeta):
                 raise
 
     @abstractmethod
-    def apply(self, stagemgr: PreservationStateManager):
+    def apply(self, stagemgr: PreservationStateManager, *kw):
         """
-        Apply this preservation step to the target AIP.  One should expect that the outcome from any 
-        previous runs of this step will be overwritten.
+        Apply this preservation step to the target AIP.  
+
+        One should expect that the outcome from any previous runs of this step will be overwritten.  
+        The implementation may support extra custom arguments; generally, such arguments would be 
+        provided when this function is called outside of the normal :py:class:`PreservationTask`
+        workflow.
+        
         :raise PreservationException:  if an error occurred preventing the application of this step.
         """
         raise NotImplementedError()
@@ -401,7 +422,7 @@ class AIPValidation(PreservationStep):
         :return:  False if this step cannot be undone even partially.
         :raise PreservationException:  if an error occurred while trying to undo the step
         """
-        statemgr.unmark_completed(statemgr.VALIDATION)
+        statemgr.unmark_completed(statemgr.VALIDATED)
         return True
 
     def clean_up(self, statemgr: PreservationStateManager):
@@ -467,6 +488,100 @@ class AIPPublication(PreservationStep):
             statemgr.log.warning("Failure during publication clean-up (%s): %s",
                                  type(ex).__name__, str(ex))
 
+class AIPCleanup(PreservationStep):
+    """
+    the final preservation step after publication that cleans up any remaining preservation 
+    artifacts as well as possibly the input SIP.  
+
+    This step is often different from the other steps in that generally it cannot be reverted.  
+    Further, it should be implemented to be able to run multiple times without error whether 
+    there are things to clean up or not.  In particular, the :py:class:`PreservationTask`'s 
+    ``run()`` method will always run this clean-up step even if the publish step has already 
+    been completed.  This step's :py:meth:`apply` method should support a ``cancel`` keyword 
+    argument.  
+
+    This default implementation does nothing.
+    """
+    def apply(self, statemgr: PreservationStateManager, cancel=False, *kw):
+        """
+        Apply the final clean-up chores
+
+        This default implementation will delete any serialized preservation bags created 
+        from the input SIP from the staging area.  
+
+        :param PreservationStateManager statemgr:  the state manager that can help guide the 
+               final clean-up. 
+        :param bool cancel:  If True, assume that the clean-up is due to a request to cancel 
+               a previous preservation attempt such that the next time the preservation is 
+               restarted, it should start from the very beginning.  This means that the input
+               SIP should remain intact.  The preservation state should be reset accordingly.  
+               If False (default), the implementation should feel free to delete the input SIP.  
+        """
+        staged = statemgr.get_serialized_files()
+        if self.delete_files(staged, statemgr, "serialized bags"):
+            statemgr.set_serialized_files(None)
+
+
+    def delete_files(self, filelist: List[str], statemgr: PreservationStateManager,
+                     what: str=None, log: Logger=None):
+        """
+        delete a list of files and complain about any problems
+
+        :param list(str) filelist:  the list of file names to delete
+        :param PreservationStateManager stagemgr:   the preservation state manager
+        :param str what:  a phrase indicating what is in the list; used in log messages when 
+                          files fail to delete (default: "files")
+        """
+        if not what:
+            what = "files"
+
+        failed = {}
+        if filelist:
+            for f in filelist:
+                if os.path.exists(f):
+                    try:
+                        os.remove(f)
+                    except Exception as ex:
+                        failed[f] = str(ex)
+
+        if failed:
+            if not log:
+                log = statemgr.log.getChild("clean-up")
+            if len(failed) == len(filelist):
+                msg = list(failed.values())[0]
+                log.error("Unable to delete %s: (e.g.) %s", what, msg)
+
+            elif len(failed) == 1:
+                f = list(failed.items())[0]
+                log.warning("Unable to delete a serialized bags: %s: %s", what, f[0], f[1])
+
+            else:
+                msgs = [ f"  {f[0]}: {f[1]}" for f in failed.items() ]
+                log.error(f"Unable to delete some {what}:\n" + "\n".join(msgs))
+
+        return not failed
+
+        
+    def revert(self, statemgr: PreservationStateManager) -> bool:
+        """
+        This implementation does nothing because this step generally cannot be reverted, and 
+        so it returns True.
+        """
+        return False
+
+    def clean_up(self, statemgr: PreservationStateManager):
+        """
+        This does nothing as this step should not create any artifacts to clean_up.
+        This implementation does nothing.  
+        :raise PreservationException:  if an error occurred while trying to undo the step
+        """
+        pass
+
+    def _report_cleanup_failure(self, statemgr: PreservationStateManager, ex: Exception):
+        if statemgr.log:
+            statemgr.log.warning("Failure during publication clean-up (%s): %s",
+                                 type(ex).__name__, str(ex))
+
 
 class PreservationTask(PreservationStepsAware):
     """
@@ -484,7 +599,7 @@ class PreservationTask(PreservationStepsAware):
     """
     def __init__(self, mgr: PreservationStateManager, finalizer: AIPFinalization,
                  validater: AIPValidation, serializer: AIPSerialization, archiver: AIPArchiving,
-                 publisher: AIPPublication):
+                 publisher: AIPPublication, cleaner: AIPCleanup=None):
         """
         initialize the task with its pluggable components.  Clients normally do not instantiate a 
         task directly, but rather call :py:meth:`PreservationTaskFactory.create_task` on a 
@@ -496,6 +611,13 @@ class PreservationTask(PreservationStepsAware):
         self._serializer = serializer
         self._archiver = archiver
         self._publisher = publisher
+
+        if not cleaner:
+            cleaner = self._create_default_cleaner()
+        self._cleaner = cleaner
+
+    def _create_default_cleaner(self):
+        pass
         
     def _setup(self):
         # initialize the state manager
@@ -645,6 +767,46 @@ class PreservationTask(PreservationStepsAware):
         """
         return self._statemgr.state == self.PUBLISHED
 
+    def completion_clean_up(self, cancel: bool=False):
+        """
+        clean up the preservation input and any remaining artifacts after all preservations steps 
+        have been completed.  
+
+        This commonly means cleaning up the submitted SIP as well as any remaining serialized AIPs.  
+
+        :param bool cancel: if False (default), an exception will be raised if all of the 
+                            preservation have not been completed.  If True, it is assumed that 
+                            this incomplete task is being canceled: remaining artifacts will be 
+                            purged but the input SIP will not.  
+        """
+        # NOTE: Is it possible for the task to legitimately complete the publishing step
+        # but not previous ones (presumably via admin override or otherwise manual handling)?
+        # If so, requiring all_completed() may be problematic.
+        if not cancel and not self._statemgr.all_completed():
+            raise AIPPublishingException(id, "Preservation has not completed")
+        if self._cleaner:
+            self._cleaner.run(cancel)
+
+    def run(self):
+        """
+        execute this preservation task to completion and clean-up.  
+
+        This run by the presrevation service system to commence the preservation process. 
+
+        :return:  False if the task has already be run to completion and there is nothing left 
+                  to do; otherwise True is returned.
+        """
+        if not self._statemgr.all_completed():
+            if self._statemgr.steps_completed > self._statemgr.UNSTARTED:
+                self._statemgr.log.info("Restarting preservation task")
+            else:
+                self._statemgr.log.info("Starting preservation task")
+
+            self.publish()
+
+        self.completion_clean_up()
+        
+
 class PreservationTaskFactory(metaclass=ABCMeta):
     """
     an interface for creating a :py:class:`PreservationTask` injected with necessary 
@@ -671,6 +833,9 @@ class PreservationTaskFactory(metaclass=ABCMeta):
     ``publish``
          properties that configure the :py:class:`AIPPublication` instance to use
          (may be ignored by :py:meth:`recreate_task`).
+    ``cleanup``
+         properties that configure the :py:class:`AIPCleanup` instance to use
+         (may be ignored by :py:meth:`recreate_task`).
 
     Each of the above properties have dictionary values which can include the ``type`` property.
     This property identifies the class that should be instantiated to handle its part of the 
@@ -681,7 +846,7 @@ class PreservationTaskFactory(metaclass=ABCMeta):
     component class implementation.
 
     Note that the factory takes responsibility for sharing subproperties across the top-level 
-    dictionaries to ensure that the steps work together--i.e. that a step can find the outputs of 
+    dictionaries to ensure that the steps work together--e.g. that a step can find the outputs of 
     the previous step.  
     """
     def __init__(self, config: Mapping=None):
@@ -729,6 +894,8 @@ class PreservationTaskFactory(metaclass=ABCMeta):
         steps.append(self._create_serializer(config.get('serialize')))
         steps.append(self._create_archiver(config.get('arhive')))
         steps.append(self._create_publisher(config.get('publish')))
+        steps.append(self._create_cleaner(config.get('cleanup')))
+
         return PreservationTask(statemgr, *steps)
 
     @abstractmethod
@@ -755,6 +922,10 @@ class PreservationTaskFactory(metaclass=ABCMeta):
     @abstractmethod
     def _create_publisher(self, config: Mapping) -> AIPPublication:
         raise NotImplementedError()
+        
+    def _create_cleaner(self, config: Mapping) -> AIPCleanup:
+        # returning None will cause the minimal default implementation to be used
+        raise None
         
 
 class PreservationTaskException(PreservationException):

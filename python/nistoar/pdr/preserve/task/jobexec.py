@@ -68,7 +68,7 @@ def process(dataid: str, config: Mapping, args: List[str], log=None):
             
         try:
             ptask = make_preservation_task(aipid, sm, config, log)
-            ptask.publish()
+            ptask.run()
 
         except PreservationException as ex:
             log.exception(ex)

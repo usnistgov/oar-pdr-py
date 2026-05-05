@@ -14,8 +14,8 @@ from .. import framework as fw
 from nistoar.pdr.preserve.bagit import BagBuilder, BagWriteError, BagItException
 from nistoar.base.config import ConfigurationException, merge_config
 import nistoar.pdr.preserve.bagit.utils as bagutils
-from nistoar.pdr.preserve import PreservationStateError
-from nistoar.pdr.preserve.bagit.utils import parse_bag_name
+from nistoar.pdr.preserve import PreservationStateError, system as preserve_system
+from nistoar.pdr.preserve.bagit.utils import parse_bag_name, find_latest_head_bag
 import nistoar.id.versions as verutils
 from nistoar.pdr.ingest import RMMIngestClient, DOIMintingClient
 from nistoar.pdr.distrib import (BagDistribClient, RESTServiceClient,
@@ -533,17 +533,28 @@ class PDRPublication(fw.AIPPublication):
     An implementation of the AIP publication interface appropriate for fully public data being published
     into the PDR.  
 
+    This step can carry out the following specific functions:
+      * migrating the dataset's products into the distribution system's cache
+      * ingesting the dataset's NERDm record into the RMM database
+      * delivering the DataCite DOI metadata to DataCite
+      * notifying people that the dataset is fully published and ready for access
+
     This implementaion supports the following configuraiton parameters:
 
-    ``store``    
-            (dict) the configuration for an AIPStoreClient that will deliver the serialized AIPs
-            to long-term storage.
     ``ingest``
-            (dict) a configuration dictionary for the ingest functions that require preparation.
-            recognized keys include ``rmm`` and ``doi`` (see more detail below).
-
-    The ``ingest`` configuration dictionary is also used by the PDRPublication class; the parameters 
-    used here include:
+            (dict) _required_. a configuration dictionary for the ingest functions that require 
+            preparation.  Recognized keys include ``rmm`` and ``doi`` (see more detail below).
+    ``data_cache``
+            (dict) _optional_. a dictionary for configuring data caching capabilities; see below 
+            for the keys that will be recognized in this dictionary.
+    ``notifier``
+            (dict) _optional_. the configuration for the notification system that alerts humans 
+            (by email) about the successes and failures from the preservation system.  See 
+            :py:mod:`nistoar.pdr.notify` for details of this configuration.  The ``alert`` 
+            types used by this preservation step are described below.  
+ 
+    The ``ingest`` configuration dictionary is also used by the :py:class:`PDRFinalization` class; 
+    the parameters used here include:
 
     ``doi``
             a configuration dictionary for configuring the DOI minting client used to submit the 
@@ -563,6 +574,38 @@ class PDRPublication(fw.AIPPublication):
             a failure results in an 
             :py:class:`~nistoar.pdr.preserve.task.framework.AIPPublicationException` is 
             raised, causing processing to stop.  
+
+    The following parameters from the ``data_cache`` dictionary are used to configure a 
+    :py:class:`~nistoar.pdr.distrib.cachectl.CacheCtlClient` that will be used to migrate
+    the new dataset's products into the distribution system's cache.  If not provided,
+    data caching will not be done by this step
+
+    ``service_endpoint``:
+            (str) _required_.  the base URL for the cache manager Web API used to migrate
+            the data.
+    ``auth_key``:
+            (str) _required_.  the secret authorization key to use when accessing the API
+
+    The ``notifier`` configures the :py:mod:`notification system<nistoar.pdr.notify>` used by 
+    this presrevation step.  (It may be shared by other preservation steps.)  This step uses
+    the following alert types:
+
+    ``preserve.failure``
+            a notification that announces that preservation of dataset failed and requires 
+            attention by an administrator.
+    ``preserve.success``
+            a notification that announces that preservation of a dataset successfully completed.
+    ``ingest.failure``
+            a notification that announces that there was a failure specifically ingesting the 
+            dataset's NERDm metadata into the RMM.  Generally, this means that the dataset's 
+            landing page will not be available.
+    ``doi.failure``
+            a notification that announces that there was a failure specifically sending the DOI
+            metadata to DataCite and establishing the public availability of the DOI.  
+    ``cache.failure``
+            a notification that announces that there was a failure specifically caching the dataset
+            into the distribution system.  This type failure is not critical and thus does not prevent 
+            the issuance of a ``preserve.success`` alert.  
     """
 
     def __init__(self, config=None, notifier=None):
@@ -581,6 +624,8 @@ class PDRPublication(fw.AIPPublication):
         #     raise ConfigurationException("Missing required configparameter: store")
         # self._storer = PDRStoreClient(scfg)
 
+        setuplog = logging.getLogger(preserve_system).getChild('PDRPublication')
+
         icfg = self.cfg.get('ingest', {})
         self._ingester = None
         self._ingcfg = icfg.get('rmm')
@@ -593,6 +638,25 @@ class PDRPublication(fw.AIPPublication):
         self._dmcfg = icfg.get('doi')
         if self._dmcfg and self._dmcfg.get('datacite_api'):
             self._doiminter = DOIMintingClient(self._dmcfg)
+        if not self._doiminter:
+            setuplog.warning("DOI Minter not configured (missing doi parameter): won't create DOI")
+
+        self._cachecli = None
+        dccfg = self.cfg('data_cache')
+        if dccfg and dccfg.get('service_endpoint'):
+            if not dcfg.get('auth_key'):
+                setuplog.warnging("Missing data_cache.auth_key; no authorization key will be used")
+            self._cachecli = CacheCtlClient(dccfg['service_endpoint'], dccfg.get('auth_key'))
+        if not self._cachecli:
+            setuplog.warning("Cache client not configured (missing data_cache parameter)")
+
+        if not self._notifier and self.cfg.get('notifier'):
+            self._notifier = NotificationService(self.cfg['notifier'])
+        if not self._notifier:
+            setuplog.warning("Notification service not configured (missing notifier parameter)")
+
+        self._done = set()
+            
 
     def apply(self, statemgr: fw.PreservationStateManager):
         """
@@ -603,23 +667,47 @@ class PDRPublication(fw.AIPPublication):
         log = statemgr.log.getChild("publication")
         aipid = statemgr.aipid
         version = statemgr.get_state_property("nerdm:version", "?")
-        statemgr.record_progress("Releasing metadata to the PDR")
+        statemgr.record_progress("Releasing dataset to the PDR")
 
         # TODO: submit for caching
+        if self._cachecli:
+            statemgr.record_progress("Triggering migration of data to distribution system")
+            try:
+                self._cachecli.ensure_cached(aipid)
+                self._note_reverted(statemgr, "cache_data")
+
+            except Exception as ex:
+                msg = f"Failure while caching data products: {str(ex)}"
+                log.exception(msg)
+                log.info("Cache API service endpoint: %s", self._cachecli.ep)
+                self._note_failed(statemgr, "cache_data")
+
+                if self._notifier:
+                    self._notifier.alert("cache.failure", origin=self.name,
+                                         summary=f"Distribution caching failure: {aipid}", 
+                                         desc=msg, id=aipid, version=version)
 
         if self._ingester:
             # submit NERDm record to RMM ingest service
+            statemgr.record_progress("Releasing metadata to the PDR")
             try:
                 if not self._ingester.is_staged(aipid):
                     PreservationStateException(f"No staged RMM record found for AIP-ID={aipid}")
                 self._ingester.submit(aipid)
                 log.info("Submitted NERDm record to RMM")
+                self._note_succeeded(statemgr, "rmm_ingest")
+
             except Exception as ex:
                 msg = f"Failed to ingest record with name={aipid} into RMM: {str(ex)}"
                 if self._ingcfg.get('fail_on_incomplete'):
                     raise fw.AIPPublicationException(msg)
                 log.exception(msg)
                 log.info("Ingest service endpoint: %s", self._ingester.endpoint)
+
+                if isinstance(ex, NotValideForIngest):
+                    self._note_failed(statemgr, "rmm_ingest")
+                else:
+                    self._note_reverted(statemgr, "rmm_ingest")
 
                 if self._notifier:
                     self._notifier.alert("ingest.failure", origin=self.name,
@@ -628,17 +716,25 @@ class PDRPublication(fw.AIPPublication):
 
         if self._doiminter:
             # submit the DOI metadata to DataCite
+            statemgr.record_progress("Releasing DOI metadata to DataCite")
             try:
                 if not self._doiminter.is_staged(aipid):
                     PreservationStateException(f"No staged DOI record found for AIP-ID={aipid}")
                 self._doiminter.submit(aipid)
                 log.info("Submitted DOI record to DataCite")
+                self._note_succeeded(statemgr, "mint_doi")
+
             except Exception as ex:
                 msg = f"Failed to submit DOI record with name={aipid} to DataCite: {str(ex)}"
                 if self._dmcfg.get('fail_on_incomplete'):
                     raise fw.AIPPublicationException(msg)
                 log.exception(msg)
                 log.info("DOI minter service endpoint: %s", self._doiminter.dccli._ep)
+
+                if isinstance(ex, DOIClientException):
+                    self._note_failed(statemgr, "mint_doi")
+                else:
+                    self._note_reverted(statemgr, "mint_doi")
 
                 if self._notifier:
                     self._notifier.alert("doi.failure", origin=self.name,
@@ -648,7 +744,70 @@ class PDRPublication(fw.AIPPublication):
         statemgr.mark_completed(statemgr.PUBLISHED, "AIP is released")
 
     def revert(self, statemgr: fw.PreservationStateManager):
-        return False
+        log = statemgr.log.getChild("publication")
+        revertinfo = statemgr.get_state_property("publication:revert", {})
+        if revertinfo:
+            log.info("reverting state from previous attempt")
+        
+        if self._doiminter and revertinfo.get("mint_doi"):
+            resultdir = None
+            if revertinfo["mint_doi"] == "succeeded":
+                resultdir = self._doiminter._publishdir
+            elif revertinfo["mint_doi"] == "failed":
+                resultdir = self._doiminter._faildir
+            elif revertinfo["mint_doi"] == "interrupted":
+                resultdir = self._doiminter._inprogdir
+
+            if resultdir:
+                staged = os.path.join(self._doiminter._stagedir, statemgr.aipid+".json")
+                handled = os.path.join(resultdir, statemgr.aipid+".json")
+                if not os.path.exists(staged) and os.path.isfile(handled):
+                    try:
+                        shutil.copy(handled, staged)
+                    except Exception as ex:
+                        log.error("Failed to revert DOI record from %s: %s", handled, str(ex))
+
+                del revertinfo["mint_doi"]
+
+        if self._ingester and revertinfo.get("rmm_ingest"):
+            resultdir = None
+            if revertinfo["rmm_ingest"] == "succeeded":
+                resultdir = self._doiminter._successdir
+            elif revertinfo["rmm_ingest"] == "failed":
+                resultdir = self._doiminter._faildir
+            elif revertinfo["rmm_ingest"] == "interrupted":
+                resultdir = self._doiminter._inprogdir
+
+            if resultdir:
+                staged = os.path.join(self._doiminter._stagedir, statemgr.aipid+".json")
+                handled = os.path.join(resultdir, statemgr.aipid+".json")
+                if not os.path.exists(staged) and os.path.isfile(handled):
+                    try:
+                        shutil.copy(handled, staged)
+                    except Exception as ex:
+                        log.error("Failed to revert NERDm record from %s: %s", handled, str(ex))
+
+                del revertinfo["rmm_ingest"]
+
+        # nothing to do for caching
+        if revertinfo.get("cache_data"):
+            del revertinfo["cache_data"]
+
+        statemgr.set_state_property("publication:revert", revertinfo)
+        return super().revert(statemgr)
+
+    def _set_for_revert(self, statemgr, action, result):
+        revertinfo = statemgr.get_state_property("publication:revert", {})
+        revertinfo[action] = result
+        statemgr.set_state_property("publication:revert", revertinfo)
+
+    def _note_failed(self, statemgr, action):
+        self._note_for_revert(statemgr, action, "failed")
+    def _note_succeeded(self, statemgr, action):
+        self._note_for_revert(statemgr, action, "succeeded")
+    def _note_reverted(self, statemgr, action):
+        self._note_for_revert(statemgr, action, "reverted")
+            
     
 
 class RepositoryAccess:
@@ -758,8 +917,110 @@ class RepositoryAccess:
 
         aipres = "/".join(['_aip', aipfile])
         return self.distrib.is_available(aipres)
+
+class PDRPreservationCleanup(fw.AIPCleanup):
+    """
+    An implementation of the AIP clean-up step appropriate for the PDR preservation workflow.
+
+    When applied, this clean-up step will, by default:
+       * remove from the staging area all serialized bags and associated SHA files _except_ 
+         for the head bag, 
+       * remove all unserialized multi-bags from the work area, and
+       * remove the input SIP bag.
+
+    When the ``cancel`` argument is passed in as ``True``, this step will:
+       * remove all serialized bags, including the head bag,
+       * remove all unserializaed multi-bags, 
+       * leave the input SIP bag intact, and 
+       * update the state manager for starting preservation again from the beginning.
+    """
+
+    def __init__(self, config=None):
+        if config is None:
+            config = {}
+        self.cfg = config
         
+    def clean_serialized_bags(self, statemgr: fw.PreservationStateManager, 
+                              cancel=False, log: Logger=None):
+        staged = statemgr.get_serialized_files()
+        if staged:
+            head = None
+            if not cancel:
+                head = find_latest_head_bag(staged)
+                staged.remove(head)  # don't delete the head bag
+            if self.delete_files(staged, statemgr, "serialized bags", log):
+                statemgr.set_serialized_files(None if cancel else [head])
+
+    def clean_multibags(self, statemgr: fw.PreservationStateManager, cancel=False, log: Logger=None):
+        if self.cfg.get("cleanup_unserialized_bags", True):
+            self._rm_mb_working_dir(statemgr, log)
         
+    def _rm_mb_working_dir(self, statemgr: fw.PreservationStateManager, log: Logger=None):
+        workdir = Path(statemgr.get_working_dir()) / "multibag"
+        if workdir.exists():
+            if not log:
+                log = statemgr.log.getChild("cleanup")
+            if not workdir.is_dir():
+                log.warning("Multibag working dir, %s, is not a directory", str(workdir))
+            else:
+                try: 
+                    shutil.rmtree(workdir)
+                except Exception as ex:
+                    log.error("Trouble deleting multibag work directory: %s", str(ex))
+
+    def clean_original_aip(self, statemgr: fw.PreservationStateManager, log: Logger=None):
+        sipdir = statemgr.get_original_aip()
+        if sipdir and os.path.exists(sipdir):
+            if not log:
+                log = statemgr.log.getChild("cleanup")
+            if not os.path.isdir(sipdir):
+                raise PreservationStateException("PDRPreservationCleanup: assumption is that input SIP "+
+                                                 "is a directory is not True")
+            else:
+                try:
+                    shutil.rmtree(sipdir)
+                except Exception as ex:
+                    log.error("Trouble deleting original SIP: %s", str(ex))
+        
+
+    def apply(self, statemgr: fw.PreservationStateManager, cancel=False, *kw):
+        """
+        Apply final clean-up chores.  See :py:class:`class documentation<AIPPreservationCleanup>` 
+        for details.
+        """
+        log = statemgr.log.getChild("clean-up")
+        if cancel:
+            log.info("Preservation canceled: cleaning up for restart")
+        else:
+            log.info("Preservation completed successfully: cleaning up")
+
+        disabled = self.cfg.get('disabled')
+        if disabled is None or disabled is False:
+            disabled = []
+        elif not isinstance(disabled, (bool, list)):
+            log.warning("Wrong type for config param 'disabled' (%s); will be ignored", type(disabled))
+            disabled = []
+            
+        if self.cfg.get('disabled') is True:
+            log.warning("Full clean-up is disabled; preservation artifacts will remain")
+            return
+
+        if 'multibag' not in disabled:
+            self.clean_multibags(statemgr, cancel, log)
+        else:
+            log.info("Skipping multibag clean-up (disabled in config)")
+
+        if 'serialized' not in disabled:
+            self.clean_serialized_bags(statemgr, cancel, log)
+        else:
+            log.info("Skipping serialized bag clean-up (disabled in config)")
+
+        if not cancel:
+            if 'original' not in disabled:
+                self.clean_original_aip(statemgr, log)
+            else:
+                log.info("Skipping original input SIP (disabled in config)")
+
 
 class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
     """
@@ -807,6 +1068,15 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
         if config.get('type', 'def') not in self.def_supported_types:
             raise ConfigurationException("Unsupported validate step type: "+str(config.get('type')))
         return PDRPublication(config)
+
+    def _create_cleaner(self, config: Mapping) -> fw.AIPCleanup:
+        tp = config.get('type', 'def')
+        if tp == 'min':
+            # a minimal cleaner is wanted; PreservationTask will create a minimal default
+            return None
+        if tp not in self.def_supported_types:
+            raise ConfigurationException("Unsupported validate step type: "+str(tp))
+        return PDRAIPCleanup(config)
 
 
         

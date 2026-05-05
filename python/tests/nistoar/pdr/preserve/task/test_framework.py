@@ -23,6 +23,14 @@ class TestPreservationStepAware(test.TestCase, fw.PreservationStepsAware):
         self.assertEqual(self._label_for_step(self.ARCHIVED), "archived")
         self.assertEqual(self._label_for_step(self.PUBLISHED), "published")
         self.assertEqual(self._label_for_step(49), "archived")
+
+    def test_all_steps_completed(self):
+        all = self.PUBLISHED * 2 - 1
+        self.assertEqual(self._all_steps, all)
+        self.assertTrue(self._all_steps_completed(all))
+        self.assertFalse(self._all_steps_completed(64))
+        self.assertFalse(self._all_steps_completed(13))
+        self.assertFalse(self._all_steps_completed(100))
         
         
 
