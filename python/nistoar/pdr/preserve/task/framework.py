@@ -31,7 +31,7 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from logging import Logger
 from typing import List
 
-from nistoar.pdr.preserve import PreservationException
+from nistoar.pdr.preserve import PreservationException, system as preserve_system
 
 UNSTARTED_PROGRESS = "waiting to start preservation"
 
@@ -96,7 +96,7 @@ class PreservationStateManager(PreservationStepsAware, metaclass=ABCMeta):
         :param Logger  logger:  the logger to use during preservation.
         """
         if not logger:
-            logger = logging.getLogger("preserve").getChild(aipid)
+            logger = preserve_system.getSysLogger().getChild(aipid)
         self._log = logger
         self.cfg = config
         self._aipid = aipid

@@ -26,7 +26,7 @@ def make_state_manager(aipid: str, aipdir: str,
     if not os.path.is_file(statefile):
         raise PreservationStateException(f"{statefile}: pre-initialized preservation state file "
                                          "not found as a file")
-    return JSONPreservationStateManager(smcfg, aipid, aipdir, self.log) # need SIPStatus
+    return JSONPreservationStateManager(smcfg, aipid, aipdir, log) # need SIPStatus
 
 def make_preservation_task(aipid: str, stmgr: PreservationStateManager,
                            config: Mapping=None, log: Logger=None) -> PreservationTask:

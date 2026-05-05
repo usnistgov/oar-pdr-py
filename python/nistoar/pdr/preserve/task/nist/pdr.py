@@ -624,7 +624,7 @@ class PDRPublication(fw.AIPPublication):
         #     raise ConfigurationException("Missing required configparameter: store")
         # self._storer = PDRStoreClient(scfg)
 
-        setuplog = logging.getLogger(preserve_system).getChild('PDRPublication')
+        setuplog = preserve_system.getSysLogger.getChild('PDRPublication')
 
         icfg = self.cfg.get('ingest', {})
         self._ingester = None

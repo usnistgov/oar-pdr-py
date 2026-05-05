@@ -140,7 +140,7 @@ class PreservationService(PreservationSystem, PreservationStepsAware, meta=ABCMe
         PreservationSystem.__init__(self)
         self.cfg = config
         if not log:
-            log = logging.getLogger("PreservationService")
+            log = preserve_system.getSysLogger().getChild("service")
         self.log = log
 
     @abstractmethod
@@ -319,7 +319,8 @@ class AIP1PreservationService(PreservationService):
         if not iddir.is_dir():
             return None
         return JSONPreservationStateManager(self.cfg.get('state_manager', {}), aipid, 
-                                            persistin=iddir/self._state_file, log=self.log)
+                                            persistin=iddir/self._state_file,
+                                            log=self.log.getChild(aipid))
 
     def active_aip_ids(self) -> Iterator[str]:
         """
