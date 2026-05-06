@@ -100,9 +100,9 @@ def execute(args, config: Mapping=None, log: Logger=None):
         raise CommandFailure(args.cmd, "Unable to create DAP service: "+str(ex), 1) from ex
 
     try:
-        if args.phase == "approve":
+        if args.phase == "approved" or args.phase == "approve":
             if args.feedback:
-                log.warning("feedback statements ignored for phase=approve")
+                log.warning("feedback statements ignored for phase=approved")
             svc.approve(args.dbid, args.revsys, args.revid, args.infourl) 
 
         elif args.phase == "cancel":

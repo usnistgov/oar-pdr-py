@@ -744,7 +744,7 @@ def authenticate_via_authkey(svcname: str, env: Mapping, authcfg: Mapping, log: 
 
     :param str   svcname: a name to provide as the agent software vehicle
     :param dict      env: the WSGI environment containing the request data
-    :param dict  authcfg: the JWT decoding configuration (see above)
+    :param dict  authcfg: the supported keys and user configuration (see above)
     :param Logger    log: the logger that can be used to record messages
     :param [str]  agents: an optional list of agent strings to attach to output agent
     :param str client_id: an ID representing the OAR client being used to connect.  If None,

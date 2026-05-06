@@ -36,7 +36,7 @@ class SimulatedExternalReviewClient(ExternalReviewClient):
 
         self.projs = {}
 
-    def submit(self, id: str, submitter: str, version: str=None, **options):
+    def submit(self, id: str, submitter: str, version: str=None, **options) -> Mapping:
         if id in self.projs and self.projs[id].get('phase','approved') != 'approved':
             raise ExternalReviewException(f"Already under review with the {self.system_name} review system")
 
@@ -50,7 +50,25 @@ class SimulatedExternalReviewClient(ExternalReviewClient):
             extra = {}
             if options.get('can_publish'):
                 extra['publish'] = True
+            self.projs[id]['phase'] = 'approved'
             self.approve(id, **extra)
+
+        else:
+            self.update(id, self.projs[id]['phase'])
+
+        return self.projs[id]
+
+    def get_status(self, id: str, revid: str=None) -> Mapping:
+        return self.projs.get(id)
+
+    def resubmit(self, id: str, revid: str, **options) -> Mapping:
+        if not self.projs.get(id):
+            self.projs[id] = { "submitter": "nobody" }
+                
+        self.projs[id]['phase'] = "restarted"
+        self.projs[id]['options'] = options
+
+        return self.projs[id]
 
     def approve(self, id, publish: bool=False):
         if id not in self.projs:

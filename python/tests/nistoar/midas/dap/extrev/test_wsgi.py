@@ -110,8 +110,8 @@ class TestLegacyNPSFeedbackHandler(test.TestCase):
     def create_record(self):
         svc = self.create_service()
         prec = svc.create_record("testrec")
-        svc._set_review_permissions(prec)
-        prec.save()
+#        svc._set_review_permissions(prec)
+#        prec.save()
         return prec.id
 
     def test_handle(self):
@@ -137,6 +137,10 @@ class TestLegacyNPSFeedbackHandler(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         resp=self.body2dict(body)
         self.assertEqual(resp, [])
+
+        # submit for review so we can receive feedback
+        svc = self.create_service()
+        svc.submit(id)
 
         # start a review
         # self.create_service().apply_external_review(id, "nps", "requested", id)
@@ -193,9 +197,6 @@ class TestLegacyNPSFeedbackHandler(test.TestCase):
         fb = resp['feedback'][0]
         self.assertEqual(fb['type'], "req")
         self.assertTrue(fb['description'].startswith("Visit NPS"))
-
-        svc = self.create_service()
-        svc.submit(id)
 
         # now approve
         self.resp = []
