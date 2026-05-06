@@ -6,16 +6,16 @@
 ## Basic Information
 
 **Title:**
-{{record['title']}}
+{{record.get('title', 'Not Provided')}}
 
 **Project Description:**
-{{record['projectDescription']}}
+{{record.get('projectDescription', 'Not Provided')}}
 
 **Start Date:**
-{{record['startDate']}}
+{{record.get('startDate', 'Not Provided')}}
 
 **Make DAP Searchable:**
-{{record['dapSearchable']}}
+{{record.get('dapSearchable', 'Not Provided')}}
 
 **Asset Type:**
 {{record.get('assetType', 'Data Asset')}}
@@ -24,7 +24,7 @@
 
 | Grant Source | Grant ID |
 | --- | --- |
-| {{record['funding']['grant_source']}} | {{record['funding']['grant_id']}} |
+| {{record.get('funding', {}).get('grant_source', 'Not Provided')}} | {{record.get('funding', {}).get('grant_id', 'Not Provided')}} |
 
 ---
 
@@ -75,11 +75,11 @@ if data_sources:
     
     for ds in data_sources:
         row = "| {name} | {desc} | {type} | {format} | {access} |".format(
-            name=md_escape(ds.get('name', 'N/A')),
-            desc=md_escape(ds.get('description', 'N/A')),
-            type=md_escape(ds.get('sourceType', 'N/A')),
-            format=md_escape(ds.get('dataFormat', 'N/A')),
-            access=md_escape(ds.get('accessMethod', 'N/A'))
+            name=md_escape(ds.get('name', 'Not Provided')),
+            desc=md_escape(ds.get('description', 'Not Provided')),
+            type=md_escape(ds.get('sourceType', 'Not Provided')),
+            format=md_escape(ds.get('dataFormat', 'Not Provided')),
+            access=md_escape(ds.get('accessMethod', 'Not Provided'))
         )
         lines.append(row)
     
@@ -105,11 +105,11 @@ if assets:
     
     for asset in assets:
         row = "| {name} | {desc} | {size} | {format} | {location} |".format(
-            name=md_escape(asset.get('name', 'N/A')),
-            desc=md_escape(asset.get('description', 'N/A')),
-            size=md_escape(asset.get('estimatedSize', 'N/A')),
-            format=md_escape(asset.get('format', 'N/A')),
-            location=md_escape(asset.get('storageLocation', 'N/A'))
+            name=md_escape(asset.get('name', 'Not Provided')),
+            desc=md_escape(asset.get('description', 'Not Provided')),
+            size=md_escape(asset.get('estimatedSize', 'Not Provided')),
+            format=md_escape(asset.get('format', 'Not Provided')),
+            location=md_escape(asset.get('storageLocation', 'Not Provided'))
         )
         lines.append(row)
     
@@ -125,49 +125,49 @@ else:
 ## Storage and Access
 
 **Storage Requirements:**
-{{record.get('storageRequirements', 'Not specified')}}
+{{record.get('storageRequirements', 'Not Provided')}}
 
 **Access Restrictions:**
-{{record.get('accessRestrictions', 'Not specified')}}
+{{record.get('accessRestrictions', 'Not Provided')}}
 
 **Retention Period:**
-{{record.get('retentionPeriod', 'Not specified')}}
+{{record.get('retentionPeriod', 'Not Provided')}}
 
 ---
 
 ## Technical Details
 
 **File Formats:**
-{{", ".join(record.get('supportedFormats', ['Not specified']))}}
+{{", ".join(record.get('supportedFormats', ['Not Provided']))}}
 
 **Processing Requirements:**
-{{record.get('processingRequirements', 'Not specified')}}
+{{record.get('processingRequirements', 'Not Provided')}}
 
 **Quality Assurance:**
-{{record.get('qualityAssurance', 'Not specified')}}
+{{record.get('qualityAssurance', 'Not Provided')}}
 
 ---
 
 ## Compliance and Standards
 
 **Data Standards:**
-{{", ".join(record.get('dataStandards', ['Not specified']))}}
+{{", ".join(record.get('dataStandards', ['Not Provided']))}}
 
 **Metadata Standards:**
-{{", ".join(record.get('metadataStandards', ['Not specified']))}}
+{{", ".join(record.get('metadataStandards', ['Not Provided']))}}
 
 **Regulatory Compliance:**
-{{record.get('regulatoryCompliance', 'Not specified')}}
+{{record.get('regulatoryCompliance', 'Not Provided')}}
 
 ---
 
 ## Comments and Notes
 
 **Additional Comments:**
-{{record.get('comments', 'No additional comments.')}}
+{{record.get('comments', 'Not Provided')}}
 
 **Internal Notes:**
-{{record.get('internalNotes', 'No internal notes.')}}
+{{record.get('internalNotes', 'Not Provided')}}
 
 ---
 

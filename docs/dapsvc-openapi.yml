@@ -1291,9 +1291,14 @@ paths:
 
     get:
       summary: return whether the specified user or group has the given permission
-      description:
-        This method removes the group or user ID from an ACL permission list.  A special
-        value, ":user" is a synonym for the ID of the authenticated user.  
+      description: >-
+        This method returns (JSON) true if the specified user or group is authorized to access
+        the record with the given permission (e.g. does this user have write permission on this
+        record).  This does more than check if the identifier appears explicitly in the ACL
+        permission list: it does a full authorization check which resolves the identifier's
+        group membership.  Special user identifier values, ":user" and "midas:user", are both
+        synonyms for the ID of the currently authenticated user (in other words, "do I have 
+        the permission on this record").  
       responses:
         "200":
           description:
