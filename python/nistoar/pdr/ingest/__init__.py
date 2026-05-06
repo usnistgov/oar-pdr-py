@@ -11,6 +11,6 @@ Each module contains a submodule called ``client`` which provides a client class
 PDR publishing system to submit artifacts.  Additional modules may be included to provice service 
 implementations to be run on the public repository side to ingest the artifacts.  
 """
-from .rmm import IngestClient as RMMIngestClient
+from .rmm import IngestClient as RMMIngestClient, NotValidForIngest
 from .dc import DOIMintingClient
 

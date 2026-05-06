@@ -17,7 +17,7 @@ import nistoar.pdr.preserve.bagit.utils as bagutils
 from nistoar.pdr.preserve import PreservationStateError, system as preserve_system
 from nistoar.pdr.preserve.bagit.utils import parse_bag_name, find_latest_head_bag
 import nistoar.id.versions as verutils
-from nistoar.pdr.ingest import RMMIngestClient, DOIMintingClient
+from nistoar.pdr.ingest import RMMIngestClient, DOIMintingClient, NotValidForIngest
 from nistoar.pdr.distrib import (BagDistribClient, RESTServiceClient,
                                  DistribResourceNotFound, DistribServiceException)
 from ..validate import *
@@ -624,7 +624,7 @@ class PDRPublication(fw.AIPPublication):
         #     raise ConfigurationException("Missing required configparameter: store")
         # self._storer = PDRStoreClient(scfg)
 
-        setuplog = preserve_system.getSysLogger.getChild('PDRPublication')
+        setuplog = preserve_system.getSysLogger().getChild('PDRPublication')
 
         icfg = self.cfg.get('ingest', {})
         self._ingester = None
@@ -642,7 +642,7 @@ class PDRPublication(fw.AIPPublication):
             setuplog.warning("DOI Minter not configured (missing doi parameter): won't create DOI")
 
         self._cachecli = None
-        dccfg = self.cfg('data_cache')
+        dccfg = self.cfg.get('data_cache')
         if dccfg and dccfg.get('service_endpoint'):
             if not dcfg.get('auth_key'):
                 setuplog.warnging("Missing data_cache.auth_key; no authorization key will be used")
@@ -704,7 +704,7 @@ class PDRPublication(fw.AIPPublication):
                 log.exception(msg)
                 log.info("Ingest service endpoint: %s", self._ingester.endpoint)
 
-                if isinstance(ex, NotValideForIngest):
+                if isinstance(ex, NotValidForIngest):
                     self._note_failed(statemgr, "rmm_ingest")
                 else:
                     self._note_reverted(statemgr, "rmm_ingest")
@@ -802,11 +802,11 @@ class PDRPublication(fw.AIPPublication):
         statemgr.set_state_property("publication:revert", revertinfo)
 
     def _note_failed(self, statemgr, action):
-        self._note_for_revert(statemgr, action, "failed")
+        self._set_for_revert(statemgr, action, "failed")
     def _note_succeeded(self, statemgr, action):
-        self._note_for_revert(statemgr, action, "succeeded")
+        self._set_for_revert(statemgr, action, "succeeded")
     def _note_reverted(self, statemgr, action):
-        self._note_for_revert(statemgr, action, "reverted")
+        self._set_for_revert(statemgr, action, "reverted")
             
     
 
