@@ -910,7 +910,8 @@ class ProjectACLsHandler(ProjectRecordHandler):
             # this indicates the currently authenticated user
             parts[1] = self.who.actor
 
-        return self.send_json(parts[1] in acl, ashead=ashead)  # returns true or false
+        hasaccess = parts[1] in acl or prec.authorized(parts[0], parts[1])
+        return self.send_json(hasaccess, ashead=ashead)  # returns true or false
 
     def do_POST(self, path):
         """
