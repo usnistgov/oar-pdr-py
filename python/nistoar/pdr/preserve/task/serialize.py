@@ -135,7 +135,7 @@ class NISTBagSerialization(fw.AIPSerialization):
         :return:  False if this step cannot be undone even partially
         :raise PreservationException:  if an error occurred while trying to undo the step
         """
-        log = statemgr.log.getChild("serialization.cleanup")
+        log = statemgr.log.getChild("serialization").getChild("revert")
         statemgr.unmark_completed(statemgr.SERIALIZED)
         self._rm_mb_working_dir(statemgr)
 

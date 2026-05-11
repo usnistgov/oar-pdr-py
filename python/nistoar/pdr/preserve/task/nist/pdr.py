@@ -744,7 +744,7 @@ class PDRPublication(fw.AIPPublication):
         statemgr.mark_completed(statemgr.PUBLISHED, "AIP is released")
 
     def revert(self, statemgr: fw.PreservationStateManager):
-        log = statemgr.log.getChild("publication")
+        log = statemgr.log.getChild("publication").getChild("revert")
         revertinfo = statemgr.get_state_property("publication:revert", {})
         if revertinfo:
             log.info("reverting state from previous attempt")
@@ -935,10 +935,11 @@ class PDRPreservationCleanup(fw.AIPCleanup):
        * update the state manager for starting preservation again from the beginning.
     """
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, finalizer: fw.AIPFinalization = None):
         if config is None:
             config = {}
         self.cfg = config
+        self.finalizer = finalizer
         
     def clean_serialized_bags(self, statemgr: fw.PreservationStateManager, 
                               cancel=False, log: Logger=None):
@@ -968,21 +969,30 @@ class PDRPreservationCleanup(fw.AIPCleanup):
                 except Exception as ex:
                     log.error("Trouble deleting multibag work directory: %s", str(ex))
 
-    def clean_original_aip(self, statemgr: fw.PreservationStateManager, log: Logger=None):
-        sipdir = statemgr.get_original_aip()
+    def clean_sip(self, statemgr: fw.PreservationStateManager, log: Logger=None):
+        if not log:
+            log = statemgr.log.getChild("cleanup")
+        sipdir = statemgr.get_sip()
         if sipdir and os.path.exists(sipdir):
-            if not log:
-                log = statemgr.log.getChild("cleanup")
-            if not os.path.isdir(sipdir):
-                raise PreservationStateException("PDRPreservationCleanup: assumption is that input SIP "+
-                                                 "is a directory is not True")
-            else:
-                try:
-                    shutil.rmtree(sipdir)
-                except Exception as ex:
-                    log.error("Trouble deleting original SIP: %s", str(ex))
-        
+            self._delete_bag(sipdir, "original SIP", log)
 
+    def clean_finalized(self, statemgr: fw.PreservationStateManager, log: Logger=None):
+        if not log:
+            log = statemgr.log.getChild("cleanup")
+        findir = statemgr.get_finalized_aip()
+        if findir and os.path.exists(findir):
+            self._delete_bag(findir, "finalized AIP", log)
+
+    def _delete_bag(self, bagdir, what, log):
+        if not os.path.isdir(bagdir):
+            raise PreservationStateException("PDRPreservationCleanup: assumption is that the "+
+                                             what+" is a directory is not True")
+        else:
+            try:
+                shutil.rmtree(bagdir)
+            except Exception as ex:
+                log.error("Trouble deleting the %s: %s", what, str(ex))
+        
     def apply(self, statemgr: fw.PreservationStateManager, cancel=False, *kw):
         """
         Apply final clean-up chores.  See :py:class:`class documentation<AIPPreservationCleanup>` 
@@ -1015,11 +1025,16 @@ class PDRPreservationCleanup(fw.AIPCleanup):
         else:
             log.info("Skipping serialized bag clean-up (disabled in config)")
 
-        if not cancel:
-            if 'original' not in disabled:
-                self.clean_original_aip(statemgr, log)
+        if 'original' not in disabled:
+            if self.finalizer:
+                # this will rename the finalized AIP back the original SIP
+                self.finalizer.revert(statemgr)
+
+            if not cancel:
+                self.clean_sip(statemgr, log)
             else:
                 log.info("Skipping original input SIP (disabled in config)")
+            self.clean_finalized(statemgr, log)
 
 
 class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
@@ -1087,6 +1102,15 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
         if tp not in self.def_supported_types:
             raise ConfigurationException("Unsupported validate step type: "+str(tp))
         return PDRAIPCleanup(config)
+
+    def create_task(self, aipid: str, config: Mapping, logger: Logger=None, startover=False,
+                    statemgr: fw.PreservationStateManager=None) -> fw.PreservationTask:
+        out = super().create_task(aipid, config, logger, startover, statemgr)
+        if hasattr(out._cleaner) and hasattr(out._finalizer) and \
+           hasattr(out._cleaner.finalizer) and not out._cleaner.finalizer:
+            out._cleaner.finalizer = out._finalizer
+
+        return out
 
 
         

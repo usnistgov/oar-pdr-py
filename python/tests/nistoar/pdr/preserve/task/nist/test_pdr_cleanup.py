@@ -39,12 +39,14 @@ class TestPDRPreservationCleanup(test.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory(prefix="work.", dir=tmpdir.name)
         self.workdir = Path(self.tmpdir.name)
         self.aipid = "mds8-2222"
+        self.finalized_bag = self.workdir/(self.aipid+"1.0.0.mbag0_4-0")
         self.cfg = { }
 
         self.mbags = [f"{self.aipid}.1_0_0.mbag0_4-{str(i)}" for i in range(3)]
         self.pstate = {
             "_aipid": self.aipid,
-            "_orig_aip": str(self.workdir/self.aipid),
+            "_orig_sip": str(self.workdir/self.aipid),
+            "_finalized_aip": str(self.finalized_bag),
             "_work_dir": str(self.workdir),
             "_stage_dir": str(self.workdir/"stage"),
             "_serialized_files": [str(self.workdir/"stage"/f"{f}.zip") for f in self.mbags],
@@ -86,8 +88,10 @@ class TestPDRPreservationCleanup(test.TestCase):
             if not (self.workdir/"multibag"/mb).exists():
                 self._make_bag(self.workdir/"multibag"/mb)
 
-        if not (self.workdir/self.pstate["_orig_aip"]).exists():
-            self._make_bag(self.workdir/self.pstate["_orig_aip"])
+        if not (self.workdir/self.pstate["_orig_sip"]).exists():
+            self._make_bag(self.workdir/self.pstate["_orig_sip"])
+        if not self.finalized_bag.exists():
+            shutil.copytree(self.workdir/self.pstate["_orig_sip"], self.finalized_bag)
 
     def tearDown(self):
         self.tmpdir.cleanup()
@@ -181,17 +185,17 @@ class TestPDRPreservationCleanup(test.TestCase):
         self.cln.clean_multibags(self.mgr)
         self.assertTrue((self.workdir/self.aipid).is_dir())
 
-    def test_clean_original_aip(self):
+    def test_clean_sip(self):
         mbdir = self.workdir/"multibag"
         self.assertTrue(mbdir.is_dir())
         self.assertTrue((self.workdir/self.aipid).is_dir())
 
-        self.cln.clean_original_aip(self.mgr)
+        self.cln.clean_sip(self.mgr)
         self.assertTrue(not (self.workdir/self.aipid).exists())
         self.assertTrue(mbdir.is_dir())
 
         # indempodent
-        self.cln.clean_original_aip(self.mgr)
+        self.cln.clean_sip(self.mgr)
         self.assertTrue(not (self.workdir/self.aipid).exists())
         self.assertTrue(mbdir.is_dir())
         
@@ -199,11 +203,38 @@ class TestPDRPreservationCleanup(test.TestCase):
         mbdir = self.workdir/"multibag"
         self.assertTrue(mbdir.is_dir())
         self.assertTrue((self.workdir/self.aipid).is_dir())
+        self.assertTrue(os.path.exists(self.mgr.get_finalized_aip()))
 
         self.cln.apply(self.mgr, cancel=True)
 
         self.assertFalse(mbdir.exists())
         self.assertTrue((self.workdir/self.aipid).is_dir())
+        final = self.mgr.get_finalized_aip()
+        self.assertTrue(final)
+        self.assertFalse(os.path.exists(final))
+        self.assertEqual(final, str(self.finalized_bag))
+        self.assertIsNone(self.mgr.get_serialized_files())
+        
+    def test_cancel_wrename(self):
+        shutil.rmtree(self.workdir/self.aipid)
+        self.cln.finalizer = pdr.PDRBagFinalization({
+            "repo_access": {
+                "distrib_service": { "service_endpoint": "https://notused.net/" }
+            }
+        })
+        
+        mbdir = self.workdir/"multibag"
+        self.assertTrue(mbdir.is_dir())
+        self.assertFalse((self.workdir/self.aipid).is_dir())
+        self.assertTrue(os.path.exists(self.mgr.get_finalized_aip()))
+
+        self.cln.apply(self.mgr, cancel=True)
+
+        self.assertFalse(mbdir.exists())
+        self.assertTrue((self.workdir/self.aipid).is_dir())
+        final = self.mgr.get_finalized_aip()
+        self.assertFalse(final)
+        self.assertFalse(os.path.exists(self.finalized_bag))
         self.assertIsNone(self.mgr.get_serialized_files())
 
         
@@ -216,6 +247,7 @@ class TestPDRPreservationCleanup(test.TestCase):
 
         self.assertFalse(mbdir.exists())
         self.assertFalse((self.workdir/self.aipid).exists())
+        self.assertFalse(os.path.exists(self.mgr.get_finalized_aip()))
         staged = self.mgr.get_serialized_files()
         self.assertIsNotNone(staged)
         self.assertEqual(len(staged), 1)
@@ -233,6 +265,7 @@ class TestPDRPreservationCleanup(test.TestCase):
 
         self.assertFalse(mbdir.exists())
         self.assertTrue((self.workdir/self.aipid).is_dir())
+        self.assertTrue(os.path.exists(self.mgr.get_finalized_aip()))
         staged = self.mgr.get_serialized_files()
         self.assertIsNotNone(staged)
         self.assertEqual(len(staged), 1)
