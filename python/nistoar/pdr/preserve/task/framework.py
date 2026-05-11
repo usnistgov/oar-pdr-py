@@ -4,21 +4,21 @@ The Preservation Task Framework provides a model for how the preserving of produ
 The process can be a long-running one which can experience various errors along the way.  This framework
 allows one to execute the process in a variety ways--such as, synchronously via the command line or 
 asynchronously via a web service.  If the process fails along the way, the framework can allow the process
-to be resumed at the right after the failure conditions have been corrected without starting over.  
+to be resumed at the appropriate point after the failure conditions have been corrected without starting 
+over.  
 
-The preservation process operates on the PDR's notion of an Archive Information Package (AIP), which takes 
-the form of a BagIt bag.  The process is defined by the following steps, each represented by a pluggable 
-interface:
-  1. :py:class:`AIPFinalization` -- setting up the preservation process, which can include last-minute 
-     tweaks to the content of the bag.  
+The preservation process accepts as its input a Submission Information Package (SIP); typically, this 
+takes the form of a proto-BagIt bag (but this can depend on the implementation).  The process is defined 
+by the following steps, each represented by a pluggable interface:
+  1. :py:class:`AIPFinalization` -- transforming the input SIP (the proto-bag) into a complete AIP; this
+     often adding required administrative artifacts and other tweaks to the content of the bag.  
   2. :py:class:`AIPValidation` -- running a series of validation checks to ensure that the AIP meets the 
      requirements for completeness.
   3. :py:class:`AIPSerialization` -- converting the AIP into one or more archivable files
   4. :py:class:`AIPArchiving` -- committing the serialized bag files to long-term storage
   5. :py:class:`AIPPublication` -- releasing the AIP to external systems, namely to a repository system 
      through which the AIP can be accessed.  
-  6. :py:class:`AIPCleanup` -- removing any remaining preservation artifacts and possibly the input SIP
-     (Submission Information Package)
+  6. :py:class:`AIPCleanup` -- removing any remaining preservation artifacts and possibly the input SIP.
 
 These steps are managed via an instance of the :py:class:`PreservationTask` class, calling each step 
 in sequence.  The state of a task--which steps have been completed and where to find intermediate 
@@ -182,11 +182,11 @@ class PreservationStateManager(PreservationStepsAware, metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_original_aip(self) -> str:
+    def get_sip(self) -> str:
         """
-        return the original location of the submitted AIP.  Typically, the value represents a bag
+        return the location of the submitted SIP.  Typically, the value represents a bag
         root directory; however, in general, it could be a URI interpreted in an implementation-specific
-        way.  The AIP's existance at that location depends on the state of the preservation process; it 
+        way.  The SIP's existance at that location depends on the state of the preservation process; it 
         is not guaranteed to exist at this location at the time this function is called.
         """
         raise NotImplementedError()
@@ -362,9 +362,9 @@ class PreservationStep(metaclass=ABCMeta):
     
 class AIPFinalization(PreservationStep):
     """
-    The interface for applying pre-serialization finalization to an AIP.  Finalization may include
-    last-minute tweaks to the content of the AIP, but it also may involve extracting key information
-    that will be needed in the :py:class:`AIPPublication` step. 
+    The interface for transforming the submitted SIP into a complete AIP.  last-minute tweaks to the 
+    content of the AIP, but it also may involve extracting key information that will be needed in the
+    :py:class:`AIPPublication` step. 
 
     This implementation can be instantiated and used to apply the null operation for finalization, 
     but it should also be used as a base class for specific finalization implementations.
@@ -817,25 +817,19 @@ class PreservationTaskFactory(metaclass=ABCMeta):
 
     ``state_manager``
          properties that configure the :py:class:`PreservationStateManager` to use
-         within the task.  (Some of the properties may be ignored by :py:meth:`recreate_task`.)
+         within the task.  
     ``finalize``:       
          properties that configure the :py:class:`AIPFinalizaiton` instance to use
-         (may be ignored by :py:meth:`recreate_task`).
     ``validate``       
          properties that configure the :py:class:`AIPValidation` instance to use
-         (may be ignored by :py:meth:`recreate_task`).
     ``serialize``
          properties that configure the :py:class:`AIPSerialization` instance to use
-         (may be ignored by :py:meth:`recreate_task`).
     ``archive``
          properties that configure the :py:class:`AIPArchiving` instance to use
-         (may be ignored by :py:meth:`recreate_task`).
     ``publish``
          properties that configure the :py:class:`AIPPublication` instance to use
-         (may be ignored by :py:meth:`recreate_task`).
     ``cleanup``
          properties that configure the :py:class:`AIPCleanup` instance to use
-         (may be ignored by :py:meth:`recreate_task`).
 
     Each of the above properties have dictionary values which can include the ``type`` property.
     This property identifies the class that should be instantiated to handle its part of the 
@@ -875,8 +869,8 @@ class PreservationTaskFactory(metaclass=ABCMeta):
                                 be restarted from scratch.
         :param PreservationStateManager statemgr:  the state manager to use in the task.  If not 
                                 provided, one will be created based on the given configuration.  While
-                                it may depend on the implementation, this parameter will be ignored if 
-                                ``startover`` is ``True``.  
+                                it may depend on the implementation, this parameter will typically be 
+                                ignored if ``startover`` is ``True``.  
         :return:  the configured :py:class:`PreservationTask`
         :raise ConfigurationException:  if the task cannot be created due to insufficient or 
                                 incorrect configuration

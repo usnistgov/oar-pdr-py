@@ -92,7 +92,7 @@ class PDRBagFinalization(fw.AIPFinalization):
         log = statemgr.log.getChild("finalization")
 
         aipid = statemgr.aipid
-        bagdir = Path(statemgr.get_original_aip())
+        bagdir = Path(statemgr.get_sip())
         if bagdir is None:
             raise fw.AIPFinalizationException("Initial AIP is not set via state manager", aipid)
         if not bagdir.is_dir():
@@ -207,7 +207,7 @@ class PDRBagFinalization(fw.AIPFinalization):
         if finalized and os.path.exists(finalized):
             statemgr.set_finalized_aip(None)
             try:
-                orig = statemgr.get_original_aip()
+                orig = statemgr.get_sip()
                 if orig and os.path.exists(orig):
                     log.warning("Original AIP (unexpectedly) exists; deleting previously finalized version")
                     if os.path.is_dir(finalized):

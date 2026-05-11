@@ -205,7 +205,7 @@ class TestPDRBagFinalization(test.TestCase):
         self.assertEqual(self.mgr.get_state_property("nerdm:version"), "1.1.0")
         
     def test_run(self):
-        bgb = BagBuilder.forBag(self.mgr.get_original_aip())
+        bgb = BagBuilder.forBag(self.mgr.get_sip())
         bgb.update_annotations_for('', {'version': '2.0.0.0'})
         bgb.done()
 

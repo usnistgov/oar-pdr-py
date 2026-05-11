@@ -97,14 +97,14 @@ class JSONPreservationStateManager(PreservationStateManager):
             self._load()
             self._data["_aipid"] = self._aipid
             if aiploc:
-                self._data["_orig_aip"] = aiploc
+                self._data["_orig_sip"] = aiploc
             if self.cfg.get("stage_dir"):
                 self._data["_stage_dir"] = self.cfg.get("stage_dir")
             if self.cfg.get("working_dir"):
                 self._data["_work_dir"] = self.cfg.get("working_dir")
             self._cache()
         else:
-            self._init_state(_aipid=self._aipid, _orig_aip=aiploc,
+            self._init_state(_aipid=self._aipid, _orig_sip=aiploc,
                              _stage_dir=self.cfg.get("stage_dir"), _work_dir=self.cfg.get("working_dir"))
 
     def _init_state(self, **kw):
@@ -197,14 +197,14 @@ class JSONPreservationStateManager(PreservationStateManager):
             self._data["_completed"] = self.steps_completed & ~step
             self.record_progress("reverting step...")
 
-    def get_original_aip(self) -> str:
+    def get_sip(self) -> str:
         """
-        return the original location of the submitted AIP.  Typically, the value represents a bag
+        return the original location of the submitted SIP.  Typically, the value represents a bag
         root directory; however, in general, it could be a URI interpreted in an implementation-specific
         way.  The AIP's existance at that location depends on the state of the preservation process; it 
         is not guaranteed to exist at this location at the time this function is called.
         """
-        return self._data.get("_orig_aip")
+        return self._data.get("_orig_sip")
 
     def get_finalized_aip(self) -> str:
         """

@@ -50,13 +50,13 @@ class TestPreservationStateManager(test.TestCase):
         self.assertTrue(os.path.isfile(self.state._cachefile))
         self.assertEqual(self.state._data, {
             "_aipid": "goober",
-            "_orig_aip": "goober/bag",
+            "_orig_sip": "goober/bag",
             "_stage_dir": "stage",
             "_work_dir": None,
             "_completed": 0,
             "_message": st.UNSTARTED_PROGRESS
         })
-        self.assertEqual(self.state.get_original_aip(), "goober/bag")
+        self.assertEqual(self.state.get_sip(), "goober/bag")
         self.assertEqual(self.state.get_stage_dir(), "stage")
         self.assertIsNone(self.state.get_working_dir())
         self.assertEqual(self.state.steps_completed, 0)
@@ -69,13 +69,13 @@ class TestPreservationStateManager(test.TestCase):
         self.assertEqual(self.state.aipid, "goober")
         self.assertEqual(self.state._data, {
             "_aipid": "goober",
-            "_orig_aip": "goober/bag",
+            "_orig_sip": "goober/bag",
             "_stage_dir": "stage",
             "_work_dir": None,
             "_completed": 0,
             "_message": st.UNSTARTED_PROGRESS
         })
-        self.assertEqual(self.state.get_original_aip(), "goober/bag")
+        self.assertEqual(self.state.get_sip(), "goober/bag")
         self.assertEqual(self.state.get_stage_dir(), "stage")
         self.assertEqual(self.state.steps_completed, 0)
         with open(self.state._cachefile) as fd:
@@ -88,13 +88,13 @@ class TestPreservationStateManager(test.TestCase):
         self.assertEqual(str(self.state._cachefile), self.cfg["persist_in"])
         self.assertEqual(self.state._data, {
             "_aipid": "foo",
-            "_orig_aip": "goober/bag",
+            "_orig_sip": "goober/bag",
             "_stage_dir": "stage",
             "_work_dir": None,
             "_completed": 0,
             "_message": st.UNSTARTED_PROGRESS
         })
-        self.assertEqual(self.state.get_original_aip(), "goober/bag")
+        self.assertEqual(self.state.get_sip(), "goober/bag")
         self.assertEqual(self.state.get_stage_dir(), "stage")
         self.assertEqual(self.state.steps_completed, 0)
         with open(self.state._cachefile) as fd:
@@ -109,13 +109,13 @@ class TestPreservationStateManager(test.TestCase):
         self.assertTrue(os.path.isfile(self.state._cachefile))
         self.assertEqual(self.state._data, {
             "_aipid": "goober",
-            "_orig_aip": "goober/bag",
+            "_orig_sip": "goober/bag",
             "_stage_dir": "stage",
             "_work_dir": None,
             "_completed": 0,
             "_message": st.UNSTARTED_PROGRESS
         })
-        self.assertEqual(self.state.get_original_aip(), "goober/bag")
+        self.assertEqual(self.state.get_sip(), "goober/bag")
         self.assertEqual(self.state.get_stage_dir(), "stage")
         self.assertEqual(self.state.steps_completed, 0)
         with open(self.state._cachefile) as fd:
@@ -131,13 +131,13 @@ class TestPreservationStateManager(test.TestCase):
         self.assertTrue(os.path.isfile(self.state._cachefile))
         self.assertEqual(self.state._data, {
             "_aipid": "goober",
-            "_orig_aip": None,
+            "_orig_sip": None,
             "_stage_dir": None,
             "_work_dir": None,
             "_completed": 0,
             "_message": st.UNSTARTED_PROGRESS
         })
-        self.assertIsNone(self.state.get_original_aip())
+        self.assertIsNone(self.state.get_sip())
         self.assertIsNone(self.state.get_stage_dir())
         self.assertIsNone(self.state.get_working_dir())
         self.assertEqual(self.state.steps_completed, 0)
@@ -189,7 +189,7 @@ class TestPreservationStateManager(test.TestCase):
     def test_finalized_aip(self):
         self.assertIsNone(self.state.get_finalized_aip())
         
-        self.state.set_finalized_aip(self.state.get_original_aip())
+        self.state.set_finalized_aip(self.state.get_sip())
         self.assertEqual(self.state.get_finalized_aip(), "goober/bag")
 
         self.state.set_finalized_aip("goober/bag.1_0_0-0")
