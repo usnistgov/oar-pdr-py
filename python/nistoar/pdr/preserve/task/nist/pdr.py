@@ -1032,11 +1032,21 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
 
     def __init__(self, config: Mapping=None):
         super(PDRPreservationTaskFactory, self).__init__(config)
+        self._massage_config()
+
+    def _massage_config(self):
         if self.cfg.get('repo_access'):
             for step in ['archive', 'finalize']:
                 if not self.cfg.get(step, {}).get('repo_access'):
                     self.cfg.setdefault(step, {})
                     self.cfg[step]['repo_access'] = self.cfg['repo_access']
+
+        for prop in ['store_dir', 'restricted_store_dir']:
+            if self.cfg.get(prop):
+                for step in ['finalize', 'archive']:
+                    if not self.cfg.get(step, {}).get(prop):
+                        self.cfg.setdefault(step, {})
+                        self.cfg[step][prop] = self.cfg[prop]
 
     def _create_state_manager(self, aipid: str, config: Mapping,
                               logger: Logger, startover=False) -> fw.PreservationStateManager:
