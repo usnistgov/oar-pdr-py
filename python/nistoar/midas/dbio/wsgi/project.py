@@ -820,13 +820,24 @@ class ProjectSelectionHandler(ProjectRecordHandler):
     def export_selected_records(self, input: Mapping):
         """
         export records identified by IDs provided in the request body.
-        Expects: {"ids": ["id1", "id2", ...], "format": "pdf"|"csv"|"markdown"}
+        Expects: {"ids": ["id1", "id2", ...], "format": "json"|"pdf"|"csv"|"markdown"}
+        When format is omitted or "json", returns the records as a JSON array.
         """
         ids = input.get("ids", [])
         if not ids:
             return self.send_error_resp(400, "Bad POST input", "No record IDs provided")
 
-        fmt_name = input.get("format", "")
+        fmt_name = (input.get("format") or "json").strip().lower()
+        perms = input.get("permissions") or dbio.ACLs.OWN
+
+        recs = self._sort_and_format_records(self._select_records(perms, id=ids))
+        if not recs:
+            return self.send_error_resp(400, "Cannot export empty result set",
+                                        "No records match the specified IDs")
+
+        if fmt_name == "json":
+            return self.send_json(recs)
+
         supp_fmts = FormatSupport()
         supp_fmts.support(Format("pdf", "application/pdf"))
         supp_fmts.support(Format("markdown", "text/markdown"))
@@ -834,13 +845,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         fmt = supp_fmts.match(fmt_name)
         if not fmt:
             return self.send_error_resp(400, "Bad POST input",
-                                        "format must be one of: pdf, csv, markdown")
-
-        perms = input.get("permissions") or dbio.ACLs.OWN
-        recs = self._sort_and_format_records(self._select_records(perms, id=ids))
-        if not recs:
-            return self.send_error_resp(400, "Cannot export empty result set",
-                                        "No records match the specified IDs")
+                                        "format must be one of: json, pdf, csv, markdown")
 
         return self._format_records_as(recs, fmt)
 

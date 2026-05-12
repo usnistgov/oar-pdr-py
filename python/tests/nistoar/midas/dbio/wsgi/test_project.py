@@ -704,17 +704,38 @@ class TestMIDASProjectApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("400 ", self.resp[0])
 
-    def test_export_post_missing_format(self):
-        """POST /:export with no format field returns 400"""
+    def test_export_post_json_format(self):
+        """POST /:export with format=json returns 200 with a JSON array"""
+        prec = self.create_record("json_export")
         path = ":export"
         req = {
             'REQUEST_METHOD': 'POST',
             'PATH_INFO': self.rootpath + path
         }
-        req['wsgi.input'] = StringIO(json.dumps({"ids": ["mdm1:0001"]}))
+        req['wsgi.input'] = StringIO(json.dumps({"ids": [prec.id], "format": "json"}))
         hdlr = self.app.create_handler(req, self.start, path, nistr)
         body = hdlr.handle()
-        self.assertIn("400 ", self.resp[0])
+        self.assertIn("200 ", self.resp[0])
+        result = self.body2dict(body)
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['id'], prec.id)
+
+    def test_export_post_missing_format(self):
+        """POST /:export with no format field defaults to JSON and returns 200"""
+        prec = self.create_record("default_fmt")
+        path = ":export"
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"ids": [prec.id]}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        result = self.body2dict(body)
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
 
     def test_export_post_invalid_format(self):
         """POST /:export with unsupported format returns 400"""
