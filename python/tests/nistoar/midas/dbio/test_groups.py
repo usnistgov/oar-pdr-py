@@ -425,5 +425,35 @@ class TestVirtualGroups(test.TestCase):
         self.assertIn(g.id, newcli.user_groups)
         self.assertEqual(len(newcli.user_groups), 2)
 
+    def test_authorized_via_virtual_group(self):
+        # Grant read access to a virtual group ID (nistou:728).
+        # A user whose NSD entry maps to nistou:728 should pass authorized(),
+        # while a user in a different OU and a user absent from NSD should not.
+        staffdata = {
+            "nist0:ava1": {"nistou": "728", "nistdiv": "730"},
+            "nist0:bob":  {"nistgrp": "999"},
+        }
+        pplsvc = MockPeopleService(staffdata)
+        cli = self.fact.create_client(base.DMP_PROJECTS, {}, "alice")
+        cli._peopsvc = pplsvc
+
+        prec = cli.create_record("shared-record", "pdr0")
+        prec.acls.grant_perm_to(base.ACLs.READ, "nistou:728")
+        prec.save()
+
+        # ava1 belongs to nistou:728 — read access granted
+        self.assertTrue(prec.authorized(base.ACLs.READ, "nist0:ava1"))
+        # bob is in nistgrp:999, not nistou:728 — no read access
+        self.assertFalse(prec.authorized(base.ACLs.READ, "nist0:bob"))
+        # gary is not in NSD at all — no read access
+        self.assertFalse(prec.authorized(base.ACLs.READ, "gary"))
+
+        # grant write via nistdiv — ava1 is also in nistdiv:730
+        prec.acls.grant_perm_to(base.ACLs.WRITE, "nistdiv:730")
+        prec.save()
+        self.assertTrue(prec.authorized(base.ACLs.WRITE, "nist0:ava1"))
+        self.assertFalse(prec.authorized(base.ACLs.WRITE, "nist0:bob"))
+
+
 if __name__ == '__main__':
     test.main()
