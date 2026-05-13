@@ -58,7 +58,8 @@ class NISTBagSerialization(fw.AIPSerialization):
 
         bagdir = statemgr.get_finalized_aip()
         if bagdir is None:
-            raise fw.AIPValidationException("Finalized bag is not set (rerun finalized?)", statemgr.aipid)
+            raise fw.AIPSerializationException("Finalized bag is not set (rerun finalized?)",
+                                               statemgr.aipid)
         srcbags = [ bagdir ]
 
         # Consider multibag splitting

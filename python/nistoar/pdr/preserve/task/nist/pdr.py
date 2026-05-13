@@ -117,7 +117,7 @@ class PDRBagFinalization(fw.AIPFinalization):
         # except repoaccess error
 
         bldr = BagBuilder(str(bagdir.parents[0]), str(bagdir.name), self.cfg.get("bag_builder"),
-                          statemgr.aipid, log)
+                          aipid, log)
         try:
             bldr.ensure_bagdir()
             bldr.record("Beginning preservation")
@@ -125,17 +125,19 @@ class PDRBagFinalization(fw.AIPFinalization):
             # check version.  New version should already be set in bag.
             newver = bldr.bag.nerd_metadata_for("", True).get("version")
             if not newver:
-                raise fw.AIPFinalizationException(f"{aipid}: Version not set in AIP")
+                raise fw.AIPFinalizationException(f"{aipid}: Version not set in AIP", aipid)
             newver = verutils.OARVersion(newver)
             if lastver and newver <= lastver:
                 if self.cfg.get("allow_replace", False):
                     if newver < lastver:
                         raise fw.AIPFinalizationException("f{aipid}: {newver}: Can't replace "+
-                                                          f"version earlier than last version ({lastver})")
+                                                          f"version earlier than last version ({lastver})",
+                                                          aipid)
                     log.warning("Preservation set to replace previous published version: %s", newver)
                 else:
                     raise fw.AIPFinalizationException(
-                        f"{aipid}: {newver} AIP version already published; won't replace!"
+                        f"{aipid}: {newver} AIP version already published; won't replace!",
+                        aipid
                     )
                         
 
@@ -162,7 +164,7 @@ class PDRBagFinalization(fw.AIPFinalization):
                                                   str(ex)) from ex
             bagdir = Path(newdir)
             bldr = BagBuilder(str(bagdir.parents[0]), str(bagdir.name), self.cfg.get("bag_builder"),
-                              statemgr.aipid, log)
+                              aipid, log)
             bldr.ensure_bagdir()
 
         # now finalize on newly renamed bag
@@ -170,7 +172,7 @@ class PDRBagFinalization(fw.AIPFinalization):
             bldr.finalize_bag(self.cfg.get("bag_builder", {}).get("finalize", {}))
             bldr.done()
         except BagItException as ex:
-            raise AIPFinalizationException("Failed to finalize AIP bag: "+str(ex)) from ex
+            raise AIPFinalizationException("Failed to finalize AIP bag: "+str(ex), aipid) from ex
 
         # stage NERDm record for publishing
         nerdm = bldr.bag.nerdm_record()
@@ -222,8 +224,8 @@ class PDRBagFinalization(fw.AIPFinalization):
                 didstuff = True
                 
             except OSError as ex:
-                raise AIPFinalizationException("Failed to revert finalized bag back to original: "+str(ex)) \
-                    from ex
+                raise AIPFinalizationException("Failed to revert finalized bag back to original: "+str(ex),
+                                               statemgr.aipid) from ex
 
         if self._ingester and self._ingester.is_staged(statemgr.aipid):
             self._ingester.clear(statemgr.aipid)
@@ -377,7 +379,8 @@ class PDR1AIPArchiving(fw.AIPArchiving):
                 f = os.path.basename(f)
                 os.rename(cksdir/f, self.storedir/f)
         except Exception as ex:
-            raise fw.AIPArchivingException(f"Error while renaming archive files: {str(ex)}")
+            raise fw.AIPArchivingException(f"Error while renaming archive files: {str(ex)}",
+                                           statemgr.aipid) from ex
 
     def revert(self, statemgr: fw.PreservationStateManager) -> bool:
         """
@@ -477,7 +480,8 @@ class PDR1AIPArchiving(fw.AIPArchiving):
                 log.warn("Trouble polling for migrated files: %s", str(ex))
                 fails += 1
                 if faillim > 0 and fails > faillim:
-                    raise fw.AIPArchivingException(f"Too many polling errors (last one: {str(ex)}")
+                    raise fw.AIPArchivingException(f"Too many polling errors (last one: {str(ex)}",
+                                                   statemgr.aipid) from ex
 
             if aipfiles and found:
                 statemgr.record_progress("Archiving files: waiting for arrival of %d file%s" %
@@ -696,7 +700,7 @@ class PDRPublication(fw.AIPPublication):
             except Exception as ex:
                 msg = f"Failed to ingest record with name={aipid} into RMM: {str(ex)}"
                 if self._ingcfg.get('fail_on_incomplete'):
-                    raise fw.AIPPublicationException(msg)
+                    raise fw.AIPPublicationException(msg, aipid) from ex
                 log.exception(msg)
                 log.info("Ingest service endpoint: %s", self._ingester.endpoint)
 
@@ -723,7 +727,7 @@ class PDRPublication(fw.AIPPublication):
             except Exception as ex:
                 msg = f"Failed to submit DOI record with name={aipid} to DataCite: {str(ex)}"
                 if self._dmcfg.get('fail_on_incomplete'):
-                    raise fw.AIPPublicationException(msg)
+                    raise fw.AIPPublicationException(msg, aipid) from ex
                 log.exception(msg)
                 log.info("DOI minter service endpoint: %s", self._doiminter.dccli._ep)
 

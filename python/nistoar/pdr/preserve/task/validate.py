@@ -179,7 +179,7 @@ class NISTBagValidation(fw.AIPValidation):
         self._save_results(info, res, statemgr)
 
         if raiseon and res.count_failed(res.want) > 0:
-            raise AIPValidationError("AIP Bag Validation errors detected",
+            raise AIPValidationError("AIP Bag Validation errors detected", statemgr.aipid,
                                      errors=[i.description for i in res.failed(res.PROB)])
 
         log.info(f"{statemgr.aipid}: bag validation completed without issue")
