@@ -61,16 +61,7 @@ class NISTBagValidation(fw.AIPValidation):
                for more info.  
     """
 
-    def __init__(self, config=None):
-        """
-        instantiate the validator step.
-        :param dict config:  the configuration for this step; if not provided, defaults will apply.
-        """
-        if config is None:
-            config = {}
-        self.cfg = config
-
-    def apply(self, statemgr: fw.PreservationStateManager):
+    def apply(self, statemgr: fw.PreservationStateManager, as_is: bool=False):
         """
         apply the validation to the target AIP
         :param PreservationStateManager statemgr:  the state manager coordinating the preservation task
@@ -100,6 +91,8 @@ class NISTBagValidation(fw.AIPValidation):
             raise ConfigurationException(f"raise_on property not one of "+str(raiseon) + ": " + raiseon)
 
         bagdir = statemgr.get_finalized_aip()
+        if bagdir is None and as_is:
+            bagdir = statemgr.get_sip()
         if bagdir is None:
             raise fw.AIPValidationException("Finalized bag is not set (rerun finalized?)", statemgr.aipid)
 
@@ -190,11 +183,7 @@ class NISTBagValidation(fw.AIPValidation):
                                      errors=[i.description for i in res.failed(res.PROB)])
 
         log.info(f"{statemgr.aipid}: bag validation completed without issue")
-        if not self.cfg.get("always_apply", True):
-            statemgr.mark_completed(statemgr.VALIDATED, "Bag validation completed")
-
-        else:
-            statemgr.record_progress("Bag validation completed")
+        statemgr.mark_completed(statemgr.VALIDATED, "Bag validation completed")
 
     def _save_results(self, info, res, statemgr):
         outdir = statemgr.get_working_dir()

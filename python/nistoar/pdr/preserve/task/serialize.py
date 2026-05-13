@@ -22,34 +22,34 @@ class NISTBagSerialization(fw.AIPSerialization):
     framework, it is assumed that the target bag has been finalized and validated.  
 
     This implementation supports the following configuration parameters:
-    :multibag:  (dict) a configuration that controls how AIP bags are split into multiple bags.  If not 
-                provided, multi-bag splitting will not be applied.  Furthermore, if the original bag to
-                be serialized has a size smaller than ``multibag.max_headbag_size`` (which defaults to 
-                ``multibag.max_bag_size``), splitting will not be applied.  See the 
-                :py:class:`~nistoar.pdr.preserve.bagit.multibag.MulibagSplitter` class for the definition
-                of supported sub-parameters.
-    :format:    (str) a label indicating the format of serialization that will be applied.  Supported values
-                include "zip" (default) and "7z".
-    :hard_link_data:  (bool) if True (default), unix hard links will be used when replicating data files
-                in a bag (which can be quite large).  This does not apply to other metadata files in the 
-                bag.  If False, then data files will be explicitly copied.  Of course, This only applies 
-                when replicating a bag to a destination on the same filesystem as the source bag.
-    :cleanup_unserialized_bags:  if True (default) and the input bag was split before serialization, 
-                then the resulting (unserialized) split bags will be removed after serialized into zip
-                files.  
+    ``multibag``  
+          (dict) a configuration that controls how AIP bags are split into multiple bags.  If not 
+          provided, multi-bag splitting will not be applied.  Furthermore, if the original bag to
+          be serialized has a size smaller than ``multibag.max_headbag_size`` (which defaults to 
+          ``multibag.max_bag_size``), splitting will not be applied.  See the 
+          :py:class:`~nistoar.pdr.preserve.bagit.multibag.MulibagSplitter` class for the definition
+          of supported sub-parameters.
+    ``format``
+          (str) a label indicating the format of serialization that will be applied.  Supported values
+          include "zip" (default) and "7z".
+    ``hard_link_data``
+          (bool) if True (default), unix hard links will be used when replicating data files
+          in a bag (which can be quite large).  This does not apply to other metadata files in the 
+          bag.  If False, then data files will be explicitly copied.  Of course, This only applies 
+          when replicating a bag to a destination on the same filesystem as the source bag.
+    ``cleanup_unserialized_bags``  
+          if True (default) and the input bag was split before serialization, then the resulting 
+          (unserialized) split bags will be removed after serialized into zip files.  
     """
     def __init__(self, config=None):
         """
         instantiate the serialization step
         :param dict config:  the configuration for this step; if not provided, defaults will apply.
         """
-        if config is None:
-            config = {}
-        self.cfg = config
-
+        super(NISTBagSerialization, self).__init__(config)
         self._ser = DefaultSerializer()
 
-    def apply(self, statemgr: fw.PreservationStateManager):
+    def apply(self, statemgr: fw.PreservationStateManager, **kw):
         """
         apply the serialization step.  
         """

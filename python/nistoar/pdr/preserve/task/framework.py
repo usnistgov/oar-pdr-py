@@ -30,8 +30,10 @@ from collections.abc import Mapping
 from abc import ABCMeta, abstractmethod, abstractproperty
 from logging import Logger
 from typing import List
+from copy import deepcopy
 
 from nistoar.pdr.preserve import PreservationException, system as preserve_system
+from nistoar.base.config import merge_config
 
 UNSTARTED_PROGRESS = "waiting to start preservation"
 
@@ -296,7 +298,16 @@ class PreservationStep(metaclass=ABCMeta):
     To apply a step, an instance is passed via its functions a PreservationStateManager instance
     which encapsulates the AIP being preserved as well as the state of its progress
     """
-    def run(self, statemgr: PreservationStateManager, ignore_cleanup_error: bool=True, *kw):
+    def __init__(self, config: Mapping=None):
+        """
+        instantiate the validator step.
+        :param dict config:  the configuration for this step; if not provided, defaults will apply.
+        """
+        if config is None:
+            config = {}
+        self.cfg = config
+    
+    def run(self, statemgr: PreservationStateManager, ignore_cleanup_error: bool=True, **kw):
         """
         Apply the preservation processing step.  This is normally done by first calling 
         :py:meth:`revert` to clean up from a previously (failed) attempt, then 
@@ -314,7 +325,7 @@ class PreservationStep(metaclass=ABCMeta):
                                        step.
         """
         self.revert(statemgr)
-        self.apply(statemgr)
+        self.apply(statemgr, **kw)
         try:
             self.clean_up(statemgr)
         except PreservationException as ex:
@@ -323,7 +334,7 @@ class PreservationStep(metaclass=ABCMeta):
                 raise
 
     @abstractmethod
-    def apply(self, stagemgr: PreservationStateManager, *kw):
+    def apply(self, stagemgr: PreservationStateManager, **kw):
         """
         Apply this preservation step to the target AIP.  
 
@@ -370,10 +381,7 @@ class AIPFinalization(PreservationStep):
     but it should also be used as a base class for specific finalization implementations.
     """
 
-    def __init__(self):
-        pass
-
-    def apply(self, stagemgr: PreservationStateManager):
+    def apply(self, stagemgr: PreservationStateManager, **kw):
         """
         Apply the finalization steps.  This implementation does nothing.
         :raise AIPFinalizationException:  if an error occurred preventing the finalization
@@ -442,7 +450,34 @@ class AIPSerialization(PreservationStep):
     """
     an abstract interface for serializing an AIP into one or more archivable files.  Subclasses
     implement a particular strategy for the serialization.
+
+    In addition to implementation-specific parameters, this abstract class supports the following
+    general parameter:
+
+    ``always_validate``
+        (bool) _optional_.  If True (default), always run the validation step before running 
+        this serialization step, regardless of whether the finalized bag successfully passed 
+        validation before.  This sets the :py:attr:`always_validate` property and only applies 
+        when this step is run within a :py:class:`PreservationTask`.  If False, this step will 
+        only be applied if the step is marked as uncompleted.
     """
+
+    @property
+    def always_validate(self):
+        """
+        a flag indicating whether the validation step should always be run before this 
+        serialization step. 
+
+        This behavior only applies when this step is executed as part of a 
+        :py:class:`PreservationTask` and generally becomes relevent when restarting the task 
+        after a failure during the serialization step: after the failure conditions are rectified,
+        this flag ensures that validation is re-run before serialization.  If this flag is False, 
+        validation will only be applied if it is marked as uncompleted.
+
+        This flag is set at construction time via the configuration parameter, 
+        ``always_validate``.
+        """
+        return self.cfg.get('always_validate', True)
 
     def _report_cleanup_failure(self, statemgr: PreservationStateManager, ex: Exception):
         if statemgr.log:
@@ -468,11 +503,11 @@ class AIPPublication(PreservationStep):
     
     def revert(self, statemgr: PreservationStateManager) -> bool:
         """
-        If possible, undo the finalization step.  This implementation does nothing but return True.
+        If possible, undo the publication step.  This implementation does nothing but return True.
         :return:  False if this step cannot be undone even partially.
         :raise PreservationException:  if an error occurred while trying to undo the step
         """
-        statemgr.unmark_completed(statemgr.PUBLICATION)
+        statemgr.unmark_completed(statemgr.PUBLISHED)
         return True
 
     def clean_up(self, statemgr: PreservationStateManager):
@@ -619,13 +654,9 @@ class PreservationTask(PreservationStepsAware):
     def _create_default_cleaner(self):
         pass
         
-    def _setup(self):
-        # initialize the state manager
-        self._statemgr.ensure_set_up()
-
     @property
-    def aip_id(self):
-        self._statemgr.aip_id
+    def aipid(self):
+        return self._statemgr.aipid
 
     def finalize(self) -> bool:
         """
@@ -642,7 +673,6 @@ class PreservationTask(PreservationStepsAware):
         """
         if self.finalized():
             return False
-        self._setup()
         self._finalizer.run(self._statemgr)
         return True
 
@@ -650,15 +680,18 @@ class PreservationTask(PreservationStepsAware):
         """
         return True if the AIP has been finalized and is ready to be serialized.
         """
-        return self._statemgr.state == self.FINALIZED
+        return bool(self._statemgr.steps_completed & self.FINALIZED)
 
-    def validate(self, as_is: bool=True) -> bool:
+    def validate(self, as_is: bool=True, always_apply=True) -> bool:
         """
         Validate that the AIP is ready for preservation.  This is the second step in the preservation
         process, coming after finalization.  
 
         :param bool as_is:  if False, ensure that the AIP has been finalized first; otherwise,
                   the validater will be forced to run on the AIP without regard to its state. 
+        :param bool always_apply:  if True (default), always execute the validation prior to 
+                  serialization; if False, validation will only be executed if it hasn't be 
+                  previously marked as completing validation.  
         :return:  True if it was necessary to execute the step because it had not be carried out 
                   previously or becaues it was forced to by request via ``as_is``; otherwise, False 
                   is returned.
@@ -669,10 +702,12 @@ class PreservationTask(PreservationStepsAware):
                   requirements for preservation
         """
         if not as_is:
-            if self.validated():
+            if always_apply:
+                self._statemgr.unmark_completed(self._statemgr.VALIDATED)
+            elif self.validated():
                 return False
-            self.finalize(self._statemgr)
-        self._validater.run()
+            self.finalize()
+        self._validater.run(self._statemgr)
         return True
 
     def validated(self) -> bool:
@@ -683,7 +718,7 @@ class PreservationTask(PreservationStepsAware):
         Note that this task may configured to always run the validater regardless before
         serialization; if this is the case, this will always return False.
         """
-        self._statemgr.state == self.VALIDATED
+        return bool(self._statemgr.steps_completed & self.VALIDATED)
             
     def serialize(self) -> bool:
         """
@@ -697,7 +732,7 @@ class PreservationTask(PreservationStepsAware):
         """
         if self.serialized():
             return False
-        self.validate(as_is=False)
+        self.validate(as_is=False, always_apply=self._serializer.always_validate)
         self._serializer.run(self._statemgr)
         return True
 
@@ -705,7 +740,7 @@ class PreservationTask(PreservationStepsAware):
         """
         return True if the AIP has been completed serialized and is ready to be archived.
         """
-        return self._statemgr.state == self.SERIALIZED
+        return bool(self._statemgr.steps_completed & self.SERIALIZED)
 
     def archive(self) -> bool:
         """
@@ -723,7 +758,7 @@ class PreservationTask(PreservationStepsAware):
         if self.submitted_to_archive():
             return False
         self.serialize()
-        self._archiver.submit(self._statemgr)
+        self._archiver.run(self._statemgr)
         return True
 
     def submitted_to_archive(self):
@@ -737,7 +772,8 @@ class PreservationTask(PreservationStepsAware):
         """
         return True if this AIP has been completed migrated to long-term storage.  
         """
-        return self._archiver.transfer_complete()
+#        return self._archiver.transfer_complete()
+        return self._statemgr.steps_completed & self.ARCHIVED > 0
 
     def publish(self, ensure_archived=True):
         """
@@ -750,14 +786,14 @@ class PreservationTask(PreservationStepsAware):
         :return:  True if it was necessary to execute the step because it had not be carried out 
                   previously, or False because it was already completed.  
                   :rtype: bool
-        :raise AIPPublishingException:  if a fatal failure occurs while attempting to publish the AIP,
+        :raise AIPPublicationException:  if a fatal failure occurs while attempting to publish the AIP,
                   or if ``ensure_archived`` was True and archiving is not yet complete.
         """
         if self.published():
             return False
         self.archive()
         if ensure_archived and not self.archived():
-            raise AIPPublishingException(id, "Archiving has not completed")
+            raise AIPPublicationException("Archiving has not completed", id)
         self._publisher.run(self._statemgr)
         return True
 
@@ -765,7 +801,7 @@ class PreservationTask(PreservationStepsAware):
         """
         return True if the AIP has completed the publication step (and, thus, the entire process).
         """
-        return self._statemgr.state == self.PUBLISHED
+        return bool(self._statemgr.steps_completed & self.PUBLISHED)
 
     def completion_clean_up(self, cancel: bool=False):
         """
@@ -782,10 +818,10 @@ class PreservationTask(PreservationStepsAware):
         # NOTE: Is it possible for the task to legitimately complete the publishing step
         # but not previous ones (presumably via admin override or otherwise manual handling)?
         # If so, requiring all_completed() may be problematic.
-        if not cancel and not self._statemgr.all_completed():
-            raise AIPPublishingException(id, "Preservation has not completed")
+        if not cancel and not self._statemgr.all_completed:
+            raise PreservationTaskException("Preservation has not completed", id)
         if self._cleaner:
-            self._cleaner.run(cancel)
+            self._cleaner.run(self._statemgr, cancel)
 
     def run(self):
         """
@@ -796,12 +832,14 @@ class PreservationTask(PreservationStepsAware):
         :return:  False if the task has already be run to completion and there is nothing left 
                   to do; otherwise True is returned.
         """
-        if not self._statemgr.all_completed():
-            if self._statemgr.steps_completed > self._statemgr.UNSTARTED:
-                self._statemgr.log.info("Restarting preservation task")
-            else:
-                self._statemgr.log.info("Starting preservation task")
-
+        doing = "Starting"
+        if self._statemgr.steps_completed > self._statemgr.UNSTARTED:
+            doing = "Restarting"
+        msg = f"{doing} preservation task"
+        self._statemgr.mark_completed(self._statemgr.STARTED, msg)
+        self._statemgr.log.info(msg)
+        
+        if not self._statemgr.all_completed:
             self.publish()
 
         self.completion_clean_up()
@@ -886,7 +924,7 @@ class PreservationTaskFactory(metaclass=ABCMeta):
         steps.append(self._create_finalizer(config.get('finalize')))
         steps.append(self._create_validater(config.get('validate')))
         steps.append(self._create_serializer(config.get('serialize')))
-        steps.append(self._create_archiver(config.get('arhive')))
+        steps.append(self._create_archiver(config.get('archive')))
         steps.append(self._create_publisher(config.get('publish')))
         steps.append(self._create_cleaner(config.get('cleanup')))
 

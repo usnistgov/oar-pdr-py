@@ -16,8 +16,10 @@ from nistoar.base.config import ConfigurationException, merge_config
 import nistoar.pdr.preserve.bagit.utils as bagutils
 from nistoar.pdr.preserve import PreservationStateError, system as preserve_system
 from nistoar.pdr.preserve.bagit.utils import parse_bag_name, find_latest_head_bag
+from nistoar.pdr.preserve.task.state import JSONPreservationStateManager
 import nistoar.id.versions as verutils
-from nistoar.pdr.ingest import RMMIngestClient, DOIMintingClient, NotValidForIngest
+from nistoar.pdr.ingest import (RMMIngestClient, DOIMintingClient, DOIClientException,
+                                NotValidForIngest, IngestFileNotStaged)
 from nistoar.pdr.distrib import (BagDistribClient, RESTServiceClient,
                                  DistribResourceNotFound, DistribServiceException)
 from ..validate import *
@@ -65,9 +67,7 @@ class PDRBagFinalization(fw.AIPFinalization):
 
         :param dict config:  the configuration for this step; if not provided, defaults will apply.
         """
-        if config is None:
-            config = {}
-        self.cfg = config
+        super(PDRBagFinalization, self).__init__(config)
 
         if not self.cfg.get("repo_access", {}).get("distrib_service", {}).get("service_endpoint"):
             raise ConfigurationException("Missing required configuration: "+
@@ -85,7 +85,7 @@ class PDRBagFinalization(fw.AIPFinalization):
             self._doiminter = DOIMintingClient(dmcfg)
 
 
-    def apply(self, statemgr: fw.PreservationStateManager):
+    def apply(self, statemgr: fw.PreservationStateManager, **kw):
         """
         apply the finalization step.  This implementation will give the original bag a new name.
         """
@@ -127,7 +127,7 @@ class PDRBagFinalization(fw.AIPFinalization):
             if not newver:
                 raise fw.AIPFinalizationException(f"{aipid}: Version not set in AIP")
             newver = verutils.OARVersion(newver)
-            if newver <= lastver:
+            if lastver and newver <= lastver:
                 if self.cfg.get("allow_replace", False):
                     if newver < lastver:
                         raise fw.AIPFinalizationException("f{aipid}: {newver}: Can't replace "+
@@ -297,9 +297,7 @@ class PDR1AIPArchiving(fw.AIPArchiving):
         instantiate the archiving step
         :param dict config:  the configuration for this step; if not provided, defaults will apply.
         """
-        if config is None:
-            config = {}
-        self.cfg = config
+        super(PDR1AIPArchiving, self).__init__(config)
         self.storedir = self.cfg.get("store_dir")
         if not self.storedir:
             self.storedir = self.cfg.get("repo_access", {}).get('store_dir')
@@ -309,11 +307,11 @@ class PDR1AIPArchiving(fw.AIPArchiving):
         if not self.storedir.is_dir() or not os.access(self.storedir, os.W_OK):
             raise ConfiguationException("store_dir is not an existing directory with write permission: "+
                                         str(self.storedir))
-        self.finalbucket = self.cfg.get("public_bucket")
-        if not self.finalbucket:
-            raise ConfiguationException("Missing required config parameter: public_bucket")
+#        self.finalbucket = self.cfg.get("public_bucket")
+#        if not self.finalbucket:
+#            raise ConfigurationException("Missing required config parameter: public_bucket")
 
-    def apply(self, statemgr: fw.PreservationStateManager):
+    def apply(self, statemgr: fw.PreservationStateManager, **kw):
         """
         apply the archiving step.  
         """
@@ -613,9 +611,7 @@ class PDRPublication(fw.AIPPublication):
         instantiate the publication step
         :param dict config:  the configuration for this step; if not provided, defaults will apply.
         """
-        if config is None:
-            config = {}
-        self.cfg = config
+        super(PDRPublication, self).__init__(config)
         self._notifier = notifier
 
         # client for requesting that data be cached
@@ -658,7 +654,7 @@ class PDRPublication(fw.AIPPublication):
         self._done = set()
             
 
-    def apply(self, statemgr: fw.PreservationStateManager):
+    def apply(self, statemgr: fw.PreservationStateManager, **kw):
         """
         apply the final publication step.  This implementation assumes details specific to the NIST
         PDR system as well as the use of ingest staging done during the finalization step (as with 
@@ -692,7 +688,7 @@ class PDRPublication(fw.AIPPublication):
             statemgr.record_progress("Releasing metadata to the PDR")
             try:
                 if not self._ingester.is_staged(aipid):
-                    PreservationStateException(f"No staged RMM record found for AIP-ID={aipid}")
+                    PreservationStateError(f"No staged RMM record found for AIP-ID={aipid}")
                 self._ingester.submit(aipid)
                 log.info("Submitted NERDm record to RMM")
                 self._note_succeeded(statemgr, "rmm_ingest")
@@ -719,7 +715,7 @@ class PDRPublication(fw.AIPPublication):
             statemgr.record_progress("Releasing DOI metadata to DataCite")
             try:
                 if not self._doiminter.is_staged(aipid):
-                    PreservationStateException(f"No staged DOI record found for AIP-ID={aipid}")
+                    raise PreservationStateError(f"No staged DOI record found for AIP-ID={aipid}")
                 self._doiminter.submit(aipid)
                 log.info("Submitted DOI record to DataCite")
                 self._note_succeeded(statemgr, "mint_doi")
@@ -731,7 +727,7 @@ class PDRPublication(fw.AIPPublication):
                 log.exception(msg)
                 log.info("DOI minter service endpoint: %s", self._doiminter.dccli._ep)
 
-                if isinstance(ex, DOIClientException):
+                if isinstance(ex, (DOIClientException)):
                     self._note_failed(statemgr, "mint_doi")
                 else:
                     self._note_reverted(statemgr, "mint_doi")
@@ -936,9 +932,7 @@ class PDRPreservationCleanup(fw.AIPCleanup):
     """
 
     def __init__(self, config=None, finalizer: fw.AIPFinalization = None):
-        if config is None:
-            config = {}
-        self.cfg = config
+        super(PDRPreservationCleanup, self).__init__(config)
         self.finalizer = finalizer
         
     def clean_serialized_bags(self, statemgr: fw.PreservationStateManager, 
@@ -947,7 +941,7 @@ class PDRPreservationCleanup(fw.AIPCleanup):
         if staged:
             head = None
             if not cancel:
-                head = find_latest_head_bag(staged)
+                head = find_latest_head_bag([b for b in staged if not b.endswith(".sha256")])
                 staged.remove(head)  # don't delete the head bag
             if self.delete_files(staged, statemgr, "serialized bags", log):
                 statemgr.set_serialized_files(None if cancel else [head])
@@ -1048,13 +1042,22 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
     def __init__(self, config: Mapping=None):
         super(PDRPreservationTaskFactory, self).__init__(config)
         self._massage_config()
+        self.sipdir = self.cfg.get("sip_dir")
 
     def _massage_config(self):
         if self.cfg.get('repo_access'):
+            # share the top level repo_access with steps that need it
             for step in ['archive', 'finalize']:
                 if not self.cfg.get(step, {}).get('repo_access'):
                     self.cfg.setdefault(step, {})
                     self.cfg[step]['repo_access'] = self.cfg['repo_access']
+
+        if self.cfg.get('ingest'):
+            # share the top level ingest with steps that need it
+            for step in ['publish', 'finalize']:
+                if not self.cfg.get(step, {}).get('ingest'):
+                    self.cfg.setdefault(step, {})
+                    self.cfg[step]['ingest'] = self.cfg['ingest']
 
         for prop in ['store_dir', 'restricted_store_dir']:
             if self.cfg.get(prop):
@@ -1067,7 +1070,14 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
                               logger: Logger, startover=False) -> fw.PreservationStateManager:
         if config.get('type', 'def') not in self.def_supported_types + ["json"]:
             raise ConfigurationException("Unsupported state manager type: "+str(config.get('type')))
-        return JSONPreservationStateManager(config, aipid, clear_task=restart)
+
+        loc = None
+        sipdir = config.get('sip_dir')
+        if sipdir:
+            if not os.path.isdir(sipdir):
+                raise ConfigurationException(f"sip_dir: {sipdir}: not a directory")
+            loc = os.path.join(sipdir, aipid)
+        return JSONPreservationStateManager(config, aipid, loc, logger)
         
     def _create_finalizer(self, config: Mapping) -> fw.AIPFinalization:
         if config.get('type', 'def') not in self.def_supported_types:
@@ -1101,13 +1111,13 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
             return None
         if tp not in self.def_supported_types:
             raise ConfigurationException("Unsupported validate step type: "+str(tp))
-        return PDRAIPCleanup(config)
+        return PDRPreservationCleanup(config)
 
     def create_task(self, aipid: str, config: Mapping, logger: Logger=None, startover=False,
                     statemgr: fw.PreservationStateManager=None) -> fw.PreservationTask:
         out = super().create_task(aipid, config, logger, startover, statemgr)
-        if hasattr(out._cleaner) and hasattr(out._finalizer) and \
-           hasattr(out._cleaner.finalizer) and not out._cleaner.finalizer:
+        if hasattr(out, '_cleaner') and hasattr(out, '_finalizer') and \
+           hasattr(out._cleaner, 'finalizer') and not out._cleaner.finalizer:
             out._cleaner.finalizer = out._finalizer
 
         return out

@@ -602,6 +602,9 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             raise ValidationError("@type is missing or insufficient to interpret as an SIP submission")
 
     def _tweak_resource_for_validation(self, resmd):
+        if not resmd.get('ediid'):
+            resmd['ediid'] = resmd.get('@id')
+
         types = resmd.setdefault('@type', [])
         extschs = set(resmd.setdefault('_extensionSchemas', []))
         
