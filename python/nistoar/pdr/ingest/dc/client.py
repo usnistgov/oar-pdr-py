@@ -13,11 +13,19 @@ from nistoar.doi import datacite as dc
 from nistoar.pdr import def_jq_libdir, def_schema_dir
 from nistoar import jq
 from nistoar.nerdm import validate as valid8, constants as nerdconst
+from ..exceptions import IngestFileNotStaged
+
+__all__ = ["DOIMintingClient"]
 
 class DOIMintingClient(object):
     """
     a client class for minting and updating DataCite DOIs as part of the PDR preservation 
     process.
+
+    This class can submit a DataCite metadata record directly (via :py:meth:`submit_rec`) or, 
+    more typically, indirectly from a NERDm record.  In the latter case, one uses :py:meth:`stage`
+    to convert the record to the Datacite format (and save it in a staging area) and then 
+    :py:meth:`submit_staged` to actually submit it.  
     """
 
     def __init__(self, config, log=None):
@@ -253,6 +261,9 @@ class DOIMintingClient(object):
         :raises DOIResolverError:      raised if the submission failed due to a server error.
                                        The record will be returned a staged state to be 
                                        resubmitted later.
+        :raises IngestFileNotStaged:   raised if an attempt to submit a staged record that has 
+                                       not yet been staged.  (Note: this is a subclass of 
+                                       StateException.)
         :raises StateException:        raised if an error occurs while reading 
                                        the record file or moving the file between
                                        directories.  

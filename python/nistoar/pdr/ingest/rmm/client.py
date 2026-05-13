@@ -6,9 +6,9 @@ from collections import OrderedDict
 from typing import Mapping, Sequence
 from pathlib import Path
 
-from nistoar.pdr.exceptions import (StateException, ConfigurationException, PDRException,
-                                    NERDError)
+from nistoar.pdr.exceptions import StateException, ConfigurationException, NERDError
 from nistoar.pdr.utils import write_json, read_nerd
+from ..exceptions import IngestException, IngestFileNotStaged
 
 def submit_for_ingest(record, endpoint, name=None, authkey=None, authmeth='qparam'):
     """
@@ -463,7 +463,7 @@ class IngestClient(object):
                            "\n  ".join(errs))
 
 
-class IngestServiceException(PDRException):
+class IngestServiceException(IngestException):
     """
     an exception indicating a problem using the ingest service.
     """
