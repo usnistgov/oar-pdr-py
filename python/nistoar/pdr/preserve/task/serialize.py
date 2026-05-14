@@ -49,7 +49,7 @@ class NISTBagSerialization(fw.AIPSerialization):
         super(NISTBagSerialization, self).__init__(config)
         self._ser = DefaultSerializer()
 
-    def apply(self, statemgr: fw.PreservationStateManager, **kw):
+    def apply(self, statemgr: fw.PreservationStateManager, notifier: fw.NotificationService=None, **kw):
         """
         apply the serialization step.  
         """

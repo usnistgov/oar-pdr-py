@@ -85,7 +85,7 @@ class PDRBagFinalization(fw.AIPFinalization):
             self._doiminter = DOIMintingClient(dmcfg)
 
 
-    def apply(self, statemgr: fw.PreservationStateManager, **kw):
+    def apply(self, statemgr: fw.PreservationStateManager, notifier: fw.NotificationService=None, **kw):
         """
         apply the finalization step.  This implementation will give the original bag a new name.
         """
@@ -313,7 +313,7 @@ class PDR1AIPArchiving(fw.AIPArchiving):
 #        if not self.finalbucket:
 #            raise ConfigurationException("Missing required config parameter: public_bucket")
 
-    def apply(self, statemgr: fw.PreservationStateManager, **kw):
+    def apply(self, statemgr: fw.PreservationStateManager, notifier: fw.NotificationService=None, **kw):
         """
         apply the archiving step.  
         """
@@ -569,14 +569,6 @@ class PDRPublication(fw.AIPPublication):
             for the supported sub-parameters.  In addition, a sub-paramter called ``fail_on_incomplete``,
             described below, is supported.
 
-    The ``ingest`` sub-sections both can also include this following sub-parameter:
-    ``fail_on_incomplete``  
-            If ``False`` (default), if the ingest attempt fails, processing will continue
-            (after logging the error and, if configured, a notification sent); if ``True``,
-            a failure results in an 
-            :py:class:`~nistoar.pdr.preserve.task.framework.AIPPublicationException` is 
-            raised, causing processing to stop.  
-
     The following parameters from the ``data_cache`` dictionary are used to configure a 
     :py:class:`~nistoar.pdr.distrib.cachectl.CacheCtlClient` that will be used to migrate
     the new dataset's products into the distribution system's cache.  If not provided,
@@ -610,13 +602,12 @@ class PDRPublication(fw.AIPPublication):
             the issuance of a ``preserve.success`` alert.  
     """
 
-    def __init__(self, config=None, notifier=None):
+    def __init__(self, config=None):
         """
         instantiate the publication step
         :param dict config:  the configuration for this step; if not provided, defaults will apply.
         """
         super(PDRPublication, self).__init__(config)
-        self._notifier = notifier
 
         # client for requesting that data be cached
         scfg = self.cfg.get('store')
@@ -650,15 +641,10 @@ class PDRPublication(fw.AIPPublication):
         if not self._cachecli:
             setuplog.warning("Cache client not configured (missing data_cache parameter)")
 
-        if not self._notifier and self.cfg.get('notifier'):
-            self._notifier = NotificationService(self.cfg['notifier'])
-        if not self._notifier:
-            setuplog.warning("Notification service not configured (missing notifier parameter)")
-
         self._done = set()
             
 
-    def apply(self, statemgr: fw.PreservationStateManager, **kw):
+    def apply(self, statemgr: fw.PreservationStateManager, notifier: fw.NotificationService=None, **kw):
         """
         apply the final publication step.  This implementation assumes details specific to the NIST
         PDR system as well as the use of ingest staging done during the finalization step (as with 
@@ -682,10 +668,10 @@ class PDRPublication(fw.AIPPublication):
                 log.info("Cache API service endpoint: %s", self._cachecli.ep)
                 self._note_failed(statemgr, "cache_data")
 
-                if self._notifier:
-                    self._notifier.alert("cache.failure", origin=self.name,
-                                         summary=f"Distribution caching failure: {aipid}", 
-                                         desc=msg, id=aipid, version=version)
+                if notifier:
+                    notifier.alert("cache.failure", origin=self.name,
+                                   summary=f"Distribution caching failure: {aipid}", 
+                                   desc=msg, id=aipid, version=version)
 
         if self._ingester:
             # submit NERDm record to RMM ingest service
@@ -699,8 +685,6 @@ class PDRPublication(fw.AIPPublication):
 
             except Exception as ex:
                 msg = f"Failed to ingest record with name={aipid} into RMM: {str(ex)}"
-                if self._ingcfg.get('fail_on_incomplete'):
-                    raise fw.AIPPublicationException(msg, aipid) from ex
                 log.exception(msg)
                 log.info("Ingest service endpoint: %s", self._ingester.endpoint)
 
@@ -709,10 +693,8 @@ class PDRPublication(fw.AIPPublication):
                 else:
                     self._note_reverted(statemgr, "rmm_ingest")
 
-                if self._notifier:
-                    self._notifier.alert("ingest.failure", origin=self.name,
-                                         summary=f"NERDm ingest failure: {aipid}", 
-                                         desc=msg, id=aipid, version=version)
+                raise fw.IngestError(aipid, msg) from ex
+                                  
 
         if self._doiminter:
             # submit the DOI metadata to DataCite
@@ -726,8 +708,6 @@ class PDRPublication(fw.AIPPublication):
 
             except Exception as ex:
                 msg = f"Failed to submit DOI record with name={aipid} to DataCite: {str(ex)}"
-                if self._dmcfg.get('fail_on_incomplete'):
-                    raise fw.AIPPublicationException(msg, aipid) from ex
                 log.exception(msg)
                 log.info("DOI minter service endpoint: %s", self._doiminter.dccli._ep)
 
@@ -736,10 +716,7 @@ class PDRPublication(fw.AIPPublication):
                 else:
                     self._note_reverted(statemgr, "mint_doi")
 
-                if self._notifier:
-                    self._notifier.alert("doi.failure", origin=self.name,
-                                         summary="NERDm ingest failure: {aipid}", 
-                                         desc=msg, id=aipid, version=version)
+                raise fw.DOISubmissionError(aipid, msg) from ex
 
         statemgr.mark_completed(statemgr.PUBLISHED, "AIP is released")
 
@@ -991,7 +968,8 @@ class PDRPreservationCleanup(fw.AIPCleanup):
             except Exception as ex:
                 log.error("Trouble deleting the %s: %s", what, str(ex))
         
-    def apply(self, statemgr: fw.PreservationStateManager, cancel=False, *kw):
+    def apply(self, statemgr: fw.PreservationStateManager, notifier: fw.NotificationService=None,
+              cancel=False, *kw):
         """
         Apply final clean-up chores.  See :py:class:`class documentation<AIPPreservationCleanup>` 
         for details.

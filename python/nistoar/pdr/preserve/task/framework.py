@@ -34,6 +34,7 @@ from copy import deepcopy
 
 from nistoar.pdr.preserve import PreservationException, system as preserve_system
 from nistoar.base.config import merge_config
+from nistoar.pdr.notify import NotificationService
 
 UNSTARTED_PROGRESS = "waiting to start preservation"
 
@@ -307,7 +308,8 @@ class PreservationStep(metaclass=ABCMeta):
             config = {}
         self.cfg = config
     
-    def run(self, statemgr: PreservationStateManager, ignore_cleanup_error: bool=True, **kw):
+    def run(self, statemgr: PreservationStateManager, notifier: NotificationService=None,
+            ignore_cleanup_error: bool=True, **kw):
         """
         Apply the preservation processing step.  This is normally done by first calling 
         :py:meth:`revert` to clean up from a previously (failed) attempt, then 
@@ -325,7 +327,7 @@ class PreservationStep(metaclass=ABCMeta):
                                        step.
         """
         self.revert(statemgr)
-        self.apply(statemgr, **kw)
+        self.apply(statemgr, notifier, **kw)
         try:
             self.clean_up(statemgr)
         except PreservationException as ex:
@@ -334,7 +336,7 @@ class PreservationStep(metaclass=ABCMeta):
                 raise
 
     @abstractmethod
-    def apply(self, stagemgr: PreservationStateManager, **kw):
+    def apply(self, stagemgr: PreservationStateManager, notifier: NotificationService=None, **kw):
         """
         Apply this preservation step to the target AIP.  
 
@@ -342,6 +344,16 @@ class PreservationStep(metaclass=ABCMeta):
         The implementation may support extra custom arguments; generally, such arguments would be 
         provided when this function is called outside of the normal :py:class:`PreservationTask`
         workflow.
+
+        :param PreservationStateManager stagemgr:  the state manager the step should use to get 
+                 the current state of the preservation
+        :param NotificationService      notifier:  the notification service the step may use to 
+                 send out alerts about issues needing attention (by a person).  Any exception 
+                 raised by this step will automatically result in a notification alert sent out 
+                 by the executing :py:class:`PreservationTask`, so a step need only make use of 
+                 this notifier for issues that need attention but should not stop processing (i.e.
+                 does not raise an exception for).
+        :param **kw:  additional implementation-specific arguments
         
         :raise PreservationException:  if an error occurred preventing the application of this step.
         """
@@ -381,7 +393,7 @@ class AIPFinalization(PreservationStep):
     but it should also be used as a base class for specific finalization implementations.
     """
 
-    def apply(self, stagemgr: PreservationStateManager, **kw):
+    def apply(self, stagemgr: PreservationStateManager, notifier: NotificationService=None, **kw):
         """
         Apply the finalization steps.  This implementation does nothing.
         :raise AIPFinalizationException:  if an error occurred preventing the finalization
@@ -537,7 +549,8 @@ class AIPCleanup(PreservationStep):
 
     This default implementation does nothing.
     """
-    def apply(self, statemgr: PreservationStateManager, cancel=False, *kw):
+    def apply(self, statemgr: PreservationStateManager, notifier: NotificationService=None,
+              cancel=False, *kw):
         """
         Apply the final clean-up chores
 
@@ -634,7 +647,7 @@ class PreservationTask(PreservationStepsAware):
     """
     def __init__(self, mgr: PreservationStateManager, finalizer: AIPFinalization,
                  validater: AIPValidation, serializer: AIPSerialization, archiver: AIPArchiving,
-                 publisher: AIPPublication, cleaner: AIPCleanup=None):
+                 publisher: AIPPublication, cleaner: AIPCleanup=None, notifier: NotificationService=None):
         """
         initialize the task with its pluggable components.  Clients normally do not instantiate a 
         task directly, but rather call :py:meth:`PreservationTaskFactory.create_task` on a 
@@ -650,6 +663,8 @@ class PreservationTask(PreservationStepsAware):
         if not cleaner:
             cleaner = self._create_default_cleaner()
         self._cleaner = cleaner
+
+        self._notifier = notifier
 
     def _create_default_cleaner(self):
         pass
@@ -673,7 +688,7 @@ class PreservationTask(PreservationStepsAware):
         """
         if self.finalized():
             return False
-        self._finalizer.run(self._statemgr)
+        self._finalizer.run(self._statemgr, self._notifier)
         return True
 
     def finalized(self) -> bool:
@@ -707,7 +722,7 @@ class PreservationTask(PreservationStepsAware):
             elif self.validated():
                 return False
             self.finalize()
-        self._validater.run(self._statemgr)
+        self._validater.run(self._statemgr, self._notifier)
         return True
 
     def validated(self) -> bool:
@@ -733,7 +748,7 @@ class PreservationTask(PreservationStepsAware):
         if self.serialized():
             return False
         self.validate(as_is=False, always_apply=self._serializer.always_validate)
-        self._serializer.run(self._statemgr)
+        self._serializer.run(self._statemgr, self._notifier)
         return True
 
     def serialized(self) -> bool:
@@ -758,7 +773,7 @@ class PreservationTask(PreservationStepsAware):
         if self.submitted_to_archive():
             return False
         self.serialize()
-        self._archiver.run(self._statemgr)
+        self._archiver.run(self._statemgr, self._notifier)
         return True
 
     def submitted_to_archive(self):
@@ -794,7 +809,7 @@ class PreservationTask(PreservationStepsAware):
         self.archive()
         if ensure_archived and not self.archived():
             raise AIPPublicationException("Archiving has not completed", id)
-        self._publisher.run(self._statemgr)
+        self._publisher.run(self._statemgr, self._notifier)
         return True
 
     def published(self) -> bool:
@@ -821,7 +836,7 @@ class PreservationTask(PreservationStepsAware):
         if not cancel and not self._statemgr.all_completed:
             raise PreservationTaskException("Preservation has not completed", id)
         if self._cleaner:
-            self._cleaner.run(self._statemgr, cancel)
+            self._cleaner.run(self._statemgr, self._notifier, cancel)
 
     def run(self):
         """
@@ -832,18 +847,45 @@ class PreservationTask(PreservationStepsAware):
         :return:  False if the task has already be run to completion and there is nothing left 
                   to do; otherwise True is returned.
         """
-        doing = "Starting"
-        if self._statemgr.steps_completed > self._statemgr.UNSTARTED:
-            doing = "Restarting"
-        msg = f"{doing} preservation task"
-        self._statemgr.mark_completed(self._statemgr.STARTED, msg)
-        self._statemgr.log.info(msg)
-        
-        if not self._statemgr.all_completed:
-            self.publish()
+        try:
+            doing = "Starting"
+            if self._statemgr.steps_completed > self._statemgr.UNSTARTED:
+                doing = "Restarting"
+            msg = f"{doing} preservation task"
+            self._statemgr.mark_completed(self._statemgr.STARTED, msg)
+            self._statemgr.log.info(msg)
+            
+            if not self._statemgr.all_completed:
+                self.publish()
 
-        self.completion_clean_up()
-        
+        except Exception as ex:
+            if self._notifier:
+                if isinstance(ex, PreservationTaskFailure):
+                    notify_as = ex.notify_as or "preserve.failure"
+                    props = ex.props or {}
+                    self._notifier.alert(notify_as, str(ex), ex.errors, ex.step,
+                                         id=ex.aipid or self._statemgr.aipid, **props)
+                elif isinstance(ex, PreservationException):
+                    self._notifier.alert("preserve.failure", str(ex), ex.errors,
+                                         getattr(ex, 'step', None),
+                                         id=ex.aipid or self._statemgr.aipid)
+                elif isinstance(ex, ConfigurationException):
+                    self._notifier.alert("preserve.failure",
+                                         "Preservation failed due to task configuration problem",
+                                         [str(ex)], id=self._statemgr.aipid)
+                else:
+                    self._notifier.alert("preserve.failure",
+                                         "Preservation failed due to unexpected error",
+                                         [str(ex)], id=self._statemgr.aipid)
+            raise
+                
+        try:
+            self.completion_clean_up()
+        except Exception as ex:
+            if self._notifier:
+                self._notifier.alert("cleanup.failure", "Problem during presrevation task clean-up",
+                                     [str(ex)], id=self._statemgr.aipid)
+            raise
 
 class PreservationTaskFactory(metaclass=ABCMeta):
     """
@@ -928,7 +970,12 @@ class PreservationTaskFactory(metaclass=ABCMeta):
         steps.append(self._create_publisher(config.get('publish')))
         steps.append(self._create_cleaner(config.get('cleanup')))
 
-        return PreservationTask(statemgr, *steps)
+        
+        notifier = None
+        if config.get('notify'):
+            nostifier = NotificationService(config['notify'])
+
+        return PreservationTask(statemgr, *steps, notifier=notifier)
 
     @abstractmethod
     def _create_state_manager(self, aipid: str, config: Mapping,
@@ -1155,7 +1202,7 @@ class PreservationTaskFailure(PreservationTaskException):
     """
 
     def __init__(self, aipid: str, message: str, errors: List[str], origin: str=None,
-                 notify_type: str=None, cause=None):
+                 notify_type: str=None, cause=None, **kw):
         """
         initialize the exception.
 
@@ -1173,5 +1220,7 @@ class PreservationTaskFailure(PreservationTaskException):
         """
         super(PreservationTaskFailure, self).__init__(message, aipid, step, errors, cause)
         self.notify_as = notify_type
+        self.props = kw
+        
 
 

@@ -61,7 +61,8 @@ class NISTBagValidation(fw.AIPValidation):
                for more info.  
     """
 
-    def apply(self, statemgr: fw.PreservationStateManager, as_is: bool=False):
+    def apply(self, statemgr: fw.PreservationStateManager, notifier: fw.NotificationService=None,
+              as_is: bool=False, **kw):
         """
         apply the validation to the target AIP
         :param PreservationStateManager statemgr:  the state manager coordinating the preservation task
