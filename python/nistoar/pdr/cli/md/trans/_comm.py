@@ -5,7 +5,7 @@ This module defines some reusable functions shared by the trans command package 
 import sys, json
 from collections import OrderedDict
 
-from nistoar.pdr.cli import PDRCommandFailure
+from nistoar.pdr.utils.cli import CommandFailure
 from nistoar.pdr.cli.md.get import describe, extract_from_AIP
 from nistoar.pdr.exceptions import IDNotFound
 from nistoar.pdr.distrib import DistribServerError, DistribResourceNotFound
@@ -64,7 +64,7 @@ def _get_record_for_cmd(args, cmd, config=None, log=None):
     """
     read in from whatever source stipulated by the command arguments and return the record to transform, 
     assuming a command context.  This means that all errors or failues will result in raising a 
-    PDRCommandFailure exception.  The args parameter contains the parsed command arguments (assuming the
+    CommandFailure exception.  The args parameter contains the parsed command arguments (assuming the
     set defined by define_comm_trans_opts() and define_comm_md_opts()) which have been fully processed 
     and normalized.  This function is intended only to be called from the ``trans`` subcommand modules.
     :param args:  the parsed arguments 
@@ -79,11 +79,11 @@ def _get_record_for_cmd(args, cmd, config=None, log=None):
                                    bool(args.aipsrc), args.distbase, config, log)
 
         except (IDNotFound, DistribResourceNotFound) as ex:
-            raise PDRCommandFailure(cmd, "ID not found: "+src, 1)
+            raise CommandFailure(cmd, "ID not found: "+src, 1)
         except (RMMServerError, DistribServerError) as ex:
-            raise PDRCommandFailure(cmd, "Unexpected service failure: "+str(ex), 5)
+            raise CommandFailure(cmd, "Unexpected service failure: "+str(ex), 5)
         except Exception as ex:
-            raise PDRCommandFailure(cmd, "Unexpected failure retrieving metadata: "+str(ex), 8)
+            raise CommandFailure(cmd, "Unexpected failure retrieving metadata: "+str(ex), 11)
             
     else:
         fd = None
@@ -96,8 +96,8 @@ def _get_record_for_cmd(args, cmd, config=None, log=None):
                 id = sys.stdin
             return json.load(fd, object_pairs_hook=OrderedDict)
         except Exception as ex:
-            raise PDRCommandFailure(cmd, "Failed to read input record from " +
-                                    ((fd is None and "stdin") or args.filesrc) + ": " + str(ex), 3)
+            raise CommandFailure(cmd, "Failed to read input record from " +
+                                 ((fd is None and "stdin") or args.filesrc) + ": " + str(ex), 3)
         finally:
             if fd:
                 fd.close()
@@ -106,7 +106,7 @@ def _write_record_for_cmd(rec, args, cmd, config=None, log=None):
     """
     write out the given JSON record (to an output file or standard out) according to the given 
     command arguments, assuming a command context.  This means that all errors or failues will result 
-    in raising a PDRCommandFailure exception.  The args parameter contains the parsed command arguments 
+    in raising a CommandFailure exception.  The args parameter contains the parsed command arguments 
     (assuming the set defined by define_comm_trans_opts() and define_comm_md_opts()) which have been 
     fully processed and normalized.  This function is intended only to be called from the ``trans`` 
     subcommand modules.
@@ -123,8 +123,8 @@ def _write_record_for_cmd(rec, args, cmd, config=None, log=None):
         json.dump(rec, op, indent=4, separators=(',', ': '))
 
     except OSError as ex:
-        raise PDRCommandFailure(cmd, "Failed to write data to %s: %s" %
-                                ((fp and args.outfile) or "standard out", str(ex)), 4)
+        raise CommandFailure(cmd, "Failed to write data to %s: %s" %
+                             ((fp and args.outfile) or "standard out", str(ex)), 4)
     finally:
         if fp: fp.close()
 

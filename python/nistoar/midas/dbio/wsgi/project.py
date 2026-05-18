@@ -40,14 +40,16 @@ are handled accordingly:
      returns other non-editable parts of the record via GET (including the ``meta`` property).
 """
 from collections import OrderedDict
-from collections.abc import Mapping, Callable
+from collections.abc import Mapping, Sequence, Callable
 from logging import Logger
-from typing import Iterator
+from typing import Iterator, List
 from urllib.parse import parse_qs
+import json, re
 
-from nistoar.web.formats import JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
 from nistoar.web.rest import ServiceApp, Handler, Agent
-
+from nistoar.web.formats import Format, FormatSupport, JSONSupport, TextSupport, UnsupportedFormat, Unacceptable
+from nistoar.pdr.utils.validate import ValidationResults
+from nistoar.midas.export.export import run as export_run
 from .base import DBIOHandler
 from .search_sorter import SortByPerm
 from ..fsbased import FSBasedDBClient
@@ -55,6 +57,7 @@ from ... import dbio
 from ...dbio import ProjectRecord, ProjectService, ProjectServiceFactory
 
 __all__ = ["MIDASProjectHandler", "ProjectDataHandler"]
+SUPPORTED_FILTERS = set("perm name id owner status_state".split())
 
 class ProjectRecordHandler(DBIOHandler):
     """
@@ -85,6 +88,120 @@ class ProjectRecordHandler(DBIOHandler):
         super(ProjectRecordHandler, self).__init__(svcapp, service.dbcli, wsgienv, start_resp, who,
                                                    path, config, log)
         self.svc = service
+
+    def _format_records_as(self, records: List[Mapping], format):
+        """
+        Handle export requests for non-JSON formats with validation and error handling.
+
+        Validates records before formatting and skips invalid records while logging warnings.
+        Returns partial results if some records are valid, or error if all fail validation.
+
+        :param records: List of record dictionaries to format
+        :param format: Format object with name and content type
+        :return: Formatted response via send_ok() or send_error_resp()
+        """
+        format_type = format.name
+
+        # Validate and filter records
+        valid_records = []
+        for rec in records:
+            try:
+                # Basic validation - records must have an ID
+                if not rec.get('id'):
+                    raise ValueError("Record missing 'id' field")
+                # Add more validation as needed
+                valid_records.append(rec)
+            except Exception as ex:
+                self.log.warning(f"Skipping malformed record {rec.get('id', 'unknown')}: {str(ex)}")
+
+        # If all records failed validation, return error
+        if not valid_records:
+            return self.send_error_resp(400, "All records failed validation",
+                                        f"No valid records could be formatted as {format_type}")
+
+        # Log if some records were skipped
+        if len(valid_records) < len(records):
+            self.log.warning(f"Skipped {len(records) - len(valid_records)} invalid records during {format_type} export")
+
+        try:
+            # Detect record type for template selection
+            template_name = self._determine_template_name(valid_records, format_type)
+
+            result = export_run(
+                input_data=valid_records,
+                output_format=format_type,
+                output_directory=None,
+                template_name=template_name
+            )
+
+            content = result.get('bytes', result.get('text'))
+            if not content and result.get('path'):
+                # deliver content from a file
+                pass
+
+            if content:
+                return self.send_ok(content, contenttype=format.ctype)
+
+            # unable to comply
+            return self.send_error_resp(500, "Export format error",
+                             f"Failed to convert records into requested format, {format_type}")
+
+        except Exception as ex:
+            self.log.exception(f"Exception during {format_type} export: {str(ex)}")
+            return self.send_error_resp(500, "Export failed",
+                                        f"Failure during export formatting: {str(ex)}")
+
+    def _determine_template_name(self, records: list, format_type: str) -> str:
+        """
+        Determine appropriate template name based on record type and format.
+
+        Checks multiple indicators to detect record type:
+        1. Explicit 'type' field (dmp/dap)
+        2. ID prefix patterns (mdm1=DMP, mds3=DAP)
+        3. Metadata content
+        4. Default fallback to DMP
+
+        :param records: List of record dictionaries
+        :param format_type: Output format (pdf, csv, markdown)
+        :return: Template name string (e.g., 'dmp_pdf_template')
+        """
+        if not records:
+            return None
+
+        # Check first record to determine type
+        first_record = records[0]
+
+        # Convert ProjectRecord to dict if necessary
+        if hasattr(first_record, 'to_dict'):
+            record_dict = first_record.to_dict()
+        else:
+            record_dict = first_record
+
+        # Method 1: Check record type field directly
+        record_type = record_dict.get('type', '').lower()
+        if record_type in ['dmp', 'dap']:
+            return f"{record_type}_{format_type}_template"
+
+        # Method 2: Check ID prefix patterns
+        record_id = record_dict.get('id', '')
+        if record_id.startswith('mdm1'):  # DMP records
+            return f"dmp_{format_type}_template"
+        elif record_id.startswith('mds3'):  # DAP records
+            return f"dap_{format_type}_template"
+
+        # Method 3: Check metadata for type indicators
+        meta = record_dict.get('meta', {})
+        if 'dmp' in str(meta).lower():
+            return f"dmp_{format_type}_template"
+        elif 'dap' in str(meta).lower():
+            return f"dap_{format_type}_template"
+
+        # Default fallback - assume DMP for backward compatibility
+        return f"dmp_{format_type}_template"
+
+    def free(self):
+        self.svc.free()
+
 
 class ProjectHandler(ProjectRecordHandler):
     """
@@ -122,7 +239,32 @@ class ProjectHandler(ProjectRecordHandler):
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "DELETE"])
 
-    def do_GET(self, path, ashead=False):
+    def do_GET(self, path, ashead=False, format=None):
+        """
+        Respond to a GET request for a single project record.
+        Supports JSON (default) and export formats (PDF, CSV, Markdown).
+
+        :param str path:  a path to the portion of the data to get
+        :param bool ashead:  if True, the request is actually a HEAD request
+        :param str format:  optional format override for testing
+        """
+        # Setup format support
+        supp_fmts = FormatSupport()
+        JSONSupport.add_support(supp_fmts, ["text/json", "application/json"], asdefault=True)
+        supp_fmts.support(Format("pdf", "application/pdf"))
+        supp_fmts.support(Format("markdown", "text/markdown"), ["text/markdown", "text/plain"])
+        supp_fmts.support(Format("csv", "text/csv"))
+        self._set_default_format_support(supp_fmts)
+
+        # Select format (via query parameter or Accept header)
+        try:
+            fmt = self.select_format(format)
+        except Unacceptable as ex:
+            return self.send_unacceptable(content=str(ex))
+        except UnsupportedFormat as ex:
+            return self.send_error(400, "Unsupported Format", str(ex))
+
+        # Get record
         try:
             prec = self.svc.get_record(self._id)
         except dbio.NotAuthorized as ex:
@@ -130,6 +272,10 @@ class ProjectHandler(ProjectRecordHandler):
         except dbio.ObjectNotFound as ex:
             return self.send_error_resp(404, "ID not found", "Record with requested identifier not found",
                                         self._id, ashead=ashead)
+
+        # Format output
+        if fmt.name in ["pdf", "csv", "markdown"]:
+            return self._format_records_as([prec.to_dict()], fmt)
 
         return self.send_json(prec.to_dict(), ashead=ashead)
 
@@ -447,7 +593,6 @@ class ProjectDataHandler(ProjectRecordHandler):
         except dbio.NotEditable as ex:
             return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit")
 
-
         return self.send_json(data)
 
     def do_PATCH(self, path):
@@ -504,6 +649,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             iftype = ""
         super(ProjectSelectionHandler, self).__init__(service, svcapp, wsgienv, start_resp, who, iftype,
                                                       config, log)
+        self._set_format_qp("format")
 
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "POST"])
@@ -516,29 +662,80 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         :return:  a generator that iterates through the matched records
         """
         return self._dbcli.select_records(perms, **constraints)
+    
+    def _select_records_by_ids(self, ids: Sequence[str], perms) -> Iterator[ProjectRecord]:
+        """
+        submit a search query in a project specific way.  This method is provided as a 
+        hook to subclasses that may need to specialize the search strategy or manipulate the results.  
+        This implementation passes the query directly to the generic DBClient instance.
+        :return:  a generator that iterates through the records corresponding to the provided ids.
+        """
+        return self._dbcli.select_records_by_ids(ids, perms)
 
-    def do_GET(self, path, ashead=False):
+    def _sort_and_format_records(self, records: Iterator[ProjectRecord]) -> list:
+        """
+        Helper method to sort records by permission and convert to dictionaries.
+        :param records: Iterator of ProjectRecord objects
+        :return: List of record dictionaries sorted by permission
+        """
+        sortd = SortByPerm()
+        for rec in records:
+            sortd.add_record(rec)
+        return [rec.to_dict() for rec in sortd.sorted()]
+
+    def do_GET(self, path, ashead=False, format=None):
         """
         respond to a GET request, interpreted as a search for records accessible by the user
         :param str path:  a path to the portion of the data to get.  This is the same as the `datapath`
                           given to the handler constructor.  This will always be an empty string.
         :param bool ashead:  if True, the request is actually a HEAD request for the data
         """
+        # Set supported output formats
+        supp_fmts = FormatSupport()
+        JSONSupport.add_support(supp_fmts, ["text/json", "application/json"], asdefault=True)
+        supp_fmts.support(Format("pdf", "application/pdf"))
+        supp_fmts.support(Format("markdown", "text/markdown"), ["text/markdown", "text/plain"])
+        supp_fmts.support(Format("csv", "text/csv"))
+        self._set_default_format_support(supp_fmts)
+        
         perms = []
+        params = {}
+        filters = {}
+        fmt = self.select_format(format)   # may raise UnsupportedFormat, Unacceptable
+        
         qstr = self._env.get('QUERY_STRING')
         if qstr:
             params = parse_qs(qstr)
-            perms = params.get('perm')
+            filters = dict([(k,v) for k,v in params.items() if k in SUPPORTED_FILTERS])
+
+        # split up filter values that are in comma-separated lists
+        for prop,vals in filters.items():
+            out = []
+            for v in vals:
+                out.extend(v.split(','))
+            filters[prop] = out
+
+        perms = filters.pop('perm') if 'perm' in filters else None
         if not perms:
             perms = dbio.ACLs.OWN
 
-        # sort the results by the best permission type permitted
-        sortd = SortByPerm()
-        for rec in self._select_records(perms):
-            sortd.add_record(rec)
-        out = [rec.to_dict() for rec in sortd.sorted()]
+        recs = self._sort_and_format_records(self._select_records(perms, **filters))
 
-        return self.send_json(out, ashead=ashead)
+        # Handle empty results based on format
+        if not recs:
+            if fmt.name == "json":
+                # Empty JSON array is valid RESTful response
+                return self.send_json([], ashead=ashead)
+            else:
+                # Cannot export empty result set to PDF/CSV/Markdown
+                return self.send_error_resp(400, "Cannot export empty result set",
+                                            "No records match the specified filters")
+
+        if fmt.name in ["pdf", "csv", "markdown"]:
+            return self._format_records_as(recs, fmt)
+
+        # Default: send in the default format, json
+        return self.send_json(recs, ashead=ashead)
 
     def do_POST(self, path):
         """
@@ -748,7 +945,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
         if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
             prec.acls.grant_perm_to(path, identity)
-            prec.save()
+            prec.save(dbio.ACLs.ADMIN)
             return self.send_json(prec.to_dict().get('acls', {}).get(path,[]))
 
         return self.send_error_resp(405, "POST not allowed on this permission type",
@@ -759,23 +956,41 @@ class ProjectACLsHandler(ProjectRecordHandler):
         replace the list of identities in a particular ACL.  This handles PUT ID/acls/PERM;
         `path` should be set to PERM.  Note that previously set identities are removed.
         """
-        # make sure a permission type, and only a permission type, is specified
-        path = path.strip('/')
-        if not path or '/' in path:
-            return self.send_error_resp(405, "PUT not allowed", "Unable set ACL membership")
-
+        return self._do_update_acls(path, "PUT")
+        
+    def _do_update_acls(self, path, meth):
+        # update specified ACLs
         try:
-            identities = self.get_json_body()
+            input = self.get_json_body()
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
-        if isinstance(identities, str):
-            identities = [identities]
-        if not isinstance(identities, list):
-            return self.send_error_resp(400, "Wrong input data type"
-                                        "Input data is not a string providing a user/group list")
+        path = path.strip('/')
+        if not path:
+            # requesting bulk update to multiple permissions
+            if not isinstance(input, Mapping):
+                return self.send_error_resp(400, "Wrong input data type"
+                                            "Input data is not an ACLs object with permission properties")
+        else:
+            # requesting update to to a single permission
+            if '/' in path:
+                return self.send_error_resp(405, "PATCH not allowed",
+                                            "ACL PATCH request should not a member name")
+            input = { path: input }
 
+        # validate the input
         # TODO: ensure input value is a bona fide user or group name
+        bad = []
+        for perm in input:
+            if isinstance(input[perm], str):
+                input[perm] = [ input[perm] ]
+            if not isinstance(input[perm], list):
+                bad.append(perm)
+        if bad:
+            return self.send_error_resp(400, "Wrong input data type",
+                                        f"Input permission{'s' if len(bad) > 1 else ''} "+
+                                        f"{','.join(bad)} {'are' if len(bad) > 1 else 'is'} "+
+                                        "not a list of user/group identities")
 
         try:
             prec = self.svc.get_record(self._id)
@@ -785,62 +1000,33 @@ class ProjectACLsHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
 
-        if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
+        for perm in input:
+            if perm not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
+                return self.send_error_resp(405, "PATCH not allowed on provided permission type",
+                                            "Updating non-standard permission is not allowed")
+            identities = input[perm]
             try:
-                prec.acls.revoke_perm_from_all(path)
-                prec.acls.grant_perm_to(path, *identities)
-                prec.save()
-                return self.send_json(prec.to_dict().get('acls', {}).get(path,[]))
+                if meth == "PUT":
+                    prec.acls.revoke_perm_from_all(perm)
+                prec.acls.grant_perm_to(perm, *identities)
             except dbio.NotAuthorized as ex:
                 return self.send_unauthorized()
 
-        return self.send_error_resp(405, "PUT not allowed on this permission type",
-                                    "Updating specified permission is not allowed")
-
+        prec.save(dbio.ACLs.ADMIN)
+        acls = prec.to_dict().get('acls', {})
+        if path:
+            return self.send_json(acls.get(path, []))
+        return self.send_json(acls)
 
     def do_PATCH(self, path):
         """
-        fold given list of identities into a particular ACL.  This handles PATCH ID/acls/PERM;
-        `path` should be set to PERM.
+        fold given lists of identities into ACLs.  This handles these paths:
+          *  PATCH ID/acls/PERM (`path` is set to PERM): fold the given list of IDs into the PERM list
+          *  PATCH ID/acls (`path` is an empty string): input is an object with ACL names (permissions)
+             to update.
         """
-        try:
-            # input is a list of user and/or group identities to add the PERM ACL
-            identities = self.get_json_body()
-        except self.FatalError as ex:
-            return self.send_fatal_error(ex)
+        return self._do_update_acls(path, "PATCH")
 
-        # make sure path is a permission type (PERM), and only a permission type
-        path = path.strip('/')
-        if not path or '/' in path:
-            return self.send_error_resp(405, "PATCH not allowed",
-                                        "ACL PATCH request should not a member name")
-
-        if isinstance(identities, str):
-            identities = [identities]
-        if not isinstance(identities, list):
-            return self.send_error_resp(400, "Wrong input data type"
-                                        "Input data is not a list of user/group identities")
-
-        # TODO: ensure input value is a bona fide user or group name
-
-        try:
-            prec = self.svc.get_record(self._id)
-        except dbio.NotAuthorized as ex:
-            return self.send_unauthorized()
-        except dbio.ObjectNotFound as ex:
-            return self.send_error_resp(404, "ID not found",
-                                        "Record with requested identifier not found", self._id)
-
-        if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
-            try:
-                prec.acls.grant_perm_to(path, *identities)
-                prec.save()
-                return self.send_json(prec.to_dict().get('acls', {}).get(path, []))
-            except dbio.NotAuthorized as ex:
-                return self.send_unauthorized()
-
-        return self.send_error_resp(405, "PATCH not allowed on this permission type",
-                                    "Updating specified permission is not allowed")
 
     def do_DELETE(self, path):
         """
@@ -883,7 +1069,11 @@ class ProjectStatusHandler(ProjectRecordHandler):
     """
     handle status requests and actions
     """
-    _requestable_actions = [ ProjectService.STATUS_ACTION_FINALIZE, ProjectService.STATUS_ACTION_SUBMIT ]
+    _requestable_actions = [
+        ProjectService.STATUS_ACTION_FINALIZE,
+        ProjectService.STATUS_ACTION_SUBMIT,
+        ProjectService.STATUS_ACTION_REVISE
+    ]
 
     def __init__(self, service: ProjectService, svcapp: ServiceApp, wsgienv: dict, start_resp: Callable,
                  who: Agent, id: str, datapath: str="", config: dict=None, log: Logger=None):
@@ -940,12 +1130,17 @@ class ProjectStatusHandler(ProjectRecordHandler):
         elif path == "action":
             out = out.action
         elif path == "message":
-            out = out.action
+            out = out.message
+        elif path == "todo":
+            return self.review()
+                
         elif path:
             return self.send_error_resp(404, "Status property not accessible",
                                         "Requested status property is not accessible", self._id, ashead=ashead)
+        else:
+            out = out.to_dict()
 
-        return self.send_json(out.to_dict(), ashead=ashead)
+        return self.send_json(out, ashead=ashead)
 
     def do_PUT(self, path):
         """
@@ -960,10 +1155,14 @@ class ProjectStatusHandler(ProjectRecordHandler):
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
+        if not isinstance(req.get('action_options'), (Mapping, type(None))):
+            return self.send_error_resp(400, "Bad Input",
+                                        "Bad value for action_options property: not a dictionary")
+        
         if not req.get('action'):
             return self.send_error_resp(400, "Invalid input: missing action property"
                                         "Input record is missing required action property")
-        return self._apply_action(req['action'], req.get('message'))
+        return self._apply_action(req['action'], req.get('message'), req.get('action_options'))
 
     def do_PATCH(self, path):
         """
@@ -978,17 +1177,25 @@ class ProjectStatusHandler(ProjectRecordHandler):
         except self.FatalError as ex:
             return self.send_fatal_error(ex)
 
-        # if action is not set, the message will just get updated.
-        return self._apply_action(req.get('action'), req.get('message'))
+        if not isinstance(req.get('action_options'), (Mapping, type(None))):
+            return self.send_error_resp(400, "Bad Input",
+                                        "Bad value for action_options property: not a dictionary")
 
-    def _apply_action(self, action, message=None):
+        # if action is not set, the message will just get updated.
+        return self._apply_action(req.get('action'), req.get('message'), req.get('action_options'))
+
+    def _apply_action(self, action: str, message: str=None, options: Mapping=None):
+        if action:
+            action = action.lower()
         try:
             if message and action is None:
                 stat = self.svc.update_status_message(self._id, message)
             elif action == 'finalize':
                 stat = self.svc.finalize(self._id, message)
             elif action == 'submit':
-                stat = self.svc.submit(self._id, message)
+                stat = self.svc.submit(self._id, message, options)
+            elif action == 'revise':
+                stat = self.svc.revise(self._id, message, options)
             else:
                 return self.send_error_resp(400, "Unrecognized action",
                                             "Unrecognized action requested")
@@ -1006,7 +1213,59 @@ class ProjectStatusHandler(ProjectRecordHandler):
 
         return self.send_json(stat.to_dict())
 
+    def review(self, ashead=False):
+        """
+        run the review operation on the project record and send the results back to the client
+        """
+        try:
+            res = self.svc.review(self._id)
+            if res is None:
+                return self.send_error_resp(404, "todo property not accessible",
+                                            "Status property, todo, is not accessible",
+                                            self._id, ashead=ashead)
 
+        except dbio.NotAuthorized as ex:
+            return self.send_unauthorized()
+        except dbio.ObjectNotFound as ex:
+            return self.send_error_resp(404, "ID not found",
+                                        "Record with requested identifier not found", self._id)
+
+        if res is None:
+            return self.send_error_resp(404, "todo property not accessible",
+                                        "Status property, todo, is not accessible", self._id, ashead=ashead)
+
+        return self.send_json(self.__class__.export_review(res))
+
+    @classmethod
+    def export_review(cls, res: ValidationResults) -> Mapping:
+        """
+        return JSON-encodable version of review results appropriate for sending back to web clients
+        """
+        todo = { "req": [], "warn": [], "rec": [] }
+        for issue in res.failed():
+            label = issue.label.split(maxsplit=1)
+            jissue = { "id": f"{issue.profile}@{issue.profile_version} {label[0]}", "subject": "" }
+            if len(label) > 1:
+                jissue["subject"] = label[1]
+            if len(issue.comments) > 0:
+                jissue["summary"] = issue.comments[0]
+                jissue["details"] = [ issue.specification ] + list(issue.comments[1:])
+            else:
+                jissue["summary"] = issue.specification
+                jissue["details"] = []
+
+            if issue._type & issue.REQ:
+                todo["req"].append(jissue)
+            elif issue._type & issue.WARN:
+                todo["warn"].append(jissue)
+            elif issue._type & issue.REC:
+                todo["rec"].append(jissue)
+
+        todo['req'].sort(key=lambda e: e.get("id"))
+        todo['warn'].sort(key=lambda e: e.get("id"))
+        todo['rec'].sort(key=lambda e: e.get("id"))
+
+        return todo
 
 class MIDASProjectApp(ServiceApp):
     """

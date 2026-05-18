@@ -1,7 +1,7 @@
 import os, sys, logging, argparse, pdb, time, json, shutil, tempfile, re
 import unittest as test
 
-from nistoar.pdr import cli
+from nistoar.pdr.utils import cli
 from nistoar.pdr.cli.md import get
 from nistoar.pdr.exceptions import PDRException, ConfigurationException
 from nistoar.pdr import config as cfgmod
@@ -17,6 +17,10 @@ distarchdir = os.path.join(pdrmoddir, "distrib", "data")
 descarchdir = os.path.join(pdrmoddir, "describe", "data")
 tmparch = None
 
+uwsgi_opts = "--plugin python3"
+if os.environ.get("OAR_UWSGI_OPTS") is not None:
+    uwsgi_opts = os.environ['OAR_UWSGI_OPTS']
+
 def startServices(archbase):
     archdir = os.path.join(archbase, "distarchive")
 
@@ -27,9 +31,10 @@ def startServices(archbase):
     pidfile = os.path.join(archbase,"simdistrib"+str(srvport)+".pid")
     wpy = os.path.join(pdrmoddir, "distrib/sim_distrib_srv.py")
     assert os.path.exists(wpy)
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
-          "--wsgi-file {2} --set-ph archive_dir={3} --pidfile {4}"
-    cmd = cmd.format(os.path.join(archbase,"simdistrib.log"), srvport, wpy, archdir, pidfile)
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --set-ph archive_dir={4} --pidfile {5}"
+    cmd = cmd.format(os.path.join(archbase,"simdistrib.log"), uwsgi_opts,
+                     srvport, wpy, archdir, pidfile)
     os.system(cmd)
 
     archdir = os.path.join(archbase, "mdarchive")
@@ -43,9 +48,10 @@ def startServices(archbase):
     pidfile = os.path.join(archbase,"simrmm"+str(srvport)+".pid")
     wpy = os.path.join(pdrmoddir, "describe/sim_describe_svc.py")
     assert os.path.exists(wpy)
-    cmd = "uwsgi --daemonize {0} --plugin python3 --http-socket :{1} " \
-          "--wsgi-file {2} --set-ph archive_dir={3} --pidfile {4}"
-    cmd = cmd.format(os.path.join(archbase,"simrmm.log"), srvport, wpy, rmmdir, pidfile)
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --set-ph archive_dir={4} --pidfile {5}"
+    cmd = cmd.format(os.path.join(archbase,"simrmm.log"), uwsgi_opts,
+                     srvport, wpy, rmmdir, pidfile)
     os.system(cmd)
     time.sleep(0.5)
 
@@ -132,7 +138,7 @@ class TestGetCmd(test.TestCase):
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory(prefix="_test_get.", dir=tmparch.name)
-        self.cmd = cli.PDRCLI()
+        self.cmd = cli.CLISuite("test")
         self.cmd.load_subcommand(get)
 
         self.config = {
@@ -220,7 +226,7 @@ class TestGetCmd(test.TestCase):
         self.assertTrue(not os.path.exists(outf))
 
         argline = "-q get -D %s -R %s ark:/88434/pdr2210 -o %s" % (self.distep, self.mdep, outf)
-        with self.assertRaises(cli.PDRCommandFailure):
+        with self.assertRaises(cli.CommandFailure):
             self.cmd.execute(argline.split(), {})
 
         argline = "-q get -A -D %s -R %s ark:/88434/pdr2210 -o %s" % (self.distep, self.mdep, outf)

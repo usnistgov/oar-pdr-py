@@ -25,6 +25,9 @@ VOLUME /app/dist
 RUN mkdir -p /dev/oar-pdr-py /app && chmod a+rwx /app
 WORKDIR /dev/oar-pdr-py
 
+RUN pip install preppy==5.0.1 trml2pdf==0.6
+RUN pip install websockets==10.4 json-spec
+
 ENV PYTHONPATH /dev/oar-pdr-py/python/build/lib
 ENV MONGO_TESTDB_URL mongodb://localhost/testdb
 

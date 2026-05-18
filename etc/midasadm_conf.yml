@@ -1,0 +1,16 @@
+# working_dir: .
+logfile: midasadm.log
+logdir: /var/log/midas
+dbio:
+  factory: mongo
+  db_url: "mongodb://oarop:oarop@mongodb:27017/midas"
+  people_service: embedded
+doi_naan: '10.88434'
+
+cmd:
+
+  dap:
+    cmd:
+
+      regpub:
+        resolver_url: https://data.nist.gov/od/id/

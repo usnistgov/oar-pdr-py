@@ -36,8 +36,12 @@ class TestPDRDownload(test.TestCase):
         self.tf.clean()
 
     def test_set_options(self):
-        pdrdl.set_options(pdrdl.def_progname, [])
-        self.assertEqual(pdrdl.opts.pdrid, pdrdl.def_pdrid)
+        self.assertFalse(pdrdl.def_pdrid)
+        with self.assertRaises(pdrdl.MortalError):
+            pdrdl.set_options(pdrdl.def_progname, [])
+
+        pdrdl.set_options(pdrdl.def_progname, "-I 1922".split())
+        self.assertEqual(pdrdl.opts.pdrid, "1922")
         self.assertEqual(pdrdl.opts.destdir, os.path.join(os.getcwd(), pdrdl.opts.pdrid))
         self.assertEqual(pdrdl.opts.verbosity, pdrdl.NORMAL)
         self.assertFalse(pdrdl.opts.dodownload)

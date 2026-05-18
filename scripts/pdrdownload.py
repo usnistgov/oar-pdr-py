@@ -2,19 +2,21 @@
 #
 # type "python3 pdrdownload.py -h" for help on command-line options
 #
-def_pdrid = "mds2-2512"
+def_pdrid = ""  # Insert ID to customize to a particlur dataset, e.g. "mds2-3325"
 def_filelist_url = None
 description="""download data from the NIST PDR dataset, %s""" % def_pdrid
 epilog="Note that no data will actually get downloaded unless --download (or -D) is provided."
 
 def_filelist_url_pat = "https://data.nist.gov/od/ds/%s/filelisting.csv"
-def_metadata_url_pat = "https://data.nist.gov/rmm/records?@id=%s"
+def_metadata_url_pat = "https://data.nist.gov/od/id/%s"
 def_progname = "pdrdownload"
 
 import os, sys, shutil, csv, hashlib, argparse, json, re, traceback, math
 from collections.abc import Mapping
 from urllib.request import urlopen, URLError, HTTPError
 from urllib.parse import urlparse
+
+ARK_PFX_RE = re.compile(r'^ark:/88434/')
 
 SILENT = -1
 QUIET  =  0
@@ -54,7 +56,7 @@ def define_options(progname, parser=None):
     parser.add_argument("-E", "--no-error-list-table", action="store_const", dest="errfile", const=None,
                         help="do not write a file listing the failed downloads (a la -e)")
     parser.add_argument("-I", "--pdrid", metavar="ID", dest="pdrid",
-                        help="assume ID as the identifier for the dataset; ignored if -F is specified. "+
+                        help="assume ID as the identifier for the dataset; ignored if -f is specified. "+
                              "This can either be the PDR ARK identifier or its local part.")
     parser.add_argument("-w", "--overwrite", action="store_true", dest="force",
                         help="download each requested file regardless of whether it already exists in "+
@@ -79,6 +81,18 @@ def define_options(progname, parser=None):
                              "possible).")
     return parser
 
+class MortalError(Exception):
+    """
+    an exception representing an error that should cause this script should exit with an 
+    error status.
+    """
+    def __init__(self, msg, exitwith=3):
+        super(MortalError, self).__init__(msg)
+        self.excode = exitwith
+
+    def die(self):
+        complain(str(self), self.excode)
+
 def set_options(progname, args, parser=None):
     """
     parse the given command-line arguments and save them as global options (stored as "opts" in 
@@ -99,9 +113,21 @@ def set_options(progname, args, parser=None):
     opts = parser.parse_args(args)
 
     if not opts.pdrid:
+        if not def_pdrid:
+            raise MortalError("No default dataset ID set; you must specify it with -I", 2)
         opts.pdrid = def_pdrid
     if opts.pdrid.startswith("ark:"):
         opts.pdrid = ARK_PFX_RE.sub('', opts.pdrid)
+    if opts.pdrid.startswith("https://"):
+        # allow the ID to have the form, "https://data.nist.gov/od/id/[pdrid]"
+        try:
+            urlpath = urlparse(opts.pdrid).path
+            if not urlpath.startswith("/od/id/") or len(urlpath) <= len("/od/id/"):
+                raise MortalError("Unrecognized URL form given for dataset identifier: " % opts.pdrid, 2)
+            opts.pdrid = urlpath[len("/od/id/"):]
+        except Exception:
+            pass
+            
 
 #    if not opts.filelist:
 #        opts.filelist = def_filelist_url_pat % opts.pdrid
@@ -116,19 +142,7 @@ def set_options(progname, args, parser=None):
 
 prog = def_progname
 clparser = define_options(def_progname)
-opts = set_options(def_progname, [])
-
-class MortalError(Exception):
-    """
-    an exception representing an error that should cause this script should exit with an 
-    error status.
-    """
-    def __init__(self, msg, exitwith=3):
-        super(MortalError, self).__init__(msg)
-        self.excode = exitwith
-
-    def die(self):
-        complain(str(self), self.excode)
+opts = set_options(def_progname, "-I noidea".split())
 
 def complain(message, exitwith=-1, ostrm=sys.stderr):
     """
@@ -170,6 +184,8 @@ def run():
         opts.select = True
     try:
         if opts.verbosity > QUIET:
+            if opts.verbosity >= VERBOSE:
+                print("Assessing what needs to be downloaded...")
             print("")
             (found, todo) = summarize_todo(filelist, opts.destdir, opts.select,
                                            opts.dodownload or not opts.docheck)
@@ -244,6 +260,10 @@ def ensure_filelist(listfile, destdir):
     :param listfile:  the table file, either as a URL or a local path
     """
     try:
+        if re.match(r"^([A-Z]:)*\\", listfile):
+            # this is a MS-style file path
+            raise ValueError("")
+
         url = urlparse(listfile)
         if url.scheme:
             # it's a URL
@@ -261,6 +281,10 @@ def ensure_filelist(listfile, destdir):
     return listfile
 
 def get_filelist(url, destdir):
+    global opts
+    if opts.verbosity >= VERBOSE:
+        print("Fetching the list of files into %s..." % destdir)
+    
     with urlopen(url) as resp:
         if resp.info().get_content_type() == "application/json" or \
            resp.info().get_content_type() == "application/ld+json":

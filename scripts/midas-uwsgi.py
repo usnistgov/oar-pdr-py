@@ -42,6 +42,7 @@ except ImportError:
         sys.path.insert(0, oarpath)
     import nistoar
 
+import nistoar.midas
 from nistoar.base import config
 from nistoar.midas.dbio import MongoDBClientFactory, InMemoryDBClientFactory, FSBasedDBClientFactory
 from nistoar.midas import wsgi
@@ -88,6 +89,12 @@ if uwsgi.opt.get("oar_log_file"):
     cfg["logfile"] = _dec(uwsgi.opt.get("oar_log_file"))
 
 config.configure_log(config=cfg)
+
+# Is there a client notification service running we should talk to?
+if uwsgi.opt.get('dbio_clinotif_config_file'):
+    cnscfg = config.resolve_configuration(_dec(uwsgi.opt['dbio_clinotif_config_file']))
+    cfg.setdefault('dbio', {})
+    cfg['dbio']['client_notifier'] = cnscfg
 
 # setup the MIDAS database backend
 dbtype = _dec(uwsgi.opt.get("oar_midas_db_type"))
@@ -158,7 +165,10 @@ if nsdcfg:
     except ConfigurationException as ex:
         logging.warning("Unable to initialize NSD database: %s", str(ex))
 
-print("MIDAS service ready with "+dbtype+" backend")
-logging.info("MIDAS service ready with "+dbtype+" backend")
+msg = f"MIDAS service (v{nistoar.midas.__version__}) ready with {dbtype} backend"
+print(msg)
+logging.info(msg)
 if nsdcfg:
     logging.info("...and NSD service built-in")
+if cfg.get('dbio', {}).get('client_notifier'):
+    logging.info("...and with client notifier")

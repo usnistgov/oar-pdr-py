@@ -35,11 +35,92 @@ servers:
 
 paths:
   /mds3:
-    summary: the resource representing the full collection of publications created under the MDS3 convention
+    summary: the resource representing the full, searchable collection of publications created under the MDS3 convention
     get:
       summary: search for DAP records
-      description: return all or a subset of DAP records that the requesting user is authorized to read
-      parameters: [ ]    # parameters for selecting matching records.
+      description: >-
+        return all or a subset of DAP records that the requesting user is authorized to read.  To get
+        a subset, use one or more of the filtering query parameters (name, id, owner, status_state).
+        By default, the matching records are returned as a JSON array; however other formats are
+        supported either via the Accept Header or the format query parameter.  
+      parameters:
+        - in: query
+          name: format
+          required: false
+          description: >-
+            a name that identifies the desired format for the output (overriding content negotiation);
+            the default value is nerdm.  This parameter serves as an alternative to content negotiation
+            via the Accept Header (which also works).  
+          schema:
+            type: string
+            enum: [ "json", "nerdm", "pdf", "markdown", "csv" ]
+          examples:
+            "PDF":
+              value: "pdf"
+            "Markdown":
+              value: "markdown"
+            "CSV table":
+              value: "csv"
+            "JSON, in NERDm format":
+              value: "nerdm"
+            "JSON (syn. for nerdm)":
+              value: "json"
+        - in: query
+          name: perm
+          required: false
+          schema:
+            type: string
+            enum: [ "read", "write", "admin", "delete" ]
+          description: >-
+            a single permission name or a comma-delimited list of permission names; the output will 
+            only include records for which the user has at least one of these permissions granted to
+            them.  If not provided, it defaults to all of the standard permissions.  
+          examples:
+            "write-access":
+              value: "write"
+            "all-access":
+              value: "read,write,admin,delete"
+        - in: query
+          name: name
+          schema:
+            type: string
+          required: false
+          description: a single records name or a comma-delimited list of names; the output will include all records whose name property matches any one of the names given.
+          examples:
+            "Select records with a particular name":
+              value: "myrec"
+            "Select records having either one of the two given names":
+              value: "mytestrec,myrealrec"
+        - in: query
+          name: id
+          schema:
+            type: string
+          required: false
+          description: a single records name or a comma-delimited list of identifiers; the output will include all records whose id property matches any one of the identifiers given.
+          examples:
+            "Select records with a particular ID":
+              value: "mds3:0104"
+            "Select records having either one of the three given ids":
+              value: "mds3:0010,mds3:0012,mds3:0013"
+        - in: query
+          name: owner
+          schema:
+            type: string
+          required: false
+          description: a single user identifier or a comma-delimited list of identifiers; the output will include all records whose owner property matches any one of the identifiers given.
+          examples:
+            "Select records with a particular ID":
+              value: "rlp3"
+            "Select records having either one of the three given ids":
+              value: "rlp3,ava1,nist:op"
+        - in: query
+          name: status_state
+          schema:
+            type: string
+            enum: ["edit", "processing", "ready", "submitted", "accepted", "in press", "published", "unwell"]
+          required: false
+          description: a single status state name or a comma-delimited list of names; the output will include all records whose status.state property matches any one of the names given.
+            
       responses:
         "200":
           description: >-
@@ -54,6 +135,24 @@ paths:
                 "empty":
                   summary: no matching DAPs found
                   value: '[]'
+            "text/markdown":
+              schema:
+                description: a rendering of the DAP records in Markdown format for human readability
+                type: string
+            "text/plain":
+              schema:
+                description: a rendering of the DAP records in Markdown format for human readability, identical to text/markdown
+                type: string
+            "application/pdf":
+              schema:
+                description: a rendering of the DAP records as PDF
+                type: string
+                format: binary
+            "text/csv":
+              schema:
+                description: a structuring of the DAP records into rows of a comma-separated-value (CSV) table.
+                type: string
+                format: csv
     post:
       summary: create a new DAP record
       description: >-
@@ -72,6 +171,16 @@ paths:
           "application/json":
             schema:
               "$ref": "#/components/schemas/CreateRecordRequest"
+            examples:
+              "create-min":
+                summary: minimum required input
+                value:
+                  name: mydap1
+              "create-data":
+                summary: providing some initial data
+                value:
+                  name: mydap2
+                  data: { "title": "My Second DAP" }
       responses:
         "201":
           description: >-
@@ -119,6 +228,28 @@ paths:
         provides a digest of the draft publication document with selected properties and summary
         information; to see the full draft publication document, access the
         [/mds3/{draftid}/data endpoint](../mds3-draftid--data/get).
+      parameters:
+        - in: query
+          name: format
+          required: false
+          description: >-
+            a name that identifies the desired format for the output (overriding content negotiation);
+            the default value is nerdm.  This parameter serves as an alternative to content negotiation
+            via the Accept Header (which also works).  
+          schema:
+            type: string
+            enum: [ "json", "nerdm", "pdf", "markdown", "csv" ]
+          examples:
+            "PDF":
+              value: "pdf"
+            "Markdown":
+              value: "markdown"
+            "CSV table":
+              value: "csv"
+            "JSON, in NERDm format":
+              value: "nerdm"
+            "JSON (syn. for nerdm)":
+              value: "json"
       responses:
         "200":
           description:  The DAP draft record with the given identifier was found and returned
@@ -126,6 +257,25 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ProjectRecord"
+                description: the requested DAP record object
+            "text/markdown":
+              schema:
+                description: a rendering of the DAP record in Markdown format for human readability
+                type: string
+            "text/plain":
+              schema:
+                description: a rendering of the DAP record in Markdown format for human readability, identical to text/markdown
+                type: string
+            "application/pdf":
+              schema:
+                description: a rendering of the DAP record as PDF
+                type: string
+                format: binary
+            "text/csv":
+              schema:
+                description: a structuring of the DAP record into a single row of a comma-separated-value (CSV) table.
+                type: string
+                format: csv
         "404":
           description:  The DAP draft record with the given identifier was not found
           content:
@@ -188,6 +338,10 @@ paths:
           "application/json":
             schema:
               type: object
+            examples:
+              "replace-data":
+                summary: replace the data contents
+                value: { "title": "My Second DAP", "keywords": ["testing", "AppScan"] }
       responses:
         "200":
           description: >-
@@ -239,6 +393,10 @@ paths:
           "application/json":
             schema:
               type: object
+            examples:
+              "update-data":
+                summary: merge given properties into the data contents
+                value: { "title": "My Second DAP", "keywords": ["testing", "AppScan"] }
       responses:
         "200":
           description:  The DAP record with the given identifier was found and it data content was updated and returned
@@ -343,6 +501,13 @@ paths:
               oneOf:
                 - type: object
                 - type: string
+            examples:
+              "replace-data-title":
+                summary: replace the value of a top-level NERDm property
+                value: "\"My Second DMP\""
+              "replace-data-keywords":
+                summary: replace the value of a top-level NERDm property
+                value: ["testing", "AppScan"]
       responses:
         "200":
           description: >-
@@ -351,7 +516,7 @@ paths:
             submitted as required by policy or convention.
           content:
             "application/json":
-            description: the type of the output is the type defined for the property in the NERDm schema
+              description: the type of the output is the type defined for the property in the NERDm schema
               schema:
                 oneOf:
                   - type: object
@@ -429,6 +594,10 @@ paths:
           "application/json":
             schema:
               type: string
+            examples:
+              "replace-name":
+                summary: replace the current name
+                value: "\"mySpecialDAP\""
       responses:
         "200":
           description:  the record was found, the name was successfully changed and the new name returned
@@ -454,6 +623,80 @@ paths:
         "401":
           description:
             The authenticated user is not authorized to change its name.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+  /mdm1/{projid}/owner:
+    summary:  the owner of the DAP record with the given identifier
+    parameters:
+      - "$ref": "#/components/parameters/projid"
+    get:
+      summary: "return the DAP owner ID"
+      description:
+        this returns the value of the "owner" property of the object returned by the "/mdm1/{projid}"
+        endpoint.
+      responses:
+        "200":
+          description:  The DAP record was found and the ID of its owner was returned.
+          content:
+            "application/json":
+              schema:
+                "type": string
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    put:
+      summary: Reassign the DAP record to a new owner with the given identifier
+      description: This endpoint method is used to change the owner assigned to the record.
+      requestBody:
+        summary:  the ID of the new owner to assign to the DAP
+        description:  the ID of the new owner to assign to the DAP
+        required: true
+        content:
+          "application/json":
+            schema:
+              type: string
+            examples:
+              "switch-owner":
+                summary: Switch the current owner
+                value: "\"ava1\""
+      responses:
+        "200":
+          description:  the record was found, the name was successfully changed and the new owner returned
+          content:
+            "application":
+              "type": string
+        "400":
+          description: |-
+            The client sent bad or unusabe input of one of the following forms:
+              * The input request body is not parsable as a JSON string, or
+              * The string represents an ID that is not a recognized user.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:  The DAP draft record with the given identifier was not found
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to change its owner.
           content:
             "application/json":
               schema:
@@ -491,6 +734,16 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+            examples:
+              "finalize":
+                summary: finalize the record
+                value:
+                  action: "finalize"
+                  message: "all editing complete"
+              "submit":
+                summary: submit the record
+                value:
+                  action: "submit"
     put:
       summary: "apply an action to the record"
       description: >-
@@ -545,6 +798,15 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+        "409":
+          description:
+            The requested record is not in an editable state or in a sufficient state to apply
+            the action.  For example, this is returned in response to a finalize or submit action
+            request if the record does include the minimum required data.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
     patch:
       summary: "update the status message"
       description: >-
@@ -592,6 +854,509 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+        "409":
+          description:
+            The requested record is not in an editable state or in a sufficient state to apply
+            the action.  For example, this is returned in response to a finalize or submit action
+            request if the record does include the minimum required data.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+  /mds3/{draftid}/acls:
+    summary:  the access control lists (ACLs) that control who can access this DAP
+    parameters:
+      - "$ref": "#/components/parameters/draftid"
+        summary:  the identifier assigned to the desired DAP record
+    get:
+      summary: return the ACLs currently set for this DAP
+      description:
+        this returns the full set of ACLs currently assigned to this DAP record.  Each
+        property in the returned object is the name of a permission.  Standard permissions
+        include "read", "write", "admin", and "delete"; however, additional custom permissions
+        are possible.  Each contain a list of strings that represent the user or group
+        identifiers that have been given that permission.
+      responses:
+        "200":
+          description:  The body contains the ACL data for the DAP record.
+          content: 
+            "application/json":
+              schema:
+                "type": object
+                "$ref": "#/components/schemas/ACLs" 
+              examples:
+                "on-create":
+                   summary:
+                     the default permissions after a record is first created (where usr1
+                     is the identifer of the user that created the record).  
+                   value:
+                     '{ 
+                        "read": [ "usr1" ],
+                        "write": [ "usr1" ],
+                        "admin": [ "usr1" ],
+                        "delete": [ "usr1" ]
+                      }'
+        "401":
+          description:
+            The authenticated user is not authorized to read this record and its permissions.
+            The user must have "read" permission assigned to view its ACLs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:  The given project ID does not exist
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    put:
+      summary: replace the lists of users and groups assigned to multiple permissions
+      description: |-
+        This will completely replace the list of user and group IDs attached to the specified
+        permissions.  This action is equivalent to PUTing a list to `/mdm1/{projid}/acls/{perm}`
+        for each permission, `{perm}`, included in the input.  
+        
+        The input request body is an object where each property is the permission name ("read",
+        "write", "admin", or "delete") to update and its value is the corresponding array of
+        string user/group IDs.  If a previously existing permission is not included in the input 
+        object, it will not be changed
+      requestBody:
+        description:  the ACLs to set.  
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/ACLs"
+            examples:
+              "replace-acls":
+                summary: replace all permissions
+                value:
+                  read: [ "me", "you", "him", "her" ]
+                  write: [ "me", "her" ]
+      responses:
+        "200":
+          description:  the updated ACLs (inluding the ones that were not updated)
+          content: 
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ACLs"
+                type: array
+                items: { type: string }
+              examples:
+                "read":
+                   value:
+                     '[ "usr1", "usr2" ]'
+        "400":
+          description:
+            The given input is not a compliant ACL object
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to update this record's permissions.
+            The user must have "admin" and "write" permission assigned to update its ACLs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            The given project ID does not exist.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "405":
+          description:
+            One or more of the specified permissions is not a standard, editable permission.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    patch:
+      summary: grant multiple permissions to various users and groups
+      description: |-
+        This endpoint allows one to add users and groups to multiple ACLs in one call.  This
+        action is equivalent to PATCHTing a list to `/mdm1/{projid}/acls/{perm}`
+        for each permission, `{perm}`, included in the input.
+        
+        The input request body is an object where each property is the permission name ("read",
+        "write", "admin", or "delete") to update and each value is the corresponding array of
+        string user/group IDs.  If a previously existing permission is not included in the input 
+        object, it will not be changed
+      requestBody:
+        description:  the ACLs to set.  
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/ACLs"
+            examples:
+              "update-acls":
+                summary: replace all permissions
+                value:
+                  read: [ "you", "him", "her" ]
+                  write: [ "her" ]
+      responses:
+        "200":
+          description:  the updated ACLs (inluding the ones that were not updated)
+          content: 
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ACLs"
+                type: array
+                items: { type: string }
+              examples:
+                "read":
+                   value:
+                     '[ "usr1", "usr2" ]'
+        "400":
+          description:
+            The given input is not a compliant ACL object
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to update this record's permissions.
+            The user must have "admin" and "write" permission assigned to update its ACLs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            The given project ID does not exist.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "405":
+          description:
+            One or more of the specified permissions is not a standard, editable permission.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+
+  /mds3/{draftid}/acls/{perm}:
+    summary:  the access control lists (ACLs) that control who can access this DAP
+    parameters:
+      - "$ref": "#/components/parameters/draftid"
+      - "$ref": "#/components/parameters/perm"
+    get:
+      summary: return the list of users and groups that have permission to access this record
+      description:
+        each string in the returned array is an identifier for a user or group that has been
+        assigned the permission.
+      responses:
+        "200":
+          description:  a list of user and group identifiers
+          content: 
+            "application/json":
+              schema:
+                type: array
+                items: { type: string }
+              examples:
+                "read":
+                   value:
+                     '[ "usr1", "grp0:public" ]'
+        "401":
+          description:
+            The authenticated user is not authorized to read this record and its permissions.
+            The user must have "read" permission assigned to view its ACLs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            Either the given project ID does not exist, or the requested permission
+            does not exist on the record.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    post:
+      summary: add the specified user or group to the list of those that are assigned this permission
+      description: |-
+        If the user or group is not already assigned this permission, it will be added to the
+        list.  (It is not an error if the ID is already in the list.)  Only standard permissions
+        ("read", "write", "admin", and "delete") may be updated.  The authenticated user must 
+        have "admin" permission to add other identifiers to the list.  Note that only one identifier
+        can be added with this method; use PATCH to add multiple users or groups.
+
+        The input request body is a single string providing the ID of the user or group that the
+        permission should be granted to. (Be sure to enclose your ID in quotes.)
+      requestBody:
+        summary:  the identifier of the user or group to grant this permission to.
+        required: true
+        content:
+          "application/json":
+            schema:
+              type: string
+            examples:
+              "add-user-to-perm":
+                summary: add a user to the list granted a permission
+                value: "\"ava1\""
+      responses:
+        "200":
+          description:  a updated list of user and group identifiers with this permission
+          content: 
+            "application/json":
+              schema:
+                type: array
+                items: { type: string }
+              examples:
+                "read":
+                   value:
+                     '[ "usr1", "usr2" ]'
+        "400":
+          description:
+            The given input is not a string identifying a user or group.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to update this record's permissions.
+            The user must have "admin" permission assigned to view its ACLs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            Either the given project ID does not exist, or the requested permission
+            does not exist on the record.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "405":
+          description:
+            The specified permission is not a standard, editable permission.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    put:
+      summary: replace the list of users and groups assigned a permission
+      description: |-
+        This will completely replace the list of user and group IDs attached to the specified
+        permission.  This is helpful when the client wants to take complete control over editing
+        the list client-side, pushing it all when all changes are completed.  
+        
+        The input request body is an array of strings providing the IDs of the users and/or groups
+        that the permission should be granted to. 
+      requestBody:
+        summary:  the list of user and group identifiers to grant this permission to.
+        required: true
+        content:
+          "application/json":
+            schema:
+              type: array
+              items: { type: string }
+            examples:
+              "replace-perm":
+                summary: replace users given a permission
+                value: [ "me", "you", "him", "her" ]
+      responses:
+        "200":
+          description:  the updated list of user and group identifiers with this permission
+          content: 
+            "application/json":
+              schema:
+                type: array
+                items: { type: string }
+              examples:
+                "read":
+                   value:
+                     '[ "usr1", "usr2" ]'
+        "400":
+          description:
+            The given input is not an array of user or group (string) IDs
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to update this record's permissions.
+            The user must have "admin" permission assigned to update its ACLs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            Either the given project ID does not exist, or the requested permission
+            does not exist on the record.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "405":
+          description:
+            The specified permission is not a standard, editable permission.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+    patch:
+      summary: grant a single user or group or a list of them a permission
+      description: |-
+        A single user or group ID can be assigned a permission by passing a string as the input.
+        Alternatively, multiple users and/or groups can be granted permission by providing an
+        array of identifiers as input. 
+        
+        The input request body is a single string or an array of strings providing the IDs of
+        the users and/or groups that the permission should be granted to. (Be sure to enclose
+        a single ID in quotes.)
+      requestBody:
+        summary:  the list of user and group identifiers to grant this permission to.
+        required: true
+        content:
+          "application/json":
+            schema:
+              anyOf: 
+                - type: array 
+                  items: { type: string }
+                - type: string
+            examples:
+              "update-to-perm":
+                summary: merge in users to be given a permission
+                value: [ "him", "her" ]
+              "add-to-perm":
+                summary: merge in users to be given a permission
+                value: [ "him" ]
+      responses:
+        "200":
+          description:  the updated list of user and group identifiers with this permission
+          content: 
+            "application/json":
+              schema:
+                type: array
+                items: { type: string }
+              examples:
+                "read":
+                   value:
+                     '[ "usr1", "usr2" ]'
+        "400":
+          description:
+            The given input is neither a single user or group ID nor an array of IDs
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "401":
+          description:
+            The authenticated user is not authorized to update this record's permissions.
+            The user must have "admin" permission assigned to update its ACLs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            Either the given project ID does not exist, or the requested permission
+            does not exist on the record.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "405":
+          description:
+            The specified permission is not a standard, editable permission.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+
+  /mds3/{draftid}/acls/{perm}/{userorgroup}:
+    summary:  the status of a user or group with respect to a permission on this record
+    parameters:
+      - "$ref": "#/components/parameters/draftid"
+      - "$ref": "#/components/parameters/perm"
+      - "$ref": "#/components/parameters/userorgroup"
+
+    get:
+      summary: return whether the specified user or group has the given permission
+      description:
+        This method removes the group or user ID from an ACL permission list.  A special
+        value, ":user" is a synonym for the ID of the authenticated user.  
+      responses:
+        "200":
+          description:
+            the permission was recognized, so the output indicates whether the ID is in the list.
+          content: 
+            "application/json":
+              schema:
+                type: boolean
+              examples:
+                "true":
+                   value:
+                     'true'
+                "false":
+                   value:
+                     'false'
+        "401":
+          description:
+            The authenticated user is not authorized to read this record and its permissions.
+            The user must have "read" permission assigned to view its ACLs and test its membership
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            Either the given project ID does not exist, or the requested permission
+            does not exist on the record.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    delete:
+      summary: revoke a permission to a user or group
+      description:
+        This method removes the group or user ID from an ACL permission list.  A successful
+        response is still returned if the specified user or group did not previously have
+        the permission.
+      responses:
+        "200":
+          description:  the user or group was removed
+        "401":
+          description:
+            The authenticated user is not authorized to update this record and its permissions.
+            The user must have "admin" permission assigned to update its ACLs.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            Either the given project ID does not exist, or the requested permission
+            does not exist on the record.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "405":
+          description:
+            The specified permission is not a standard, editable permission.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
 
 components:
   parameters:
@@ -602,6 +1367,23 @@ components:
       required: true
       schema:
         type: string
+    perm:
+      name: perm
+      in: "path"
+      description:
+        the name of the permission (e.g. "read", "write", "admin", or "delete").
+      required: true
+      schema:
+        type: string
+    userorgroup:
+      name: userorgroup
+      in: "path"
+      description:
+        the identifier of a user or group of interest
+      required: true
+      schema:
+        type: string
+        required: true
 
     nerdmprop:
       name: nerdmprop
@@ -674,9 +1456,9 @@ components:
             a boolean set to True if this record has been deactivated, preventing any further editing or
             listing
           type: boolean
-        "acl":
+        "acls":
           description:  the access control lists associated with this record
-          type: { $ref: ACLs }
+          type: { $ref: "#/components/schemas/ACLs" }
         "data":
           description:  a digest of the draft publication document, featuring selected and summary properties 
           type:  object
@@ -784,6 +1566,30 @@ components:
             advisory only; the server may override some or all of this data based on policy.
           type:  object
           
+    ACLs:
+      title: the set of ACLs (permissions) assigned to a record
+      description:
+        This record enumerates the users and groups different permissions have been assigned
+        to.  The object can contain additional permissions types besides the standard ones
+        listed here.
+      properties:
+        "read":
+          description:  the list of users and groups that are allowed to read this record
+          type: array
+          items: { type: string }
+        "write":
+          description:  the list of users and groups that are allowed to update this record
+          type: array
+          items: { type: string }
+        "admin":
+          description:  the list of users and groups that are allowed to assign access permissions for this record to other users 
+          type: array
+          items: { type: string }
+        "delete":
+          description:  the list of users and groups that are allowed to delete this record
+          type: array
+          items: { type: string }
+
           
           
         

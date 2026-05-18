@@ -53,7 +53,7 @@ class NISTBagValidator(ValidatorBase):
                 "$": ejs.ExtValidator.with_schema_dir(schemadir, ejsprefix='$')
             }
 
-    def test_name(self, bag, want=ALL, results=None):
+    def test_name(self, bag, want=ALL, results=None, **kw):
         """
         Test that the bag has a compliant name
         """
@@ -63,28 +63,26 @@ class NISTBagValidator(ValidatorBase):
 
         pver = [int(v) for v in self.profile[1].split('.')]
         if pver > [0, 3]:
-            t = self._issue("2-0",
-                         "Bag names should match format DSID.DM_DN.mbagMM_NN-SS")
+            t = self._warn("2-0", "Bag names should match format DSID.DM_DN.mbagMM_NN-SS")
             nm = self.namere04.match(bag.name)
             pverpos = (4, 5)
         else:
-            t = self._issue("2-0",
-                            "Bag names should match format DSID.mbagMM_NN-SS")
+            t = self._warn("2-0", "Bag names should match format DSID.mbagMM_NN-SS")
             nm = self.namere02.match(bag.name)
             pverpos = (2, 3)
-            
-        out._warn(t, nm)
+
+        t = out._add_applied(t, nm)
 
         if nm:
-            t = self._issue("2-2",
-                         "Bag name should include profile version 'mbag{0}_{1}'"
+            t = self._warn("2-2",
+                           "Bag name should include profile version 'mbag{0}_{1}'"
                             .format(*pver))
-            out._warn(t, nm.group(pverpos[0]) == str(pver[0]) and
-                         nm.group(pverpos[1]) == str(pver[1]))
+            t = out._add_applied(t, nm.group(pverpos[0]) == str(pver[0]) and
+                                    nm.group(pverpos[1]) == str(pver[1]))
 
         return out
 
-    def test_bagit_mdels(self, bag, want=ALL, results=None):
+    def test_bagit_mdels(self, bag, want=ALL, results=None, **kw):
         """
         test that the bag-info.txt has the required/recommended metadata 
         elements defined by the BagIt standard.
@@ -103,36 +101,29 @@ class NISTBagValidator(ValidatorBase):
         i = 0
         for name in required:
             i += 1
-            t = self._issue("3-1-"+str(i), "bag-info.txt file must include "+
-                            name)
-            out._err(t, name in data and len(data[name]) > 0 and data[name][-1])
+            t = self._err("3-1-"+str(i), "bag-info.txt file must include "+name)
+            t = out._add_applied(t, name in data and len(data[name]) > 0 and data[name][-1])
 
         orgname = "National Institute of Standards and Technology"
-        t = self._issue("3-1-1-1",
-                   "'Source-Organization' must be set to '{0}'".format(orgname))
-        out._err(t, any([orgname in v for v in data.get('Source-Organization',[])]))
+        t = self._err("3-1-1-1", "'Source-Organization' must be set to '{0}'".format(orgname))
+        t = out._add_applied(t, any([orgname in v for v in data.get('Source-Organization',[])]))
 
         i = 0
         for name in recommended:
             i += 1
-            t = self._issue("3-2-"+str(i), "bag-info.txt file must include "+
-                            name)
-            out._rec(t, name in data and len(data[name]) > 0 and data[name][-1])
+            t = self._rec("3-2-"+str(i), "bag-info.txt file must include "+name)
+            t = out._add_applied(t, name in data and len(data[name]) > 0 and data[name][-1])
 
         orgaddr = "Gaithersburg, MD 20899"
-        t = self._issue("3-2-1-1",
-                   "'Organization-Address' must be set to the NIST address")
-        out._warn(t, any([orgaddr in v
-                                  for v in data.get('Organization-Address',[])]))
+        t = self._warn("3-2-1-1", "'Organization-Address' must be set to the NIST address")
+        t = out._add_applied(t, any([orgaddr in v for v in data.get('Organization-Address',[])]))
 
-        t = self._issue("3-2-3-1",
-              "'External-Identifier' values should include NIST ARK Identifier")
-        out._rec(t, any([v.startswith(arkstart)
-                                  for v in data.get('External-Identifier',[])]))
+        t = self._rec("3-2-3-1", "'External-Identifier' values should include NIST ARK Identifier")
+        t = out._add_applied(t, any([v.startswith(arkstart) for v in data.get('External-Identifier',[])]))
 
         return out;
 
-    def test_profile_version(self, bag, want=ALL, results=None):
+    def test_profile_version(self, bag, want=ALL, results=None, **kw):
         """
         test that the bag-info.txt file includes the NIST BagIt Profile version
         """
@@ -142,27 +133,23 @@ class NISTBagValidator(ValidatorBase):
 
         data = bag.get_baginfo()
 
-        t = self._issue("3-3-1","bag-info.txt must include 'NIST-BagIt-Version'")
-        out._err(t, 'NIST-BagIt-Version' in data)
+        t = self._err("3-3-1","bag-info.txt must include 'NIST-BagIt-Version'")
+        t = out._add_applied(t, 'NIST-BagIt-Version' in data)
 
         val = data.get('NIST-BagIt-Version', [])
         if t.passed():
-            t = self._issue("3-3-1",
-                            "'NIST-BagIt-Version' value must not be empty")
-            out._err(t, len(val) > 0 and val[-1])
+            t = self._err("3-3-1", "'NIST-BagIt-Version' value must not be empty")
+            t = out._add_applied(t, len(val) > 0 and val[-1])
         if t.passed():
-            t = self._issue("3-3-1",
-                            "'NIST-BagIt-Version' should only be specified once")
-            out._err(t, len(val) == 1)
+            t = self._err("3-3-1", "'NIST-BagIt-Version' should only be specified once")
+            t = out._add_applied(t, len(val) == 1)
         if t.passed():
-            t = self._issue("3-3-1",
-                            "'NIST-BagIt-Version' value must be set to {0}"
-                            .format(self.profile[1]))
-            out._err(t, val[-1] == self.profile[1])
+            t = self._err("3-3-1", "'NIST-BagIt-Version' value must be set to {0}".format(self.profile[1]))
+            t = out._add_applied(t, val[-1] == self.profile[1])
 
         return out
 
-    def test_dataset_version(self, bag, want=ALL, results=None):
+    def test_dataset_version(self, bag, want=ALL, results=None, **kw):
         """
         Test that the version is of an acceptable form
         """
@@ -184,37 +171,35 @@ class NISTBagValidator(ValidatorBase):
             pass
 
         if version:
-            t = self._issue("4.2-1", "version should be of form N.N.N...")
+            t = self._warn("4.2-1", "version should be of form N.N.N...")
             comm = None
             if not re.match(r'^\d+(.\d+)*$', version):
                 comm = [ "Offending version found in NERDm record: " +
                          str(version) ]
-            out._warn(t, not comm, comm)
+            t = out._add_applied(t, not comm, comm)
         
         data = bag.get_baginfo()
 
         if 'Multibag-Head-Version' in data:
             mbver = data['Multibag-Head-Version'][-1]
 
-            t = self._issue("4.2-2",
-                    "Multibag-Head-Version info tag should be of form N.N.N...")
+            t = self._warn("4.2-2", "Multibag-Head-Version info tag should be of form N.N.N...")
             comm = None
             if not re.match(r'^\d+(.\d+)*$', mbver):
                 comm = [ "Offending version found in NERDm record: " +
                          str(version) ]
-            out._warn(t, not comm, comm)
+            t = out._add_applied(t, not comm, comm)
 
             if version:
-                t = self._issue("4.2-3",
-                    "Multibag-Head-Version info tag should match NERDm version")
+                t = self._warn("4.2-3", "Multibag-Head-Version info tag should match NERDm version")
                 comm = None
                 if version != mbver:
                     comm = [ "{0} != {1}".format(mbver, version) ]
-                out._warn(t, not comm, comm)
+                t = out._add_applied(t, not comm, comm)
 
         return out
         
-    def test_nist_md(self, bag, want=ALL, results=None):
+    def test_nist_md(self, bag, want=ALL, results=None, **kw):
         """
         Test that the bag-info.txt file includes the required NIST-specific
         metadata elements.
@@ -236,29 +221,24 @@ class NISTBagValidator(ValidatorBase):
         if elname not in data:
             return out
         
-        t = self._issue(label,
-                        "'{0}' must not have an empty value".format(elname))
-        out._err(t, len(data[elname]) > 0 and data[elname][-1])
+        t = self._err(label, "'{0}' must not have an empty value".format(elname))
+        t = out._add_applied(t, len(data[elname]) > 0 and data[elname][-1])
         if len(data[elname]) == 0:
             return out
 
-        t = self._issue(label,
-                        "'{0}' must be specified only once".format(elname))
-        out._err(t, len(data[elname]) == 1)
+        t = self._err(label, "'{0}' must be specified only once".format(elname))
+        t = out._add_applied(t, len(data[elname]) == 1)
 
-        t = self._issue(label, "'{0}' is typically set to '{1}'"
-                               .format(elname, expected))
-        out._warn(t, data[elname][-1] == expected)
+        t = self._warn(label, "'{0}' is typically set to '{1}'".format(elname, expected))
+        t = out._add_applied(t, data[elname][-1] == expected)
 
         if data[elname][-1]:
-            t = self._issue(label,
-                            "File given in value of '{0}' must exist as a file"
-                            .format(elname))
-            out._err(t, os.path.isfile(os.path.join(bag.dir,data[elname][-1])))
+            t = self._err(label, "File given in value of '{0}' must exist as a file".format(elname))
+            t = out._add_applied(t, os.path.isfile(os.path.join(bag.dir,data[elname][-1])))
 
         return out
 
-    def test_metadata_dir(self, bag, want=ALL, results=None):
+    def test_metadata_dir(self, bag, want=ALL, results=None, **kw):
         """
         test that the metadata tag directory exists.
         """
@@ -266,13 +246,12 @@ class NISTBagValidator(ValidatorBase):
         if not out:
             out = ValidationResults(bag.name, want)
 
-        t = self._issue("4.1-1",
-                        "Bag must have a tag directory named 'metadata'")
-        out._err(t, os.path.isdir(os.path.join(bag.dir, "metadata")))
+        t = self._err("4.1-1", "Bag must have a tag directory named 'metadata'")
+        t = out._add_applied(t, os.path.isdir(os.path.join(bag.dir, "metadata")))
 
         return out
 
-    def test_pod(self, bag, want=ALL, results=None):
+    def test_pod(self, bag, want=ALL, results=None, **kw):
         """
         Test the existence and validity of the POD metadata file
         """
@@ -281,20 +260,18 @@ class NISTBagValidator(ValidatorBase):
             out = ValidationResults(bag.name, want)
         podfile = os.path.join(bag.metadata_dir, "pod.json")
         
-        t = self._issue("4.1-2-0",
-                        "Metadata tag directory must contain the file, pod.json")
-        out._err(t, os.path.isfile(podfile))
+        t = self._err("4.1-2-0", "Metadata tag directory must contain the file, pod.json")
+        t = out._add_applied(t, os.path.isfile(podfile))
         if t.failed():
             return out
 
-        t = self._issue("4.1-2-1",
-                        "pod.json must contain a legal POD Dataset record") 
+        t = self._err("4.1-2-1", "pod.json must contain a legal POD Dataset record") 
         try:
             with open(podfile) as fd:
                 data = json.load(fd)
         except Exception as ex:
             comm = ["Failed reading JSON file: "+str(ex)]
-            out._err(t, False, comm)
+            t = out._add_applied(t, False, comm)
             return out
         
         comm = None
@@ -310,11 +287,10 @@ class NISTBagValidator(ValidatorBase):
                 comm = ["{0} validation error{1} detected"
                         .format(len(verrs), s)]
                 comm += [str(e) for e in verrs]
-        out._err(t, not comm, comm)
+        t = out._add_applied(t, not comm, comm)
             
-        t = self._issue("4.1-3-2", "metadata/pod.json must have "+
-                        "@type=dcat:Dataset")
-        out._err(t, "dcat:Dataset" in data.get("@type",[]))
+        t = self._err("4.1-3-2", "metadata/pod.json must have @type=dcat:Dataset")
+        t = out._add_applied(t, "dcat:Dataset" in data.get("@type",[]))
         return out
 
     def _get_mdval_flavor(self, data):
@@ -328,7 +304,7 @@ class NISTBagValidator(ValidatorBase):
                 return mpfxs[0]
         return "_"
 
-    def test_nerdm(self, bag, want=ALL, results=None):
+    def test_nerdm(self, bag, want=ALL, results=None, **kw):
         """
         Test the existence and the validity of the resource-level NERDm
         metadata file.  
@@ -338,20 +314,18 @@ class NISTBagValidator(ValidatorBase):
             out = ValidationResults(bag.name, want)
         mdfile = os.path.join(bag.metadata_dir, "nerdm.json")
         
-        t = self._issue("4.1-3-0",
-                      "Metadata tag directory must contain the file, nerdm.json")
-        out._err(t, os.path.isfile(mdfile))
+        t = self._err("4.1-3-0", "Metadata tag directory must contain the file, nerdm.json")
+        t = out._add_applied(t, os.path.isfile(mdfile))
         if t.failed():
             return out
 
-        t = self._issue("4.1-3-1",
-               "metadata/nerdm.json must contain a legal NERDm Resource record") 
+        t = self._err("4.1-3-1", "metadata/nerdm.json must contain a legal NERDm Resource record") 
         try:
             with open(mdfile) as fd:
                 data = json.load(fd)
         except Exception as ex:
             comm = ["Failed reading JSON file: "+str(ex)]
-            out._err(t, False, comm)
+            t = out._add_applied(t, False, comm)
             return out
 
         if self._validatemd:
@@ -367,20 +341,18 @@ class NISTBagValidator(ValidatorBase):
                 comm = ["{0} validation error{1} detected"
                         .format(len(verrs), s)]
                 comm += [str(e) for e in verrs]
-            out._err(t, not comm, comm)
+            t = out._add_applied(t, not comm, comm)
             
-        t = self._issue("4.1-3-2", "metadata/nerdm.json must be a NERDm "+
-                        "Resource record")
-        out._err(t, "nrdp:PublicDataResource" in data.get("@type",[]))
+        t = self._err("4.1-3-2", "metadata/nerdm.json must be a NERDm Resource record")
+        t = out._add_applied(t, "nrdp:PublicDataResource" in data.get("@type",[]))
 
-        t = self._issue("4.1-3-3",
-               "metadata/nerdm.json must not include any DataFile components")
-        out._err(t, not any(["nrdp:DataFile" in c['@type']
-                             for c in data.get("components",[])]))
+        t = self._err("4.1-3-3", "metadata/nerdm.json must not include any DataFile components")
+        t = out._add_applied(t, not any(["nrdp:DataFile" in c['@type']
+                                         for c in data.get("components",[])]))
 
         return out
 
-    def test_metadata_tree(self, bag, want=ALL, results=None):
+    def test_metadata_tree(self, bag, want=ALL, results=None, **kw):
         """
         Test for the proper structure of the metadata tag directory tree.
         """
@@ -425,47 +397,43 @@ class NISTBagValidator(ValidatorBase):
                 elif not os.path.exists(os.path.join(f,"nerdm.json")):
                     nonerd.append("meta"+path)
 
-        t = self._issue("4.1-4-5", "Data directory should not contain files "+
-                        "or directories that start with '.'")
+        t = self._warn("4.1-4-5", "Data directory should not contain files "+
+                                  "or directories that start with '.'")
         comm = None
         if len(dotdir) > 0:
             s = (len(dotdir) > 1 and "ies") or "y"
             comm = [ "{0} dot-director{1} found".format(len(dotdir), s) ]
             comm += dotdir
-        out._warn(t, len(dotdir) == 0, comm)
+        t = out._add_applied(t, len(dotdir) == 0, comm)
         
-        t = self._issue("4.1-4-1a", "Data directory must be mirrored by a "+
-                        "metadata directory")
+        t = self._err("4.1-4-1a", "Data directory must be mirrored by a metadata directory")
         comm = None
         if len(misngdir) > 0:
             s = (len(misngdir) > 1 and "ies are") or "y is"
             comm = [ "{0} data director{1} not mirrored in metadata directory"
                      .format(len(misngdir), s) ]
             comm += misngdir
-        out._err(t, len(misngdir) == 0, comm)
+        t = out._add_applied(t, len(misngdir) == 0, comm)
         
-        t = self._issue("4.1-4-1b", "Data file must be mirrored by a "+
-                        "metadata directory")
+        t = self._err("4.1-4-1b", "Data file must be mirrored by a metadata directory")
         comm = None
         if len(misngfil) > 0:
             s = (len(misngfil) > 1 and "s are") or " is"
             comm = [ "{0} data file{1} not mirrored in metadata directory"
                      .format(len(misngfil), s) ]
             comm += misngfil
-        out._err(t, len(misngfil) == 0, comm)
+        t = out._add_applied(t, len(misngfil) == 0, comm)
         
-        t = self._issue("4.1-4-1a", "Data directory must be mirrored by a "+
-                        "metadata directory")
+        t = self._err("4.1-4-1a", "Data directory must be mirrored by a metadata directory")
         comm = None
         if len(dnotadir) > 0:
             s = (len(dnotadir) > 1 and "ies") or "y"
             comm = [ "{0} data director{1} mirrored by non-director{1}"
                      .format(len(dnotadir), s) ]
             comm += dnotadir
-        out._err(t, len(dnotadir) == 0, comm)
+        t = out._add_applied(t, len(dnotadir) == 0, comm)
         
-        t = self._issue("4.1-4-1b", "Data file must be mirrored by a "+
-                        "metadata directory")
+        t = self._err("4.1-4-1b", "Data file must be mirrored by a metadata directory")
         comm = None
         if len(fnotadir) > 0:
             fs = (len(fnotadir) > 1 and "s") or ""
@@ -473,34 +441,30 @@ class NISTBagValidator(ValidatorBase):
             comm = [ "{0} data file{1} mirrored by non-director{2}"
                      .format(len(fnotadir), fs, s) ]
             comm += fnotadir
-        out._err(t, len(fnotadir) == 0, comm)
+        t = out._add_applied(t, len(fnotadir) == 0, comm)
         
-        t = self._issue("4.1-5", "Every metadata subdirectory must contain a "+
-                        "nerdm.json file")
+        t = self._err("4.1-5", "Every metadata subdirectory must contain a nerdm.json file")
         comm = None
         if len(nonerd) > 0:
             s = (len(fnotadir) > 1 and "s") or ""
             comm = [ "Missing nerdm.json file{1} for {0} data tree item{1}"
                      .format(len(nonerd), s) ]
             comm += nonerd
-        out._err(t, len(nonerd) == 0, comm)
+        t = out._add_applied(t, len(nonerd) == 0, comm)
 
         return out
 
-    def test_nerdm_validity(self, bag, want=ALL, results=None):
+    def test_nerdm_validity(self, bag, want=ALL, results=None, **kw):
         out = results
         if not out:
             out = ValidationResults(bag.name, want)
         metadir = os.path.join(bag.dir, "metadata")
         datadir = os.path.join(bag.dir, "data")
 
-        vt = self._issue("4.1-4-2b", "A data file directory must " +
-                         "contain a valid NERDm metadata file.")
-        ft = self._issue("4.1-4-2c", "A data file's NERDm data must be of "+
-                         "@type=nrdp:DataFile.")
-        ct = self._issue("4.1-4-2d", "A data directory's NERDm data must be "+
-                         "of @type=nrdp:Subcollection.")
-        kt = self._issue("4.1-4-2e", "_schema and @context fields recommended "+
+        vt = self._err("4.1-4-2b", "A data file directory must contain a valid NERDm metadata file.")
+        ft = self._err("4.1-4-2c", "A data file's NERDm data must be of @type=nrdp:DataFile.")
+        ct = self._err("4.1-4-2d", "A data directory's NERDm data must be of @type=nrdp:Subcollection.")
+        kt = self._rec("4.1-4-2e", "_schema and @context fields recommended "+
                          "for inclusion in component NERDm data file")
         for root, subdirs, files in os.walk(datadir):
             for f in files:
@@ -519,14 +483,14 @@ class NISTBagValidator(ValidatorBase):
                       "nrdp:ChecksumFile" in data['@type'])
                 if not ok:
                     comm = [path + ": " + str(data['@type'])]
-                out._err(ft, ok, comm)
+                t = out._add_applied(ft, ok, comm)
 
                 comm = None
                 ok = ('_schema' in data or '$schema' in data) and \
                      '@context' in data;
                 if not ok:
                     comm = ["filepath: " +path]
-                out._rec(kt, ok, comm)
+                t = out._add_applied(kt, ok, comm)
 
                 if self._validatemd:
                     flav = self._get_mdval_flavor(data)
@@ -541,7 +505,7 @@ class NISTBagValidator(ValidatorBase):
                         comm = ["{0} validation error{1} detected"
                                 .format(len(verrs), s)]
                         comm += [str(e) for e in verrs]
-                    out._err(vt, not comm, comm)
+                    t = out._add_applied(vt, not comm, comm)
             
             for d in subdirs:
                 path = os.path.join(root[len(datadir):], d)
@@ -557,7 +521,7 @@ class NISTBagValidator(ValidatorBase):
                 ok = '@type' in data and "nrdp:Subcollection" in data['@type']
                 if not ok:
                     comm = [path + ": " + str(data['@type'])]
-                out._err(ct, ok, comm)
+                t = out._add_applied(ct, ok, comm)
 
                 if self._validatemd:
                     flav = self._get_mdval_flavor(data)
@@ -572,28 +536,25 @@ class NISTBagValidator(ValidatorBase):
                         comm = ["{0} validation error{1} detected"
                                 .format(len(verrs), s)]
                         comm += [str(e) for e in verrs]
-                    out._err(vt, not comm, comm)
+                    t = out._add_applied(vt, not comm, comm)
             
         return out
 
     def _check_comp_legal(self, nerdmf, path, res):
-        vt = self._issue("4.1-4-2a", "A data file directory must " +
-                         "contain a legal NERDm metadata file.")
-        pt = self._issue("4.1-4-2f", "A data component's NERDm data must have "+
-                         "a correct filepath property")
+        vt = self._err("4.1-4-2a", "A data file directory must contain a legal NERDm metadata file.")
+        pt = self._err("4.1-4-2f", "A data component's NERDm data must have a correct filepath property")
         try:
             with open(nerdmf) as fd:
                 data = json.load(fd, object_pairs_hook=OrderedDict)
         except ValueError as ex:
-            res._err(vt, False,
-                     ["metadata/"+path+"/nerdm.json: Not a legal JSON file"])
+            t = res._add_applied(vt, False, ["metadata/"+path+"/nerdm.json: Not a legal JSON file"])
             return None
 
         comm = None
         ok = isinstance(data, Mapping)
         if not ok:
             comm = ["metadata/"+path+"/nerdm.json: content is not a JSON object"]
-        res._err(vt, ok, comm)
+        vt = res._add_applied(vt, ok, comm)
         if vt.failed():
             return None
 
@@ -601,7 +562,7 @@ class NISTBagValidator(ValidatorBase):
         ok = 'filepath' in data and data['filepath'] == path
         if not ok:
             comm = [path + ": filepath: " + str(data.get('filepath'))]
-        res._err(pt, ok, comm)
+        t = res._add_applied(pt, ok, comm)
 
         return data
 

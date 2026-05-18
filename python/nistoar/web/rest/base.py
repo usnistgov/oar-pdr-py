@@ -252,6 +252,15 @@ class Handler(object):
         status = "{0} {1}".format(str(self._code), self._msg)
         self._start(status, self._hdr.items(), None)
 
+    def free(self):
+        """
+        free up resources used by this handler.  
+
+        This method is called automatically after :py:meth:`handle` completes.  The default implementation
+        does nothing.  
+        """
+        pass
+
     def handle(self):
         """
         handle the request encapsulated in this Handler (at construction time).  
@@ -268,20 +277,23 @@ class Handler(object):
         
         meth_handler = 'do_'+meth
 
-        if not self.preauthorize():
-            return self.send_unauthorized()
+        try: 
+            if not self.preauthorize():
+                return self.send_unauthorized()
 
-        try:
-            if hasattr(self, meth_handler):
-                return getattr(self, meth_handler)(self._path)
-            elif self._meth == "HEAD":
-                return self.do_GET(self._path, ashead=True)
-            else:
-                return self.send_error(405, self._meth + " not supported on this resource")
-        except Exception as ex:
-            if self.log:
-                self.log.exception("Unexpected failure: "+str(ex))
-            return self.send_error(500, "Server failure")
+            try:
+                if hasattr(self, meth_handler):
+                    return getattr(self, meth_handler)(self._path)
+                elif self._meth == "HEAD":
+                    return self.do_GET(self._path, ashead=True)
+                else:
+                    return self.send_error(405, self._meth + " not supported on this resource")
+            except Exception as ex:
+                if self.log:
+                    self.log.exception("Unexpected failure: "+str(ex))
+                return self.send_error(500, "Server failure")
+        finally:
+            self.free()    
 
     def preauthorize(self):
         """
@@ -878,7 +890,8 @@ def authenticate_via_jwt(svcname: str, env: Mapping, jwtcfg: Mapping, log: Logge
                      invalid_reason="Invalid token can not be decoded")
 
     # make sure the token has an expiration date
-    if jwtcfg.get('require_expiration', True) and not userinfo.get('exp'):
+    if jwtcfg.get('require_expiration', True) and \
+       userinfo.get("agent_type", "user") != "auto" and not userinfo.get('exp'):
         # Note expiration was checked implicitly by the above jwt.decode() call
         log.warning("Rejecting non-expiring token for user %s", userinfo.get('sub', "(unknown)"))
         if jwtcfg.get('raise_on_invalid'):

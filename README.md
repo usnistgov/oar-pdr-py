@@ -29,16 +29,18 @@ oar-pdr v1.4.7.
 python       --> Python source code for the metadata and preservation
                   services
 scripts      --> Tools for running the services and running all tests
+etc          --> Various data files that get installed with the library
+docs         --> Various documentation, including the developers' guide
 oar-build    --> general oar build system support (do not customize)
-oar-metadata --> Python source code for supporting the NERDm (and
+metadata     --> Python source code for supporting the NERDm (and
                   related) metadata, provided as a submodule
-docker/      --> Docker containers for building and running tests
+docker/      --> Docker containers for building this package and running tests
 ```
 
 ## Prerequisites
 
 The publishing services are built and run using Python 3 (supporting
-versions 3.6 through 3.7).
+versions 3.8 through 3.10).
 
 The oar-metadata package is a prerequisite which is configured as git
 sub-module of this package.  This means after you clone the oar-pdr git
@@ -173,6 +175,11 @@ Similarly, `testall.docker` runs the tests in a container:
 
 Like their non-docker counterparts, these scripts accept product names
 as arguments.
+
+### Building Documentation
+
+See [docs/manual/README.md](docs/manual/README.md) for details on building the Developers'
+Manual using the Sphinx documentation system.
 
 ### MONGODB AND LOCAL TEST
 docker-compose up

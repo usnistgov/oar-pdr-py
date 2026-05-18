@@ -43,17 +43,15 @@ class TestProjectService(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            "clients": {
-                "midas": {
-                    "default_shoulder": "mdm1"
-                },
-                "default": {
-                    "default_shoulder": "mdm0"
-                }
-            },
             "dbio": {
-                "allowed_project_shoulders": ["mdm1", "spc1"],
-                "default_shoulder": "mdm0"
+                "project_id_minting": {
+                    "allowed_shoulders": {
+                        "public": [],
+                        "midas":  ["mdm0", "mdm1", "spc1"]
+                    },
+                    "default_shoulder": { "public": "mdm1" },
+                    "localid_providers": { "midas": ["mdm0"] }
+                }
             }
         }
         self.outdir = tempfile.TemporaryDirectory(prefix="_test_dbclient.", dir=".")

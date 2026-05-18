@@ -1273,9 +1273,9 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(poddata['theme'][0], "Optical physics")
         self.assertEqual(len(poddata['theme']), 1)
         self.assertEqual(len(data['topic']), 1)
-        self.assertEqual(data['topic'][0]['tag'], "Physics: Optical physics")
+        self.assertEqual(data['topic'][0]['tag'], "Physics: Optical physics and communications")
         self.assertEqual(len(data['theme']), 1)
-        self.assertEqual(data['theme'][0], "Physics: Optical physics")
+        self.assertEqual(data['theme'][0], "Physics: Optical physics and communications")
 
     def test_add_ds_pod_filemd(self):
         podfile = os.path.join(datadir, "_pod.json")
@@ -1761,7 +1761,7 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(len(oxum), 1)
         oxum = [int(n) for n in oxum[0].split(': ')[1].split('.')]
         self.assertEqual(oxum[1], 14)
-        self.assertEqual(oxum[0], 12249)  # this will change if logging changes
+        self.assertEqual(oxum[0], 12287)  # this will change if logging changes
 
         bagsz = [l for l in lines if "Bag-Size: " in l]
         self.assertEqual(len(bagsz), 1)

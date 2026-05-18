@@ -16,8 +16,10 @@ def setUpModule():
     global loghdlr
     global rootlog
     rootlog = logging.getLogger()
+    rootlog.setLevel(logging.DEBUG)
     loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_wsgiapp.log"))
     loghdlr.setLevel(logging.DEBUG)
+    loghdlr.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     rootlog.addHandler(loghdlr)
 
 def tearDownModule():
@@ -435,19 +437,18 @@ class TestMIDASApp(test.TestCase):
                         "describedBy": "https://midas3.nist.gov/midas/apidocs",
                         "href": "http://midas3.nist.gov/midas/dmp"
                     },
-                    "clients": {
-                        "midas": {
-                            "default_shoulder": "mdm1"
-                        },
-                        "default": {
-                            "default_shoulder": "mdm0"
-                        }
-                    },
                     "dbio": {
                         "default_convention": "mdm1",
                         "superusers": [ "rlp" ],
-                        "allowed_project_shoulders": ["mdm1", "spc1"],
-                        "default_shoulder": "mdm0"
+                        "project_id_minting": {
+                            "default_shoulder": {
+                                "midas": "mdm0",
+                                "public": "mdm0"
+                            },
+                            "allowed_shoulders": {
+                                "midas": ["mdm1", "spc1" ]
+                            }
+                        }
                     },
                     "conventions": {
                         "mdm1": {
@@ -478,16 +479,18 @@ class TestMIDASApp(test.TestCase):
                     },
                     "project_name": "drafts",
                     "type": "dmp/mdm1",
-                    "clients": {
-                        "default": {
-                            "default_shoulder": "mds3"
-                        }
-                    },
                     "dbio": {
                         "default_convention": "mds3",
                         "superusers": [ "rlp" ],
-                        "allowed_project_shoulders": ["mds3", "pdr0"],
-                        "default_shoulder": "mds3"
+                        "project_id_minting": {
+                            "default_shoulder": {
+                                "midas": "mds3",
+                                "public": "mds3"
+                            },
+                            "allowed_shoulders": {
+                                "midas": ["mds3", "pdr0" ]
+                            }
+                        }
                     },
                 },
                 "pyu": {
@@ -495,7 +498,7 @@ class TestMIDASApp(test.TestCase):
                         "describedBy": "https://midas3.nist.gov/midas/apidocs/pyu",
                         "href": "http://midas3.nist.gov/midas/pyu"
                     }
-                }
+                },
             }
         }
         self.clifact = inmem.InMemoryDBClientFactory({})
@@ -719,9 +722,11 @@ class TestMIDASApp(test.TestCase):
         self.assertEqual(data["owner"], prov.Agent.ANONYMOUS)
         self.assertEqual(data["type"], "drafts")
 
+
 midasserverdir = Path(__file__).parents[4] / 'docker' / 'midasserver'
 midasserverconf = midasserverdir / 'midas-dmpdap_conf.yml'
 nsdserverconf = midasserverdir / 'midas-dmpdapnsd_conf.yml'
+doiserverconf = midasserverconf
 
 class TestMIDASServer(test.TestCase):
     # This tests midas wsgi app with the configuration provided in docker/midasserver
@@ -767,6 +772,7 @@ class TestMIDASServer(test.TestCase):
         self.assertIn("dmp/mdm1", self.app.subapps)
         self.assertIn("dap/mdsx", self.app.subapps)
         self.assertIn("dap/mds3", self.app.subapps)
+        self.assertIn("doi/2nerdm", self.app.subapps)
 
         self.assertEqual(self.app.subapps["dmp/mdm1"].svcfact._prjtype, "dmp")
         self.assertEqual(self.app.subapps["dap/mdsx"].svcfact._prjtype, "dap")
@@ -811,6 +817,15 @@ class TestMIDASServer(test.TestCase):
         self.assertEqual(who.get_prop("email"), "fed@nist.gov")
         self.assertEqual(who.get_prop("OU"), "61")
 
+        token = jwt.encode({"sub": "dbio:admin", "userEmail": "fed@nist.gov", "OU": "61"},
+                           self.config['authentication']['key'], algorithm="HS256")
+        req['HTTP_AUTHORIZATION'] = "Bearer "+token
+        who = self.app.authenticate(req)
+        self.assertEqual(who.agent_class, "nist")
+        self.assertEqual(who.actor, "dbio:admin")
+        self.assertEqual(who.delegated, ("Unit testing agent",))
+        self.assertEqual(who.get_prop("email"), "fed@nist.gov")
+        self.assertEqual(who.get_prop("OU"), "61")
 
     def test_create_dmp(self):
         req = {
@@ -1256,6 +1271,22 @@ class TestMIDASServer(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         data = self.body2dict(body)
         self.assertEqual(data.get('components',[]), [])
+
+    @test.skipIf("doi" not in os.environ.get("OAR_TEST_INCLUDE",""),
+                 "kindly skipping doi service checks")
+    def test_doi2nerdm_ref(self):
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': '/midas/doi/2nerdm/ref/10.18434/mds2-2525'
+        }
+        body = self.app(req, self.start)
+        self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
+        self.assertEqual(data['@id'], "doi:10.18434/mds2-2525")
+        self.assertIn('title', data)
+        self.assertIn('citation', data)
+
+        
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
 class TestMIDASNSDServer(test.TestCase):
