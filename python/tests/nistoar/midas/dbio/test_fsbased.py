@@ -23,7 +23,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
         cli = self.fact.create_client(base.DMP_PROJECTS, {}, "ava1")
         self.assertEqual(cli._cfg, self.fact._cfg)
         self.assertEqual(cli._projcoll, base.DMP_PROJECTS)
-        self.assertEqual(cli._who, "ava1")
+        self.assertEqual(cli.user_id, "ava1")
         self.assertIsNone(cli._whogrps)
         self.assertEqual(os.path.normpath(str(cli._native)), self.outdir.name.lstrip("./"))
         self.assertIsNotNone(cli._dbgroups)
@@ -242,6 +242,74 @@ class TestFSBasedDBClient(test.TestCase):
         self.assertTrue(isinstance(recs[0], base.ProjectRecord))
         self.assertEqual(recs[0].id, id)
 
+    def test_select_records_constraints(self):
+        # Inject some data into the database
+        id1 = "pdr0:0002"
+        data = {"id": id1, "name": "test1", "acls": {"read": [base.PUBLIC_GROUP]} }
+        rec1 = base.ProjectRecord(base.DMP_PROJECTS, data, self.cli)
+        self.cli._write_rec(base.DMP_PROJECTS, id1, rec1.to_dict())
+
+        id2 = "pdr0:0006"
+        data = {"id": id2, "name": "test2", "acls": {"read": [base.PUBLIC_GROUP]}, "owner": "bob",
+                "status": {"state": "published"} }
+        rec2 = base.ProjectRecord(base.DMP_PROJECTS, data, self.cli)
+        self.cli._write_rec(base.DMP_PROJECTS, id2, rec2.to_dict())
+
+        id3 = "pdr0:0003"
+        data = {"id": id3, "name": "test1", "acls": {"read": [base.PUBLIC_GROUP]}, "owner": "bob" }
+        rec3 = base.ProjectRecord(base.DMP_PROJECTS, data, self.cli)
+        self.cli._write_rec(base.DMP_PROJECTS, id3, rec3.to_dict())
+
+        id4 = "pdr0:0014"
+        data = {"id": id4, "name": "test4", "owner": "alice",
+                "status": {"state": "unwell"} }
+        rec4 = base.ProjectRecord(base.DMP_PROJECTS, data, self.cli)
+        self.cli._write_rec(base.DMP_PROJECTS, id4, rec4.to_dict())
+
+        recs = self.cli.select_records(base.ACLs.READ, name=["test1", "test2"])
+        rec_ids = [r.id for r in recs]
+        self.assertIn(id1, rec_ids)
+        self.assertIn(id2, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn(id4, rec_ids)
+        self.assertEqual(len(rec_ids), 3)
+
+        recs = self.cli.select_records(base.ACLs.READ, name=["test1", "test2"], owner=['bob', 'alice'])
+        rec_ids = [r.id for r in recs]
+        self.assertNotIn(id1, rec_ids)   # not owned by bob nor alice
+        self.assertIn(id2, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn(id4, rec_ids)   # alice's record is not included in the names
+        self.assertEqual(len(rec_ids), 2)
+
+        recs = self.cli.select_records(base.ACLs.READ, status_state=["edit"])
+        rec_ids = [r.id for r in recs]
+        self.assertIn(id1, rec_ids)
+        self.assertNotIn(id2, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn(id4, rec_ids)
+        self.assertEqual(len(rec_ids), 2)
+
+        recs = self.cli.select_records(base.ACLs.READ, status_state=["edit", "published"])
+        rec_ids = [r.id for r in recs]
+        self.assertIn(id1, rec_ids)
+        self.assertIn(id2, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn(id4, rec_ids)
+        self.assertEqual(len(rec_ids), 3)
+
+        recs = self.cli.select_records(base.ACLs.READ, status_state=["edit", "published"], owner=["bob"])
+        rec_ids = [r.id for r in recs]
+        self.assertNotIn(id1, rec_ids)
+        self.assertIn(id2, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn(id4, rec_ids)
+        self.assertEqual(len(rec_ids), 2)
+
+        recs = self.cli.select_records(base.ACLs.READ, status_state=["published"], owner=["alice"])
+        rec_ids = [r.id for r in recs]
+        self.assertEqual(len(rec_ids), 0)
+
     def test_action_log_io(self):
         with self.assertRaises(ValueError):
             self.cli._save_action_data({'goob': 'gurn'})
@@ -305,6 +373,21 @@ class TestFSBasedDBClient(test.TestCase):
         self.assertEqual(data[0], {'recid': 'goob:gurn', 'foo': 'bar'})
         self.assertEqual(data[1], {'recid': 'goob:gurn', 'alice': 'bob'})
 
+    def test_client_for(self):
+        self.assertTrue(isinstance(self.cli, fsbased.FSBasedDBClient))
+
+        sib = self.cli.client_for(f"{base.DMP_PROJECTS}_best")
+        self.assertTrue(isinstance(sib, fsbased.FSBasedDBClient))
+        self.assertEqual(sib.project, f"{base.DMP_PROJECTS}_best")
+        self.assertEqual(sib.user_id, self.cli.user_id)
+        self.assertEqual(sib._root, self.cli._root)
+
+        sib = self.cli.client_for(f"{base.DMP_PROJECTS}_worst", "goob")
+        self.assertTrue(isinstance(sib, fsbased.FSBasedDBClient))
+        self.assertEqual(sib.project, f"{base.DMP_PROJECTS}_worst")
+        self.assertEqual(sib.user_id, "goob")
+        self.assertEqual(sib._root, self.cli._root)
+        
 
 
                          

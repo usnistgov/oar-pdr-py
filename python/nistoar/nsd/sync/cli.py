@@ -110,7 +110,8 @@ def main(progname, args):
             raise Failure("problem reading config file, {0}: {1}"
                           .format(opts.cfgfile, ex.strerror)) from ex
     elif config.service:
-        config.service.wait_until_up()
+        to = os.environ.get("OAR_CONFIG_TIMEOUT", 60)
+        config.service.wait_until_up(to)
         cfg = config.service.get("midas-nsdsync")
     else:
         raise Failure("Unable to locate configuration; set OAR_CONFIG_SERVICE or use -c")

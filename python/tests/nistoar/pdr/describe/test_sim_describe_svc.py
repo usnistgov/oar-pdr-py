@@ -2,8 +2,13 @@ import os, sys, pdb, requests, logging, time, shutil, json
 import unittest as test
 from copy import deepcopy
 
+from nistoar.pdr.describe.rmm import MetadataClient as rmm
 from nistoar.testing import *
 # import tests.nistoar.pdr.describe.sim_describe_svc as desc
+
+releasesets = rmm.COLL_RELEASES
+versions = rmm.COLL_VERSIONS
+records = rmm.COLL_LATEST
 
 testdir = os.path.dirname(os.path.abspath(__file__))
 datadir = os.path.join(testdir, 'data', 'rmm-test-archive')
@@ -97,7 +102,7 @@ class TestArchive(test.TestCase):
             "ark:/88434/mds2-2110": "mds2-2110",
             "ark:/88434/mds2-7223": "mds2-7223"
         })
-        self.assertEqual(self.arch.releaseSets, {
+        self.assertEqual(self.arch.releasesets, {
             'ark:/88434/mds003r0x6/pdr:v': '1E0F15DAAEFB84E4E0531A5706813DD8436',
             'ark:/88434/mds00qdrz9/pdr:v': '19A9D7193F868BDDE0531A57068151D2431',
             'ark:/88434/mds00sxbvh/pdr:v': '1E651A532AFD8816E0531A570681A662439',
@@ -113,9 +118,9 @@ class TestArchive(test.TestCase):
     def test_pdrid2aipid(self):
         self.assertEqual(self.arch.pdrid2aipid("records", "ark:/88434/mds00sxbvh"),
                          "1E651A532AFD8816E0531A570681A662439")
-        self.assertEqual(self.arch.pdrid2aipid("releaseSets", "ark:/88434/mds2-2107/pdr:v"), "mds2-2107")
-        self.assertIsNone(self.arch.pdrid2aipid("releaseSets", "ark:/88434/mds2-2107"))
-        self.assertEqual(self.arch.pdrid2aipid("versions", "ark:/88434/mds2-2106/pdr:v/1.1.0"),
+        self.assertEqual(self.arch.pdrid2aipid(releasesets, "ark:/88434/mds2-2107/pdr:v"), "mds2-2107")
+        self.assertIsNone(self.arch.pdrid2aipid(releasesets, "ark:/88434/mds2-2107"))
+        self.assertEqual(self.arch.pdrid2aipid(versions, "ark:/88434/mds2-2106/pdr:v/1.1.0"),
                          "mds2-2106-v1_1_0")
         
     def test_ids(self):
@@ -128,7 +133,7 @@ class TestArchive(test.TestCase):
         self.assertIn("19A9D7193F868BDDE0531A57068151D2431", ids)
         self.assertIn("1E0F15DAAEFB84E4E0531A5706813DD8436", ids)
 
-        ids = self.arch.aipids("releaseSets");
+        ids = self.arch.aipids(releasesets);
         self.assertEqual(len(ids), 7)
         self.assertIn("mds2-2106", ids)
         self.assertIn("mds2-2107", ids)
@@ -221,7 +226,7 @@ class TestSimRMMHandler(test.TestCase):
     def test_get_all_releaseSets(self):
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "/releaseSets/"
+            'PATH_INFO': "/releasesets/"
         }
         self.hdlr = self.gethandler(req)
         body = self.hdlr.handle()
@@ -307,7 +312,7 @@ class TestSimRMMHandler(test.TestCase):
     def test_get_releaseSet_by_ediid(self):
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "/releaseSets/19A9D7193F868BDDE0531A57068151D2431"
+            'PATH_INFO': "/releasesets/19A9D7193F868BDDE0531A57068151D2431"
         }
         self.hdlr = self.gethandler(req)
         body = self.hdlr.handle()
@@ -320,16 +325,16 @@ class TestSimRMMHandler(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "/releaseSets/mds00qdrz9"
+            'PATH_INFO': "/releasesets/mds00qdrz9"
         }
         self.hdlr = self.gethandler(req)
         body = self.hdlr.handle()
-        self.assertEqual(self.resp[0], "404 mds00qdrz9 does not exist in releaseSets")
+        self.assertEqual(self.resp[0], "404 mds00qdrz9 does not exist in releasesets")
 
         self.resp = []
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "/releaseSets/mds2-2107"
+            'PATH_INFO': "/releasesets/mds2-2107"
         }
         self.hdlr = self.gethandler(req)
         body = self.hdlr.handle()
@@ -371,7 +376,7 @@ class TestSimRMMHandler(test.TestCase):
     def test_get_releaseSet_by_id(self):
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "/releaseSets",
+            'PATH_INFO': "/releasesets",
             'QUERY_STRING': "@id=ark:/88434/mds00qdrz9/pdr:v"
         }
         self.hdlr = self.gethandler(req)
@@ -386,7 +391,7 @@ class TestSimRMMHandler(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': "GET",
-            'PATH_INFO': "/releaseSets",
+            'PATH_INFO': "/releasesets",
             'QUERY_STRING': "@id=ark:/88434/mds2-2107/pdr:v"
         }
         self.hdlr = self.gethandler(req)

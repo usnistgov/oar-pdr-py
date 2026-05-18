@@ -13,15 +13,15 @@ import re
 from logging import Logger, getLogger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
-from typing import List
+from typing import List, Union
 from copy import deepcopy
 
 import jsonpatch
 
-from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, RecordStatus, ANONYMOUS,
-                   AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException,
+from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, PUBLIC_GROUP, ANONYMOUS, AUTOADMIN,
+                   RecordStatus, AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException,
                    InvalidUpdate, InvalidRecord)
-from . import status
+from . import status, restore
 from .. import MIDASException, MIDASSystem
 from nistoar.pdr.utils.prov import Agent, Action
 from nistoar.pdr.utils.validate import ValidationResults, ALL, REQ, WARN
@@ -35,6 +35,10 @@ _STATUS_ACTION_CLEAR    = "clear"
 _STATUS_ACTION_REVIEW   = "review"
 _STATUS_ACTION_FINALIZE = "finalize"
 _STATUS_ACTION_SUBMIT   = "submit"
+_STATUS_ACTION_UPDATEPREP = "update-prep"
+_STATUS_ACTION_RESTORE  = "restore"
+_STATUS_ACTION_PUBLISH  = "publish"
+_STATUS_ACTION_REVISE   = "revise"
 
 DEF_PUBLISHED_SUFFIX = "_published"
 
@@ -46,9 +50,11 @@ class ProjectService(MIDASSystem):
     to a particular user at construction time (as given by a :py:class:`~nistoar.pdr.utils.Agent`
     instance); thus, requests to this service are subject to internal Authorization checks.
 
-    This base service supports three parameters, ``dbio``, ``default_perms``, and ``clients``.  The 
-    optional ``dbio`` parameter will be passed to the :py:class:`~nistoar.midas.dbio.base.DBClientFactory`'s 
-    ``create_client()`` function to create the :py:class:`~nistoar.midas.dbio.base.DBClient`. 
+    This base service supports two parameters: ``dbio`` and ``default_perms``.  The ``dbio``
+    parameter will be passed to the :py:class:`~nistoar.midas.dbio.base.DBClientFactory`'s 
+    ``create_client()`` function to create the :py:class:`~nistoar.midas.dbio.base.DBClient`.  In 
+    principle, the ``dbio`` parameter is optional; however, this is usually where required 
+    :ref:`restrictions on ID minting<ref-id-minting>` are included.
 
     The optional ``default_perms`` is an object that sets the ACLs for newly created project records.  
     Its optional properties name the permisson types that defaults are to be set for, including "read", 
@@ -56,34 +62,19 @@ class ProjectService(MIDASSystem):
     property is a list of user identifiers that the should be given the particular type of permission.
     Typically, only virtual group identifiers (like "grp0:public") make sense.
 
-    The ``clients`` parameter is an object that places restrictions on the 
-    creation of records based on which group the user is part of.  The keys of the object
-    are user group names that are authorized to use this service, and whose values are themselves objects
-    that restrict the requests by that user group; for example:
-
-    .. code-block::
-
-       "clients": {
-           "midas": {
-               "default_shoulder": "mdm1"
-           },
-           "default": {
-               "default_shoulder": "mdm0"
-           }
-       }
-
-    The special group name "default" will (if present) be applied to users whose group does not match
-    any of the other names.  If not present the user will not be allowed to create new records.  
-
     This implementation only supports one parameter as part of the group configuration: ``default_shoulder``.
     This parameter gives the identifier shoulder that should be used the identifier for a new record 
     created under the user group.  Subclasses of this service class may support other parameters. 
     """
-    STATUS_ACTION_CREATE   = _STATUS_ACTION_CREATE  
-    STATUS_ACTION_UPDATE   = _STATUS_ACTION_UPDATE  
-    STATUS_ACTION_CLEAR    = _STATUS_ACTION_CLEAR   
+    STATUS_ACTION_CREATE   = _STATUS_ACTION_CREATE
+    STATUS_ACTION_UPDATE   = _STATUS_ACTION_UPDATE
+    STATUS_ACTION_CLEAR    = _STATUS_ACTION_CLEAR
     STATUS_ACTION_FINALIZE = _STATUS_ACTION_FINALIZE
-    STATUS_ACTION_SUBMIT   = _STATUS_ACTION_SUBMIT  
+    STATUS_ACTION_SUBMIT   = _STATUS_ACTION_SUBMIT
+    STATUS_ACTION_PUBLISH  = _STATUS_ACTION_PUBLISH
+    STATUS_ACTION_UPDATEPREP = _STATUS_ACTION_UPDATEPREP
+    STATUS_ACTION_RESTORE  = _STATUS_ACTION_RESTORE  
+    STATUS_ACTION_REVISE   = _STATUS_ACTION_REVISE
 
     def __init__(self, project_type: str, dbclient_factory: DBClientFactory, config: Mapping={},
                  who: Agent=None, log: Logger=None, _subsys=None, _subsysabbrev=None):
@@ -105,18 +96,14 @@ class ProjectService(MIDASSystem):
 
         # set configuration, check values
         self.cfg = config
-        for param in "clients default_perms".split():
+        for param in "default_perms".split():
             if not isinstance(self.cfg.get(param,{}), Mapping):
-                raise ConfigurationException("%s: value is not a object as required: %s" %
+                raise ConfigurationException("ProjectService: %s: value is not an object as required: %s" %
                                              (param, type(self.cfg.get(param))))
-        for param,val in self.cfg.get('clients',{}).items():
-            if not isinstance(val, Mapping):
-                raise ConfigurationException("clients.%s: value is not a object as required: %s" %
-                                             (param, repr(val)))
         for param,val in self.cfg.get('default_perms',{}).items():
             if not isinstance(val, list) or not all(isinstance(p, str) for p in val):
                 raise ConfigurationException(
-                    "default_perms.%s: value is not a list of strings as required: %s" %
+                    "ProjectService: default_perms.%s: value is not a list of strings as required: %s" %
                     (param, repr(val))
                 )
         
@@ -127,10 +114,11 @@ class ProjectService(MIDASSystem):
             log = getLogger(self.system_abbrev).getChild(self.subsystem_abbrev).getChild(project_type)
         self.log = log
 
-        user = who.actor if who else None
-        self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), user)
+        self.dbcli = dbclient_factory.create_client(project_type, self.cfg.get("dbio", {}), self.who)
         if not self.dbcli.people_service:
             self.log.warning("No people service available for %s service", project_type)
+        self._DEF_LATEST_COLL = f"{self.dbcli.project}_latest"
+        self._DEF_VERSION_COLL = f"{self.dbcli.project}_version"
 
     @property
     def user(self) -> Agent:
@@ -139,17 +127,44 @@ class ProjectService(MIDASSystem):
         """
         return self.who
 
-    def create_record(self, name, data=None, meta=None) -> ProjectRecord:
+    def exists(self, id) -> bool:
+        """
+        return True if there exists a project record (of the type this service is configured for) 
+        with the given identifier.  
+
+        This implementation simply delegates the question to the internal DBClient instance.  
+        """
+        return self.dbcli.exists(id)
+
+    def create_record(self, name, data=None, meta=None, dbid: str=None) -> ProjectRecord:
         """
         create a new project record with the given name.  An ID will be assigned to the new record.
         :param str  name:  the mnuemonic name to assign to the record.  This name cannot match that
                            of any other record owned by the user. 
         :param dict data:  the initial data content to assign to the new record.  
         :param dict meta:  the initial metadata to assign to the new record.  
-        :raises NotAuthorized:  if the authenticated user is not authorized to create a record
-        :raises AlreadyExists:  if a record owned by the user already exists with the given name
+        :param str  dbid:  a requested identifier or ID shoulder to assign to the record; if the 
+                           value does not include a colon (``:``), it will be interpreted as the
+                           desired shoulder that will be attached an internally minted local 
+                           identifier; otherwise, the value will be taken as a full identifier. 
+                           If not provided (default), an identifier will be minted using the 
+                           default shoulder.
+        :raises NotAuthorized:  if the authenticated user is not authorized to create a record, or 
+                                when ``dbid`` is provided, the user is not authorized to create a 
+                                record with the specified shoulder or ID.
+        :raises AlreadyExists:  if a record owned by the user already exists with the given name or
+                                the given ``dbid``.
         """
-        shoulder = self._get_id_shoulder(self.who)
+        localid = None
+        shoulder = None
+        if dbid:
+            if ':' not in dbid:
+                # interpret dbid to be a requested shoulder
+                shoulder = dbid
+            else:
+                shoulder, localid = dbid.split(':', 1)
+        else:
+            shoulder = self._get_id_shoulder(self.who, meta)  # may return None (DBClient will set it)
 
         foruser = None
         if meta and meta.get("foruser"):
@@ -165,8 +180,9 @@ class ProjectService(MIDASSystem):
             # foruser = None
             self.log.warning("A new record requested for an anonymous user")
 
-        prec = self.dbcli.create_record(name, shoulder)
+        prec = self.dbcli.create_record(name, shoulder, localid=localid)
         self._set_default_perms(prec.acls)
+        shoulder = prec.id.split(':', 1)[0]
 
         prec.status._data["created_by"] = self.who.id  # don't do this: violates encapsulation
         if foruser:
@@ -207,10 +223,102 @@ class ProjectService(MIDASSystem):
         delete the draft record.  This may leave a stub record in place if, for example, the record 
         has been published previously.  
         """
-        # TODO:  handling previously published records
-        raise NotImplementedError()
+        prec = self.dbcli.get_record_for(id, ACLs.DELETE)   # may raise ObjectNotFound/NotAuthorized
 
-    def reassign_record(self, id, recipient: str):
+        out = None
+        provact = Action(Action.DELETE, prec.id, self.who, "deleted draft record")
+        try:
+            #TODO: deal with prov data
+            if prec.status.published_as:
+                # restore record to the last published version
+                self._restore_last_published_data(prec,
+                                          "Deleted draft revision (restored previously published version)",
+                                                  provact)
+                out = prec
+            else:
+                # can completely forget this record
+                self.dbcli.delete_record(prec.id)
+
+        except Exception as ex:
+            self.log.error("Failed to delete draft for rec, %s: %s", id, str(ex))
+            provact.message = "Failed to delete draft due to internal error"
+            raise
+        finally:
+            self._record_action(provact)
+        return out
+
+    def _restore_last_published_data(self, prec: ProjectRecord, message: str=None,
+                                     foract: Action = None, reset_state: bool=True):
+        """
+        use the information in the status of the given record to restore the data content to that
+        of the last published version.  The status data must include a non-empty ``published_as``
+        property.
+
+        This implementation assumes the default publishing strategy and will pull the data from 
+        publish section of the backend store.  Subclasses may override this to handle other strategies.
+        Note that this implementation does not support honoring "archived_at".  
+        """
+        pubid = prec.status.published_as
+        if not pubid:
+            raise ValueError("_restore_last_published_data(): project record is missing "
+                             "published_as property")
+
+#        if prec.status.archived_at:
+#            self.log.warning("%s: archived_at property is set but will be ignored; assuming default")
+#        archived_at = f"dbio_store:{self._DEF_LATEST_COLL}/{self._arkify_recid(prec.id)}"
+
+        # setup prov action
+        defmsg = "Restored draft to last published version"
+        provact = Action(Action.PROCESS, prec.id, self.who,
+                         f"restored data to last published ({prec.status.archived_at})",
+                         {"name": "restore_last_published"})
+        if foract:
+            foract.add_subaction(provact)
+
+        try:
+            # Create restorer from archived_at URL
+            pubclient = self.dbcli.client_for(self._DEF_LATEST_COLL)
+            restorer = self._get_restorer_for(prec)
+            restorer.restore(prec, dofree=True)
+
+            if reset_state:
+                prec.status.set_state(status.PUBLISHED)
+            prec.status.act(self.STATUS_ACTION_RESTORE, message or defmsg)
+            prec.save()
+            
+        except Exception as ex:
+            self.log.error("Failed to save restored record for project, %s: %s",
+                           prec.id, str(ex))
+            provact.message = "Failed to save restored data due to internal error"
+            raise
+        finally:
+            if not foract:
+                self._record_action(provact)
+
+    _restorer_factory = staticmethod(restore.default_factory)
+    def _get_restorer_for(self, prec):
+        # ensure that this record has been published before; published_as should have a legit value
+        pubid = prec.status.published_as
+        if not pubid:
+            raise DBIORecordException(prec.id, "Unable to restore to last published state: " +
+                                      "project record appears unpublished (missing published_as property)")
+        pubid = re.sub(r'/pdr:v/\S+$', '', pubid)  # drop the version extension, if included
+
+        publoc = prec.status.archived_at
+        if not publoc:
+            # assume default archiving location
+            publoc = f"dbio_store:{self._DEF_LATEST_COLL}/{pubid}"
+
+        try:
+            return self._restorer_factory(publoc, prec._cli, self.cfg.get("restore"),
+                                          self.log.getChild("restorer"))
+        except DBIOException:
+            raise
+        except Exception as ex:
+            raise DBIORecordException(prec.id, "Unable to restore to last published state: " +
+                                      "Failed to interpret archived_at URL: "+str(ex)) from ex
+
+    def reassign_record(self, id, recipient: str, disown: bool=False):
         """
         reassign ownership of the record with the given recepient ID.  This is a wrapper around 
         :py:class:`~nistoar.midas.dbio.base.ProjectRecord`.reassign() that also logs the change.
@@ -228,7 +336,7 @@ class ProjectService(MIDASSystem):
         message = "from %s to %s" % (prec.owner, recipient)
         try:
             self.log.info("Reassigning ownership of %s %s", id, message)
-            prec.reassign(recipient)
+            prec.reassign(recipient, disown)
             prec.save()
             self._record_action(Action(Action.COMMENT, prec.id, self.who,
                                        f"Reassigned ownership {message}"))
@@ -268,27 +376,16 @@ class ProjectService(MIDASSystem):
             self.log.error("Failed to rename record %s to %s: %s", id, newname, str(ex))
             raise
 
-    def _get_id_shoulder(self, user: Agent):
+    def _get_id_shoulder(self, user: Agent, meta: Mapping):
         """
-        return an ID shoulder that is appropriate for the given user agent
-        :param Agent user:  the user agent that is creating a record, requiring a shoulder
-        :raises NotAuthorized: if an authorized shoulder appropriate for the user cannot be determined.
-        """
-        out = None
-        client_ctl = self.cfg.get('clients', {}).get(user.agent_class)
-        if client_ctl is None:
-            client_ctl = self.cfg.get('clients', {}).get("default")
-        if client_ctl is None:
-            self.log.debug("Unrecognized client group, %s", user.agent_class)
-            raise NotAuthorized(user.actor, "create record",
-                                "Client group, %s, not recognized" % user.agent_class)
+        return an ID shoulder that is appropriate for the given user agent and meta constraints.
 
-        out = client_ctl.get('default_shoulder')
-        if not out:
-            self.log.info("No default ID shoulder configured for client group, %s", user.agent_class)
-            raise NotAuthorized(user.actor, "create record",
-                                "No default shoulder defined for client group, "+user.agent_class)
-        return out
+        If None is returned, the shoulder should be determined by the DBClient.  This implementation
+        always returns None.
+        :param Agent user:  the user agent that is creating a record, requiring a shoulder
+        :param dict  meta:  the meta datas provided when creating record
+        """
+        return None
 
     def get_record(self, id) -> ProjectRecord:
         """
@@ -338,18 +435,29 @@ class ProjectService(MIDASSystem):
         prec = self.dbcli.get_record_for(id)  # may raise ObjectNotFound
         if not part:
             return prec.data
-        return self._extract_data_part(prec.data, part)
+        return self._extract_data_part(prec.data, part, id)
 
-    def _extract_data_part(self, data, part):
+    def _extract_data_part(self, data, part, id):
         if not part:
             return data
         steps = part.split('/')
         out = data
         while steps:
             prop = steps.pop(0)
-            if prop not in out:
-                raise ObjectNotFound(id, part)
-            out = out[prop]
+            if isinstance(out, Mapping):
+                if prop not in out:
+                    raise ObjectNotFound(id, part)
+                out = out[prop]
+            elif isinstance(out, list):
+                # elements of a list can be accessed via its @id value
+                matched = None
+                for item in out:
+                    if isinstance(item, Mapping) and item.get('@id') == prop:
+                        matched = item
+                        break;
+                if not matched:
+                    raise ObjectNotFound(id, part)
+                out = matched
 
         return out
 
@@ -391,8 +499,11 @@ class ProjectService(MIDASSystem):
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
         olddata = None
 
+        if _prec.status.state == status.PUBLISHED:
+            self.log.info("%s: Preparing published record for revision", id)
+            self._prep_for_update(_prec)   # this should change state to EDIT
         if _prec.status.state not in [status.EDIT, status.READY]:
-            raise NotEditable(id)
+            raise NotEditable(id, state=_prec.status.state)
 
         if not part:
             # updating data as a whole: merge given data into previously saved data
@@ -455,7 +566,7 @@ class ProjectService(MIDASSystem):
 
         self.log.info("Updated data for %s record %s (%s) for %s",
                       self.dbcli.project, _prec.id, _prec.name, self.who)
-        return self._extract_data_part(data, part)
+        return self._extract_data_part(data, part, _prec.id)
 
     def _jsondiff(self, old, new):
         return {"jsonpatch": jsonpatch.make_patch(old, new)}
@@ -511,6 +622,41 @@ class ProjectService(MIDASSystem):
         out['agent_vehicle'] = self.who.vehicle
         return out
 
+    def _prep_for_update(self, prec: ProjectRecord, message: str=None, reset_state: bool=True):
+        """
+        prepare a record that is currently in the PUBLISHED state to be updated and reset the state
+        to EDIT.  This may involve resetting the content of the data property to that consistent with 
+        the last published version.  
+
+        This implementation assumes that the data property already contains data matching the last 
+        published version.  Subclasses may override this and can safely call this super method to 
+        record the provenance action and reset the state.
+
+        Note that this implementation ignores the presence of the 
+        :py:class:`~nistoar.midas.dbio.status.Status` property, ``archived_at``.  
+
+        :param ProjectRecord prec:  the project record to prepare for an update
+        :param str        message:  A message to record as the status message; if not provided, a 
+                                    default will be set.
+        :param bool   reset_state:  If True (default), the state will be reset to EDIT; if False,
+                                    it will not be changed.  
+        """
+        defmsg = "Previous publication is ready for revision"
+        provact = Action(Action.PROCESS, prec.id, self.who, "trivial prep for update",
+                         {"name": "prep_for_update"})
+        if reset_state:
+            prec.status.set_state(status.EDIT)
+        prec.status.act(self.STATUS_ACTION_UPDATEPREP, message or defmsg)
+
+        try:
+            prec.save()
+        except Exception as ex:
+            self.log.error("Failed to save prepped record for project, %s: %s", prec.id, str(ex))
+            provact.message = "Failed to save prepped record due to internal error"
+            raise
+        finally:
+            self._record_action(provact)
+
     def replace_data(self, id, newdata, part=None, message="", _prec=None):
         """
         Replace the currently stored data content of a record with the given data.  It is expected that 
@@ -520,6 +666,7 @@ class ProjectService(MIDASSystem):
         :param stt    part:  the slash-delimited pointer to an internal data property.  If provided, 
                              the given `newdata` is a value that should be set to the property pointed 
                              to by `part`.  
+        :param str message:  an optional message that will be recorded as an explanation of the replacement.
         :param ProjectRecord prec:  the previously fetched and possibly updated record corresponding to `id`.
                              If this is not provided, the record will by fetched anew based on the `id`.  
         :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
@@ -536,8 +683,11 @@ class ProjectService(MIDASSystem):
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
         olddata = deepcopy(_prec.data)
 
+        if _prec.status.state == status.PUBLISHED:
+            self.log.info("%s: Preparing published record for revision", id)
+            self._prep_for_update(_prec)   # this should change state to EDIT
         if _prec.status.state not in [status.EDIT, status.READY]:
-            raise NotEditable(id)
+            raise NotEditable(id, state=_prec.status.state)
 
         if not part:
             # this is a complete replacement; merge it with a starter record
@@ -597,10 +747,10 @@ class ProjectService(MIDASSystem):
 
         self.log.info("Replaced data for %s record %s (%s) for %s",
                       self.dbcli.project, _prec.id, _prec.name, self.who)
-        return self._extract_data_part(data, part)
+        return self._extract_data_part(data, part, _prec.id)
 
-    def _save_data(self, indata: Mapping, prec: ProjectRecord,
-                   message: str, action: str = _STATUS_ACTION_UPDATE) -> Mapping:
+    def _save_data(self, indata: Mapping, prec: ProjectRecord, message: str, 
+                   action: str = _STATUS_ACTION_UPDATE, update_state: bool = True) -> Mapping:
         """
         expand, validate, and save the data modified by the user as the record's data content.
         
@@ -617,6 +767,10 @@ class ProjectService(MIDASSystem):
         :param str message:  a message to save as the status action message; if None, no message 
                              is saved.
         :param str  action:  the action label to record; if None, the action is not updated.
+        :param bool update_status:  if True (default), that record status will be reset to EDIT;
+                             if False, the status will be unchanged.  False should be used when 
+                             the record is in a state where it cannot be directly editable by 
+                             the end user (e.g. it is being processed for submission)
         :return:  the (transformed) data that was actually saved
                   :rtype: dict
         :raises InvalidUpdate:  if the provided `indata` represents an illegal or forbidden update or 
@@ -634,8 +788,9 @@ class ProjectService(MIDASSystem):
         if action:
             prec.status.act(action, message, self.who.actor)
         elif message is not None:
-            prec.message = message
-        prec.status.set_state(status.EDIT)
+            prec.status.message = message
+        if update_state:
+            prec.status.set_state(status.EDIT)
 
         prec.save();
         return indata
@@ -668,7 +823,7 @@ class ProjectService(MIDASSystem):
             prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
         if prec.status.state not in [status.EDIT, status.READY]:
-            raise NotEditable(id)
+            raise NotEditable(id, state=prec.status.state)
 
         initdata = self._new_data_for(prec.id, prec.meta)
         if not part:
@@ -743,7 +898,7 @@ class ProjectService(MIDASSystem):
         stat = _prec.status
 
         if stat.state != status.EDIT:
-            raise NotEditable(id)
+            raise NotEditable(id, state=stat.state)
         stat.message = message
         _prec.save()
         self._record_action(Action(Action.COMMENT, _prec.id, self.who, message))
@@ -773,8 +928,9 @@ class ProjectService(MIDASSystem):
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
 
         stat = _prec.status
-        if _prec.status.state not in [status.EDIT, status.READY]:
-            raise NotEditable(id)
+        nxtstate = _prec.status.state
+        if _prec.status.state not in [status.EDIT, status.READY, status.PROCESSING]:
+            raise NotEditable(id, state=_prec.status.state)
 
         stat.set_state(status.PROCESSING)
         stat.act(self.STATUS_ACTION_FINALIZE, "in progress", self.who.actor)
@@ -807,7 +963,9 @@ class ProjectService(MIDASSystem):
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, defmsg, {"name": "finalize"}))
 
             if reset_state:
-                stat.set_state(status.READY)
+                nxtstate = status.READY
+            if nxtstate != status.PROCESSING:
+                stat.set_state(nxtstate)
             stat.act(self.STATUS_ACTION_FINALIZE, message or defmsg, self.who.actor)
             _prec.save()
 
@@ -818,10 +976,13 @@ class ProjectService(MIDASSystem):
     MAJOR_VERSION_LEV = 0
     MINOR_VERSION_LEV = 1
     TRIVIAL_VERSION_LEV = 2
+    NO_VERSION_LEV = -1
 
     def _apply_final_updates(self, prec: ProjectRecord, vers_inc_lev: int=None):
         # update the data content
-        self._finalize_data(prec)
+        vil = self._finalize_data(prec)
+        if vers_inc_lev is None:
+            vers_inc_lev = vil
 
         # ensure a finalized version
         ver = self._finalize_version(prec, vers_inc_lev)
@@ -863,9 +1024,9 @@ class ProjectService(MIDASSystem):
             vers_inc_lev = self.MINOR_VERSION_LEV
 
         vers = OARVersion(prec.data.setdefault('@version', "1.0.0"))
-        if vers.is_draft():
+        if vers_inc_lev != self.NO_VERSION_LEV and vers.is_draft():
             vers.drop_suffix().increment_field(vers_inc_lev)
-            prec.date['@version'] = str(vers)
+            prec.data['@version'] = str(vers)
 
         return prec.data['@version']
 
@@ -888,28 +1049,41 @@ class ProjectService(MIDASSystem):
         (based on its form), it is returned unchanged.  
         """
         naan = self.cfg.get('ark_naan', ARK_NAAN)
-        m = re.match('^(\w+):([\w\-\/]+)$', recid)
+        m = re.match(r'^(\w+):([\w\-\/]+)$', recid)
         if m:
             return "ark:/%s/%s-%s" % (naan, m.group(1), m.group(2))
         return recid
 
-    def _finalize_data(self, prec):
+    def _finalize_data(self, prec) -> Union[int,None]:
         """
         update the data content for the record in preparation for submission.
+        @return  the version increment level that should be applied to determine the 
+                 published version based on the status of the data.  1 means incrment 
+                 the patch field only, 2 means a minor incrment, and 3 means a major 
+                 increment.  0 means the version should not be incrmented, and None 
+                 means take default.  
+                 @rtype int
         """
-        pass
+        return None
 
     def _finally_validate(self, prec: ProjectRecord) -> ValidationResults:
         # Note: we'll need to expand the checks applied; just do a review for now
         return self.review(prec.id, REQ&WARN, prec)
 
-    def submit(self, id: str, message: str=None, _prec=None) -> status.RecordStatus:
+    def submit(self, id: str, message: str=None, options: Mapping=None, _prec=None) -> status.RecordStatus:
         """
         finalize (via :py:meth:`finalize`) the record and submit it for publishing.  After a successful 
         submission, it may not be possible to edit or revise the record until the submission process 
-        has been completed.  The record must be in the "edit" state prior to calling this method.
+        has been completed.  The record must be in the "edit" state or the "ready" state (i.e. having 
+        already been finalized) prior to calling this method.
+
+        Note: see code comments for tips in specializing this function.
+
         :param str      id:  the identifier of the record to submit
         :param str message:  a message summarizing the updates to the record
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the submission process.  Note that the implementation is free to alter
+                         the contents of this dictionary.
         :returns:  a Project status instance providing the post-submission status
                    :rtype: RecordStatus
         :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
@@ -924,54 +1098,80 @@ class ProjectService(MIDASSystem):
                              not due to anything the client did, but rather reflects a system problem
                              (e.g. from a downstream service). 
         """
+        # This function is structured to allow specialized versions to re-use common parts more
+        # flexibly.  In most cases, a subclass would override this function, calling the _submit__*
+        # functions, interspersed with specializing functionality.  The _submit__* functions can also
+        # be overridden, but usually only _submit__impl() is overridden to handle special implementation
+        # details.
+
         if not _prec:
-            _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
-        stat = _prec.status
-        self.finalize(id, message, _prec=_prec)  # may raise NotEditable
+            _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)   # may raise ObjectNotFound/NotAuthorized
+
+        self.log.info("%s: submitting %s for review/publication", _prec.id, self.dbcli.project)
+
+        # Prepare for the actual submission:  Ensure current state is correct, finalize/validate record.
+        # May raise NotSubmitable, NotEditable
+        try:
+            self._submit__prep(_prec, options)
+        except Exception as ex:
+            self.log.error("%s: Submission prep failed: %s", _prec.id, str(ex))
+            raise
 
         # this record is ready for submission.  Send the record to its post-editing destination,
-        # and update its status accordingly.
+        # and return the state that it should be set to.  Normally, this implementation function
+        # does not update the state of _prec nor saved the record.  If the returned state is None,
+        # this function (and its delegates) may assume that the state has already been set and
+        # saved.  If the implementation function fails, it should raise an exception; normally,
+        # clean up from an exception happens here.
         try:
-            defmsg = self._submit(_prec)
+            poststate = self._submit__impl(_prec, options)
 
         except InvalidRecord as ex:
             emsg = "submit process failed: "+str(ex)
+            self.log.error(emsg)
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": ex.errors}))
-            stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_SUBMIT, ex.format_errors(), self.who.actor)
+            _prec.status.set_state(status.EDIT)
+            _prec.status.act(self.STATUS_ACTION_SUBMIT, ex.format_errors(), self.who.actor)
             self._try_save(_prec)
-            raise
+            raise SubmissionFailed("Invalid record could not be submitted: %s", str(ex))
 
         except Exception as ex:
             emsg = "Submit process failed due to an internal error"
+            self.log.error(emsg)
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "submit", "errors": [emsg]}))
-            stat.set_state(status.EDIT)
-            stat.act(self.STATUS_ACTION_SUBMIT, emsg, self.who.actor)
+            _prec.status.set_state(status.EDIT)
+            _prec.status.act(self.STATUS_ACTION_SUBMIT, emsg, self.who.actor)
             self._try_save(_prec)
-            raise
+            raise SubmissionFailed("Submission action failed: %s", str(ex)) from ex
 
-        else:
-            # record provenance record
-            self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, defmsg, {"name": "submit"}))
+        # Wrap up the submisstion process: record provenance info, set state and save the
+        # record, as needed.
+        try: 
+            statusdata = self._submit__wrapup(poststate, _prec, message, options)
+        except Exception as ex:
+            self.log.error("%s: Submission wrap-up failed: %s", _prec.id, str(ex))
+            raise            
 
-            stat.set_state(status.SUBMITTED)
-            stat.act(self.STATUS_ACTION_SUBMIT, message or defmsg, self.who.actor)
-            _prec.save()
+        # If there is anything that should be done automatically _after_ submitting (e.g.
+        # publishing), do it here.
 
-        self.log.info("Submitted %s record %s (%s) for %s",
-                      self.dbcli.project, _prec.id, _prec.name, self.who)
-        return stat.clone()
-            
+        return statusdata
 
-    def _submit(self, prec: ProjectRecord) -> str:
+    def _submit__impl(self, prec: ProjectRecord, options: Mapping=None) -> str:
         """
         Actually send the given record to its post-editing destination and update its status 
         accordingly.
 
         This method should be overridden to provide project-specific handling.  This generic 
-        implementation will simply copy the data contents of the record to another collection.
+        implementation will immediately publish the record (via :py:meth:`_publish`).  Its 
+        default implementation will simply copy the data contents of the record to another 
+        collection.
+
+        :param ProjectRecord prec:  the project record to submit
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the submission process.
         :returns:  the label indicating its post-editing state
                    :rtype: str
         :raises NotSubmitable:  if the finalization process produced an invalid record because the record 
@@ -981,10 +1181,363 @@ class ProjectService(MIDASSystem):
                              not due to anything the client did, but rather reflects a system problem
                              (e.g. from a downstream service). 
         """
-        pass
-        
+        if self.cfg.get('auto_publish', True):
+            return self._publish(prec)  # returned state will be PUBLISHED if completed
+        return status.ACCEPTED
 
-                    
+    def _submit__prep(self, prec: ProjectRecord, message: str= None, options: Mapping=None):
+        # Prep this record for submission:  Ensure current state is correct, finalize/validate record.
+        # :raises NotSubmitable:
+        stat = prec.status
+        if stat.state not in [status.EDIT, status.READY]:
+            raise NotSubmitable(prec.id, "Project not in submitable state: "+ stat.state)
+        self.finalize(id, message, _prec=prec)  # may raise NotEditable
+        
+    def _submit__wrapup(self, poststat: str, prec: ProjectRecord, message: str= None, options: Mapping=None):
+        # Wrap up the submisstion process: record provenance info, set state and save the
+        # record, as needed.
+        if poststat:
+            if not message:
+                did = "submitted"
+                if poststat != status.SUBMITTED:
+                    did += "and " + poststat
+                if prec.data.get('@version', '1.0.0') == '1.0.0':
+                    message = "Initial version " + did
+                else:
+                    message = "Revision " + did
+
+            # record provenance record
+            self.dbcli.record_action(Action(Action.PROCESS, prec.id, self.who, message,
+                                            {"name": "submit"}))
+
+            prec.status.set_state(poststat)
+            prec.status.act(self.STATUS_ACTION_SUBMIT, message or defmsg, self.who.actor)
+            try:
+                prec.save()
+            except Exception as ex:
+                self.log.error("%s: Failed to save record state for submission (%s): %s",
+                               _prec.id, poststat, str(ex))
+                raise
+
+        self.log.info("Submitted %s record %s (%s) for %s",
+                      self.dbcli.project, prec.id, prec.name, self.who)
+        if poststat != status.SUBMITTED:
+            self.log.info("Final status: %s", poststat)
+        return prec.status.clone()
+
+    def apply_external_review(self, id: str, revsys: str, phase: str, revid: str=None, 
+                              infourl: str=None, feedback: List[Mapping]=None, 
+                              request_changes: bool=False, fbreplace: bool=True, _prec=None, **extra_info):
+        """
+        register information about external review activity and possibly apply specific updates
+        accordingly.  
+
+        Generally, regular users are not authorized to call this function.
+
+        :param str  revsys:  a unique name for the external review system providing this information.
+        :param str   phase:  a label indicating the phase of review that the project is currently in. 
+                             The values are defined by the external review system.
+        :param str      id:  an identifier used by the external review system to track the review.  If 
+                             None, then there is none defined and can probably default to the current 
+                             project identifier
+        :param str infourl:  a URL that DBIO client user can access to get information on the status of 
+                             the external review.  If None, such information is not (yet) available
+        :param list feedback:  a list of reviewer feedback.  If None, the previously saved feedback will 
+                             be retained.  If an empty list and ``fbreplace`` is True (default), the 
+                             previously save feedback will be dropped and replaced with an empty list.
+        :param boo request_changes:  if True, return this record to a state that allows the authors to 
+                             make further edits.  (This would include changing the record state to 
+                             "edit".)  This record must currently be in the "submitted" state, otherwise,
+                             this parameter will be ignored.
+        :param bool fbreplace:  if True (default), this feedback should replace all previously registered 
+                             feedback
+        :param extra_info:   Other JSON-encodable properties that should be included in the registration.
+        """
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)   # may raise ObjectNotFound/NotAuthorized
+        stat = _prec.status
+
+        revmd = stat.pubreview(revsys, phase, revid, infourl, feedback, fbreplace, **extra_info)
+        if not self._apply_external_review_updates(_prec, revmd, request_changes):
+            _prec.save()
+
+        msg = "external %s review phase in progress" % revsys
+        if revmd.get('phase'):
+            msg += ": "+revmd['phase']
+        if revmd.get('feedback'):
+            msg += "; feedback provided"
+        self.dbcli.record_action(Action(Action.COMMENT, _prec.id, self.who, msg))
+        self.log.info("%s: %s", _prec.id, msg)
+
+        return _prec.status.state
+
+    def _apply_external_review_updates(self, prec: ProjectRecord, pubrevmd: Mapping=None,
+                                       request_changes: bool=False) -> bool:
+        # apply any automated changes to the record according the given feedback
+        # This exists as a specialization point.  return True if the record was saved
+        return False
+
+    def approve(self, id: str, revsys: str, revid: str=None, infourl: str=None, publish: bool=False):
+        """
+        mark this project as approved for publication by an external review system.  This will
+        call :py:meth:`apply_external_review` with phase "approved".  If ``publish`` is ``True``
+        and the record is in a publishable state, the publishing process will be triggered 
+        automatically.  
+
+        Generally, regular users are not authorized to call this function.
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)
+        self.apply_external_review(id, revsys, "approved", revid, infourl, [], _prec=prec)
+
+        if self._sufficiently_reviewed(id, _prec=prec):
+            self.log.info("%s: project is ready for publishing", id)
+            prec.status.set_state(status.ACCEPTED)
+            prec.save()
+
+            if publish:
+                self.publish(id)
+
+    def _sufficiently_reviewed(self, id, _prec=None):
+        """
+        return True if it appears that the record with the given identifier is sufficiently reviewed 
+        for allowing publishing to proceed.  
+
+        This default implementation returns True if there are no open reviews that are not in the
+        approved status.
+        """
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.READ)
+        revs = _prec.status.get_review_phases()
+        return not any(phase != 'approved' for phase in revs.values())
+
+    def cancel_external_review(self, id: str, revsys: str = None, revid: str=None, infourl: str=None):
+        """
+        cancel the review process from a particular review system or for all systems.  
+        """
+        prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)   # may raise ObjectNotFound/NotAuthorized
+        if not revsys:
+            revsys = list(prec.status.to_dict().get(status._pubreview_p, {}).keys())
+        elif isinstance(revsys, str):
+            revsys = [ revsys ]
+
+        for sys in revsys:
+            self.apply_external_review(id, sys, "canceled", revid, infourl, feedback=[])
+
+        return prec
+
+    def publish(self, id: str, _prec=None, **kwargs):
+        """
+        initiate the publishing processing for the given record (including preservation).  Generally,
+        regular users are not authorized to call this function directly.  The record must be in a 
+        SUBMITTED state.
+        :param str      id:  the identifier of the record to submit
+        :returns:  a Project status instance providing the post-submission status
+                   :rtype: RecordStatus
+        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+                             an undefined or unrecognized part of the data
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
+                             given by `id`.  
+        :raises NotSubmitable:  if the finalization produces an invalid record because the record 
+                             contains invalid data or is missing required data.
+        :raises SubmissionFailed:  if, during actual submission (i.e. after finalization), an error 
+                             occurred preventing successful submission.  This error is typically 
+                             not due to anything the client did, but rather reflects a system problem
+                             (e.g. from a downstream service). 
+        """
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.PUBLISH)   # may raise ObjectNotFound/NotAuthorized
+        stat = _prec.status
+        if stat.state == status.PUBLISHED:
+            raise NotSubmitable(_prec.id, "Already published")
+        if stat.state == status.INPRESS:
+            raise NotSubmitable(_prec.id, "Publication already in progress")
+        if stat.state == status.EDIT:
+            raise NotSubmitable(_prec.id, "Project has not been submitted for publication yet")
+        if stat.state not in [status.SUBMITTED, status.ACCEPTED]:
+            raise NotSubmitable(_prec.id, "Project is not in a publishable state: "+stat.state)
+
+        if stat.state != status.ACCEPTED:
+            reviews = stat._data.get(status._pubreview_p)
+            if reviews and not all(r.get('phase','') == "approved" for r in reviews.values()):
+                raise NotSubmitable(_prec.id, "Not all external reviews are completed")
+
+        self.log.info("Submitting rec, %s, for publication", _prec.id)
+        try:
+            poststat = self._publish(_prec)
+            if poststat not in [status.PUBLISHED, status.INPRESS]:
+                raise RuntimeException("Publishing submission returned unexpected state: "+poststat)
+
+        except InvalidRecord as ex:
+            emsg = "publishing process failed: "+str(ex)
+            self.log.error(f"{emsg}")
+            self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
+                                       {"name": "publish", "errors": ex.errors}))
+            stat.set_state(status.UNWELL)
+            stat.act(self.STATUS_ACTION_PUBLISH, ex.format_errors(), self.who.actor)
+            self._try_save(_prec)
+            raise
+
+        except Exception as ex:
+            emsg = "Publishing process failed due to an internal error"
+            self.log.exception(ex)
+            self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
+                                       {"name": "publish", "errors": [emsg]}))
+            stat.set_state(status.UNWELL)
+            emsg += f": {str(ex)}"
+            stat.act(self.STATUS_ACTION_PUBLISH, emsg, self.who.actor)
+            self._try_save(_prec)
+            raise
+
+        else:
+            message = "Revised"
+            if _prec.data.get('@version', '1.0.0') == '1.0.0':
+                message = "Initial"
+            message +=  " publication"
+            if poststat == status.PUBLISHED:
+                message += " successful"
+            else:
+                message += " in progress"
+
+            # record provenance record
+            self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, message, {"name": "publish"}))
+
+            stat.set_state(poststat)
+            stat.act(self.STATUS_ACTION_PUBLISH, message, self.who.actor)
+            try:
+                _prec.save()
+            except Exception as ex:
+                self.log.error("%s: Failed to save record state for publishing (%s): %s",
+                               _prec.id, poststat, str(ex))
+                raise
+
+            self.log.info(message)
+
+#        self.log.info("Submitted %s record %s (%s) for %s for final publication",
+#                      self.dbcli.project, _prec.id, _prec.name, self.who)
+        return stat.clone()
+
+    def revise(self, id: str, message: str=None, options: Mapping=None, _prec = None):
+        """
+        reset an already-published record for revision.  If this record is already in the "edit" state,
+        this function will do nothing.  Otherwise, it must be in the "published" state when this 
+        method is called.  If the reset is successful, it will be changed to the "edit" state.  
+
+        This implementation assumes that the data associated with this record represents the last 
+        published version.  It marks the version as pending update (appended with a "+") and 
+        updates the record state.  The ``options`` parameter is ignored.
+
+        :param str      id:  the identifier of the published record to revise
+        :param str message:  a message to record with this action
+        :param dict options:  a dictionary of parameters that provide implementation-specific control
+                         over the reset process.
+        :return:  the project record
+                  :rtype: ProjectRecord
+        :raises ObjectNotFound:  if no record with the given ID exists or the `part` parameter points to 
+                             an undefined or unrecognized part of the data
+        :raises NotAuthorized:   if the authenticated user does not have permission to read the record 
+                             given by `id`.  
+        :raises NotEditable:  the requested record is in neither the "published" nor "edit" state.  
+        """
+        if not _prec:
+            _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
+        stat = _prec.status
+        if stat.state == status.EDIT:
+            return stat.status
+        if stat.state != status.PUBLISHED:
+            raise NotEditable(_prec.id, "Project not in published state; "+
+                                        "thus, it cannot be revised at this time", stat.state)
+
+        self._revise(_prec)
+        stat.set_state(status.EDIT)
+        if not message:
+            message = "Restored record for revision"
+        stat.act(self.STATUS_ACTION_REVISE, message)
+        try:
+            _prec.save()
+        except Exception as ex:
+            self.log.error("%s: unable to save record state after revision setup (%s): %s",
+                           _prec.id, status.EDIT, str(ex))
+            raise
+
+        self.log.info("%s: set for revising", _prec.id)
+        return _prec
+
+    def _revise(self, prec: ProjectRecord, options: Mapping=None):
+        if prec.data.get("@version"):
+            prec.data['@version'] = prec.data.get("@version", "") + "+"
+        return prec
+        
+    def free(self):
+        """
+        free up resources used by this service.  
+
+        The client of this service can call this method when it is finished using it.  The implementation
+        should *not* disable the service, making the instance unusable for further use; it should just free
+        up resources as possible.  This implementation calls the ``free()`` function on the underlying 
+        :py:class:`~nistoar.midas.dbio.base.DBClient` instance.
+        """
+        self.dbcli.free()
+
+    def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None):
+        """
+        Actually launch the publishing process on the given record and update its state  
+        accordingly.
+
+        This method should be overridden to provide project-specific handling.  This generic 
+        implementation will simply copy the data contents of the record to another collection.
+
+        This default implement will save the data in a project record with PROJCOLL_latest collection
+        (and the PROJCOLL_version collection).  
+
+        :returns:  the label indicating its post-editing state
+                   :rtype: str
+        :raises NotSubmitable:  if this record is not in a publishable state.
+        :raises SubmissionFailed:  if an error occurs while submitting the record for publication.
+                             This error is typically not due to anything the client did, but rather 
+                             reflects a system problem (e.g. from a downstream service). 
+        """
+        endstate = status.PUBLISHED    # or could be status.SUBMITTED
+        try:
+            latestcli = self.dbcli.client_for(self._DEF_LATEST_COLL, AUTOADMIN)
+            versioncli = self.dbcli.client_for(self._DEF_VERSION_COLL, AUTOADMIN)
+
+            recd = prec.to_dict()
+            pubid = self._arkify_recid(prec.id)
+            recd['id'] = pubid
+            latest = ProjectRecord(latestcli.project, deepcopy(recd), latestcli)
+            recd['id'] += "/pdr:v/" + recd['data'].get("@version", "0")
+            version = ProjectRecord(versioncli.project, deepcopy(recd), versioncli)
+
+            # Fix permissions, state
+            for pubrec in (latest, version):
+                pubrec.status.set_state(endstate)
+
+                # no one can delete, write, or admin (except superusers)
+                pubrec.acls.revoke_perm_from_all(ACLs.DELETE)
+                pubrec.acls.revoke_perm_from_all(ACLs.WRITE)
+                pubrec.acls.revoke_perm_from_all(ACLs.ADMIN, protect_owner=False)
+
+                # everyone can read
+                pubrec.acls.revoke_perm_from_all(ACLs.READ, protect_owner=False)
+                pubrec.acls.grant_perm_to(ACLs.READ, PUBLIC_GROUP)
+
+            version.save()
+            latest.save()
+
+        except Exception as ex:
+            # TODO: back out version?
+            msg = "%s: Problem with default publication submission: %s" % (prec.id, str(ex))
+            self.log.error(msg)
+            raise SubmissionFailed(prec.id, msg) from ex
+
+        if endstate == status.PUBLISHED:
+#            base = self.cfg.get('published_resolver_ep', 'midas:')
+            prec.status.publish(pubid, recd['data'].get("@version", "0"),
+                                f"dbio_store:{self._DEF_LATEST_COLL}/{pubid}")
+
+        self.log.info("Successfully published %s as %s version %s (into %s_latest collection)",
+                      prec.id, pubid, recd['data'].get("@version", 0), self.dbcli.project)
+        return endstate
 
 class ProjectServiceFactory:
     """
@@ -1054,13 +1607,14 @@ class NotEditable(DBIORecordException):
     """
     An error indicating that a requested record cannot be updated because it is in an uneditable state.
     """
-    def __init__(self, recid, message=None, sys=None):
+    def __init__(self, recid, message=None, state=None, sys=None):
         """
         initialize the exception
         """
         if not message:
             message = "%s: not in an editable state" % recid
         super(NotEditable, self).__init__(recid, message, sys=sys)
+        self.state = state
     
 class NotSubmitable(InvalidRecord):
     """
@@ -1075,4 +1629,17 @@ class NotSubmitable(InvalidRecord):
             message = "%s: not in an submitable state" % recid
         super(NotSubmitable, self).__init__(message, recid, errors, sys=sys)
 
+class SubmissionFailed(DBIORecordException):
+    """
+    An error indicating that the process of submitting a record failed due to a system problem
+    (rather than a problem with the record; see :py:class:`NotSubmitable`).
+    """
+    def __init__(self, recid, message=None, sys=None):
+        """
+        initialize the exception
+        """
+        if not message:
+            message = "%s: system error occurred while submitting record" % recid
+        super(SubmissionFailed, self).__init__(recid, message, sys=sys)
+    
 

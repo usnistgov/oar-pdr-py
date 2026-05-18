@@ -16,8 +16,8 @@ CLASSIFIERS = [
 ]
 
 SCRIPTS = [
-    'pdr.py', 'pdrhealthcheck.py', 'nsdsync.py',
-    'resolver-uwsgi.py', 'pdp-uwsgi.py', 'midas-uwsgi.py', 'websocket_server.py'
+    'pdrhealthcheck.py', 'nsdsync.py', 'midasadm', 'pdr',
+    'resolver-uwsgi.py', 'pdp-uwsgi.py', 'midas-uwsgi.py', 'websocket_server.py', 'fm-uwsgi.py'
 ]
 
 TESTSCRIPTS = [
@@ -125,7 +125,9 @@ setup(name='nistoar.pdr',
       url='https://github.com/usnistgov/oar-pdr-py',
       scripts=find_scripts(),
       packages=find_namespace_packages(include=['nistoar.*'], exclude=['nistoar.*.data']),
-      package_data={'nistoar.pdr': [ 'data/*' ]},
+      package_data={'nistoar.pdr': [ 'data/*' ],
+                    'nistoar.midas.export': [ 'templates/*', 'templates/**/*', 'templates/**/*.prep' ]
+      },
       cmdclass={'build_py': build, 'install': install},
       classifiers=CLASSIFIERS,
       zip_safe=False

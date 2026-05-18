@@ -49,11 +49,13 @@ class TestInMemoryDBClientFactory(test.TestCase):
         self.assertIsNone(self.fact._notifier)
 
     def test_create_client(self):
-        cli = self.fact.create_client(base.DMP_PROJECTS, {}, "ava1")
+        avauser = Agent("dbio", Agent.AUTO, "ava1", "test")
+        cli = self.fact.create_client(base.DMP_PROJECTS, {}, avauser)
         self.assertEqual(cli._db, self.fact._db)
         self.assertEqual(cli._cfg, self.fact._cfg)
         self.assertEqual(cli._projcoll, base.DMP_PROJECTS)
-        self.assertEqual(cli._who, "ava1")
+        self.assertEqual(cli.user_id, "ava1")
+        self.assertTrue(isinstance(cli._who, Agent))
         self.assertIsNone(cli._whogrps)
         self.assertIs(cli._native, self.fact._db)
         self.assertIsNotNone(cli._dbgroups)
@@ -66,10 +68,17 @@ class TestInMemoryDBClientFactory(test.TestCase):
 class TestInMemoryDBClient(test.TestCase):
 
     def setUp(self):
-        self.cfg = {"default_shoulder": "mds3"}
+        self.cfg = {
+            "project_id_minting": {
+                "default_shoulder": {
+                    "public": "pdr0"
+                }
+            }
+        }
         self.user = "nist0:ava1"
+        self.agent = Agent("dbio", Agent.AUTO, self.user, "test")
         self.cli = inmem.InMemoryDBClientFactory({}).create_client(
-            base.DMP_PROJECTS, self.cfg, self.user)
+            base.DMP_PROJECTS, self.cfg, self.agent)
         self.received_messages = []
 
     async def mock_websocket_server(self, websocket):
@@ -78,6 +87,22 @@ class TestInMemoryDBClient(test.TestCase):
         """
         async for message in websocket:
             self.received_messages.append(message)
+        
+
+    def test_client_for(self):
+        self.assertTrue(isinstance(self.cli, inmem.InMemoryDBClient))
+
+        sib = self.cli.client_for(f"{base.DMP_PROJECTS}_best")
+        self.assertTrue(isinstance(sib, inmem.InMemoryDBClient))
+        self.assertEqual(sib.project, f"{base.DMP_PROJECTS}_best")
+        self.assertEqual(sib.user_id, self.cli.user_id)
+        self.assertIs(sib._db, self.cli._db)
+
+        sib = self.cli.client_for(f"{base.DMP_PROJECTS}_worst", "goob")
+        self.assertTrue(isinstance(sib, inmem.InMemoryDBClient))
+        self.assertEqual(sib.project, f"{base.DMP_PROJECTS}_worst")
+        self.assertEqual(sib.user_id, "goob")
+        self.assertIs(sib._db, self.cli._db)
         
 
     def test_next_recnum(self):
@@ -349,6 +374,118 @@ class TestInMemoryDBClient(test.TestCase):
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0].id, "pdr0:0006")
         self.assertEqual(recs[1].id, "pdr0:0003")
+
+    def test_select_records_by_ids(self):
+        # Inject some data into the database
+        id1 = "pdr0:0002"
+        rec1 = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": id1, "name": "test 1"}, self.cli)
+        self.cli._db[base.DMP_PROJECTS][id1] = rec1.to_dict()
+
+        id2 = "pdr0:0006"
+        rec2 = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": id2, "name": "test 2"}, self.cli)
+        self.cli._db[base.DMP_PROJECTS][id2] = rec2.to_dict()
+
+        id3 = "pdr0:0003"
+        rec3 = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": id3, "name": "test3"}, self.cli)
+        self.cli._db[base.DMP_PROJECTS][id3] = rec3.to_dict()
+
+        # Add a record with a different owner (should not be returned for this user)
+        rec4 = base.ProjectRecord(
+            base.DMP_PROJECTS, {"id": "pdr0:0014", "name": "test5", "owner": "not_self"}, self.cli)
+        self.cli._db[base.DMP_PROJECTS]["pdr0:0014"] = rec4.to_dict()
+
+        # Test selecting by a subset of IDs
+        ids = [id1, id3, "pdr0:0014"]
+#        recs = list(self.cli.select_records_by_ids(ids, base.ACLs.READ))
+        recs = list(self.cli.select_records(base.ACLs.READ, id=ids))
+        rec_ids = [r.id for r in recs]
+        self.assertIn(id1, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn("pdr0:0014", rec_ids)  # not owned by self.user
+
+        # Test selecting with a single ID
+#        recs = list(self.cli.select_records_by_ids([id2], base.ACLs.READ))
+        recs = list(self.cli.select_records(base.ACLs.READ, id=[id2]))
+        self.assertEqual(len(recs), 1)
+        self.assertEqual(recs[0].id, id2)
+
+        # Test selecting with no matching IDs
+        recs = list(self.cli.select_records(base.ACLs.READ, id=["nonexistent"]))
+        self.assertEqual(len(recs), 0)
+
+    def test_select_records_constraints(self):
+        # Inject some data into the database
+        id1 = "pdr0:0002"
+        data = {"id": id1, "name": "test1", "acls": {"read": [base.PUBLIC_GROUP]} }
+        rec1 = base.ProjectRecord(base.DMP_PROJECTS, data, self.cli)
+        self.cli._db[base.DMP_PROJECTS][id1] = rec1.to_dict()
+
+        id2 = "pdr0:0006"
+        data = {"id": id2, "name": "test2", "acls": {"read": [base.PUBLIC_GROUP]}, "owner": "bob",
+                "status": {"state": "published"} }
+        rec2 = base.ProjectRecord(base.DMP_PROJECTS, data, self.cli)
+        self.cli._db[base.DMP_PROJECTS][id2] = rec2.to_dict()
+
+        id3 = "pdr0:0003"
+        data = {"id": id3, "name": "test1", "acls": {"read": [base.PUBLIC_GROUP]}, "owner": "bob" }
+        rec3 = base.ProjectRecord(base.DMP_PROJECTS, data, self.cli)
+        self.cli._db[base.DMP_PROJECTS][id3] = rec3.to_dict()
+
+        id4 = "pdr0:0014"
+        data = {"id": id4, "name": "test4", "owner": "alice",
+                "status": {"state": "unwell"} }
+        rec4 = base.ProjectRecord(base.DMP_PROJECTS, data, self.cli)
+        self.cli._db[base.DMP_PROJECTS][id4] = rec4.to_dict()
+
+        recs = self.cli.select_records(base.ACLs.READ, name=["test1", "test2"])
+        rec_ids = [r.id for r in recs]
+        self.assertIn(id1, rec_ids)
+        self.assertIn(id2, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn(id4, rec_ids)
+        self.assertEqual(len(rec_ids), 3)
+
+        recs = self.cli.select_records(base.ACLs.READ, name=["test1", "test2"], owner=['bob', 'alice'])
+        rec_ids = [r.id for r in recs]
+        self.assertNotIn(id1, rec_ids)   # not owned by bob nor alice
+        self.assertIn(id2, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn(id4, rec_ids)   # alice's record is not included in the names
+        self.assertEqual(len(rec_ids), 2)
+
+        recs = self.cli.select_records(base.ACLs.READ, status_state=["edit"])
+        rec_ids = [r.id for r in recs]
+        self.assertIn(id1, rec_ids)
+        self.assertNotIn(id2, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn(id4, rec_ids)
+        self.assertEqual(len(rec_ids), 2)
+
+        recs = self.cli.select_records(base.ACLs.READ, status_state=["edit", "published"])
+        rec_ids = [r.id for r in recs]
+        self.assertIn(id1, rec_ids)
+        self.assertIn(id2, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn(id4, rec_ids)
+        self.assertEqual(len(rec_ids), 3)
+
+        recs = self.cli.select_records(base.ACLs.READ, status_state=["edit", "published"], owner=["bob"])
+        rec_ids = [r.id for r in recs]
+        self.assertNotIn(id1, rec_ids)
+        self.assertIn(id2, rec_ids)
+        self.assertIn(id3, rec_ids)
+        self.assertNotIn(id4, rec_ids)
+        self.assertEqual(len(rec_ids), 2)
+
+        recs = self.cli.select_records(base.ACLs.READ, status_state=["published"], owner=["alice"])
+        rec_ids = [r.id for r in recs]
+        self.assertEqual(len(rec_ids), 0)
+
+        
+        
     
     def test_notify(self):
         """
@@ -481,9 +618,9 @@ class TestInMemoryDBClient(test.TestCase):
 
     def test_record_action(self):
         rec = self.cli.create_record("mine1")
-        self.cli.record_action(Action(Action.CREATE, "mds3:0001", testuser, "created"))
-        self.cli.record_action(Action(Action.COMMENT, "mds3:0001", testuser, "i'm hungry"))
-        acts = self.cli._select_actions_for("mds3:0001")
+        self.cli.record_action(Action(Action.CREATE, "pdr0:0001", testuser, "created"))
+        self.cli.record_action(Action(Action.COMMENT, "pdr0:0001", testuser, "i'm hungry"))
+        acts = self.cli._select_actions_for("pdr0:0001")
         self.assertEqual(len(acts), 2)
         self.assertEqual(acts[0]['type'], Action.CREATE)
         self.assertEqual(acts[1]['type'], Action.COMMENT)

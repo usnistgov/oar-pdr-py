@@ -7,6 +7,9 @@ from typing import Callable
 from pathlib import Path
 import traceback as tb
 
+from pythonjsonlogger.json import JsonFormatter
+_JF_RESERVED = "msecs relativeCreated thread threadName processName".split()  # do not include these
+
 from nistoar.jobmgt import Job, FatalError, job_state_file
 from nistoar.base import config
 
@@ -88,10 +91,7 @@ def main(args):
         # send logging messages to stdout?
         if opts.logout:
             h = logging.StreamHandler(sys.stdout)
-            fmt = '{"name":"%(name)s","created":"%(created)s","level":%(levelno)s,"msg":"%(message)s",' + \
-                   '"lineno":"%(lineno)d","pathname":"%(pathname)s"}'
-            fmtr = logging.Formatter(fmt)
-            h.setFormatter(fmtr)
+            h.setFormatter(JsonFormatter(reserved_attrs=_JF_RESERVED))
             h.setLevel(logging.DEBUG)
             logging.getLogger().addHandler(h)
             lev = cfg.get('loglevel', logging.DEBUG)

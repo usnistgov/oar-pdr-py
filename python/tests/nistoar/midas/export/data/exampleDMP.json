@@ -1,0 +1,141 @@
+{
+    "id": "mdm1:0583",
+    "status": {
+        "created_by": "dbio.project/anonymous",
+        "state": "edit",
+        "action": "update",
+        "created": 1734557956.0743365,
+        "since": 1734557956.0743365,
+        "modified": 1746737986.0585203,
+        "message": "",
+        "byWho": "anonymous"
+    },
+    "name": "full dmp example",
+    "acls": {
+        "read": [
+            "anonymous"
+        ],
+        "write": [
+            "anonymous"
+        ],
+        "admin": [
+            "anonymous"
+        ],
+        "delete": [
+            "anonymous"
+        ]
+    },
+    "owner": "anonymous",
+    "deactivated": null,
+    "data": {
+        "title": "Full DMP example",
+        "startDate": "2025-03-19",
+        "dmpSearchable": "yes",
+        "funding": {
+            "grant_source": "Operating Unit",
+            "grant_id": "1234"
+        },
+        "projectDescription": "description",
+        "organizations": [
+            {
+                "groupName": "Chemical Informatics Group",
+                "divisionName": "Chemical Sciences Division",
+                "ouName": "Material Measurement Laboratory"
+            }
+        ],
+        "contributors": [
+            {
+                "firstName": "Steve",
+                "lastName": "Smith",
+                "orcid": "",
+                "emailAddress": "ssmith@example.com",
+                "groupOrgID": 0,
+                "groupNumber": "",
+                "groupName": "",
+                "divisionOrgID": 0,
+                "divisionNumber": "",
+                "divisionName": "",
+                "ouOrgID": 0,
+                "ouNumber": "",
+                "ouName": "",
+                "primary_contact": "No",
+                "institution": "example instittution",
+                "role": "Contact Person"
+            },
+            {
+                "firstName": "Niksa",
+                "lastName": "Blonder",
+                "orcid": "0000-0003-4103-9801",
+                "emailAddress": "niksa.blonder@nist.gov",
+                "groupOrgID": 13705,
+                "groupNumber": "64604",
+                "groupName": "Chemical Informatics Group",
+                "divisionOrgID": 13700,
+                "divisionNumber": "646",
+                "divisionName": "Chemical Sciences Division",
+                "ouOrgID": 13213,
+                "ouNumber": "63",
+                "ouName": "Material Measurement Laboratory",
+                "primary_contact": "No",
+                "institution": "NIST",
+                "role": "Contact Person"
+            }
+        ],
+        "keywords": [
+            " a",
+            " b",
+            " c"
+        ],
+        "dataSize": "4.8",
+        "sizeUnit": "GB",
+        "softwareDevelopment": {
+            "development": "yes",
+            "softwareUse": "internal",
+            "softwareDatabase": "no",
+            "softwareWebsite": "no"
+        },
+        "technicalResources": [
+            "a",
+            " b",
+            " c"
+        ],
+        "instruments": [
+            {
+                "name": "FEI Helioss",
+                "description_url": "https://nistgov.sharepoint.com/sites/microscopy/636663/SitePages/Home.asp"
+            }
+        ],
+        "ethical_issues": {
+            "irb_number": "1234",
+            "ethical_issues_exist": "yes",
+            "ethical_issues_description": "aaaaaaaaaa",
+            "ethical_issues_report": "bbbbbbbb"
+        },
+        "security_and_privacy": {
+            "data_sensitivity": [
+                "High"
+            ],
+            "cui": [
+                "Export Controlled (EAR)",
+                "PII"
+            ]
+        },
+        "dataDescription": "ccccccc",
+        "dataCategories": [
+            "Published Results and SRD",
+            "Publishable",
+            "Working",
+            "Derived"
+        ],
+        "preservationDescription": "dddddd",
+        "dataAccess": "eeeeeee",
+        "pathsURLs": [
+            "a",
+            " b",
+            " c"
+        ],
+        "dataSizeDescription": "Annual"
+    },
+    "meta": {},
+    "curators": []
+}

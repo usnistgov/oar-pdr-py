@@ -134,7 +134,7 @@ class HandlerWithJSON(Handler, ErrorHandling):
 
     def __init__(self, path: str, wsgienv: dict, start_resp: Callable, who=None, 
                  config: dict={}, log: Logger=None, app=None):
-        Handler.__init__(self, wsgienv, start_resp, who, config, log, app)
+        Handler.__init__(self, path, wsgienv, start_resp, who, config, log, app)
 
         
         

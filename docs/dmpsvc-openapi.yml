@@ -17,10 +17,92 @@ servers:
 
 paths:
   /mdm1:
-    summary: the resource representing the full collection of DMPs
+    summary: the resource representing the full, searchable collection of DMPs
     get:
-      summary: return all or a subset of DMP records that the requesting user is authorized to read
-      parameters: [ ]    # parameters for selecting matching records.
+      summary: search for DMP records
+      description: >-
+        return all or a subset of DMP records that the requesting user is authorized to read.  To get
+        a subset, use one or more of the filtering query parameters (name, id, owner, status_state).
+        By default, the matching records are returned as a JSON array; however other formats are
+        supported either via the Accept Header or the format query parameter.  
+      parameters:
+        - in: query
+          name: format
+          required: false
+          description: >-
+            a name that identifies the desired format for the output (overriding content negotiation);
+            the default value is nerdm.  This parameter serves as an alternative to content negotiation
+            via the Accept Header (which also works).  
+          schema:
+            type: string
+            enum: [ "json", "nerdm", "pdf", "markdown", "csv" ]
+          examples:
+            "PDF":
+              value: "pdf"
+            "Markdown":
+              value: "markdown"
+            "CSV table":
+              value: "csv"
+            "JSON, in NERDm format":
+              value: "nerdm"
+            "JSON (syn. for nerdm)":
+              value: "json"
+        - in: query
+          name: perm
+          required: false
+          schema:
+            type: string
+            enum: [ "read", "write", "admin", "delete" ]
+          description: >-
+            a single permission name or a comma-delimited list of permission names; the output will 
+            only include records for which the user has at least one of these permissions granted to
+            them.  If not provided, it defaults to all of the standard permissions.  
+          examples:
+            "write-access":
+              value: "write"
+            "all-access":
+              value: "read,write,admin,delete"
+        - in: query
+          name: name
+          schema:
+            type: string
+          required: false
+          description: a single records name or a comma-delimited list of names; the output will include all records whose name property matches any one of the names given.
+          examples:
+            "Select records with a particular name":
+              value: "myrec"
+            "Select records having either one of the two given names":
+              value: "mytestrec,myrealrec"
+        - in: query
+          name: id
+          schema:
+            type: string
+          required: false
+          description: a single records name or a comma-delimited list of identifiers; the output will include all records whose id property matches any one of the identifiers given.
+          examples:
+            "Select records with a particular ID":
+              value: "mds3:0104"
+            "Select records having either one of the three given ids":
+              value: "mds3:0010,mds3:0012,mds3:0013"
+        - in: query
+          name: owner
+          schema:
+            type: string
+          required: false
+          description: a single user identifier or a comma-delimited list of identifiers; the output will include all records whose owner property matches any one of the identifiers given.
+          examples:
+            "Select records with a particular ID":
+              value: "rlp3"
+            "Select records having either one of the three given ids":
+              value: "rlp3,ava1,nist:op"
+        - in: query
+          name: status_state
+          schema:
+            type: string
+            enum: ["edit", "processing", "ready", "submitted", "accepted", "in press", "published", "unwell"]
+          required: false
+          description: a single status state name or a comma-delimited list of names; the output will include all records whose status.state property matches any one of the names given.
+            
       responses:
         "200":
           description:
@@ -35,16 +117,34 @@ paths:
                 "empty":
                   summary: no matching DMPs found
                   value: '[]'
+            "text/markdown":
+              schema:
+                description: a rendering of the DMP records in Markdown format for human readability
+                type: string
+            "text/plain":
+              schema:
+                description: a rendering of the DMP records in Markdown format for human readability, identical to text/markdown
+                type: string
+            "application/pdf":
+              schema:
+                description: a rendering of the DMP records as PDF
+                type: string
+                format: binary
+            "text/csv":
+              schema:
+                description: a structuring of the DMP records into rows of a comma-separated-value (CSV) table.
+                type: string
+                format: csv
     post:
       summary: create a new DMP record
-      description:
+      description: >-
         The client provides a name and initial data to be used to create the new record.  The
         server will assign a new identifier to the newly created record, and returns the actual
         ProjectRecord saved as a result of the request.
 
       requestBody:
         summary:  the data that should be used to initialize the newly created record
-        description:
+        description: >-
           This body contains the initial data for the record.  It must include the human-oriented
           name to assign to the record.  The data field is optional, but if given, it must only 
           include properties that are part of the DMP schema.  Properties provide within the optional
@@ -54,9 +154,20 @@ paths:
           "application/json":
             schema:
               "$ref": "#/components/schemas/CreateRecordRequest"
+            examples:
+              "create-min":
+                summary: minimum required input
+                value:
+                  name: mydmp1
+              "create-data":
+                summary: providing some initial data
+                value:
+                  name: mydmp2
+                  data: { "title": "My Second DMP" }
+
       responses:
         "201":
-          description:
+          description: >-
             The request was accepted and a DMP record was created.  The response will include the
             identifier assigned to the DMP.
           content:
@@ -90,9 +201,31 @@ paths:
       - "$ref": "#/components/parameters/projid"
     get:
       summary: Return the DMP record with the specified identifier.  
-      description:
+      description: >-
         The returns the DMP project record where the data property contains the data consituting the
         contents of the plan.
+      parameters:
+        - in: query
+          name: format
+          required: false
+          description: >-
+            a name that identifies the desired format for the output (overriding content negotiation);
+            the default value is nerdm.  This parameter serves as an alternative to content negotiation
+            via the Accept Header (which also works).  
+          schema:
+            type: string
+            enum: [ "json", "nerdm", "pdf", "markdown", "csv" ]
+          examples:
+            "PDF":
+              value: "pdf"
+            "Markdown":
+              value: "markdown"
+            "CSV table":
+              value: "csv"
+            "JSON, in NERDm format":
+              value: "nerdm"
+            "JSON (syn. for nerdm)":
+              value: "json"
       responses:
         "200":
           description:  The DMP draft record with the given identifier was found and returned
@@ -113,6 +246,24 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+            "text/markdown":
+              schema:
+                description: a rendering of the DMP record in Markdown format for human readability
+                type: string
+            "text/plain":
+              schema:
+                description: a rendering of the DMP record in Markdown format for human readability, identical to text/markdown
+                type: string
+            "application/pdf":
+              schema:
+                description: a rendering of the DMP record as PDF
+                type: string
+                format: binary
+            "text/csv":
+              schema:
+                description: a structuring of the DMP record into a single row of a comma-separated-value (CSV) table.
+                type: string
+                format: csv
                 
   /mdm1/{projid}/data:
     summary:  the data describing the contents of a Data Management Plan (DMP)
@@ -160,6 +311,10 @@ paths:
           "application/json":
             schema:
               type: object
+            examples:
+              "replace-data":
+                summary: replace the data contents
+                value: { "title": "My Second DMP", "dataSize": 50, "sizeUnit": "GB" }
       responses:
         "200":
           description:  The DMP record with the given identifier was found and it data content was updated and returned
@@ -210,6 +365,10 @@ paths:
           "application/json":
             schema:
               type: object
+            examples:
+              "update-data":
+                summary: merge given properties into the data contents
+                value: { "title": "My Second DMP", "dataSize": 50, "sizeUnit": "GB" }
       responses:
         "200":
           description:  The DMP record with the given identifier was found and it data content was updated and returned
@@ -282,6 +441,10 @@ paths:
           "application/json":
             schema:
               type: string
+            examples:
+              "replace-name":
+                summary: replace the current name
+                value: "\"mySpecialDMP\""
       responses:
         "200":
           description:  the record was found, the name was successfully changed and the new name returned
@@ -353,6 +516,10 @@ paths:
           "application/json":
             schema:
               type: string
+            examples:
+              "switch-name":
+                summary: Change the current name
+                value: "\"ava1\""
       responses:
         "200":
           description:  the record was found, the name was successfully changed and the new owner returned
@@ -415,7 +582,7 @@ paths:
                 "$ref": "#/components/schemas/ErrorResponse"
     put:
       summary: "request an action be applied to the record"
-      description:
+      description: >-
         This endpoint can be used to request special processing be applied to the record.  The
         "action" property in the input object indicates what action should be applied.  The only
         accepted values are "finalize" and "submit".  The finalize action will cause the last of
@@ -426,6 +593,33 @@ paths:
         submission.  The submit action will apply the finalize action (again) and then submit the
         record to be published.  Note that all input properties besides "action" and "message" will
         be ignored.  
+      requestBody:
+        summary:  the ID of the new owner to assign to the DMP
+        description:  the ID of the new owner to assign to the DMP
+        required: true
+        content:
+          "application/json":
+            schema:
+              type: object
+              properties:
+                "action":
+                  type: string
+                  description:  the action to apply
+                  enum: ["finalize", "submit"]
+                  required: true
+                "message":
+                  type: string
+                  description:  a message to record as part of the status if action is successful
+            examples:
+              "finalize":
+                summary: finalize the record
+                value:
+                  action: "finalize"
+                  message: "all editing complete"
+              "submit":
+                summary: submit the record
+                value:
+                  action: "submit"
       responses:
         "200":
           description:
@@ -467,12 +661,48 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+        "409":
+          description:
+            The requested record is not in an editable state or in a sufficient state to apply
+            the action.  For example, this is returned in response to a finalize or submit action
+            request if the record does include the minimum required data.  
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
     patch:
       summary: "update the status (synonymous to a PUT request)"
       description:
         This method is synonymous to a PUT request in that it can also be used to request
         special processing.  In addition, if the input includes only the "message"
         property, the status message will just be updated with no other processing applied. 
+      requestBody:
+        summary:  the ID of the new owner to assign to the DMP
+        description:  the ID of the new owner to assign to the DMP
+        required: true
+        content:
+          "application/json":
+            schema:
+              type: object
+              properties:
+                "action":
+                  type: string
+                  description:  the action to apply
+                  enum: ["finalize", "submit"]
+                  required: true
+                "message":
+                  type: string
+                  description:  a message to record as part of the status if action is successful
+            examples:
+              "finalize":
+                summary: finalize the record
+                value:
+                  action: "finalize"
+                  message: "all editing complete"
+              "submit":
+                summary: submit the record
+                value:
+                  action: "submit"
       responses:
         "200":
           description:
@@ -510,6 +740,15 @@ paths:
         "401":
           description:
             The authenticated user is not authorized to read this record.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "409":
+          description:
+            The requested record is not in an editable state or in a sufficient state to apply
+            the action.  For example, this is returned in response to a finalize or submit action
+            request if the record does include the minimum required data.  
           content:
             "application/json":
               schema:
@@ -579,6 +818,12 @@ paths:
           "application/json":
             schema:
               "$ref": "#/components/schemas/ACLs"
+            examples:
+              "replace-acls":
+                summary: replace all permissions
+                value:
+                  read: [ "me", "you", "him", "her" ]
+                  write: [ "me", "her" ]
       responses:
         "200":
           description:  the updated ACLs (inluding the ones that were not updated)
@@ -639,6 +884,12 @@ paths:
           "application/json":
             schema:
               "$ref": "#/components/schemas/ACLs"
+            examples:
+              "update-acls":
+                summary: replace all permissions
+                value:
+                  read: [ "you", "him", "her" ]
+                  write: [ "her" ]
       responses:
         "200":
           description:  the updated ACLs (inluding the ones that were not updated)
@@ -741,6 +992,10 @@ paths:
           "application/json":
             schema:
               type: string
+            examples:
+              "add-user-to-perm":
+                summary: add a user to the list granted a permission
+                value: "ava1"
       responses:
         "200":
           description:  the updated list of user and group identifiers with this permission
@@ -801,6 +1056,10 @@ paths:
             schema:
               type: array
               items: { type: string }
+            examples:
+              "replace-perm":
+                summary: replace users given a permission
+                value: [ "me", "you", "him", "her" ]
       responses:
         "200":
           description:  the updated list of user and group identifiers with this permission
@@ -864,6 +1123,13 @@ paths:
                 - type: array 
                   items: { type: string }
                 - type: string
+            examples:
+              "update-to-perm":
+                summary: merge in users to be given a permission
+                value: [ "him", "her" ]
+              "add-to-perm":
+                summary: merge in users to be given a permission
+                value: [ "him" ]
       responses:
         "200":
           description:  the updated list of user and group identifiers with this permission

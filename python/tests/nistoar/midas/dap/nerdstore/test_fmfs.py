@@ -16,7 +16,7 @@ daptestdir = Path(__file__).parents[1] / 'data'
 def load_simple():
     return read_json(sipnerd)
 
-def read_scan(id=None):
+def read_scan(id=None, *kw):
     return read_json(daptestdir/"scan-report.json")
 
 def read_scan_reply(id=None):
@@ -55,8 +55,8 @@ class TestFMFSFileComps(test.TestCase):
         self.fm = None
         with patch('nistoar.midas.dap.fm.FileManager') as mock:
             self.fm = mock.return_value
-            self.fm.post_scan_files.return_value = ack
-            self.fm.get_scan_files.return_value = read_scan()
+            self.fm.start_scan.return_value = ack
+            self.fm.get_scan.side_effect = read_scan
             self.fm.get_uploads_directory.return_value = {
                 "fileid": "130",
                 "type": "folder",
@@ -89,7 +89,7 @@ class TestFMFSFileComps(test.TestCase):
         self.assertIsNone(self.cmps.last_scan_id)
         self.cmps.last_scan_id = self.scanid
         scan = self.cmps._get_file_scan()
-        self.fm.scan_files.assert_not_called()
+        self.fm.start_scan.assert_not_called()
         self.assertEqual(scan['scan_id'], self.scanid)
         self.assertIn('contents', scan)
         self.assertEqual(len(scan['contents']), 8)
@@ -103,8 +103,8 @@ class TestFMFSFileComps(test.TestCase):
         self.assertIsNone(self.cmps.last_scan_id)
         scan = self.cmps._scan_files()
         self.assertEqual(self.cmps.last_scan_id, self.scanid)
-        self.fm.delete_scan_files.assert_not_called()
-        self.fm.post_scan_files.assert_called()
+        self.fm.delete_scan.assert_not_called()
+        self.fm.start_scan.assert_called()
         self.assertEqual(scan['scan_id'], self.scanid)
         self.assertIn('contents', scan)
         self.assertEqual(len(scan['contents']), 8)
@@ -121,7 +121,7 @@ class TestFMFSFileComps(test.TestCase):
         self.assertEqual(stat['file_count'], 7)
         self.assertEqual(stat['folder_count'], 2)
         self.assertEqual(stat['usage'], 4997166)
-        self.assertEqual(stat['syncing'], "successful")
+        self.assertEqual(stat['syncing'], "synced")
         self.assertEqual(self.cmps.count, 9)
         self.assertTrue(self.cmps.path_exists("analysis"))
         self.assertTrue(self.cmps.path_exists("ngc7793-cont.fits"))
@@ -136,7 +136,7 @@ class TestFMFSFileComps(test.TestCase):
         self.assertEqual(stat['file_count'], 7)
         self.assertEqual(stat['folder_count'], 2)
         self.assertEqual(stat['usage'], 4997166)
-        self.assertEqual(stat['syncing'], "successful")
+        self.assertEqual(stat['syncing'], "synced")
         self.assertEqual(self.cmps.count, 9)
         self.assertTrue(self.cmps.path_exists("analysis"))
         self.assertTrue(self.cmps.path_exists("ngc7793-cont.fits"))
@@ -149,13 +149,13 @@ class TestFMFSFileComps(test.TestCase):
         fmd['title'] = "The End"
         self.cmps.set_file_at(fmd)
         scan = read_scan()
-        scan['contents'][-1]['path'] = re.sub(r'/previews/', '/', scan['contents'][-1]['path'])
+        scan['contents'][-1]['path'] = re.sub(r'previews/', '', scan['contents'][-1]['path'])
         id = scan['contents'][-1]['fileid']
         stat = self.cmps._update_files_from_scan(scan)
         self.assertEqual(stat['file_count'], 7)
         self.assertEqual(stat['folder_count'], 2)
         self.assertEqual(stat['usage'], 4997166)
-        self.assertEqual(stat['syncing'], "successful")
+        self.assertEqual(stat['syncing'], "synced")
         self.assertEqual(self.cmps.count, 9)
         self.assertTrue(self.cmps.path_exists("analysis"))
         self.assertTrue(self.cmps.path_exists("ngc7793-cont.fits"))
@@ -174,7 +174,7 @@ class TestFMFSFileComps(test.TestCase):
         self.assertEqual(stat['file_count'], 6)
         self.assertEqual(stat['folder_count'], 2)
         self.assertEqual(stat['usage'], 4992391)
-        self.assertEqual(stat['syncing'], "successful")
+        self.assertEqual(stat['syncing'], "synced")
         self.assertEqual(self.cmps.count, 8)
         self.assertTrue(self.cmps.path_exists("analysis"))
         self.assertTrue(self.cmps.path_exists("ngc7793-cont.fits"))
@@ -556,7 +556,7 @@ class TestFMFSFileComps(test.TestCase):
         self.assertEqual(self.cmps.fm_summary['file_count'], 7)
         self.assertEqual(self.cmps.fm_summary['folder_count'], 2)
         self.assertEqual(self.cmps.fm_summary['usage'], 4997166)
-        self.assertEqual(self.cmps.fm_summary['syncing'], "successful")
+        self.assertEqual(self.cmps.fm_summary['syncing'], "synced")
 
         # simulate constructing while (slow) scanning is still in progress
         summ = deepcopy(fmfs._NO_FM_SUMMARY)
@@ -567,7 +567,7 @@ class TestFMFSFileComps(test.TestCase):
         self.cmps._fmsumf.unlink()
         write_json(summ, self.cmps._fmsumf)
         self.assertEqual(self.cmps.count, 0)
-        self.fm.get_scan_files.return_value = read_scan()
+        #self.fm.get_scan.return_value = read_scan()
 
         self.cmps = fmfs.FMFSFileComps(inmem.InMemoryResource("pdr0:0001"), self.outdir.name, self.fm)
         self.assertEqual(self.cmps.count, 0)
@@ -577,7 +577,7 @@ class TestFMFSFileComps(test.TestCase):
         self.assertEqual(self.cmps.fm_summary['file_count'], 7)
         self.assertEqual(self.cmps.fm_summary['folder_count'], 2)
         self.assertEqual(self.cmps.fm_summary['usage'], 4997166)
-        self.assertEqual(self.cmps.fm_summary['syncing'], "successful")
+        self.assertEqual(self.cmps.fm_summary['syncing'], "synced")
 
 
 class TestFMFSResource(test.TestCase):

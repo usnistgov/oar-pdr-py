@@ -8,7 +8,7 @@ import logging, argparse, sys, os, shutil, time, tempfile, re, json
 from nistoar.pdr.preserve.bagit import NISTBag
 from nistoar.pdr.utils import write_json
 from nistoar.pdr.exceptions import PDRException, ConfigurationException, StateException
-from nistoar.pdr.cli import PDRCommandFailure
+from nistoar.pdr.utils.cli import CommandFailure, explain
 from nistoar.pdr.describe import MetadataClient, RMMServerError, IDNotFound
 from nistoar.pdr.distrib import (RESTServiceClient, BagDistribClient,
                                  DistribServerError, DistribResourceNotFound)
@@ -92,11 +92,11 @@ def execute(args, config=None, log=None):
             rec = describe(args.id, args.rmmbase, args.version, config)
 
     except (IDNotFound, DistribResourceNotFound) as ex:
-        raise PDRCommandFailure(cmd, "ID not found: "+args.id, 1)
+        raise CommandFailure(cmd, "ID not found: "+args.id, 1)
     except (RMMServerError, DistribServerError) as ex:
-        raise PDRCommandFailure(cmd, "Unexpected service failure: "+str(ex), 5)
+        raise CommandFailure(cmd, "Unexpected service failure: "+str(ex), 5)
     except Exception as ex:
-        raise PDRCommandFailure(cmd, "Unexpected failure retrieving metadata: "+str(ex), 8)
+        raise CommandFailure(cmd, "Unexpected failure retrieving metadata: "+str(ex), 11)
 
     # write the output
     fp = None   # file object for file output
@@ -111,8 +111,8 @@ def execute(args, config=None, log=None):
         json.dump(rec, op, indent=4, separators=(',', ': '))
 
     except OSError as ex:
-        raise PDRCommandFailure(cmd, "Failed to write data to %s: %s" %
-                                ((fp and args.outfile) or "standard out", str(ex)), 4)
+        raise CommandFailure(cmd, "Failed to write data to %s: %s" %
+                             ((fp and args.outfile) or "standard out", str(ex)), 4)
     finally:
         if fp: fp.close()
 

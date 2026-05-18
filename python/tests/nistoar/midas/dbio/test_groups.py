@@ -11,7 +11,13 @@ from nistoar.midas.dbio import inmem, base
 class TestGroup(test.TestCase):
 
     def setUp(self):
-        self.cfg = { "default_shoulder": "pdr0" }
+        self.cfg = {
+            "group_id_minting": {
+                "default_shoulder": {
+                    "public": "grp0"
+                }
+            }
+        }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
@@ -100,7 +106,13 @@ class TestGroup(test.TestCase):
 class TestDBGroups(test.TestCase):
 
     def setUp(self):
-        self.cfg = { "default_shoulder": "pdr0" }
+        self.cfg = {
+            "group_id_minting": {
+                "default_shoulder": {
+                    "public": "grp0"
+                }
+            }
+        }
         self.user = "nist0:ava1"
         self.fact = inmem.InMemoryDBClientFactory(self.cfg)
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
@@ -112,8 +124,10 @@ class TestDBGroups(test.TestCase):
         self.assertEqual(self.dbg._shldr, base.DEF_GROUPS_SHOULDER)
 
     def test_mint_id(self):
-        self.assertEqual(self.dbg._mint_id("a", "b", "c"), "a:c:b")
-
+        with self.assertRaises(base.NotAuthorized):
+            self.assertEqual(self.dbg._mint_id("a", "b", "c"), "a:c:b")
+        self.assertEqual(self.dbg._mint_id("grp0", "b", "c"), "grp0:c:b")
+            
     def test_create_group(self):
         # group does not exist yet
         id = "grp0:nist0:ava1:enemies"
@@ -330,11 +344,18 @@ class MockPeopleService(base.PeopleService):
 class TestVirtualGroups(test.TestCase):
     def setUp(self):
         # user with no PeopleService by default:
-        self.cfg = { "default_shoulder": "pdr0" }
+        self.fact = inmem.InMemoryDBClientFactory({})
         self.user = "nist0:ava1"
-        self.fact = inmem.InMemoryDBClientFactory(self.cfg)
+        self.clientcfg = {
+            "project_id_minting": {
+                "default_shoulder": { "public": "pdr0" }
+            },
+            "group_id_minting": {
+                "default_shoulder": { "public": "grp0" }
+            }
+        }
         # no peopleService given means no virtual groups
-        self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, self.user)
+        self.cli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, self.user)
 
     def test_all_groups_for_noPeopleService(self):
         # Should always return whatever is in the DB and PUBLIC_GROUP
@@ -373,8 +394,7 @@ class TestVirtualGroups(test.TestCase):
             "nist0:alice": { "nistgrp": "999" }
         }
         pplsvc = MockPeopleService(staffdata)
-        cfg = {}
-        newcli = self.fact.create_client(base.DMP_PROJECTS, cfg, self.user)
+        newcli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, self.user)
         newcli._peopsvc = pplsvc
 
         matches = newcli.all_groups_for("nist0:ava1")
@@ -398,8 +418,7 @@ class TestVirtualGroups(test.TestCase):
             "nist0:alice": { "nistgrp": "999" }
         }
         pplsvc = MockPeopleService(staffdata)
-        cfg = {}
-        newcli = self.fact.create_client(base.DMP_PROJECTS, cfg, self.user)
+        newcli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, self.user)
         newcli._peopsvc = pplsvc
 
         newcli.recache_user_groups()
@@ -424,6 +443,36 @@ class TestVirtualGroups(test.TestCase):
         self.assertIn(base.PUBLIC_GROUP, newcli.user_groups)
         self.assertIn(g.id, newcli.user_groups)
         self.assertEqual(len(newcli.user_groups), 2)
+
+    def test_authorized_via_virtual_group(self):
+        # Grant read access to a virtual group ID (nistou:728).
+        # A user whose NSD entry maps to nistou:728 should pass authorized(),
+        # while a user in a different OU and a user absent from NSD should not.
+        staffdata = {
+            "nist0:ava1": {"nistou": "728", "nistdiv": "730"},
+            "nist0:bob":  {"nistgrp": "999"},
+        }
+        pplsvc = MockPeopleService(staffdata)
+        cli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, "alice")
+        cli._peopsvc = pplsvc
+
+        prec = cli.create_record("shared-record", "pdr0")
+        prec.acls.grant_perm_to(base.ACLs.READ, "nistou:728")
+        prec.save()
+
+        # ava1 belongs to nistou:728 — read access granted
+        self.assertTrue(prec.authorized(base.ACLs.READ, "nist0:ava1"))
+        # bob is in nistgrp:999, not nistou:728 — no read access
+        self.assertFalse(prec.authorized(base.ACLs.READ, "nist0:bob"))
+        # gary is not in NSD at all — no read access
+        self.assertFalse(prec.authorized(base.ACLs.READ, "gary"))
+
+        # grant write via nistdiv — ava1 is also in nistdiv:730
+        prec.acls.grant_perm_to(base.ACLs.WRITE, "nistdiv:730")
+        prec.save()
+        self.assertTrue(prec.authorized(base.ACLs.WRITE, "nist0:ava1"))
+        self.assertFalse(prec.authorized(base.ACLs.WRITE, "nist0:bob"))
+
 
 if __name__ == '__main__':
     test.main()

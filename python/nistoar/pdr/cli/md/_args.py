@@ -4,7 +4,7 @@ This module defines some reusable functions shared by the md command package and
 """
 from urllib.parse import urlparse, urljoin
 
-from nistoar.pdr.cli import PDRCommandFailure
+from nistoar.pdr.utils.cli import CommandFailure
 
 def define_comm_md_opts(subparser):
     """
@@ -39,7 +39,7 @@ def process_svcep_args(args, config, cmd, log=None):
         check_url(srvrbase)
     except ValueError as ex:
         if args.srvrbase:
-            raise PDRCommandFailure(cmd, "Bad PDR URL provided: %s: %s" % (args.srvrbase, str(ex)), 7)
+            raise CommandFailure(cmd, "Bad PDR URL provided: %s: %s" % (args.srvrbase, str(ex)), 7)
         else:
             raise ConfigurationException("Config parameter, nist_pdr_base: bad value: %s: %s" %
                                          (args.srvrbase, str(ex)))
@@ -53,7 +53,7 @@ def process_svcep_args(args, config, cmd, log=None):
     try:
         check_url(args.distbase)
     except ValueError as ex:
-        raise PDRCommandFailure(cmd, "Bad distrib service URL: %s: %s" % (args.distbase, str(ex)), 7)
+        raise CommandFailure(cmd, "Bad distrib service URL: %s: %s" % (args.distbase, str(ex)), 7)
 
     if not args.rmmbase:
         args.rmmbase = config.get("pdr_rmm_base", "rmm/")
@@ -61,7 +61,7 @@ def process_svcep_args(args, config, cmd, log=None):
     try:
         check_url(args.rmmbase)
     except ValueError as ex:
-        raise PDRCommandFailure(cmd, "Bad RMM service URL: %s: %s" % (args.rmmbase, str(ex)), 7)
+        raise CommandFailure(cmd, "Bad RMM service URL: %s: %s" % (args.rmmbase, str(ex)), 7)
 
 def check_url(url):
     """

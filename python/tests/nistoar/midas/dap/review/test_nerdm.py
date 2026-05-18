@@ -198,7 +198,7 @@ class TestDAPNERDmReviewValidator(test.TestCase):
         self.assertEqual(res.count_passed(), 0)
         self.assertEqual(res.failed()[0].label, "1.3.1 authors")
 
-        res = self.val.test_author(self.nerd, want=rev.REQ&rev.WARN)
+        res = self.val.test_author(self.nerd, want=rev.REQ|rev.REC)
         self.assertEqual(res.count_applied(), 0)
         self.assertEqual(res.count_passed(), 0)
 
@@ -212,8 +212,8 @@ class TestDAPNERDmReviewValidator(test.TestCase):
         self.assertEqual(res.count_applied(), 4)
         self.assertEqual(res.count_passed(), 1)
         self.assertEqual(res.passed()[0].label, "1.3.1 authors")
-        self.assertEqual(res.failed()[0].label, "1.3.5 authors")
-        self.assertEqual(res.failed()[1].label, "1.3.2 authors")
+        self.assertEqual(res.failed()[0].label, "1.3.2 authors")
+        self.assertEqual(res.failed()[1].label, "1.3.5 authors")
         self.assertEqual(res.failed()[2].label, "1.3.6 authors")
         self.assertTrue(res.failed()[0].comments[0].endswith("1 author"))
         
@@ -224,16 +224,18 @@ class TestDAPNERDmReviewValidator(test.TestCase):
         self.assertTrue(res.failed()[0].comments[0].endswith("2 authors"))
         
         res = self.val.test_author(self.nerd, want=rev.WARN)
-        self.assertEqual(res.count_applied(), 1)
-        self.assertEqual(res.count_passed(), 0)
-        self.assertEqual(res.failed()[0].label, "1.3.5 authors")
+        self.assertEqual(res.count_applied(), 3)
+        self.assertEqual(res.count_passed(), 1)
+        self.assertEqual(res.passed()[0].label, "1.3.1 authors")
+        self.assertEqual(res.failed()[0].label, "1.3.2 authors")
+        self.assertEqual(res.failed()[1].label, "1.3.5 authors")
 
         self.nerd['authors'] = [{"familyName": "Doe", "givenName": "John"}]
         res = self.val.test_author(self.nerd)
         self.assertEqual(res.count_applied(), 4)
         self.assertEqual(res.count_passed(), 2)
-        self.assertEqual(res.passed()[0].label, "1.3.5 authors")
-        self.assertEqual(res.passed()[1].label, "1.3.1 authors")
+        self.assertEqual(res.passed()[0].label, "1.3.1 authors")
+        self.assertEqual(res.passed()[1].label, "1.3.5 authors")
         self.assertEqual(res.failed()[0].label, "1.3.2 authors")
         self.assertEqual(res.failed()[1].label, "1.3.6 authors")
         
@@ -241,8 +243,8 @@ class TestDAPNERDmReviewValidator(test.TestCase):
         res = self.val.test_author(self.nerd)
         self.assertEqual(res.count_applied(), 4)
         self.assertEqual(res.count_passed(), 3)
-        self.assertEqual(res.passed()[0].label, "1.3.5 authors")
-        self.assertEqual(res.passed()[1].label, "1.3.1 authors")
+        self.assertEqual(res.passed()[0].label, "1.3.1 authors")
+        self.assertEqual(res.passed()[1].label, "1.3.5 authors")
         self.assertEqual(res.passed()[2].label, "1.3.6 authors")
         self.assertEqual(res.failed()[0].label, "1.3.2 authors")
 
@@ -251,8 +253,8 @@ class TestDAPNERDmReviewValidator(test.TestCase):
         self.assertEqual(res.count_applied(), 4)
         self.assertEqual(res.count_passed(), 1)
         self.assertEqual(res.passed()[0].label, "1.3.1 authors")
-        self.assertEqual(res.failed()[0].label, "1.3.5 authors")
-        self.assertEqual(res.failed()[1].label, "1.3.2 authors")
+        self.assertEqual(res.failed()[0].label, "1.3.2 authors")
+        self.assertEqual(res.failed()[1].label, "1.3.5 authors")
         self.assertEqual(res.failed()[2].label, "1.3.6 authors")
 
         del self.nerd['authors'][-1]
@@ -261,9 +263,9 @@ class TestDAPNERDmReviewValidator(test.TestCase):
         self.assertEqual(res.count_applied(), 6)
         self.assertEqual(res.count_passed(), 5)
         self.assertEqual(res.passed()[0].label, "1.3.4 authors")
-        self.assertEqual(res.passed()[1].label, "1.3.5 authors")
-        self.assertEqual(res.passed()[2].label, "1.3.1 authors")
-        self.assertEqual(res.passed()[3].label, "1.3.2 authors")
+        self.assertEqual(res.passed()[1].label, "1.3.1 authors")
+        self.assertEqual(res.passed()[2].label, "1.3.2 authors")
+        self.assertEqual(res.passed()[3].label, "1.3.5 authors")
         self.assertEqual(res.passed()[4].label, "1.3.6 authors")
         self.assertEqual(res.failed()[0].label, "1.3.3 authors")
         
@@ -273,9 +275,9 @@ class TestDAPNERDmReviewValidator(test.TestCase):
         self.assertEqual(res.count_passed(), 6)
         self.assertEqual(res.passed()[0].label, "1.3.3 authors")
         self.assertEqual(res.passed()[1].label, "1.3.4 authors")
-        self.assertEqual(res.passed()[2].label, "1.3.5 authors")
-        self.assertEqual(res.passed()[3].label, "1.3.1 authors")
-        self.assertEqual(res.passed()[4].label, "1.3.2 authors")
+        self.assertEqual(res.passed()[2].label, "1.3.1 authors")
+        self.assertEqual(res.passed()[3].label, "1.3.2 authors")
+        self.assertEqual(res.passed()[4].label, "1.3.5 authors")
         self.assertEqual(res.passed()[5].label, "1.3.6 authors")
 
         self.nerd['authors'].append(deepcopy(self.nerd['authors'][0]))
@@ -283,9 +285,9 @@ class TestDAPNERDmReviewValidator(test.TestCase):
         self.assertEqual(res.count_applied(), 6)
         self.assertEqual(res.count_passed(), 5)
         self.assertEqual(res.passed()[0].label, "1.3.3 authors")
-        self.assertEqual(res.passed()[1].label, "1.3.5 authors")
-        self.assertEqual(res.passed()[2].label, "1.3.1 authors")
-        self.assertEqual(res.passed()[3].label, "1.3.2 authors")
+        self.assertEqual(res.passed()[1].label, "1.3.1 authors")
+        self.assertEqual(res.passed()[2].label, "1.3.2 authors")
+        self.assertEqual(res.passed()[3].label, "1.3.5 authors")
         self.assertEqual(res.passed()[4].label, "1.3.6 authors")
         self.assertEqual(res.failed()[0].label, "1.3.4 authors")
         
@@ -295,9 +297,9 @@ class TestDAPNERDmReviewValidator(test.TestCase):
         self.assertEqual(res.count_passed(), 6)
         self.assertEqual(res.passed()[0].label, "1.3.3 authors")
         self.assertEqual(res.passed()[1].label, "1.3.4 authors")
-        self.assertEqual(res.passed()[2].label, "1.3.5 authors")
-        self.assertEqual(res.passed()[3].label, "1.3.1 authors")
-        self.assertEqual(res.passed()[4].label, "1.3.2 authors")
+        self.assertEqual(res.passed()[2].label, "1.3.1 authors")
+        self.assertEqual(res.passed()[3].label, "1.3.2 authors")
+        self.assertEqual(res.passed()[4].label, "1.3.5 authors")
         self.assertEqual(res.passed()[5].label, "1.3.6 authors")
 
     def test_test_files(self):

@@ -14,6 +14,7 @@ from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nsd.service import PeopleService, MongoPeopleService, create_people_service
 
 _dburl_re = re.compile(r"^mongodb://(\w+(:\S+)?@)?\w+(\.\w+)*(:\d+)?/\w+(\?\w.*)?$")
+SUPPORTED_CONSTRAINTS = set("name id owner status_state".split())
 
 class MongoDBClient(base.DBClient):
     """
@@ -66,6 +67,14 @@ class MongoDBClient(base.DBClient):
             finally:
                 self._mngocli = None
                 self._native = None
+
+    def free(self):
+        """
+        free up resources used by this client.  
+
+        This implementation calls :py:meth:`disconnect`.
+        """
+        self.disconnect()
 
     @property
     def native(self):
@@ -191,18 +200,51 @@ class MongoDBClient(base.DBClient):
          
 
     def select_records(self, perm: base.Permissions=base.ACLs.OWN, **cnsts) -> Iterator[base.ProjectRecord]:
+        """
+        return an iterator of project records for which the given user has at least one of the given 
+        permissions and matches additional optional search constraints
+
+        :param str       user:  the identity of the user that wants access to the records.  
+        :param str|[str] perm:  the permissions the user requires for the selected record.  For
+                                each record returned the user will have at least one of these
+                                permissions.  The value can either be a single permission value
+                                (a str) or a list/tuple of permissions
+        :param list _cnsts_:    an additional constraint that will match any record with a property
+                                refered to by the constraint name if its value matches any of those 
+                                given in the constraint's value list.  Supported _constraint_ names 
+                                include ``name``, ``id``, ``status.state``, and ``owner``.  Particular 
+                                implementations may support additional properties; any unsupported 
+                                constraints will be ignored.  Note that multiple constraints are 
+                                logically AND-ed together; that is, a matched record must match at least
+                                one value from each constraint value list.
+        """
         if isinstance(perm, str):
             perm = [perm]
         if isinstance(perm, (list, tuple)):
             perm = set(perm)
-
         idents = [self.user_id] + list(self.user_groups)
+
+        for prop in cnsts:
+            if cnsts.get(prop) and not isinstance(cnsts[prop], (list, tuple)):
+                cnsts[prop] = [ cnsts[prop] ]
+
+        # Build permission constraints (same as in select_records method)
         if len(perm) > 1:
             constraints = {"$or": []}
             for p in perm:
                 constraints["$or"].append({"acls."+p: {"$in": idents}})
         else:
             constraints = {"acls."+perm.pop(): {"$in": idents}}
+
+        # Combine other filters with permission constraints
+        if cnsts:
+            for prop in SUPPORTED_CONSTRAINTS:
+                vals = cnsts.get(prop)
+                if vals:
+                    if prop == "status_state":
+                        prop = "status.state"
+                    constraints[prop] = {"$in": vals}
+            
         try:
             coll = self.native[self._projcoll]
 
@@ -211,8 +253,7 @@ class MongoDBClient(base.DBClient):
 
         except Exception as ex:
             raise base.DBIOException("Failed while selecting records: " + str(ex), cause=ex)
-        
-    
+
     def adv_select_records(self, filter: dict,
                            perm: base.Permissions=base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
         
@@ -279,7 +320,19 @@ class MongoDBClient(base.DBClient):
         except Exception as ex:
             raise DBIOEception(histrec.get('recid', "id=?")+": Failed to save history entry: "+str(ex)) \
                 from ex
-    
+
+    def client_for(self, projcoll: str, foruser: str = None):
+        """
+        create a new DBClient using the same backend as this one but attached to a different collection
+        (and possibly user).
+        :param str projcol:  the project collection name
+        :param str foruser:  the user this should be used on behalf of.  This controls what records the 
+                             client has access to.
+        """
+        if not foruser:
+            foruser = self.user_id
+        return self.__class__(self._dburl, self._cfg, projcoll, foruser)
+                
 
 class MongoDBClientFactory(base.DBClientFactory):
     """
@@ -324,6 +377,13 @@ class MongoDBClientFactory(base.DBClientFactory):
                              "'mongodb://[USER:PASS@]HOST[:PORT]/DBNAME'): "+
                              dburl)
         self._dburl = dburl
+
+        pscfg = self._cfg.get("people_service", {})
+        if pscfg == 'embedded':
+            pscfg = {"facory": "mongo"}
+        if pscfg.get("factory") == "mongo" and not pscfg.get("db_url"):
+            # default people service db url is same as DBIO's.
+            pscfg["db_url"] = self._dburl
 
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
         cfg = merge_config(config, deepcopy(self._cfg))

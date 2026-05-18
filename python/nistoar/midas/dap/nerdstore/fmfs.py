@@ -11,7 +11,7 @@ from json import JSONDecodeError
 from .fsbased import *
 from .base import (DATAFILE_TYPE, SUBCOLL_TYPE, DOWNLOADABLEFILE_TYPE,
                    RemoteStorageException, NERDStorageException, ObjectNotFound)
-from ..fm import FileManager, FileSpaceException
+from ..fm import FileManager, FileManagerException, FileManagerResourceNotFound
 from nistoar.nerdm.constants import core_schema_base, schema_versions
 from nistoar.pdr.preserve.bagit.builder import (NERD_DEF, NERDM_CONTEXT, BagBuilder)
 
@@ -102,7 +102,6 @@ _NO_FM_SUMMARY = OrderedDict([
     ("file_count", -1),
     ("folder_count", -1),
     ("usage", -1),
-    ("syncing", False),
     ("last_modified", "(unknown)"),
     ("last_scan_id", None),
     ("syncing", "unsynced")
@@ -128,16 +127,43 @@ class FMFSFileComps(FSBasedFileComps):
 #        if self._fmcli and self.last_scan_id and self._summary['file_count'] < 0:
 #            try:
 #                self.update_metadata()
-#            except FileSpaceException as ex:
+#            except FileManagerException as ex:
 #                self._res.log.error("Failed to update get files update from file manager: %s", str(ex))
+
+    def _load_fm_summary(self):
+        if self._fmsumf.is_file():
+            self._summary = read_json(self._fmsumf)
+        else:
+            self._refresh_fm_summary()
+
+    def _refresh_fm_summary(self):
+        # refresh our locally-cached file space summary
+        if not self._summary:
+            self._summary = deepcopy(_NO_FM_SUMMARY)
+
+        if self._fmcli:
+            # fetch the summary info from the file manager
+            try:
+                self._summary.update(self._fmcli.summarize_space(self._res.id))
+            except FileManagerResourceNotFound as ex:
+                self._res.log.error("nerdstore: file space appears to be missing: %s", str(ex))
+            except FileManagerException as ex:
+                self._res.log.error("nerdstore: Failed to get file space summary: %s", str(ex))
+            except Exception as ex:
+                self._res.log.exception("Failed to get file space summary: %s", str(ex))
+
+        self._cache_fm_summary(self._summary)
+
+    def _cache_fm_summary(self, summary):
+        if self._upl_dir_id:
+            summary['uploads_dir_id'] = self._upl_dir_id
+        write_json(summary, self._fmsumf)
 
     def _ensure_uploads_id(self) -> str:
         if not self._upl_dir_id and self._fmcli:
-            try:
-                self._upl_dir_id = self._fmcli.get_uploads_directory(self._res.id).get('fileid')
-            except FileSpaceException as ex:
-                self._res.log.error("Failed to determine uploads directory id for %s: %s",
-                                    self._res.id, str(ex))
+            self._refresh_fm_summary()
+            self._upl_dir_id = self._summary.get('uploads_dir_id')
+
         return str(self._upl_dir_id) if self._upl_dir_id is not None else None
 
     def update_hierarchy(self) -> Mapping:
@@ -154,19 +180,6 @@ class FMFSFileComps(FSBasedFileComps):
             self._summary = self._update_files_from_scan(self._get_file_scan())
             self._cache_fm_summary(self._summary)
         return self.fm_summary
-
-    def _cache_fm_summary(self, summary):
-        if self._upl_dir_id:
-            summary['uploads_dir_id'] = self._upl_dir_id
-        write_json(summary, self._fmsumf)
-
-    def _load_fm_summary(self):
-        if self._fmsumf.is_file():
-            self._summary = read_json(self._fmsumf)
-        else:
-            if not self._summary:
-                self._summary = deepcopy(_NO_FM_SUMMARY)
-            self._cache_fm_summary(self._summary)
 
     @property
     def fm_summary(self) -> Mapping:
@@ -190,14 +203,14 @@ class FMFSFileComps(FSBasedFileComps):
         # delete last scan
         if self.last_scan_id:
             try:
-                self._fmcli.delete_scan_files(self._res.id, self.last_scan_id)
+                self._fmcli.delete_scan(self._res.id, self.last_scan_id)
             except Exception as ex:
                 self._res.log.warning("Failed to delete old scan (id=%s)", self.last_scan_id)
             finally:
                 self.last_scan_id = None
 
         try:
-            resp = self._fmcli.post_scan_files(self._res.id)
+            resp = self._fmcli.start_scan(self._res.id)
             if not isinstance(resp, Mapping):
                 self._res.log.error("Unexpected response from scan request: "+
                                     "not a JSON object (is URL correct?)")
@@ -235,7 +248,7 @@ class FMFSFileComps(FSBasedFileComps):
             return self._scan_files()
 
         try:
-            resp = self._fmcli.get_scan_files(self._res.id, self.last_scan_id)
+            resp = self._fmcli.get_scan(self._res.id, self.last_scan_id)
             if 'message' in resp:
                 resp = resp['message']
 
@@ -252,18 +265,15 @@ class FMFSFileComps(FSBasedFileComps):
 
         if 'contents' not in resp or not isinstance(resp['contents'], list):
             raise StorageFormatException("Unexpected response in scan data: missing 'contents' property")
-        if not resp.get('user_dir'):
+        if not resp.get('uploads_dir'):
             # property needs to at least contain /
-            raise StorageFormatException("Unexpected response in scan data: missing 'user_dir' property")
+            raise StorageFormatException("Unexpected response in scan data: missing 'uploads_dir' property")
 
         return resp
 
     def _update_files_from_scan(self, scanmd):
         # consume the result of a file scanning to cache the organization of files locally
         topchildren = []
-        basepath = scanmd.get("user_dir")
-        if not basepath.endswith(os.sep):
-            basepath += os.sep    # because file paths are absolute (and OS(this) == OS(fm))
 
         def new_folder_md(id, fpath):
             return OrderedDict([
@@ -305,27 +315,25 @@ class FMFSFileComps(FSBasedFileComps):
         reqfolders = set()  # the folders required as implied by the paths
         total_size = 0
         for entry in scanmd.get("contents", []):
-            if not entry.get('fileid'):
-                failed += 1
-                problems.add("missing file id")
-                continue
             if not entry.get('path'):
                 failed += 1
-                problems.add("missing file id")
+                problems.add("missing file path")
+                self._res.log.debug("missing path; keys: %s", str(list(entry.keys())))
+                continue
+            if not entry.get('fileid'):
+                # failed += 1
+                # problems.add("missing file id")  # not a prob, just skip
+                self._res.log.debug("%s missing id; keys: %s", entry.get('path', 'file'),
+                                    str(list(entry.keys())))
                 continue
 
-            if entry['path'].startswith(basepath):
-                entry['path'] = entry['path'][len(basepath):].rstrip(os.sep)
-            else:
-                failed += 1
-                problems.add("disallowed basepath")
-                continue
+            entry['path'] = entry['path'].strip(os.sep)
 
             # determine all the parent folders implied by this file path
             reqfolders.update([str(d) for d in Path(entry['path']).parents if str(d) != '.'])
 
             id = entry['fileid']    # Note: nextcloud ids are numbers
-            if entry.get('resource_type') == "folder":
+            if entry.get('resource_type') == "collection":
                 scfolders[id] = entry
             else:
                 scfiles[id] = entry
@@ -335,7 +343,7 @@ class FMFSFileComps(FSBasedFileComps):
                 msg = "%d fatal problem%s found in scan listing" % \
                       (failed, "s" if failed > 1 else "")
                 if problems:
-                    msg += ", including" + "\n  ".join(problems)
+                    msg += ", including\n  " + "\n  ".join(problems)
                 self._res.log.error(msg)
             raise RemoteStorageException(self._res.id + ": Retrieved scan data is too flawed " +
                                          "to process; file metadata not updated")
@@ -353,7 +361,7 @@ class FMFSFileComps(FSBasedFileComps):
                 scfolders[id] = {
                     "fileid": id,
                     "path": fpath,
-                    "resource_type": "folder"
+                    "resource_type": "collection"
                 }
 
         # Remove existing file metadata for files/folders not refered to in the scan
@@ -421,17 +429,21 @@ class FMFSFileComps(FSBasedFileComps):
             self._res.log.warning("File hierarchy may be incomplete")
             raise RuntimeError("Failed add/update files due to missing folders")
 
-        if scanmd.get("status") and scanmd["status"] != "in_progress" and scanmd["status"] != "unsynced":
+        if scanmd.get("is_complete"):
             try:
-                self._fmcli.delete_scan_files(self._res.id, self.last_scan_id)
+                self._fmcli.delete_scan(self._res.id, self.last_scan_id)
             except Exception as ex:
                 self._res.log.error("Failed to delete scan report, %s: %s", self.last_scan_id, str(ex))
             self.last_scan_id = None
 
+        syncing = "unknown"
+        if scanmd.get("is_complete") is not None:
+            syncing = "synced" if scanmd["is_complete"] else "syncing"
+
         return OrderedDict([
             ("file_count", len(scfiles)),
             ("folder_count", len(scfolders)),
-            ("syncing", scanmd.get("status", "unknown")),
+            ("syncing", syncing),
             ("last_scan_started", scanmd.get("scan_datetime", "(unknown)")),
             ("last_scan_id", self.last_scan_id),
             ("last_scan_is_complete", scanmd.get("is_complete", True)),

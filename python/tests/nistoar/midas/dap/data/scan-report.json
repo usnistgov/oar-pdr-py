@@ -3,13 +3,15 @@
     "scan_id": "914e479a-e344-4152-a340-f62947d7adbd",
     "scan_time": 1705612136.8156767,
     "scan_datetime": "2024-01-18T21:08:56.815677",
-    "user_dir": "/shared/data/oar_api/files/mds3-0012/mds3-0012",
+    "fm_space_path": "mds3-0012/mds3-0012",
+    "uploads_dir": "/shared/data/oar_api/files/mds3-0012/mds3-0012",
+    "scan_root": "",
     "fm_system_path": "mds3-0012/mds3-0012-sys",
-    "status": "successful",
+    "is_complete": true,
     "contents": [
         {
             "fileid": "196",
-            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/ngc7793-HIcube.fits",
+            "path": "ngc7793-HIcube.fits",
             "size": "4083840",
             "last_modified": "2009-03-26T13:03:29+00:00",
             "resource_type": "file",
@@ -19,7 +21,7 @@
         },
         {
             "fileid": "203",
-            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/ngc7793-HIm0.fits",
+            "path": "ngc7793-HIm0.fits",
             "size": "152640",
             "last_modified": "2009-03-26T13:03:31+00:00",
             "resource_type": "file",
@@ -29,7 +31,7 @@
         },
         {
             "fileid": "229",
-            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/ngc7793-HIm1.fits",
+            "path": "ngc7793-HIm1.fits",
             "size": "146880",
             "last_modified": "2009-03-26T13:03:34+00:00",
             "resource_type": "file",
@@ -39,7 +41,7 @@
         },
         {
             "fileid": "194",
-            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/ngc7793-cont.fits",
+            "path": "ngc7793-cont.fits",
             "size": "581760",
             "last_modified": "2009-03-26T12:59:08+00:00",
             "resource_type": "file",
@@ -49,15 +51,15 @@
         },
         {
             "fileid": "284",
-            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/analysis/",
+            "path": "analysis/",
             "size": "32046",
             "last_modified": "2024-01-18T21:08:09+00:00",
-            "resource_type": "folder",
+            "resource_type": "collection",
             "scan_errors": []
         },
         {
             "fileid": "301",
-            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/previews/ngc7793-cont.gif",
+            "path": "previews/ngc7793-cont.gif",
             "size": "22502",
             "last_modified": "2009-03-26T12:59:08+00:00",
             "resource_type": "file",
@@ -67,7 +69,7 @@
         },
         {
             "fileid": "302",
-            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/previews/ngc7793-HIm0.gif",
+            "path": "previews/ngc7793-HIm0.gif",
             "size": "4769",
             "last_modified": "2009-03-26T12:59:08+00:00",
             "resource_type": "file",
@@ -77,7 +79,7 @@
         },
         {
             "fileid": "303",
-            "path": "/shared/data/oar_api/files/mds3-0012/mds3-0012/previews/ngc7793-HIm1.gif",
+            "path": "previews/ngc7793-HIm1.gif",
             "size": "4775",
             "last_modified": "2009-03-26T12:59:08+00:00",
             "resource_type": "file",

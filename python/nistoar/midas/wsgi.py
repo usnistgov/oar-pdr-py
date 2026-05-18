@@ -145,7 +145,7 @@ from copy import deepcopy
 import jwt
 
 from . import system
-from .dbio.base import DBClientFactory
+from .dbio.base import DBClientFactory, AUTOADMIN
 from .dbio.wsgi import project as prj, DBIOHandler
 from nistoar.web.rest import (ServiceApp, Handler, Agent, AuthenticatedWSGIApp,
                               authenticate_via_jwt)
@@ -158,6 +158,7 @@ from nistoar.base.config import ConfigurationException, merge_config
 
 from nistoar.nsd.wsgi import nsd1, oar1
 from .dbio.wsgi import group
+from .doi import wsgi as doi2nerdm
 
 
 log = logging.getLogger(system.system_abbrev)
@@ -478,6 +479,12 @@ def PeopleServiceFactory(servicemodule):
         return servicemodule.PeopleServiceApp(config, log, name)
     return factory
 
+def DOIServiceFactory(servicemodule):
+    if not hasattr(servicemodule, "DOIServiceApp"):
+        raise ValueError(f"service module {servicemodule.__name__} is missing a DOIServiceApp symbol")
+    def factory(dbiofact, log, config, name):
+        return servicemodule.DOIServiceApp(log, config)
+    return factory
 
 class DevAbout(About):
     """
@@ -536,8 +543,8 @@ _MIDASServiceApps = {
 #    "nsdi/v1":   nsdiv1.NSDIndexerAppFactory
     "nsd/oar1":  PeopleServiceFactory(oar1),
     "nsd/nsd1":  PeopleServiceFactory(nsd1),
-   "group/grp0": group.MIDASGroupApp.factory_for(),
-
+    "group/grp0": group.MIDASGroupApp.factory_for(),
+    "doi/2nerdm": DOIServiceFactory(doi2nerdm)
 }
 
 class MIDASApp(AuthenticatedWSGIApp):
