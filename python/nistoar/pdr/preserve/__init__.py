@@ -84,6 +84,9 @@ class AIPValidationError(PreservationException):
     """
     An indication that the an Archive Information Package (AIP) (usually,
     the preservation bag) is not valid.
+
+    This exception is raised as a result of applying validation tests to an AIP in which one or 
+    more of those tests failed.  
     """
     pass
 

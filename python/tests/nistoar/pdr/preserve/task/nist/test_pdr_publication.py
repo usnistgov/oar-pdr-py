@@ -128,6 +128,10 @@ class TestPDRBagFinalization(test.TestCase):
                 }
             }
         }
+        self.smcfg = {
+            "working_dir": str(self.workdir),
+            "persist_in": str(self.workdir)
+        }
 
         self.testbag = self.workdir/"mds2-7223"
         with zipfile.ZipFile(storedir/"mds2-7223.1_1_0.mbag0_4-1.zip") as zip:
@@ -139,8 +143,7 @@ class TestPDRBagFinalization(test.TestCase):
 
         self.fin = pdr.PDRBagFinalization(self.cfg)
         self.pub = pdr.PDRPublication(self.cfg)
-        self.mgr = st.JSONPreservationStateManager({"working_dir": str(self.workdir)}, "mds2-7223", 
-                                                   str(self.testbag), persistin=Path(self.workdir))
+        self.mgr = st.JSONPreservationStateManager(self.smcfg, "mds2-7223", str(self.testbag))
 
     def tearDown(self):
         self.tmpdir.cleanup()

@@ -54,10 +54,10 @@ class TestPDRPreservationCleanup(test.TestCase):
             "_message": "Publication complete"
         }
         self._init_data()
-        with open(self.workdir/f"{self.aipid}_state.json", 'w') as fd:
+        self.statefile = self.workdir/f"{self.aipid}_state.json"
+        with open(self.statefile, 'w') as fd:
             json.dump(self.pstate, fd, indent=2)
-        self.mgr = st.JSONPreservationStateManager({"working_dir": str(self.workdir),
-                                                    "persist_in":  str(self.workdir)}, self.aipid)
+        self.mgr = st.JSONPreservationStateManager.from_file(self.statefile)
 
         self.cln = pdr.PDRPreservationCleanup(self.cfg)
 

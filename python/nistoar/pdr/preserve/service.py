@@ -1,7 +1,7 @@
 """
 a module for asynchronously launching preservation jobs and access their status.
 """
-import logging
+import logging, re
 from typing import Mapping, Iterator
 from abc import ABCMeta, abstractmethod
 from logging import Logger
@@ -27,7 +27,7 @@ class PreservationStatus(PreservationStepsAware):
     """
     a read-only description of the state of the preservation of an AIP.  
 
-    The status is container for several attributes accessible via the :py:meth:`get` method.  The 
+    This class is a container for several attributes accessible via the :py:meth:`get` method.  The 
     status is guaranteed to include four attributes; for this reason, they are also accessible as 
     properties of an instance: 
 
@@ -247,7 +247,7 @@ class AIP1PreservationService(PreservationService):
                              provided, a default one will be used.  
         :param module|str execmod:  the :py:mod:`~nistoar.jobmgt` execution module, containing the 
                              required ``process()`` funtion to use.  If not provided (typically),
-                             use the default preservation job module 
+                             the default preservation job module 
                              (:py:mod:`nistoar.pdr.preserve.task.jobexec) will be used.
                              Either a module (dot-delimited) name or an imported module object can 
                              be used as a value. 
@@ -314,14 +314,6 @@ class AIP1PreservationService(PreservationService):
     def _history_file_for(self, aipid):
         return self.historydir/f"{aipid}_history.json"
 
-    def _open_presstatemgr(self, aipid, aipdir=None):
-        iddir = aipdir or self.inprogdir/aipid
-        if not iddir.is_dir():
-            return None
-        return JSONPreservationStateManager(self.cfg.get('state_manager', {}), aipid, 
-                                            persistin=iddir/self._state_file,
-                                            log=self.log.getChild(aipid))
-
     def active_aip_ids(self) -> Iterator[str]:
         """
         return an iterator of the identifiers that are actively being tracked by this service.  
@@ -343,9 +335,10 @@ class AIP1PreservationService(PreservationService):
         pstatefile = self._state_file_for(aipid)
         if statefile.exists():
             pstate = read_json(statefile)
-            job = self.presq.get_job(aipid)
             if pstate.get('version'):
                 info['version'] = pstate['version']
+
+            job = self.presq.get_job(aipid)
             if job:
                 info['reqtime'] = job.request_time
                 info['reqdate'] = datatime.fromtimestamp(job.request_time).isformat()
@@ -354,7 +347,8 @@ class AIP1PreservationService(PreservationService):
                                  'runtime',  job.info.get('runtime'),
                                  'exitcode',  job.info.get('exitcode')})
                 # TODO: need headbag
-            return PreservationState(aipid, pstate.get('message'), pstate.get('state'), info)
+
+            return PreservationState(aipid, pstate.get('_message'), pstate.get('_completed'), info)
 
         histf = self._history_file_for(aipid)
         if histf.is_file():
@@ -449,7 +443,7 @@ class AIP1PreservationService(PreservationService):
         workparent = str(self.inprogdir/aipid)
         smcfg['working_dir'] = str(workparent/"work")
         smcfg['stage_dir']   = str(workparent/"stage")
-        smcfg['persist_in']  = str(workparent/"_state.json")
+        smcfg['persist_in']  = self._state_file_for(aipid)
         try:
             for dir in (workparent, smcfg['working_dir'], smcfg['stage_dir']):
                 if not os.path.isdir(dir):
@@ -457,10 +451,9 @@ class AIP1PreservationService(PreservationService):
         except Exception as ex:
             raise PreservationException(f"{str(dir)}: failed to create directory: {str(ex)}")
 
-        pstate = JSONPreservationStateManager(smcfg, aipid, aipdir, self.log, # need SIPStatus
-                                              clear_state=startover)
-        pstate._data['version'] = version
-        pstate._cache()
+        pstate = JSONPreservationStateManager.for_aip(smcfg, aipid, aipdir, self.log, # need SIPStatus
+                                                      clear_state=startover)
+        pstate.set_state_property('version', version)
 
         # submit job
         jcfg = {
@@ -468,7 +461,7 @@ class AIP1PreservationService(PreservationService):
             "process": self.cfg.get('task', {}),
             "logfile": str(workparent/"preservation.log")
         }
-        self.presq.submit(aipid, [aipdir, self._state_file_for(aipid)], jcfg)
+        self.presq.submit(aipid, [self._state_file_for(aipid)], jcfg)
 
         # return status
         return self.status_of(aipid)

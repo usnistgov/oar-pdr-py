@@ -7,7 +7,7 @@ from pathlib import Path
 from collections import OrderedDict
 from collections.abc import Mapping
 from logging import Logger
-from typing import List, Iterable
+from typing import List, Iterable, Union
 
 from .framework import PreservationStateManager, UNSTARTED_PROGRESS
 from .. import PreservationStateError, PreservationException
@@ -17,133 +17,192 @@ from nistoar.base.config import ConfigurationException
 from nistoar.pdr.publish.service import status
 from nistoar.pdr.utils.io import _PathTolerantJSONEncoder
 
+def _read_state_file(filename: Path, aipid: str=None) -> Mapping:
+    if not aipid:
+        aipid = '??'
+    try:
+        with LockedFile(filename) as fd:
+            return json.load(fd)
+    except FileNotFoundError as ex:
+        msg = "Trouble loading preservation state for AIP=%s from %s: cache file not found" \
+              % (aipid, filename)
+        raise PreservationStateError(msg) from ex
+    except IOError as ex:
+        raise PreservationStateError("Trouble loading preservation state for AIP=%s from %s: %s" %
+                                     (aipid, filename, str(ex))) from ex
+    except json.JSONDecodeError as ex:
+        raise PreservationStateError("Trouble decoding JSON state for AIP=%s from %s: %s" %
+                                     (aipid, filename, str(ex))) from ex
+
+def _write_state_file(state: Mapping, filename: Path, aipid: str):
+    try:
+        with LockedFile(filename, 'w') as fd:
+            json.dump(state, fd, indent=2, cls=_PathTolerantJSONEncoder)
+    except FileNotFoundError as ex:
+        msg = "Trouble saving preservation state for AIP=%s to %s: directory not found: %s" \
+            % (aipid, filename, str(ex))
+        raise PreservationStateError(msg) from ex
+    except IOError as ex:
+        raise PreservationStateError("Trouble saving preservation state for AIP=%s to %s: %s" %
+                                     (aipid, filename, str(ex))) from ex
+    except TypeError as ex:
+        raise PreservationStateError("Trouble encoding JSON state for AIP=%s: %s" %
+                                     (aipid, str(ex))) from ex
+
 class JSONPreservationStateManager(PreservationStateManager):
     """
     An implementation of the :py:class:`~nistoar.pdr.preserve.task.framework.PreservationStateManager`
-    class in which the state is stored in a JSON files on disk.
+    class in which the state is stored in a JSON files on disk.  The default location for this 
+    persisted data is controlled by configuration.  
 
     This implementation will look for the following properties in the configuration dictionary passed 
     to it:
 
-    :persist_in:       a file or directory path where this manager can persist its state information 
-                       (no default).  If the path points to an existing directory, the state will be
-                       written to a file in that directory with a name of the form 
-                       _aipid_``_state.json``.  Otherwise it will be interpreted as a file path; its
-                       parent directory must exist.
-    :stage_dir:        a directory path where serialized AIP files can be written prior to archiving.
-    :working_dir:      a directory path where preservation task steps can write temporary data.  
-    :keep_fresh:       if True (default), the persist state will be reloaded often (everytime information 
-                       is asked for).  Set this to False if it is expected that this instance will be 
-                       the only one updating this status.  
+    ``persist_in`` 
+          a file or directory path where this manager can persist its state information 
+          (no default).  If the path points to an existing directory, the state will be
+          written to a file in that directory with a name of the form _aipid_``_state.json``.  
+          Otherwise it will be interpreted as a file path; its parent directory must exist.
+    ``stage_dir``        
+          a directory path where serialized AIP files can be written prior to archiving.
+    ``working_dir``
+          a directory path where preservation task steps can write temporary data.  
+    ``keep_fresh``
+          if True (default), the persisted state will be reloaded often (everytime information 
+          is asked for).  Set this to False if it is expected that this instance will be 
+          the only one updating this status.  
     """
 
-    def __init__(self, config: Mapping=None, aipid: str=None, aiploc: str=None, logger: Logger=None,
-                 stat: status.SIPStatus=None, clear_state: bool=False, persistin: Path=None):
+    @classmethod
+    def from_file(cls, statefile: Union[str,Path], logger: Logger=None, pubstat: status.SIPStatus=None, 
+                  config: Mapping=None, persistin: Union[str,Path]=None):
         """
-        Create the state manager
+        create at state manager instance by loading the preservation state from a given file.  
+
+        :param str|Path statefile:  the persisted preservation state file to load
+        :param Logger      logger:  the logger to use in this state manager
+        :param SIPStatus  pubstat:  an SIPStatus tracking the overall publishing status; if provided,
+                                    it will be updated messages about what's happening with preservation.
+        :param dict        config:  an optional configuration, used for filling in any configuration 
+                                    information missing from ``statefile``.  
+        :param Path     persistin:  the location to persist state information to.  Provide this if 
+                                    ``statefile`` should be treated as read-only.  If not provided, 
+                                    the input ``statefile`` will be updated as the preservation proceeds.  
+        :raises ValueError:  if the state file is missing key data, namely the AIP-ID or the location 
+                             of the SIP.  If this file was created by this class, this error should not
+                             occur.  
+        :raises IOError:  if ``statefile`` cannot be opened to read or if it is not possible to write 
+                          to the state file (``persistin``, if provided; otherwise, ``statefile``).
+        """
+        if isinstance(statefile, str):
+            statefile = Path(statefile)
+        if not persistin:
+            persistin = statefile
+        return cls(_read_state_file(statefile), config, logger, pubstat, persistin=persistin)
+
+    @classmethod
+    def for_aip(cls, config: Mapping, aipid: str, aiploc: str, logger: Logger=None,
+                pubstat: status.SIPStatus=None, clear_state: bool=False):
+        """
+        Create a state manager to process a particular AIP.  
+
+        Normally, this factory method will look for a persisted state file in a location set by 
+        the configuration, and its state will be loaded from there (so that preservation can proceed
+        from where it left off).  If the file does not exist or the ``clear_state`` argument is True, 
+        a new state file will be created and the returned instance will be set to start preservation 
+        from the beginning.  
+
+        :param dict        config:  an optional configuration, used for filling in any configuration 
+                                    information missing from ``statefile``.  
+        :param str          aipid:  the ID of the AIP to process
+        :param str         aiploc:  the location of the input SIP/AIP.  Often, this is a file path, 
+                                    but it could be a URL if the task finalization step supports it.
+        :param Logger      logger:  the logger to use in this state manager
+        :param SIPStatus  pubstat:  an SIPStatus tracking the overall publishing status; if provided,
+                                    it will be updated messages about what's happening with preservation.
+        :param bool   clear_state:  If True, any previously saved state will be forgotten and the state
+                                    will be set to start preservation processing from the beginning.
+        :raises ValueError:  if the state file exists but is missing key data.  If the file was created 
+                             by this class, this error should not occur.  
+        :raises IOError:  if it is not possible to write the persisted state file.
+        """
+        persistin = config.get("persist_in")
+        if not persistin:
+            raise ConfigurationException("Missing required config param: persist_in")
+        persistin = Path(persistin)
+        statefile = persistin / f"{aipid}_state.json" if persistin.is_dir() else persistin
+        if not statefile.parent.is_dir():
+            raise ConfigurationException(f"persist_in: {str(statefile.parent)}: directory does not exist")
+
+        if not clear_state and statefile.exists():
+            state = _read_state_file(statefile, aipid)
+        else:
+            # create a brand new state
+            state = {
+                "_aipid": aipid,
+                "_orig_sip": aiploc
+            }
+
+        return cls(state, config, logger, pubstat, persistin=statefile)
+
+    def __init__(self, statedata: Mapping, config: Mapping=None, logger: Logger=None,
+                 pubstat: status.SIPStatus=None, persistin: Path=None):
+        """
+        Create the state manager. 
+
+        Typically, this constructor is not called directly; rather, an instance is created via either
+        of the factory methods, :py:meth:`from_file` or :py:meth:`for_aip`.  
+
+        :param dict statedata:  the preservation state data 
         :param dict    config:  the dictionary for configuring this instance
-        :param str      aipid:  the ID of the AIP being preserved
-        :param str     aiploc:  the location (as a file path or a URI) of the AIP
         :param Logger  logger:  the logger to use in this state manager
         :param SIPStatus stat:  an SIPStatus tracking the overall publishing status; if provided,
                                 it will be updated messages about what's happening with preservation.
-        :param bool clear_state:  if True, any previously persisted state will be over-written by 
-                                an initial, pre-preservation state.  Otherwise (default), the 
-                                currently persisted state will be loaded into memory.
         :param Path persistin:  the location to persist state information to; this overrides the 
                                 value of ``persist_in`` in the configuration.  This location must be 
                                 provided either via this argument or in the configuration.
         """
         if config is None:
             config = {}
-        self._data = None
-        self._keepfresh = config.get("keep_fresh", True)
-        self._pubstat = stat
+        self.cfg = config
+        self._data = statedata
+        self._keepfresh = self.cfg.get("keep_fresh", True)
+        self._pubstat = pubstat
 
-        # determine/process the cache file before calling the super-constructor.   If the AIP-ID
-        # and the AIP location were not given as arguments, we might be able to get them from
-        # the cache file, if it exists.
-        if not persistin:
-            persistin = config.get("persist_in")
-        if not persistin:
-            raise ConfigurationException("Missing configuration parameter: persist_in")
-        if isinstance(persistin, str):
-            persistin = Path(persistin)
+        aipid = self._data.get("_aipid")
         if not aipid:
-            if persistin.is_file():
-                self._load(persistin)
-                try:
-                    aipid = self._data["_aipid"]
-                except KeyError as ex:
-                    raise ValueError(f"{persistin}: file missing required property: {str(ex)}")
-            else:
-                raise ValueError(self.__class__.__name__ + "(): when aipid is not given, " +
-                                 "persistin must point to an existing file")
+            raise ValueError("JSONPreservationStateManager: state data is missing _aipid")
+        if not self._data.get("_orig_sip"):
+            raise ValueError("JSONPreservationStateManager: state data is missing _orig_sip")
 
+        super(JSONPreservationStateManager, self).__init__(aipid, logger)
+
+        self._data.setdefault("_stage_dir", self.cfg.get("stage_dir"))
+        self._data.setdefault("_work_dir", self.cfg.get("working_dir"))
+        self._data.setdefault("_completed", self.UNSTARTED)
+        self._data.setdefault("_message", UNSTARTED_PROGRESS)
+
+        if not persistin:
+            persistin = self.cfg.get("persist_in")
+            if isinstance(persistin, str):
+                persistin = Path(persistin)
+        if not persistin:
+            raise ConfigurationException("JSONPreservationStateManager: missing parameter, persist_in")
         if persistin.is_dir():
             persistin = persistin / f"{aipid}_state.json"
         elif not persistin.parents[0].is_dir():
             raise PreservationStateError("Preservation state file's parent is not an existing directory: "
                                          + str(persistin.parents[0]))
         self._cachefile = persistin
-        
-        super(JSONPreservationStateManager, self).__init__(aipid, config, logger)
-
-        if self._cachefile.exists() and clear_state:
-            self._cachefile.unlink()
-
-        # synchronize our cache
-        if self._cachefile.exists():
-            self._load()
-            self._data["_aipid"] = self._aipid
-            if aiploc:
-                self._data["_orig_sip"] = aiploc
-            if self.cfg.get("stage_dir"):
-                self._data["_stage_dir"] = self.cfg.get("stage_dir")
-            if self.cfg.get("working_dir"):
-                self._data["_work_dir"] = self.cfg.get("working_dir")
-            self._cache()
-        else:
-            self._init_state(_aipid=self._aipid, _orig_sip=aiploc,
-                             _stage_dir=self.cfg.get("stage_dir"), _work_dir=self.cfg.get("working_dir"))
-
-    def _init_state(self, **kw):
-        self._data = OrderedDict(kw)
-        self._data["_completed"] = self.UNSTARTED
-        self._data["_message"] = UNSTARTED_PROGRESS
         self._cache()
 
     def _load(self, cachefile=None):
         if not cachefile:
             cachefile = self._cachefile
-        try:
-            with LockedFile(cachefile) as fd:
-                self._data = json.load(fd)
-        except FileNotFoundError as ex:
-            msg = "Trouble loading preservation state for AIP=%s from %s: cache file disappeared" \
-                  % (self.aipid, cachefile)
-            raise PreservationStateError(msg) from ex
-        except IOError as ex:
-            raise PreservationStateError("Trouble loading preservation state for AIP=%s from %s: %s" %
-                                         (self.aipid, cachefile, str(ex))) from ex
-        except json.JSONDecodeError as ex:
-            raise PreservationStateError("Trouble decoding JSON state for AIP=%s from %s: %s" %
-                                         (self.aipid, cachefile, str(ex))) from ex
+        self._data = _read_state_file(cachefile, self.aipid)
 
     def _cache(self):
-        try:
-            with LockedFile(self._cachefile, 'w') as fd:
-                json.dump(self._data, fd, indent=2, cls=_PathTolerantJSONEncoder)
-        except FileNotFoundError as ex:
-            msg = "Trouble saving preservation state for AIP=%s to %s: directory not found: %s" \
-                % (self.aipid, self._cachefile, str(ex))
-            raise PreservationStateError(msg) from ex
-        except IOError as ex:
-            raise PreservationStateError("Trouble saving preservation state for AIP=%s to %s: %s" %
-                                         (self.aipid, self._cachefile, str(ex))) from ex
-        except TypeError as ex:
-            raise PreservationStateError("Trouble encoding JSON state for AIP=%s: %s" %
-                                         (self.aipid, str(ex))) from ex
+        _write_state_file(self._data, self._cachefile, self.aipid)
 
     @property
     def message(self) -> str:
@@ -303,7 +362,7 @@ class JSONPreservationStateManager(PreservationStateManager):
             json.dumps(value)
         except TypeError as ex:
             raise TypeError("set_state_property(): Not a JSON-supported type for %s: %s" %
-                            (name, type(value)))
+                            (name, type(value))) from ex
         self._data[name] = value
         self._cache()
 

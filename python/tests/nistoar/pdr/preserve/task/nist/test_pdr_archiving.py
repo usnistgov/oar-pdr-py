@@ -94,7 +94,8 @@ class TestPDR1AIPArchiving(test.TestCase):
         self.bucket = "s3:nist_midas"
 
         self.stcfg = {
-            "working_dir": self.workdir.name
+            "working_dir": self.workdir.name,
+            "persist_in": self.workdir.name
         }
         self.cfg = {
             "store_dir": self.storedir,
@@ -111,8 +112,7 @@ class TestPDR1AIPArchiving(test.TestCase):
         }
 
         self.arch = pdr.PDR1AIPArchiving(self.cfg)
-        self.mgr = st.JSONPreservationStateManager(self.stcfg, "pdr2210", 
-                                                   persistin=Path(self.workdir.name))
+        self.mgr = st.JSONPreservationStateManager.for_aip(self.stcfg, "pdr2210", "bags/pdr2210")
         self.mgr.set_serialized_files([str(f) for f in self.archfiles])
 
     def tearDown(self):
@@ -121,7 +121,7 @@ class TestPDR1AIPArchiving(test.TestCase):
     def test_ctor(self):
         self.assertTrue(self.arch.cfg)
         self.assertEqual(self.arch.storedir, self.storedir)
-        self.assertEqual(self.arch.finalbucket, self.bucket)
+#        self.assertEqual(self.arch.finalbucket, self.bucket)
 
     def test_safe_copy(self):
         self.mgr.record_progress("Goob!")

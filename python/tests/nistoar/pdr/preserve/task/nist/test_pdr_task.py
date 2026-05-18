@@ -5,6 +5,7 @@ import unittest as test
 from nistoar.pdr.preserve.task import state as st
 from nistoar.pdr.preserve.task.nist import pdr
 from nistoar.pdr.preserve.task import framework as fw
+from nistoar.pdr.preserve.task.state import JSONPreservationStateManager
 from nistoar.base import config
 from nistoar.pdr.distrib import DistribServiceException
 from nistoar.pdr.preserve.bagit import BagBuilder
@@ -113,6 +114,13 @@ class TestPreservationTask(test.TestCase):
             if not os.path.exists(d):
                 os.mkdir(d)
 
+        self.smcfg = {
+            "sip_dir":     self.workdir,
+            "working_dir": self.workdir,
+            "stage_dir":   self.stagedir,
+            "persist_in":  self.statedir
+        }
+
         self.config = {
             "store_dir": self.storedir,
             'restricted_store_dir': self.restricted,
@@ -139,12 +147,6 @@ class TestPreservationTask(test.TestCase):
                 }
             },
 
-            "state_manager": {
-                "sip_dir":     self.workdir,
-                "working_dir": self.workdir,
-                "stage_dir":   self.stagedir,
-                "persist_in":  self.statedir
-            },
             "finalize": {
             },
             "validate": {
@@ -176,6 +178,8 @@ class TestPreservationTask(test.TestCase):
         bagdir = os.path.join(destdir, self.aipid)
         shutil.copytree(srcbag, bagdir)
 
+        self.sm = JSONPreservationStateManager.for_aip(self.smcfg, self.aipid, bagdir,
+                                                       logging.getLogger('preserve').getChild(self.aipid))
         self.factory = pdr.PDRPreservationTaskFactory(self.config)
 
     def tearDown(self):
@@ -190,7 +194,7 @@ class TestPreservationTask(test.TestCase):
         self.assertIn('restricted_store_dir', self.factory.cfg['archive'])
 
     def test_create_task(self):
-        task = self.factory.create_task(self.aipid, {})
+        task = self.factory.create_task(self.sm)
         self.assertEqual(task.aipid, self.aipid)
 
         mgr = task._statemgr
@@ -201,7 +205,7 @@ class TestPreservationTask(test.TestCase):
         self.assertTrue(mgr.log)
 
     def test_finalize(self):
-        task = self.factory.create_task(self.aipid, {})
+        task = self.factory.create_task(self.sm)
         mgr = task._statemgr
         self.assertTrue(not task.finalized())
         
@@ -220,7 +224,7 @@ class TestPreservationTask(test.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(submitteddir,self.aipid+".json")))
 
     def test_validate(self):
-        task = self.factory.create_task(self.aipid, {})
+        task = self.factory.create_task(self.sm)
         mgr = task._statemgr
         self.assertTrue(not task.finalized())
         
@@ -235,7 +239,7 @@ class TestPreservationTask(test.TestCase):
     def test_validated_stick(self):
         # turn always_apply off
         self.factory.cfg['validate']['always_apply'] = False
-        task = self.factory.create_task(self.aipid, {})
+        task = self.factory.create_task(self.sm)
         mgr = task._statemgr
         self.assertTrue(not task.finalized())
         
@@ -248,7 +252,7 @@ class TestPreservationTask(test.TestCase):
         self.assertTrue(not os.path.isdir(mgr.get_sip()))
 
     def test_validate_as_is(self):
-        task = self.factory.create_task(self.aipid, {})
+        task = self.factory.create_task(self.sm)
         mgr = task._statemgr
         self.assertTrue(not task.finalized())
         
@@ -262,7 +266,7 @@ class TestPreservationTask(test.TestCase):
         self.assertTrue(os.path.isdir(mgr.get_sip()))
 
     def test_serialize(self):
-        task = self.factory.create_task(self.aipid, {})
+        task = self.factory.create_task(self.sm)
         mgr = task._statemgr
         self.assertTrue(not task.finalized())
         
@@ -282,8 +286,8 @@ class TestPreservationTask(test.TestCase):
 
     def test_serialize_split(self):
         # force multibag splitting
-        self.factory.cfg['serialize']['multibag']['max_bag_size'] = 10000
-        task = self.factory.create_task(self.aipid, {})
+        self.factory.cfg['serialize']['multibag']['max_bag_size'] = 9000
+        task = self.factory.create_task(self.sm)
         mgr = task._statemgr
         self.assertTrue(not task.finalized())
         self.assertTrue(not task.serialized())
@@ -305,7 +309,7 @@ class TestPreservationTask(test.TestCase):
         self.assertTrue(not os.path.isdir(mgr.get_sip()))
         
     def test_archive(self):
-        task = self.factory.create_task(self.aipid, {})
+        task = self.factory.create_task(self.sm)
         mgr = task._statemgr
         self.assertTrue(not task.finalized())
         self.assertTrue(not task.submitted_to_archive())
@@ -320,7 +324,7 @@ class TestPreservationTask(test.TestCase):
         self.assertTrue(task.archived())
 
     def test_publish(self):
-        task = self.factory.create_task(self.aipid, {})
+        task = self.factory.create_task(self.sm)
         mgr = task._statemgr
         self.assertTrue(not task.finalized())
         self.assertTrue(not task.published())
@@ -341,7 +345,7 @@ class TestPreservationTask(test.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(ingesteddir,self.aipid+".json")))
 
     def test_run(self):
-        task = self.factory.create_task(self.aipid, {})
+        task = self.factory.create_task(self.sm)
         mgr = task._statemgr
         self.assertTrue(not task.finalized())
         self.assertTrue(not task.published())

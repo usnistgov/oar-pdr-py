@@ -168,8 +168,9 @@ class TestPDRBagFinalization(test.TestCase):
         write_json(nerd, self.testbag/"metadata"/"nerdm.json")
 
         self.fin = pdr.PDRBagFinalization(self.cfg)
-        self.mgr = st.JSONPreservationStateManager({"working_dir": str(self.workdir)}, "mds2-7223", 
-                                                   str(self.testbag), persistin=Path(self.workdir))
+        self.mgr = st.JSONPreservationStateManager.for_aip({"working_dir": str(self.workdir),
+                                                            "persist_in": str(self.workdir)  },
+                                                           "mds2-7223", str(self.testbag))
 
 
     def tearDown(self):

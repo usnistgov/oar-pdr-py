@@ -90,6 +90,7 @@ class PDRBagFinalization(fw.AIPFinalization):
         apply the finalization step.  This implementation will give the original bag a new name.
         """
         log = statemgr.log.getChild("finalization")
+        statemgr.set_state_property('version', '(unknown)')
 
         aipid = statemgr.aipid
         bagdir = Path(statemgr.get_sip())
@@ -126,6 +127,7 @@ class PDRBagFinalization(fw.AIPFinalization):
             newver = bldr.bag.nerd_metadata_for("", True).get("version")
             if not newver:
                 raise fw.AIPFinalizationException(f"{aipid}: Version not set in AIP", aipid)
+            statemgr.set_state_property('version', newver)
             newver = verutils.OARVersion(newver)
             if lastver and newver <= lastver:
                 if self.cfg.get("allow_replace", False):
@@ -960,8 +962,8 @@ class PDRPreservationCleanup(fw.AIPCleanup):
 
     def _delete_bag(self, bagdir, what, log):
         if not os.path.isdir(bagdir):
-            raise PreservationStateException("PDRPreservationCleanup: assumption is that the "+
-                                             what+" is a directory is not True")
+            raise PreservationStateError("PDRPreservationCleanup: assumption is that the "+
+                                         what+" is a directory is not True")
         else:
             try:
                 shutil.rmtree(bagdir)
@@ -1048,18 +1050,18 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
                         self.cfg.setdefault(step, {})
                         self.cfg[step][prop] = self.cfg[prop]
 
-    def _create_state_manager(self, aipid: str, config: Mapping,
-                              logger: Logger, startover=False) -> fw.PreservationStateManager:
-        if config.get('type', 'def') not in self.def_supported_types + ["json"]:
-            raise ConfigurationException("Unsupported state manager type: "+str(config.get('type')))
+    # def _create_state_manager(self, aipid: str, config: Mapping,
+    #                           logger: Logger, startover=False) -> fw.PreservationStateManager:
+    #     if config.get('type', 'def') not in self.def_supported_types + ["json"]:
+    #         raise ConfigurationException("Unsupported state manager type: "+str(config.get('type')))
 
-        loc = None
-        sipdir = config.get('sip_dir')
-        if sipdir:
-            if not os.path.isdir(sipdir):
-                raise ConfigurationException(f"sip_dir: {sipdir}: not a directory")
-            loc = os.path.join(sipdir, aipid)
-        return JSONPreservationStateManager(config, aipid, loc, logger)
+    #     loc = None
+    #     sipdir = config.get('sip_dir')
+    #     if sipdir:
+    #         if not os.path.isdir(sipdir):
+    #             raise ConfigurationException(f"sip_dir: {sipdir}: not a directory")
+    #         loc = os.path.join(sipdir, aipid)
+    #     return JSONPreservationStateManager(config, aipid, loc, logger)
         
     def _create_finalizer(self, config: Mapping) -> fw.AIPFinalization:
         if config.get('type', 'def') not in self.def_supported_types:
@@ -1095,9 +1097,9 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
             raise ConfigurationException("Unsupported validate step type: "+str(tp))
         return PDRPreservationCleanup(config)
 
-    def create_task(self, aipid: str, config: Mapping, logger: Logger=None, startover=False,
-                    statemgr: fw.PreservationStateManager=None) -> fw.PreservationTask:
-        out = super().create_task(aipid, config, logger, startover, statemgr)
+    def create_task(self, sipstate: fw.PreservationStateManager,
+                    logger: Logger=None, config: Mapping=None) -> fw.PreservationTask:
+        out = super().create_task(sipstate, logger, config)
         if hasattr(out, '_cleaner') and hasattr(out, '_finalizer') and \
            hasattr(out._cleaner, 'finalizer') and not out._cleaner.finalizer:
             out._cleaner.finalizer = out._finalizer

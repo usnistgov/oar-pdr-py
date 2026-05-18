@@ -43,7 +43,8 @@ class TestNISTBagSerialization(test.TestCase):
         self.stagedir.mkdir()
         self.stcfg = {
             "working_dir": self.workdir.name,
-            "stage_dir": self.stagedir
+            "stage_dir": self.stagedir,
+            "persist_in": self.workdir.name
         }
         self.cfg = {
             "multibag": {
@@ -51,8 +52,8 @@ class TestNISTBagSerialization(test.TestCase):
             }
         }
         self.ser = ser.NISTBagSerialization(self.cfg)
-        self.mgr = st.JSONPreservationStateManager(self.stcfg, "mds2-7223", 
-                                                   str(testbag), persistin=Path(self.workdir.name))
+        self.mgr = st.JSONPreservationStateManager.for_aip(self.stcfg, "mds2-7223", str(testbag))
+                                                   
         self.mgr.set_finalized_aip(str(testbag))
 
     def tearDown(self):

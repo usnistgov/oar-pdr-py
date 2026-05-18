@@ -6,35 +6,16 @@ from typing import List, Mapping
 from logging import Logger
 
 from nistoar.jobmgt import FatalError
-from .. import PreservationException, PreservationStateException
-from .framework import PreservationStateManager, PreservationStateTask
+from .. import PreservationException, PreservationStateError
+from .framework import PreservationStateManager, PreservationTask
 
-def make_state_manager(aipid: str, aipdir: str,
-                       config: Mapping=None, log: Logger=None) -> PreservationStateManager:
-    """
-    initialize a PreservationStateManager instance to be used during preservation.  
-
-    Normally, the initialized state is already cached to disk when this is run, so creating 
-    the instance would in this case start with reading that state from disk.  The decision 
-    as to whether to resume or start over has already been set in that file.  
-    """
-    smcfg = config.get("state_manager", {})
-    statefile = smcfg.get("persist_in")
-    if not statefile:
-        raise ConfigurationException("preservation job: state_manager.persist_in: "
-                                     "required but not set")
-    if not os.path.is_file(statefile):
-        raise PreservationStateException(f"{statefile}: pre-initialized preservation state file "
-                                         "not found as a file")
-    return JSONPreservationStateManager(smcfg, aipid, aipdir, log) # need SIPStatus
-
-def make_preservation_task(aipid: str, stmgr: PreservationStateManager,
-                           config: Mapping=None, log: Logger=None) -> PreservationTask:
+def make_preservation_task(statefile: str, config: Mapping=None, log: Logger=None) -> PreservationTask:
     """
     initialize the PreservationTask that will drive preservation
     """
+    statemgr = JSONPreservationStateManager.from_file(statefile)
     taskfact = PDRPreservationTaskFactory(config.get('task'))
-    return taskfact.create_task(aipid, {}, log, statemgr=stmgr)
+    return taskfact.create_task(statemgr, log)
 
 def process(dataid: str, config: Mapping, args: List[str], log=None):
     """
@@ -52,35 +33,31 @@ def process(dataid: str, config: Mapping, args: List[str], log=None):
         log = logging.getLogger("jobmgt.preserve").getChild(dataid)
 
     if not args:
-        raise FatalError("AIP-ID and AIP directory missing from Job arguments", 2)
-    if len(args) < 2:
-        raise FatalError("SIP directory missing from Job arguments", 2)
+        raise FatalError("Preservation state file missing from Job arguments", 2)
+    pstatefile = args[0]
 
-    aipid, aipdir = args[:2]
-
-    sm = make_state_manager(aipid, aipdir, config, log)
-
-    if sm.steps_completed == sm._all_steps:
-        log.info("All preservation steps have already been completed; cleaning up...")
-    else:
-        if sm.steps_completed > sm.UNSTARTED:
+    try:
+        ptask = make_preservation_task(pstatefile, config, log)
+        if ptask.completed:
+            log.info("All preservation steps have already been completed; cleaning up...")
+        elif ptask.started:
             log.info("Resuming previously started preservation")
             
-        try:
-            ptask = make_preservation_task(aipid, sm, config, log)
-            ptask.run()
+        ptask.run()
 
-        except PreservationException as ex:
-            log.exception(ex)
-            raise FatalError(str(ex), 1) from ex
+    except PreservationException as ex:
+        log.failure("Preservation task endeed with error: "+str(ex))
+        raise FatalError(str(ex), 1) from ex
 
-        except Exception as ex:
-            log.exception(ex)
-            raise FatalError("Unexpected preservation exception: "+str(ex))
+    except Exception as ex:
+        log.exception(ex)
+        raise FatalError("Unexpected preservation exception: "+str(ex))
 
-    # clean up
-    # move headbag to headbag cache
-    # append pres-state content and job file content to preservation history file
+    else:
+        log.debug("cleaning up job")
+            
+        # move headbag to headbag cache
+        # append pres-state content and job file content to preservation history file
 
         
 

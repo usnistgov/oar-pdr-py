@@ -2,7 +2,7 @@
     "@context": [
         "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld",
         {
-            "@base": "ark:/88434/edi00hw91c"
+            "@base": "ark:/88434/mds3-3000"
         }
     ],
     "_schema": "https://data.nist.gov/od/dm/nerdm-schema/v0.4#",

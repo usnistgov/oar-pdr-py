@@ -42,9 +42,12 @@ class TestNISTBagValidation(test.TestCase):
         self.cfg = {
             "check_data_files": False,
         }
+        self.smcfg = {
+            "working_dir": self.tmpdir.name,
+            "persist_in": self.tmpdir.name
+        }
         self.val = val.NISTBagValidation(self.cfg)
-        self.mgr = st.JSONPreservationStateManager({"working_dir": self.tmpdir.name}, "mds2-7223", 
-                                                   str(testbag), persistin=Path(self.tmpdir.name))
+        self.mgr = st.JSONPreservationStateManager.for_aip(self.smcfg, "mds2-7223", str(testbag))
         self.mgr.set_finalized_aip(str(testbag))
 
     def tearDown(self):
@@ -72,8 +75,8 @@ class TestNISTBagValidation(test.TestCase):
         self.assertEqual(len(data['failed']), 0)
 
     def test_noresults(self):
-        self.mgr = st.JSONPreservationStateManager({}, "mds2-7223", str(testbag), clear_state=True,
-                                                   persistin=Path(self.tmpdir.name))
+        self.mgr = st.JSONPreservationStateManager.for_aip({"persist_in": self.tmpdir.name},
+                                                           "mds2-7223", str(testbag), clear_state=True)
         self.mgr.set_finalized_aip(str(testbag))
         self.val.apply(self.mgr)
         resfile = Path(self.tmpdir.name)/"validation_results.json"
@@ -97,9 +100,8 @@ class TestNISTBagValidation(test.TestCase):
     def test_failure(self):
         bag = Path(self.tmpdir.name)/"mds2-7223"
         shutil.copytree(testbag, bag)
-        self.mgr = st.JSONPreservationStateManager({"working_dir": self.tmpdir.name}, "mds2-7223", 
-                                                   str(bag), clear_state=True,
-                                                   persistin=Path(self.tmpdir.name))
+        self.mgr = st.JSONPreservationStateManager.for_aip(self.smcfg, "mds2-7223", 
+                                                           str(bag), clear_state=True)
         self.mgr.set_finalized_aip(str(bag))
         with self.assertRaises(val.AIPValidationError):
             self.val.apply(self.mgr)

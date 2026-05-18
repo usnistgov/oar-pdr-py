@@ -89,22 +89,17 @@ class PreservationStateManager(PreservationStepsAware, metaclass=ABCMeta):
     .. seealso:: implementations :py:mod:`~nistoar.pdr.preserve.task.state`
     """
 
-    def __init__(self, aipid: str, config: Mapping, logger: Logger=None):
+    def __init__(self, aipid: str, logger: Logger=None):
         """
         instantiate the state manager.  
         :param str      aipid:  the identifier of the AIP to preserve.  The ``config`` must 
                                 indicate where this AIP is located.
-        :param Mapping config:  the configuration that controls the behavior of the manager.
-                                The expected configuration properties is implementation-specific.
         :param Logger  logger:  the logger to use during preservation.
         """
         if not logger:
             logger = preserve_system.getSysLogger().getChild(aipid)
         self._log = logger
-        self.cfg = config
         self._aipid = aipid
-        self._completed = self.UNSTARTED   # TODO: hold this in a dictionary with other state?
-        self._keepfresh = self.cfg.get("keep_fresh", True)
 
     @property
     def aipid(self) -> str:
@@ -119,6 +114,10 @@ class PreservationStateManager(PreservationStepsAware, metaclass=ABCMeta):
         the Logger that can be used to record message from the preservation process
         """
         return self._log
+
+    @log.setter
+    def log(self, logger: Logger):
+        self._log = logger
 
     @abstractproperty
     def message(self) -> str:
@@ -319,6 +318,10 @@ class PreservationStep(metaclass=ABCMeta):
 
         :param PreservationStateManager statemgr:  the state manager that encapsulates the AIP 
                                        being preserved and the state of its progress.
+        :param NotificationService notifier:  the notification service the step may use to 
+                 send out alerts about issues needing attention (by a person).  This is passed to 
+                 the :py:meth:`apply` method whose implementation may or may not choose to use it
+                 (see :py:meth:`apply` for more details).
         :param bool ignore_cleanup_error:  if True (default), any errors that occur while calling 
                                        :py:meth:`clean_up` will be caught.  Regardless of this 
                                        value, the exception will be logged as a warning.  
@@ -430,7 +433,7 @@ class AIPValidation(PreservationStep):
     must meet.  
 
     Note that the :py:meth:`apply` method should raise an 
-    :py:class:`~nistoar.pdr.exceptions.AIPValidationError` exception if the AIP does not meet 
+    :py:class:`~nistoar.pdr.preserve.AIPValidationError` exception if the AIP does not meet 
     its validation requirements and :py:class:`AIPValidationException` if a failure occurs 
     while trying to apply the process itself.  
     """
@@ -547,7 +550,7 @@ class AIPCleanup(PreservationStep):
     been completed.  This step's :py:meth:`apply` method should support a ``cancel`` keyword 
     argument.  
 
-    This default implementation does nothing.
+    This default implementation will only delete the staged serialized bags, if they exist.
     """
     def apply(self, statemgr: PreservationStateManager, notifier: NotificationService=None,
               cancel=False, *kw):
@@ -667,7 +670,7 @@ class PreservationTask(PreservationStepsAware):
         self._notifier = notifier
 
     def _create_default_cleaner(self):
-        pass
+        return AIPCleaner()
         
     @property
     def aipid(self):
@@ -858,25 +861,36 @@ class PreservationTask(PreservationStepsAware):
             if not self._statemgr.all_completed:
                 self.publish()
 
+            if self._notifier:
+                # celebrate!
+                self._notifier.alert("preserv.success", "New DAP published: "+self._statemgr.aipid,
+                                     id=self._statemgr.aipid,
+                                     version=self._statemgr.get_state_property('version', '??'))
+
         except Exception as ex:
             if self._notifier:
+                # admit failure
                 if isinstance(ex, PreservationTaskFailure):
                     notify_as = ex.notify_as or "preserve.failure"
                     props = ex.props or {}
                     self._notifier.alert(notify_as, str(ex), ex.errors, ex.step,
-                                         id=ex.aipid or self._statemgr.aipid, **props)
+                                         id=ex.aipid or self._statemgr.aipid, **props,
+                                         version=self._statemgr.get_state_property('version', '??'))
                 elif isinstance(ex, PreservationException):
                     self._notifier.alert("preserve.failure", str(ex), ex.errors,
                                          getattr(ex, 'step', None),
-                                         id=ex.aipid or self._statemgr.aipid)
+                                         id=ex.aipid or self._statemgr.aipid,
+                                         version=self._statemgr.get_state_property('version', '??'))
                 elif isinstance(ex, ConfigurationException):
                     self._notifier.alert("preserve.failure",
                                          "Preservation failed due to task configuration problem",
-                                         [str(ex)], id=self._statemgr.aipid)
+                                         [str(ex)], id=self._statemgr.aipid,
+                                         version=self._statemgr.get_state_property('version', '??'))
                 else:
                     self._notifier.alert("preserve.failure",
                                          "Preservation failed due to unexpected error",
-                                         [str(ex)], id=self._statemgr.aipid)
+                                         [str(ex)], id=self._statemgr.aipid,
+                                         version=self._statemgr.get_state_property('version', '??'))
             raise
                 
         try:
@@ -886,6 +900,20 @@ class PreservationTask(PreservationStepsAware):
                 self._notifier.alert("cleanup.failure", "Problem during presrevation task clean-up",
                                      [str(ex)], id=self._statemgr.aipid)
             raise
+
+    @property
+    def completed(self):
+        """
+        True if this task has completed all its steps
+        """
+        return self._statemgr.all_completed
+
+    @property
+    def started(self):
+        """
+        True if this task has completed all its steps
+        """
+        return self._statemgr.steps_completed > self._statemgr.UNSTARTED
 
 class PreservationTaskFactory(metaclass=ABCMeta):
     """
@@ -933,34 +961,36 @@ class PreservationTaskFactory(metaclass=ABCMeta):
         """
         self.cfg = config
 
-    def create_task(self, aipid: str, config: Mapping, logger: Logger=None, startover=False,
-                    statemgr: PreservationStateManager=None) -> PreservationTask:
+    def create_task(self, sipstate: PreservationStateManager,
+                    logger: Logger=None, config: Mapping=None) -> PreservationTask:
         """
-        create the fully configured :py:class:`PreservationTask` that can preserve the given AIP.  
+        create the fully configured :py:class:`PreservationTask` that can preserve the SIP 
+        referenced in the given preservation state manager.  
 
-        :param str      aipid:  the identifier of the AIP to preserve.  The ``config`` must 
-                                indicate where this AIP is located.
-        :param Mapping config:  the configuration that controls construction of this task and
-                                the behavior of the steps.
-        :param Logger  logger:  the logger to use during preservation
-        :param bool startover:  if False (default), if the state of an incomplete preservation 
-                                task is detected, the task will be set to resume where it left off.  
-                                If true, that state will be purged and the preservation process will
-                                be restarted from scratch.
-        :param PreservationStateManager statemgr:  the state manager to use in the task.  If not 
-                                provided, one will be created based on the given configuration.  While
-                                it may depend on the implementation, this parameter will typically be 
-                                ignored if ``startover`` is ``True``.  
+        :param PreservationStateManager sipstate:  the :py:class:`PreservationStateManager`
+                 instance for a particular SIP needing conversion to an AIP, preservation, 
+                 and ingestion.  This state can be brand new for an SIP in "raw" form, or it
+                 can be one reflecting a partially processed SIP that needs to be completed 
+                 fully (say, after a previous failure).  
+        :param Logger logger:  the logger that the resulting task should use for messages 
+                 during processing.  If not provided, a default will be used (which may be 
+                 one already attached to the manager instance, ``sipstate``). 
+        :param dict config:  the configuration that controls construction of this task and
+                 the behavior of the steps.  This configuration will be merged with the 
+                 default configuration set at this factory's construction.  
         :return:  the configured :py:class:`PreservationTask`
         :raise ConfigurationException:  if the task cannot be created due to insufficient or 
                                 incorrect configuration
         :raise PreservationException:  if any other failure occurs while assembling the task.
         """
+        if config is None:
+            config = {}
         config = merge_config(config, deepcopy(self.cfg))
 
-        if not statemgr or startover:
-            statemgr = self._create_state_manager(aipid, config.get('state_manager', {}),
-                                                  logger, startover)
+        if logger:
+            sipstate.log = logger
+        elif not sipstate.log:
+            sipstate.log = preserve_system.getSysLogger().getChild("task").getChild(sipstat.aipid)
 
         steps = []
         steps.append(self._create_finalizer(config.get('finalize')))
@@ -969,18 +999,12 @@ class PreservationTaskFactory(metaclass=ABCMeta):
         steps.append(self._create_archiver(config.get('archive')))
         steps.append(self._create_publisher(config.get('publish')))
         steps.append(self._create_cleaner(config.get('cleanup')))
-
         
         notifier = None
         if config.get('notify'):
             nostifier = NotificationService(config['notify'])
 
-        return PreservationTask(statemgr, *steps, notifier=notifier)
-
-    @abstractmethod
-    def _create_state_manager(self, aipid: str, config: Mapping,
-                              logger: Logger, startover=False) -> PreservationStateManager:
-        raise NotImplementedError()
+        return PreservationTask(sipstate, *steps, notifier=notifier)
 
     @abstractmethod
     def _create_finalizer(self, config: Mapping) -> AIPFinalization:
@@ -1004,7 +1028,7 @@ class PreservationTaskFactory(metaclass=ABCMeta):
         
     def _create_cleaner(self, config: Mapping) -> AIPCleanup:
         # returning None will cause the minimal default implementation to be used
-        raise None
+        return None
         
 
 class PreservationTaskException(PreservationException):
