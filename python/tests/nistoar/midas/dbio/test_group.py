@@ -66,10 +66,11 @@ class TestMIDASGroupApp(test.TestCase):
 
     def setUp(self):
         self.cfg = {
-            # Could contain DBIO config like superusers, etc.
             "dbio": {
                 "superusers": ["adminuser"],
-                # e.g. "allowed_group_shoulders": ["grp0"], etc.
+            },
+            "group_id_minting": {
+                "default_shoulder": { "public": "grp0" }
             }
         }
         self.dbfact = InMemoryDBClientFactory({}, {})
@@ -410,6 +411,9 @@ class TestMIDASGroupAppMongo(test.TestCase):
         self.cfg = {
             "dbio": {
                 "superusers": ["adminuser"],
+            },
+            "group_id_minting": {
+                "default_shoulder": { "public": "grp0" }
             }
         }
         self.dburl = os.environ['MONGO_TESTDB_URL']
