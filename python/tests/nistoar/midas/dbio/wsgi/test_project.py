@@ -66,6 +66,12 @@ class TestMIDASProjectApp(test.TestCase):
                     "allowed_shoulders": {
                         "midas": ["mdm1"]
                     }
+                },
+                "group_id_minting": {
+                    "default_shoulder": {
+                        "midas": "grp0",
+                        "public": "grp0"
+                    }
                 }
             },
             "include_headers": {
@@ -1610,6 +1616,38 @@ class TestMIDASProjectApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("200 ", self.resp[0])
         self.assertEqual(self.body2dict(body), True)
+
+    def test_acls_check_via_group_membership(self):
+        # The ACL endpoint's GET /{id}/acls/{perm}/{user} must resolve group membership,
+        # not just do a literal string check against the ACL list.
+        prec = self.create_record()
+
+        # create a group owned by the record owner, add hank to it
+        owner_cli = self.dbfact.create_client(base.DMP_PROJECTS, self.cfg["dbio"], nistr.actor)
+        grp = owner_cli.groups.create_group("myteam")
+        grp.add_member("hank")
+        grp.save()
+
+        # grant the group read access
+        prec.acls.grant_perm_to("read", grp.id)
+        prec.save()
+
+        # hank is a member of the group — should return True
+        path = "mdm1:0003/acls/read/hank"
+        req = {'REQUEST_METHOD': 'GET', 'PATH_INFO': self.rootpath + path}
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), True)
+
+        # gary is not in any group with access — should return False
+        self.resp = []
+        path = "mdm1:0003/acls/read/gary"
+        req = {'REQUEST_METHOD': 'GET', 'PATH_INFO': self.rootpath + path}
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), False)
 
     def test_get_info(self):
         path = "mdm1:0003/id"
