@@ -828,7 +828,7 @@ class ProjectSelectionHandler(ProjectRecordHandler):
             return self.send_error_resp(400, "Bad POST input", "No record IDs provided")
 
         fmt_name = (input.get("format") or "json").strip().lower()
-        perms = input.get("permissions") or dbio.ACLs.OWN
+        perms = input.get("permissions") or dbio.ACLs.OWN   # OWN=any of all perms
 
         recs = self._sort_and_format_records(self._select_records(perms, id=ids))
         if not recs:
