@@ -466,7 +466,7 @@ class TestMIDASProjectAppMongo(test.TestCase):
                     self.assertIn('application/pdf', content_type_header)  
                     
                     
-                    self.assertEqual(mock_template.get.call_count, 2)
+                    self.assertEqual(mock_template.get.call_count, 3)
                     
                 
                     pdf_content = b''.join(body) if isinstance(body, list) else body
@@ -474,7 +474,7 @@ class TestMIDASProjectAppMongo(test.TestCase):
                     self.assertEqual(pdf_content, b"%PDF-1.4\nmongo combined content")
         
         self.resp = []
-        
+
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path
@@ -487,12 +487,79 @@ class TestMIDASProjectAppMongo(test.TestCase):
         self.assertIn('application/json', ctype[0])
         results = self.body2dict(body)
         self.assertEqual(len(results), 2)
-        
+
+    def test_export_post_pdf(self):
+        """POST /:export with multiple IDs returns combined PDF (MongoDB-backed)"""
+        record_ids = []
+        for name in ["Mongo Post One", "Mongo Post Two"]:
+            path = ""
+            req = {
+                'REQUEST_METHOD': 'POST',
+                'PATH_INFO': self.rootpath + path
+            }
+            req['wsgi.input'] = StringIO(json.dumps({"name": f"Export {name}", "data": {"title": name}}))
+            hdlr = self.app.create_handler(req, self.start, path, nistr)
+            body = hdlr.handle()
+            self.assertIn("201 ", self.resp[0])
+            record_ids.append(self.body2dict(body)['id'])
+            self.resp = []
+
+        with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString",
+                   return_value=b"%PDF-1.4\nmongo post content"):
+            with patch("nistoar.midas.export.exporters.pdf_exporter.preppy.getModule") as mock_preppy:
+                mock_template = Mock()
+                mock_template.get.return_value = "<document>Mongo Post</document>"
+                mock_preppy.return_value = mock_template
+
+                def fake_pdf_concat(results, output_filename):
+                    return {
+                        "format": "pdf",
+                        "filename": "export.pdf",
+                        "mimetype": "application/pdf",
+                        "file_extension": ".pdf",
+                        "bytes": b"%PDF-1.4\nmongo post content",
+                    }
+
+                with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
+                    path = ":export"
+                    req = {
+                        'REQUEST_METHOD': 'POST',
+                        'PATH_INFO': self.rootpath + path
+                    }
+                    req['wsgi.input'] = StringIO(json.dumps({"ids": record_ids, "format": "pdf"}))
+                    hdlr = self.app.create_handler(req, self.start, path, nistr)
+                    body = hdlr.handle()
+
+                    self.assertIn("200 ", self.resp[0])
+                    content_type = next((h for h in self.resp if h.startswith('Content-Type:')), None)
+                    self.assertIn('application/pdf', content_type)
+                    pdf_content = b''.join(body) if isinstance(body, list) else body
+                    self.assertTrue(pdf_content.startswith(b'%PDF'))
+
+    def test_export_post_empty_ids(self):
+        """POST /:export with empty ids returns 400 (MongoDB-backed)"""
+        path = ":export"
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"ids": [], "format": "pdf"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+
+    def test_export_post_missing_format(self):
+        """POST /:export with no format field returns 400 (MongoDB-backed)"""
+        path = ":export"
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"ids": ["mdm1:0001"]}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
 
 
-
-                         
 if __name__ == '__main__':
     test.main()
-        
-        

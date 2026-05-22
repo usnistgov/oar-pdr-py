@@ -33,6 +33,8 @@ class CSVExporter(Exporter):
         """
         Render a single JSON input into a single CSV output
         """
+        if template_name and template_name.startswith("export_report"):
+            return self._render_report_template(json_payload, filename, template_name)
         import csv
         import io
         
@@ -94,42 +96,42 @@ class CSVExporter(Exporter):
             # Handle status object properly - it might be a RecordStatus object or dict
             if hasattr(status, 'get'):
                 # It's a dictionary
-                status_state = status.get("state", "N/A")
-                status_action = status.get("action", "N/A")
-                status_created = status.get("createdDate", "N/A")
-                status_modified = status.get("modifiedDate", "N/A")
-                status_message = status.get("message", "N/A")
+                status_state = status.get("state", "Not Provided")
+                status_action = status.get("action", "Not Provided")
+                status_created = status.get("createdDate", "Not Provided")
+                status_modified = status.get("modifiedDate", "Not Provided")
+                status_message = status.get("message", "Not Provided")
             else:
                 # It's a RecordStatus object
-                status_state = getattr(status, "state", "N/A")
-                status_action = getattr(status, "action", "N/A")
-                status_created = getattr(status, "createdDate", "N/A")
-                status_modified = getattr(status, "modifiedDate", "N/A")
-                status_message = getattr(status, "message", "N/A")
+                status_state = getattr(status, "state", "Not Provided")
+                status_action = getattr(status, "action", "Not Provided")
+                status_created = getattr(status, "createdDate", "Not Provided")
+                status_modified = getattr(status, "modifiedDate", "Not Provided")
+                status_message = getattr(status, "message", "Not Provided")
             
             row = [
-                record.get("name", "N/A"),
-                record.get("id", "N/A"),
+                record.get("name", "Not Provided"),
+                record.get("id", "Not Provided"),
                 "DAP",
-                record.get("owner", "N/A"),
+                record.get("owner", "Not Provided"),
                 status_state,
                 status_action,
                 status_created,
                 status_modified,
                 status_message,
-                data.get("title", "N/A"),
-                data.get("doi", "N/A"),
-                data.get("_schema", "N/A"),
-                data.get("contactPoint", {}).get("fn", "N/A"),
-                data.get("contactPoint", {}).get("hasEmail", "N/A"),
+                data.get("title", "Not Provided"),
+                data.get("doi", "Not Provided"),
+                data.get("_schema", "Not Provided"),
+                data.get("contactPoint", {}).get("fn", "Not Provided"),
+                data.get("contactPoint", {}).get("hasEmail", "Not Provided"),
                 "; ".join(data.get("keywords", [])),
                 "; ".join(data.get("theme", [])),
-                "; ".join([author.get("fn", "N/A") for author in data.get("authors", [])]),
-                "; ".join([ref.get("title", ref.get("citation", "N/A")) for ref in data.get("references", [])]),
+                "; ".join([author.get("fn", "Not Provided") for author in data.get("authors", [])]),
+                "; ".join([ref.get("title", ref.get("citation", "Not Provided")) for ref in data.get("references", [])]),
                 data.get("file_count", 0),
                 data.get("nonfile_count", 0),
-                meta.get("resourceType", "N/A"),
-                meta.get("assocPageType", "N/A")
+                meta.get("resourceType", "Not Provided"),
+                meta.get("assocPageType", "Not Provided")
             ]
         else:
             # DMP CSV headers and data
@@ -149,49 +151,65 @@ class CSVExporter(Exporter):
             # Handle status object properly - it might be a RecordStatus object or dict
             if hasattr(status, 'get'):
                 # It's a dictionary
-                status_state = status.get("state", "N/A")
-                status_action = status.get("action", "N/A")
-                status_created = status.get("createdDate", "N/A")
-                status_modified = status.get("modifiedDate", "N/A")
-                status_message = status.get("message", "N/A")
+                status_state = status.get("state", "Not Provided")
+                status_action = status.get("action", "Not Provided")
+                status_created = status.get("createdDate", "Not Provided")
+                status_modified = status.get("modifiedDate", "Not Provided")
+                status_message = status.get("message", "Not Provided")
             else:
                 # It's a RecordStatus object
-                status_state = getattr(status, "state", "N/A")
-                status_action = getattr(status, "action", "N/A")
-                status_created = getattr(status, "createdDate", "N/A")
-                status_modified = getattr(status, "modifiedDate", "N/A")
-                status_message = getattr(status, "message", "N/A")
+                status_state = getattr(status, "state", "Not Provided")
+                status_action = getattr(status, "action", "Not Provided")
+                status_created = getattr(status, "createdDate", "Not Provided")
+                status_modified = getattr(status, "modifiedDate", "Not Provided")
+                status_message = getattr(status, "message", "Not Provided")
             
             row = [
-                record.get("name", "N/A"),
-                record.get("id", "N/A"),
+                record.get("name", "Not Provided"),
+                record.get("id", "Not Provided"),
                 "DMP",
-                record.get("owner", "N/A"),
+                record.get("owner", "Not Provided"),
                 status_state,
                 status_action,
                 status_created,
                 status_modified,
                 status_message,
-                data.get("title", "N/A"),
-                data.get("projectDescription", "N/A"),
-                data.get("startDate", "N/A"),
-                data.get("dmpSearchable", "N/A"),
-                data.get("funding", {}).get("grant_source", "N/A"),
-                data.get("funding", {}).get("grant_id", "N/A"),
+                data.get("title", "Not Provided"),
+                data.get("projectDescription", "Not Provided"),
+                data.get("startDate", "Not Provided"),
+                data.get("dmpSearchable", "Not Provided"),
+                data.get("funding", {}).get("grant_source", "Not Provided"),
+                data.get("funding", {}).get("grant_id", "Not Provided"),
                 "; ".join(data.get("keywords", [])),
-                data.get("dataSize", "N/A") if data.get("dataSize") is not None else "N/A",
-                data.get("sizeUnit", "N/A"),
-                data.get("softwareDevelopment", {}).get("development", "N/A"),
+                data.get("dataSize", "Not Provided") if data.get("dataSize") is not None else "Not Provided",
+                data.get("sizeUnit", "Not Provided"),
+                data.get("softwareDevelopment", {}).get("development", "Not Provided"),
                 "; ".join(data.get("technicalResources", [])),
-                data.get("dataDescription", "N/A"),
+                data.get("dataDescription", "Not Provided"),
                 "; ".join(data.get("dataCategories", [])),
-                data.get("preservationDescription", "N/A")
+                data.get("preservationDescription", "Not Provided")
             ]
         
         writer.writerow(row)
         csv_text = output.getvalue()
         output.close()
 
+        return {
+            "format": self.format_name,
+            "filename": f"{filename}{self.file_extension}",
+            "mimetype": "text/csv",
+            "text": csv_text,
+            "file_extension": self.file_extension,
+        }
+
+    def _render_report_template(self, json_payload: Any, filename: str, template_name: str):
+        template_path = self.resolve_template_path("csv", template_name)
+        preppy_template = preppy.getModule(str(template_path))
+        if isinstance(json_payload, MappingABC):
+            data_for_template = json_payload.get("data", json_payload)
+        else:
+            data_for_template = json_payload
+        csv_text = preppy_template.get(data_for_template)
         return {
             "format": self.format_name,
             "filename": f"{filename}{self.file_extension}",

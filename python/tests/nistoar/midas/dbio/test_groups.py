@@ -2,6 +2,10 @@ import os, json, pdb, logging, time
 from pathlib import Path
 import unittest as test
 
+from collections.abc import Mapping
+from abc import ABC, abstractmethod
+from typing import List, Iterator
+
 from nistoar.midas.dbio import inmem, base
 
 class TestGroup(test.TestCase):
@@ -307,7 +311,168 @@ class TestDBGroups(test.TestCase):
         self.assertIn(base.PUBLIC_GROUP, matches)
         self.assertEqual(len(matches), 4)
 
-                         
+
+class MockPeopleService(base.PeopleService):
+    def __init__(self, staffdata):
+        self._data = staffdata
+
+    def get_person_by_eid(self, eid):
+        return self._data.get(eid, None)
+
+    def OUs(self) -> List[Mapping]:
+        return []
+
+    def divs(self) -> List[Mapping]:
+        return []
+
+    def groups(self) -> List[Mapping]:
+        return []
+
+    def select_orgs(self, filter: Mapping, like: List[str] = None, orgtype: str = None) -> List[Mapping]:
+        return []
+
+    def select_people(self, filter: Mapping, like: List[str] = None) -> List[Mapping]:
+        return []
+
+    def get_person(self, id: int) -> Mapping:
+        return {}
+
+    def get_org(self, id: int) -> Mapping:
+        return {}
+
+
+class TestVirtualGroups(test.TestCase):
+    def setUp(self):
+        # user with no PeopleService by default:
+        self.fact = inmem.InMemoryDBClientFactory({})
+        self.user = "nist0:ava1"
+        self.clientcfg = {
+            "project_id_minting": {
+                "default_shoulder": { "public": "pdr0" }
+            },
+            "group_id_minting": {
+                "default_shoulder": { "public": "grp0" }
+            }
+        }
+        # no peopleService given means no virtual groups
+        self.cli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, self.user)
+
+    def test_all_groups_for_noPeopleService(self):
+        # Should always return whatever is in the DB and PUBLIC_GROUP
+        # The user is "nist0:ava1"
+        # If we never add that user to any group, we only see PUBLIC_GROUP
+        matches = self.cli.all_groups_for(self.user)
+        self.assertIn(base.PUBLIC_GROUP, matches)
+        self.assertEqual(len(matches), 1)
+        # create a group with member nist0:ava1
+        g = self.cli.groups.create_group("mygrp")
+        g.add_member(self.user)
+        g.save()
+
+        matches = self.cli.all_groups_for(self.user)
+        self.assertIn(base.PUBLIC_GROUP, matches)
+        self.assertIn(g.id, matches)
+        self.assertEqual(len(matches), 2)
+
+    def test_recache_user_groups_noPeopleService(self):
+        self.cli.recache_user_groups()
+        self.assertIn(base.PUBLIC_GROUP, self.cli.user_groups)
+        self.assertEqual(len(self.cli.user_groups), 1)
+
+        g = self.cli.groups.create_group("mygrp")
+        g.add_member(self.user)
+        g.save()
+
+        self.cli.recache_user_groups()
+        self.assertIn(base.PUBLIC_GROUP, self.cli.user_groups)
+        self.assertIn(g.id, self.cli.user_groups)
+        self.assertEqual(len(self.cli.user_groups), 2)
+
+    def test_all_groups_for_withMockPeopleService(self):
+        staffdata = {
+            "nist0:ava1": { "nistou": "728", "nistdiv": "730" },
+            "nist0:alice": { "nistgrp": "999" }
+        }
+        pplsvc = MockPeopleService(staffdata)
+        newcli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, self.user)
+        newcli._peopsvc = pplsvc
+
+        matches = newcli.all_groups_for("nist0:ava1")
+        self.assertIn(base.PUBLIC_GROUP, matches)
+        self.assertIn("nistou:728", matches)
+        self.assertIn("nistdiv:730", matches)
+        self.assertEqual(len(matches), 3)
+
+        matches = newcli.all_groups_for("nist0:alice")
+        self.assertIn(base.PUBLIC_GROUP, matches)
+        self.assertIn("nistgrp:999", matches)
+        self.assertEqual(len(matches), 2)
+
+        matches = newcli.all_groups_for("nist0:bob")
+        self.assertIn(base.PUBLIC_GROUP, matches)
+        self.assertEqual(len(matches), 1)
+
+    def test_recache_user_groups_withMockPeopleService(self):
+        staffdata = {
+            "nist0:ava1": { "nistou": "728", "nistdiv": "730" },
+            "nist0:alice": { "nistgrp": "999" }
+        }
+        pplsvc = MockPeopleService(staffdata)
+        newcli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, self.user)
+        newcli._peopsvc = pplsvc
+
+        newcli.recache_user_groups()
+        self.assertIn(base.PUBLIC_GROUP, newcli.user_groups)
+        self.assertIn("nistou:728", newcli.user_groups)
+        self.assertIn("nistdiv:730", newcli.user_groups)
+        self.assertEqual(len(newcli.user_groups), 3)
+
+        g = newcli.groups.create_group("mygrp")
+        g.add_member(self.user)
+        g.save()
+
+        newcli.recache_user_groups()
+        self.assertIn(g.id, newcli.user_groups)
+        self.assertIn("nistou:728", newcli.user_groups)
+        self.assertIn("nistdiv:730", newcli.user_groups)
+        self.assertIn(base.PUBLIC_GROUP, newcli.user_groups)
+        self.assertEqual(len(newcli.user_groups), 4)
+
+        del staffdata["nist0:ava1"]  # user no longer in staff directory
+        newcli.recache_user_groups()
+        self.assertIn(base.PUBLIC_GROUP, newcli.user_groups)
+        self.assertIn(g.id, newcli.user_groups)
+        self.assertEqual(len(newcli.user_groups), 2)
+
+    def test_authorized_via_virtual_group(self):
+        # Grant read access to a virtual group ID (nistou:728).
+        # A user whose NSD entry maps to nistou:728 should pass authorized(),
+        # while a user in a different OU and a user absent from NSD should not.
+        staffdata = {
+            "nist0:ava1": {"nistou": "728", "nistdiv": "730"},
+            "nist0:bob":  {"nistgrp": "999"},
+        }
+        pplsvc = MockPeopleService(staffdata)
+        cli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, "alice")
+        cli._peopsvc = pplsvc
+
+        prec = cli.create_record("shared-record", "pdr0")
+        prec.acls.grant_perm_to(base.ACLs.READ, "nistou:728")
+        prec.save()
+
+        # ava1 belongs to nistou:728 — read access granted
+        self.assertTrue(prec.authorized(base.ACLs.READ, "nist0:ava1"))
+        # bob is in nistgrp:999, not nistou:728 — no read access
+        self.assertFalse(prec.authorized(base.ACLs.READ, "nist0:bob"))
+        # gary is not in NSD at all — no read access
+        self.assertFalse(prec.authorized(base.ACLs.READ, "gary"))
+
+        # grant write via nistdiv — ava1 is also in nistdiv:730
+        prec.acls.grant_perm_to(base.ACLs.WRITE, "nistdiv:730")
+        prec.save()
+        self.assertTrue(prec.authorized(base.ACLs.WRITE, "nist0:ava1"))
+        self.assertFalse(prec.authorized(base.ACLs.WRITE, "nist0:bob"))
+
+
 if __name__ == '__main__':
     test.main()
-
