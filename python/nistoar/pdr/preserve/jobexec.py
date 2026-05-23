@@ -2,12 +2,15 @@
 a module for executing a preservation task as a a :py:mod:`nistoar.jobmgt` Job via its :py:func:`process` 
 function.  
 """
+import os, logging
 from typing import List, Mapping
 from logging import Logger
 
 from nistoar.jobmgt import FatalError
-from .. import PreservationException, PreservationStateError
-from .framework import PreservationStateManager, PreservationTask
+from . import PreservationException, PreservationStateError
+from .task.framework import PreservationStateManager, PreservationTask
+from .task.state import JSONPreservationStateManager
+from .task.nist.pdr import PDRPreservationTaskFactory
 
 def make_preservation_task(statefile: str, config: Mapping=None, log: Logger=None) -> PreservationTask:
     """

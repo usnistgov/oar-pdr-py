@@ -476,7 +476,7 @@ class PDR1AIPArchiving(fw.AIPArchiving):
         waittime = cycletime
         while aipfiles:
             try:
-                found = self_publicaips(repo, aipfiles)
+                found = self._publicaips(repo, aipfiles)
                 aipfiles = aipfiles.difference(found)
             except Exception as ex:
                 log.warn("Trouble polling for migrated files: %s", str(ex))
