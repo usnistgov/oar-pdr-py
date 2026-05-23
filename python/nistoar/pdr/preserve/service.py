@@ -337,7 +337,7 @@ class AIP1PreservationService(PreservationService):
         """
         super(JobQueuePreservationService, self).__init__(config, log)
         if not execmod:
-            from .task import jobexec
+            from . import jobexec
             execmod = jobexec
 
         workdir = self.cfg.get('working_dir')   # typically the "pdr" parent directory
