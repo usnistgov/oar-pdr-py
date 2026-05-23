@@ -69,6 +69,9 @@ The state of each job is persisted as part of its queue as a dictionary with the
     present after completion of the job, it records the epoch time (in seconds) of the job's completion.
 ``errors``
     a list of messages describing errors that led to a failed or killed execution
+``result``
+    a dictionary of arbitrary data returned by the job's process function, present after successful 
+    completion of the job.  The dictionary will be empty if no data was returned.
 """
 import logging, os, shutil, threading, json, sys, time, asyncio, queue
 from asyncio import subprocess as sp
