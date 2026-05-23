@@ -102,7 +102,7 @@ class PreservationStateError(PreservationException):
     is True, then the AIP already exists (i.e. SIP has already been preserved
     once already).  
     """
-    def __init__(self, message, aipexists=None):
+    def __init__(self, message: str, aipexists: bool=None):
         """
         create the exception
         :param str message:     the message describing mismatched state
@@ -111,6 +111,19 @@ class PreservationStateError(PreservationException):
         """
         super(PreservationStateError, self).__init__(message)
         self.aipexists = aipexists
+
+class PreservationInProgress(PreservationStateError):
+    """
+    An indication that some operation cannot be carried out because preservation is in progress.
+
+    This is typically raised when one requests to preserve an AIP that is already be preserved or 
+    is queued to be preserved.  
+    """
+
+    def __init__(self, aipid: str, message: str=None):
+        if not message:
+            message = f"{aipid}: preservation is already in progress"
+        super(PreservationInProgress, self).__init__(message)
 
 class CorruptedBagError(PDRException):
     """

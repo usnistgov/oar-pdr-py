@@ -6,13 +6,14 @@ from typing import Mapping, Iterator
 from abc import ABCMeta, abstractmethod
 from logging import Logger
 from collections import namedtuple
+from typing import Iterator, Tuple
 
 from nistoar.base.config import ConfigurationException
 from nistoar.pdr.exceptions import IDNotFound
 from nistoar.pdr.utils import read_json
 from nistoar import jobmgt
 from .task.framework import PreservationStepsAware
-from . import PreservationException, PreservationSystem
+from . import PreservationException, PreservationInProgress, PreservationSystem
 
 _pdridre = re.compile(r"^ark:/\d+/")
 def _pdrid2aipid(pdrid):
@@ -122,6 +123,88 @@ class PreservationStatus(PreservationStepsAware):
     def in_progress(self):
         "True if preservation appears to be underway"
         return self.steps > self.UNSTARTED
+
+    def items(self) -> Iterator[Tuple]:
+        return self._info.items()
+
+    def to_json(self, pretty=False):
+        kw = {}
+        if pretty:
+            kw['indent'] = 2
+        return json.dumps(self._info, **kw)
+
+    def append_to_history(histfile):
+        """
+        append this status object to a preservation history file.  
+
+        A history file lists machine-readable status from each attempt to preserve a particular 
+        AIP.  It has a format in which each line is JSON-parseable object. The lines are
+        ordered in time, so that last line describes the most recent attempt to preserve the AIP.
+        Thus, this function appends the status data contained in this object to the history file
+        as a line of JSON.
+
+        :param str|Path histfile:  the history file to append to; if the file does not exist, 
+                                   it will be created.
+        :raises OSError:  if unable to open the history file for appending
+        """
+        with open(histfile, 'a') as fd:
+            fd.write(self.to_json())
+            fd.write('\n')
+
+    @classmethod
+    def last_from_history(cls, histfile) -> PreservationState:
+        """
+        extract and instantiate the most recent recorded preservation state from the given 
+        history file
+
+        :param str|Path histfile:  the history file to extract the state from
+        :return: a ``PreservationState`` instance or ``None`` if the file is empty
+        :raises OSError:  if there is an error opening or reading the history file
+        :raises JSONDecodeError:  if there is an error parsing the JSON data
+        """
+        entries = deque(maxlen=2)
+        with open(histfile) as fd:
+            for line in fd:
+                entries.append(line.strip())
+        if entries.count() == 0:
+            return None
+
+        return cls.from_json(entries.pop())
+
+    @classmethod
+    def from_json(cls, jsondata) -> PreservationState:
+        """
+        convert JSON export of a preservation state back into a ``PreservationState`` object.
+
+        :param str|dict jsondata: the exported state data.  If it is a str, it will be taken as 
+                                  raw JSON and decoded; if it is a dictionary, it will be assumed 
+                                  to already be decoded.  
+        :raises JSONDecodeError:  if there is an error parsing the JSON data
+        """
+        if isinstance(jsondata, str):
+            status = json.loads(jsondata)
+        elif isinstance(jsondata, Mapping):
+            status = jsondata
+        else:
+            raise TypeError("Not a str or Mapping")
+        return cls(status.get('aipid'), status.get('message'), status.get('steps'), status)
+
+    @classmethod
+    def load_history(cls, histfile) -> List[PreservationState]:
+        """
+        load the states from all preservation attempts recorded in the given history file and 
+        return them as a list of ``PreservationState`` instances. 
+
+        :param str|Path histfile:  the history file to extract the states from
+        :raises OSError:  if there is an error opening or reading the history file
+        :raises JSONDecodeError:  if there is an error parsing the JSON data
+        """
+        out = []
+        with open(histfile) as fd:
+            for line in fd:
+                out.append(cls.from_json(line.strip()))
+        return out
+        
 
 class PreservationService(PreservationSystem, PreservationStepsAware, meta=ABCMeta):
     """
@@ -314,6 +397,9 @@ class AIP1PreservationService(PreservationService):
     def _history_file_for(self, aipid):
         return self.historydir/f"{aipid}_history.json"
 
+    def _lock_file_for(self, aipid):
+        return self.inprogdir/f".{aipid}.lock"
+
     def active_aip_ids(self) -> Iterator[str]:
         """
         return an iterator of the identifiers that are actively being tracked by this service.  
@@ -333,46 +419,33 @@ class AIP1PreservationService(PreservationService):
         """
         info = {}
         pstatefile = self._state_file_for(aipid)
+        job = self.presq.get_job(aipid)
         if statefile.exists():
-            pstate = read_json(statefile)
-            if pstate.get('version'):
-                info['version'] = pstate['version']
-
-            job = self.presq.get_job(aipid)
-            if job:
-                info['reqtime'] = job.request_time
-                info['reqdate'] = datatime.fromtimestamp(job.request_time).isformat()
-                if job.state > jobmgt.RUNNING:
-                    info.update({'comptime', job.info.get('comptime'),
-                                 'runtime',  job.info.get('runtime'),
-                                 'exitcode',  job.info.get('exitcode')})
-                # TODO: need headbag
-
-            return PreservationState(aipid, pstate.get('_message'), pstate.get('_completed'), info)
-
+            return self._status_from_current_job(statefile, job)
+        
         histf = self._history_file_for(aipid)
         if histf.is_file():
-            try:
-                history = read_json(histf)
-                if not isinstance(history, list):
-                    raise ValueError("not a list")
-            except ValueError as ex:
-                self.log.error("%s: bad json format: %s", histf, str(ex))
-            else:
-                history = history[-1]
-                msg = history.get('message', '')
-                state = history.get('state', 0)
-                job = history.get('job', {})
-                info = {}
-                if history.get('version'):
-                    info['version'] = history['version']
-                for prop in "reqtime comptime runtime exitcode".split():
-                    if prop in job:
-                        info[prop] = job[prop]
-                # TODO: need version and headbag
-                return PreservationState(aipid, msg, info)
+            return PreservationStatus.last_from_history(histf)
 
         raise IDNotFound(aipid, "AIP ID preservation status not found")
+
+    def _status_from_current_job(self, statefile, job):
+        pstate = read_json(statefile)
+        if pstate.get('version'):
+            info['version'] = pstate['version']
+
+        job = self.presq.get_job(aipid)
+        if job:
+            info['reqtime'] = job.request_time
+            info['reqdate'] = datatime.fromtimestamp(job.request_time).isformat()
+            if job.state > jobmgt.RUNNING:
+                info.update({ 'comptime': job.info.get('comptime'),
+                              'runtime':  job.info.get('runtime'),
+                              'exitcode': job.info.get('exitcode') })
+                if isinstance(job.info.get('result', {}), Mapping):
+                    info['headbag'] = job.info.get('result', {}).get('headbag')
+
+        return PreservationStatus(aipid, pstate.get('_message'), pstate.get('_completed'), info)
             
     def preserve(self, aipid, pubstat: SIPStatus=None,
                  message: str=None, startover: bool=False) -> PreservationStatus:
@@ -451,24 +524,118 @@ class AIP1PreservationService(PreservationService):
         except Exception as ex:
             raise PreservationException(f"{str(dir)}: failed to create directory: {str(ex)}")
 
-        pstate = JSONPreservationStateManager.for_aip(smcfg, aipid, aipdir, self.log, # need SIPStatus
-                                                      clear_state=startover)
-        pstate.set_state_property('version', version)
+        with filelock.FileLock(self._lock_file_for(aipid)):
+            job = self.presq.get_job(aipid)
+            if job and job.state < jobmgt.EXITED:
+                raise PreservationInProgress(aipid)
 
-        # submit job
-        jcfg = {
-            "status_manager": smcfg,
-            "process": self.cfg.get('task', {}),
-            "logfile": str(workparent/"preservation.log")
-        }
-        self.presq.submit(aipid, [self._state_file_for(aipid)], jcfg)
+            # TODO: save history of previous failed attempt?
+            
+            pstate = JSONPreservationStateManager.for_aip(smcfg, aipid, aipdir, self.log, # need SIPStatus
+                                                          clear_state=startover)
+            pstate.set_state_property('version', version)
+
+            # submit job
+            jcfg = {
+                "status_manager": smcfg,
+                "task": self.cfg.get('task', {}),
+                "logfile": str(workparent/"preservation.log"),
+                "history_dir": self.historydir
+            }
+            self.presq.submit(aipid, [self._state_file_for(aipid)], jcfg)
 
         # return status
         return self.status_of(aipid)
             
-            
-            
+    def _notify_job_exited(self, jobfile: str):
+        """
+        recieve a signal from the job management system that a preservation job has exited.
 
-    
+        This method is intended for use by the preservation job management system to give this 
+        service a chance to tidy-up after an asynchronous job has exited (whether successfully 
+        or with an error).  It should not be called by clients who submit preservation requests.
+
+        :param str jobfile:  the path to the job state file corresponding to the job that exited. 
+        """
+        if not os.path.isfile(jobfile):
+            log.error("Job file %s: does not exist as a file", jobfile)
+            return
+        
+        try:
+            job = Job.from_state_file(jobfile)
+            aipid = job.data_id
+            workdir = self.inprogdir/aipid
+
+            lockfile = self._lock_file_for(aipid)
+            with filelock.FileLock(lockfile):
+                if job.state != jobmgt.EXITED:
+                    log.warning("It appears that Job %s is still running or was relaunched; "+
+                                "won't clean up", aipid)
+                else:
+                    self._cleanup_pres_job(aipid, job)
+
+                # if the job was successful, the preservation state file and log will have been
+                # deleted; it is safe, then, to get rid of the working dir
+                if not (self.inprogdir/aipid/self._state_file).exists() and \
+                   len([f for f in os.listdir(self.inprogdir/aipid)
+                          if f.startswith("preservation.log")]) = 0:
+                    shutil.rmtree(self.inprogdir/aipid)seq
+
+            lockfile.remove()
+
+        except Exception as ex:
+            self.log.error("Unable able to clean-up preservation job (%s): %s", jobfile, str(ex))
+
+    def _cleanup_pres_job(self, aipid, job):
+        # this assumes that we've already checked that the job is not running
+        # and we have a lock on the work dir
+
+        workdir = self.inprogdir/aipid
+        preslog = workdir/"preservation.log"
+
+        if preslog.exists():
+            # save the preservation log
+            preslog = workdir/"preservation.log"
+            fulllog = self.preslogdir/(aipid+".log")
+            if not preslog.is_file():
+                self.log.error("%s: does not exist as a file", preslog)
+            else:
+                with open(fulllog, 'a') as dest:
+                    fd.write(f"---------- {aipid}: {pstat.get('reqdate')} --------------\n")
+                    with open(preslog) as src:
+                        for line in src:
+                            fd.write(fullog)
+
+        statefile = self._state_file_for(aipid)
+        if statefile.exists():
+            # append pres status to history
+            pstat = self._status_from_current_job(statefile, job)
+            pstat.append_to_history(self._history_file_for(aipid))
+
+            if pstat.successful:
+                # we can really clean up
+                os.remove(statefile)
+                if preslog.exists():
+                    os.remove(preslog)
+
+                # clean out workdir
+                for subdir in "work stage".split():
+                    d = workdir/subdir
+                    if d.isdir():
+                        shutil.rmtree(d)
+
+            else:
+                self.log.warning("Preservation job, %s, appears to have exited before completing; "+
+                                 "keeping state available for restart")
+
+                bkupre = re.compile(r"^preservation.log.(\d+)$")
+                bkups = [f for f in os.listdir(workdir) if bkupre.match(f)]
+                seq = [int(bkupre.match(f).group(1)) for f in bkups]
+                seq.sort()
+                if len(seq) > 0:
+                    seq = seq[-1]
+                else:
+                    seq = 1
+                preslog.rename(workdir/f"preservation.log.{str(seq)}")
 
         

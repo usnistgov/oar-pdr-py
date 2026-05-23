@@ -926,6 +926,7 @@ class PDRPreservationCleanup(fw.AIPCleanup):
             if not cancel:
                 head = find_latest_head_bag([b for b in staged if not b.endswith(".sha256")])
                 staged.remove(head)  # don't delete the head bag
+                statemgr.set_state_property('headbag', head)
             if self.delete_files(staged, statemgr, "serialized bags", log):
                 statemgr.set_serialized_files(None if cancel else [head])
 

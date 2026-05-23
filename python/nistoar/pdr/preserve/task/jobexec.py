@@ -55,12 +55,27 @@ def process(dataid: str, config: Mapping, args: List[str], log=None):
 
     else:
         log.debug("cleaning up job")
+
+        headbag = os.path.basename(ptask._statemgr.get_state_property('headbag', '(unknown)'))
+        version = ptask._statemgr.get_state_property('version', '(unknown)')
             
-        # move headbag to headbag cache
-        # append pres-state content and job file content to preservation history file
+        return {
+            'aipid': ptask.aipid,
+            'version': version,
+            'headbag': headbag
+        }
 
-        
-
+def notify(jobstatefile, config, log):
+    cfg = config.get('callback')
+    if not cfg:
+        return
     
+    ep = cfg.get('service_endpoint')
+    if not ep:
+        log.error("Unable to call back to preservation service: no service_endpoint specified")
+        return
+    
+    job = Job.from_file(jobstatefile)
+    log.debug("Contacting preservation service: NOT FULLY IMPLEMENTED")
 
 
