@@ -280,7 +280,27 @@ class Job:
         del self.info['relaunch']
 
         return Job.from_state(relaunch)
-                      
+
+    @property
+    def successful(self) -> bool:
+        """
+        True if the job ran and exited with an exit code of 0. 
+        """
+        return self.info.get('exitcode') == 0
+
+    @property
+    def errors(self) -> List[str]:
+        """
+        a list of error messages resulting from the Job, regardless of the exitcode.  If the Job 
+        has not yet started and exited, this will be None.  If otherwise no errors were produced,
+        this will be an empty list
+        """
+        if self.info.get('exitcode') is None:
+            return None
+        out = self.info.get('errors', [])
+        if not isinstance(out, list):
+            out = [out]
+        return out
 
 class FatalError(Exception):
     def __init__(self, msg, exitcode: int=10):

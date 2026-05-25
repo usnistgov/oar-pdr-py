@@ -169,7 +169,7 @@ def main(args):
         if hasattr(mod, 'notify'):
             log.info("sending job completion notification")
             try:
-                mod.notify(statefile, config, log)
+                mod.notify(statefile, cfg, log)
             except Exception as ex:
                 log.error("Failure during job completiong notification: "+str(ex))
                 log.exception(ex)
