@@ -923,9 +923,6 @@ class PreservationTaskFactory(metaclass=ABCMeta):
     The factory methods require a configuration dictionary that complies with an expected 
     base structure that includes the following properties:
 
-    ``state_manager``
-         properties that configure the :py:class:`PreservationStateManager` to use
-         within the task.  
     ``finalize``:       
          properties that configure the :py:class:`AIPFinalizaiton` instance to use
     ``validate``       

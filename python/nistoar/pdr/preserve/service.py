@@ -1,19 +1,27 @@
 """
 a module for asynchronously launching preservation jobs and access their status.
 """
-import logging, re
-from typing import Mapping, Iterator
-from abc import ABCMeta, abstractmethod
+import os, logging, re, json, time, shutil
+from typing import Mapping, Iterator, List, NewType
+from abc import ABC, ABCMeta, abstractmethod
 from logging import Logger
 from collections import namedtuple
 from typing import Iterator, Tuple
+from pathlib import Path
+from copy import deepcopy
+from datetime import datetime
+
+import filelock
 
 from nistoar.base.config import ConfigurationException
-from nistoar.pdr.exceptions import IDNotFound
+from nistoar.pdr.exceptions import IDNotFound, StateException
 from nistoar.pdr.utils import read_json
+from nistoar.pdr.publish.service.status import SIPStatus
 from nistoar import jobmgt
 from .task.framework import PreservationStepsAware
+from .task.state import JSONPreservationStateManager
 from . import PreservationException, PreservationInProgress, PreservationSystem
+from .bagit import NISTBag
 
 _pdridre = re.compile(r"^ark:/\d+/")
 def _pdrid2aipid(pdrid):
@@ -23,6 +31,8 @@ def _pdrid2aipid(pdrid):
     if '/' in aipid:
         raise PreservationException(f"{pdrid}: not a legal PDR identifier")
     return aipid
+
+PreservationStatus = NewType("PreservationStatus", object)
 
 class PreservationStatus(PreservationStepsAware):
     """
@@ -103,11 +113,11 @@ class PreservationStatus(PreservationStepsAware):
         """
         return self._info.get('message')
 
-    def get(self, prop):
+    def get(self, prop, default=None):
         """
         return the value of the named property or None if it is not available.
         """
-        return self._info.get(prop)
+        return self._info.get(prop, default)
 
     @property
     def successful(self):
@@ -117,12 +127,12 @@ class PreservationStatus(PreservationStepsAware):
     @property
     def failed(self):
         "True if the last preservation effort failed with an error"
-        return self.get('exitcode') != 0
+        return self.get('exitcode', 0) != 0
 
     @property
     def in_progress(self):
         "True if preservation appears to be underway"
-        return self.steps > self.UNSTARTED
+        return self.steps > self.UNSTARTED and self.steps != self._all_steps
 
     def items(self) -> Iterator[Tuple]:
         return self._info.items()
@@ -133,7 +143,7 @@ class PreservationStatus(PreservationStepsAware):
             kw['indent'] = 2
         return json.dumps(self._info, **kw)
 
-    def append_to_history(histfile):
+    def append_to_history(self, histfile):
         """
         append this status object to a preservation history file.  
 
@@ -152,7 +162,7 @@ class PreservationStatus(PreservationStepsAware):
             fd.write('\n')
 
     @classmethod
-    def last_from_history(cls, histfile) -> PreservationState:
+    def last_from_history(cls, histfile) -> PreservationStatus:
         """
         extract and instantiate the most recent recorded preservation state from the given 
         history file
@@ -172,9 +182,9 @@ class PreservationStatus(PreservationStepsAware):
         return cls.from_json(entries.pop())
 
     @classmethod
-    def from_json(cls, jsondata) -> PreservationState:
+    def from_json(cls, jsondata) -> PreservationStatus:
         """
-        convert JSON export of a preservation state back into a ``PreservationState`` object.
+        convert JSON export of a preservation state back into a ``PreservationStatus`` object.
 
         :param str|dict jsondata: the exported state data.  If it is a str, it will be taken as 
                                   raw JSON and decoded; if it is a dictionary, it will be assumed 
@@ -190,10 +200,10 @@ class PreservationStatus(PreservationStepsAware):
         return cls(status.get('aipid'), status.get('message'), status.get('steps'), status)
 
     @classmethod
-    def load_history(cls, histfile) -> List[PreservationState]:
+    def load_history(cls, histfile) -> List[PreservationStatus]:
         """
         load the states from all preservation attempts recorded in the given history file and 
-        return them as a list of ``PreservationState`` instances. 
+        return them as a list of ``PreservationStatus`` instances. 
 
         :param str|Path histfile:  the history file to extract the states from
         :raises OSError:  if there is an error opening or reading the history file
@@ -206,7 +216,7 @@ class PreservationStatus(PreservationStepsAware):
         return out
         
 
-class PreservationService(PreservationSystem, PreservationStepsAware, meta=ABCMeta):
+class PreservationService(ABC, PreservationSystem, PreservationStepsAware):
     """
     a service for requesting the aynchronous preservation of AIPs and monitoring the progress of 
     the requests.  
@@ -220,10 +230,10 @@ class PreservationService(PreservationSystem, PreservationStepsAware, meta=ABCMe
         :param Logger  log:  the log to use for messages from this service.  If not 
                              provided, a default one will be used.  
         """
-        PreservationSystem.__init__(self)
+        super(PreservationService, self).__init__()
         self.cfg = config
         if not log:
-            log = preserve_system.getSysLogger().getChild("service")
+            log = self.getSysLogger().getChild("service")
         self.log = log
 
     @abstractmethod
@@ -305,9 +315,12 @@ class AIP1PreservationService(PreservationService):
          convention (aip0)
       *  asynchronous preservation processing is launched via a separate process using a 
          :py:class:`nistoar.jobmgt.JobQueue` framework.
-    
-    This class supports the following configuration parameters:
 
+    By default this service will engage an preservation processing implementation based on the 
+    :py:mod:`preservation task framework <nistoar.pdr.preserve.task>` with the steps defined by 
+    the :py:class:`nistoar.pdr.preserve.task.nist.pdr.PreservationTaskFactory`; however, this can 
+    swapped out by providing a different job execution module to the constructor.  
+    
     This implementation manages state via various files persisted on disk (with locations defined by 
     configuration but by default rooted under ``pdr/preserve``), including:
       *  preservation state -- (default: _sip_``/_state.json``) tracks progress of the preservation
@@ -317,9 +330,40 @@ class AIP1PreservationService(PreservationService):
          of the process executing the preservation. 
       *  preservation history -- (default: ``_history/``_sip_``_history.json``) a history of 
          completed preservation processes.  
+
+    This class supports the following configuration parameters:
+
+    ``working_dir``
+         (str) _required_.  The base directory where this service can store all its stage 
+         information.  Other more specific locations not specified in the configuration will 
+         default to a location under this directory.  
+    ``sip_dir``
+         (str) _required_.  The directory to look for SIPs submitted to this service by its AIP 
+         identifier (i.e. via :py:meth:`preserve`).  
+    ``in_progress_dir``
+         (str) _optional_.  The directory where the states of "active" preservation requests are 
+         stored (default: working_dir/``preserve``).
+    ``job_dir``:
+         (str) _optional_.  The directory where the state of the preservation 
+         :py:class:`~nistoar.jobmgt.JobQueue` is stored (default: in_progress_dir/``_jobs``).
+    ``history_dir``
+         (str) _optional_.  The directory where histories of preservation requests for each of the 
+         are requested AIPs are stored (default: in_progressdir/``_history``).  
+    ``preserve_log_dir``
+         (str) _recommended_. When a preservation task completes, the log messages will be appended 
+         to a per-AIP historical log file (called _aipid_``.log``) located in the directory given by
+         this parameter (default: history_dir).
+    ``task``
+         (dict) _required by default_.  The details configuring the 
+         :py:class:`~nistoar.pdr.preserve.task.frameowrk.PreservationTask` that is created when
+         preservation is requested.  This dictionary configures all the steps in the task.  This 
+         may not be required if an alternate job execution module is provided at construction time.
+         See :py:class:`nistoar.pdr.preserve.task.nist.pdr.PreservationTaskFactory` for details.
+    ``headbag_cache``
+         (str) _recommended_.  a directory where head bags are cached for easier future access.  
     """
 
-    self._state_file = "_state.json"
+    _state_file = "_state.json"
 
     def __init__(self, config: Mapping, log: Logger=None, execmod=None, working_dir=None):
         """
@@ -335,12 +379,12 @@ class AIP1PreservationService(PreservationService):
                              Either a module (dot-delimited) name or an imported module object can 
                              be used as a value. 
         """
-        super(JobQueuePreservationService, self).__init__(config, log)
+        super(AIP1PreservationService, self).__init__(config, log)
         if not execmod:
             from . import jobexec
             execmod = jobexec
 
-        workdir = self.cfg.get('working_dir')   # typically the "pdr" parent directory
+        workdir = self.cfg.get('working_dir')   # typically the "pdr" directory
         if workdir:
             workdir = Path(workdir)
 
@@ -353,7 +397,7 @@ class AIP1PreservationService(PreservationService):
 
         self.inprogdir = self.cfg.get('in_progress_dir')   # typically "pdr/preserve"
         if not self.inprogdir:
-            self.inprogdir = self.workdir / "preserve"
+            self.inprogdir = workdir / "preserve"
         else:
             self.inprogdir = Path(self.inprogdir)
         if not self.inprogdir:
@@ -371,24 +415,26 @@ class AIP1PreservationService(PreservationService):
         else:
             self.jobdir = Path(self.jobdir)
 
-        self.presq = JobQueue(name, self.jobdir, execmod, jqcfg, None, True)
-
-        self.historydir = self.cfg.get('logdir')
+        self.historydir = self.cfg.get('history_dir')
         if not self.historydir:
             self.historydir = self.inprogdir / '_history'
         else:
             self.historydir = Path(self.historydir)
 
+        self.preslogdir = self.cfg.get('history_dir', self.historydir)
+
         self.hbagdir = self.cfg.get('headbag_cache')
         # required?
 
-        for dir in (self.inprogdir, self.jobdir, self.historydir):
+        for dir in (self.inprogdir, self.jobdir, self.historydir, self.preslogdir):
             if not dir.exists():
                 try:
                     dir.mkdir()
                 except Exception as ex:
                     raise ConfigurationException("%s: does not exist and cannot be created: %s" %
                                                  (dir, str(ex)))
+
+        self.presq = jobmgt.JobQueue("preservation", self.jobdir, execmod, jqcfg, None, True)
 
 
     def _state_file_for(self, aipid):
@@ -411,7 +457,7 @@ class AIP1PreservationService(PreservationService):
             dir = self.inprogdir/did
             if not dir.is_dir() or dir.name.startswith('_') or not (dir/self._state_file).is_file():
                 continue
-            yield did.name
+            yield str(did)
 
     def status_of(self, aipid) -> PreservationStatus:
         """
@@ -420,8 +466,8 @@ class AIP1PreservationService(PreservationService):
         info = {}
         pstatefile = self._state_file_for(aipid)
         job = self.presq.get_job(aipid)
-        if statefile.exists():
-            return self._status_from_current_job(statefile, job)
+        if pstatefile.exists():
+            return self._status_from_current_job(pstatefile, job)
         
         histf = self._history_file_for(aipid)
         if histf.is_file():
@@ -431,17 +477,24 @@ class AIP1PreservationService(PreservationService):
 
     def _status_from_current_job(self, statefile, job):
         pstate = read_json(statefile)
+        aipid = pstate.get('_aipid')
+        if not aipid:
+            raise StateException(f"{statefile}: preservation state file is missing aipid")
+
+        info = {}
         if pstate.get('version'):
             info['version'] = pstate['version']
 
         job = self.presq.get_job(aipid)
         if job:
             info['reqtime'] = job.request_time
-            info['reqdate'] = datatime.fromtimestamp(job.request_time).isformat()
+            info['reqdate'] = datetime.fromtimestamp(job.request_time).isoformat()
             if job.state > jobmgt.RUNNING:
                 info.update({ 'comptime': job.info.get('comptime'),
                               'runtime':  job.info.get('runtime'),
                               'exitcode': job.info.get('exitcode') })
+                if job.info.get('pid'):
+                    info['jobpid'] = job.info['pid']
                 if isinstance(job.info.get('result', {}), Mapping):
                     info['headbag'] = job.info.get('result', {}).get('headbag')
 
@@ -513,10 +566,11 @@ class AIP1PreservationService(PreservationService):
 
         # setup PreservationStateManager so that status is available
         smcfg = deepcopy(self.cfg.get('state_manager', {}))
-        workparent = str(self.inprogdir/aipid)
+        workparent = self.inprogdir/aipid
         smcfg['working_dir'] = str(workparent/"work")
         smcfg['stage_dir']   = str(workparent/"stage")
         smcfg['persist_in']  = self._state_file_for(aipid)
+        smcfg['sip_dir']     = self.sipdir
         try:
             for dir in (workparent, smcfg['working_dir'], smcfg['stage_dir']):
                 if not os.path.isdir(dir):
@@ -544,7 +598,11 @@ class AIP1PreservationService(PreservationService):
             }
             self.presq.submit(aipid, [self._state_file_for(aipid)], jcfg)
 
+        self.presq.clean()
+
         # return status
+        if isinstance(self.cfg.get('wait_to_start'), (int, float)):
+            time.sleep(self.cfg['wait_to_start'])
         return self.status_of(aipid)
             
     def _notify_job_exited(self, jobfile: str):
@@ -558,30 +616,34 @@ class AIP1PreservationService(PreservationService):
         :param str jobfile:  the path to the job state file corresponding to the job that exited. 
         """
         if not os.path.isfile(jobfile):
-            log.error("Job file %s: does not exist as a file", jobfile)
+            self.log.error("Job file %s: does not exist as a file", jobfile)
             return
-        
+
         try:
-            job = Job.from_state_file(jobfile)
+            job = jobmgt.Job.from_state_file(jobfile)
             aipid = job.data_id
             workdir = self.inprogdir/aipid
+            if job.successful:
+                self.log.info("Job %s reporting successful completion; filing results", aipid)
+            else:
+                self.log.info("Job %s reporting failure (see state under %s)", aipid, workdir)
 
             lockfile = self._lock_file_for(aipid)
             with filelock.FileLock(lockfile):
                 if job.state != jobmgt.EXITED:
-                    log.warning("It appears that Job %s is still running or was relaunched; "+
-                                "won't clean up", aipid)
+                    self.log.warning("It appears that Job %s is still running or was relaunched; "+
+                                     "won't clean up", aipid)
                 else:
                     self._cleanup_pres_job(aipid, job)
 
                 # if the job was successful, the preservation state file and log will have been
                 # deleted; it is safe, then, to get rid of the working dir
-                if not (self.inprogdir/aipid/self._state_file).exists() and \
+                if not self._state_file_for(aipid).exists() and \
                    len([f for f in os.listdir(self.inprogdir/aipid)
-                          if f.startswith("preservation.log")]) = 0:
-                    shutil.rmtree(self.inprogdir/aipid)seq
+                          if f.startswith("preservation.log")]) == 0:
+                    shutil.rmtree(self.inprogdir/aipid)
 
-            lockfile.remove()
+            lockfile.unlink()
 
         except Exception as ex:
             self.log.error("Unable able to clean-up preservation job (%s): %s", jobfile, str(ex))
@@ -595,16 +657,15 @@ class AIP1PreservationService(PreservationService):
 
         if preslog.exists():
             # save the preservation log
-            preslog = workdir/"preservation.log"
             fulllog = self.preslogdir/(aipid+".log")
             if not preslog.is_file():
                 self.log.error("%s: does not exist as a file", preslog)
             else:
                 with open(fulllog, 'a') as dest:
-                    fd.write(f"---------- {aipid}: {pstat.get('reqdate')} --------------\n")
+                    dest.write(f"---------- {aipid}: {job.info.get('reqdate')} --------------\n")
                     with open(preslog) as src:
                         for line in src:
-                            fd.write(fullog)
+                            dest.write(line)
 
         statefile = self._state_file_for(aipid)
         if statefile.exists():
@@ -614,14 +675,14 @@ class AIP1PreservationService(PreservationService):
 
             if pstat.successful:
                 # we can really clean up
-                os.remove(statefile)
+                statefile.unlink()
                 if preslog.exists():
-                    os.remove(preslog)
+                    preslog.unlink()
 
                 # clean out workdir
                 for subdir in "work stage".split():
                     d = workdir/subdir
-                    if d.isdir():
+                    if d.is_dir():
                         shutil.rmtree(d)
 
             else:

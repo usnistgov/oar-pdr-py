@@ -16,6 +16,8 @@ from nistoar.pdr.distrib import DistribServiceException
 from nistoar.pdr.preserve.bagit import BagBuilder
 from nistoar.pdr.utils import read_nerd, write_json
 from nistoar.pdr.preserve import jobexec
+from nistoar.pdr.exceptions import IDNotFound
+import nistoar.pdr.preserve.service as pres
 
 pdrdir = execdir.parents[0]
 datadir = pdrdir / "preserve" / "data"
@@ -104,7 +106,41 @@ def tearDownModule():
 from nistoar.pdr.constants import ARK_PFX_PAT
 ARK_PFX_RE = re.compile(ARK_PFX_PAT)
 
-class TestPreservationJobexec(test.TestCase):
+class TEstPreservationStatus(test.TestCase):
+    def setUp(self):
+        self.pstat = pres.PreservationStatus("mds5-2188", "ready!")
+
+    def test_ctor(self):
+        self.assertEqual(self.pstat.aipid, "mds5-2188")
+        self.assertEqual(self.pstat.steps, 0)
+        self.assertEqual(self.pstat.laststep, "unstarted")
+        self.assertEqual(self.pstat.message, "ready!")
+        self.assertFalse(self.pstat.successful)
+        self.assertFalse(self.pstat.failed)
+        self.assertFalse(self.pstat.in_progress)
+        self.assertIsNone(self.pstat.get('exitcode'))
+
+    def test_to_json(self):
+        encoded = self.pstat.to_json()
+        parsed = json.loads(encoded)
+        for prop in "aipid message steps laststep".split():
+            self.assertIn(prop, parsed)
+        self.assertEqual(len(parsed), 4)
+
+        pstat = pres.PreservationStatus.from_json(encoded)
+        
+        self.assertEqual(pstat.aipid, "mds5-2188")
+        self.assertEqual(pstat.steps, 0)
+        self.assertEqual(pstat.laststep, "unstarted")
+        self.assertEqual(pstat.message, "ready!")
+        self.assertFalse(pstat.successful)
+        self.assertFalse(pstat.failed)
+        self.assertFalse(pstat.in_progress)
+        self.assertIsNone(pstat.get('exitcode'))
+
+
+
+class TestPreservationService(test.TestCase):
 
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory(prefix="work.", dir=tmpdir.name)
@@ -120,14 +156,10 @@ class TestPreservationJobexec(test.TestCase):
             if not os.path.exists(d):
                 os.mkdir(d)
 
-        self.smcfg = {
-            "sip_dir":     self.workdir,
-            "working_dir": self.workdir,
-            "stage_dir":   self.stagedir,
-            "persist_in":  self.statedir
-        }
-
         self.config = {
+            "working_dir": self.workdir,
+            "sip_dir":     self.workdir,
+            "wait_to_start": 0.1,
             "task": {
                 "store_dir": self.storedir,
                 'restricted_store_dir': self.restricted,
@@ -183,39 +215,82 @@ class TestPreservationJobexec(test.TestCase):
         nerd = read_nerd(srcbag/"metadata"/"nerdm.json")
         self.aipid = ARK_PFX_RE.sub('', nerd["@id"])
         destdir = self.workdir
-        bagdir = os.path.join(destdir, self.aipid)
-        shutil.copytree(srcbag, bagdir)
+        self.bagdir = os.path.join(destdir, self.aipid)
+        shutil.copytree(srcbag, self.bagdir)
 
-        self.log = logging.getLogger('preserve').getChild(self.aipid)
-        JSONPreservationStateManager.for_aip(self.smcfg, self.aipid, bagdir, self.log)
-        self.statefile = os.path.join(self.statedir, f"{self.aipid}_state.json")
+        self.svc = pres.AIP1PreservationService(self.config)
 
     def tearDown(self):
         self.tempdir.cleanup()
 
-    def test_make_preservation_task(self):
-        self.assertTrue(os.path.isfile(self.statefile))
-
-        task = jobexec.make_preservation_task(self.statefile, self.config, self.log)
-        self.assertFalse(task.started)
-        self.assertFalse(task.completed)
-
-    def test_process(self):
-        jobexec.process(self.aipid, self.config, [self.statefile], self.log)
-
-        self.assertTrue(os.path.isfile(self.statefile))
-        mgr = JSONPreservationStateManager.from_file(self.statefile)
+    def test_ctor(self):
+        """
+        test service setup
+        """
+        self.assertEqual(str(self.svc.sipdir), self.workdir)
+        self.assertEqual(str(self.svc.inprogdir), os.path.join(self.workdir, 'preserve'))
         
-        self.assertTrue(mgr.all_completed)
-        self.assertIsNone(mgr.get_finalized_aip())
-        self.assertFalse(os.path.exists(mgr.get_sip()))
-        self.assertEqual(len(mgr.get_serialized_files()), 1)
-        staged = list(os.listdir(self.stagedir))
-        self.assertEqual(len(staged), 1)
-        self.assertEqual(staged[0], f"{self.aipid}.1_0_0.mbag0_4-0.zip")
-        mbdir = os.path.join(self.workdir, "multibag")
-        self.assertFalse(os.path.exists(mbdir))
+        self.assertEqual(list(self.svc.active_aip_ids()), [])
 
+        with self.assertRaises(IDNotFound):
+            self.svc.status_of(self.aipid)
+
+    def test_preserve_from(self):
+        pstat = self.svc.preserve_from(self.bagdir)
+        
+        self.assertEqual(pstat.aipid, self.aipid)
+        self.assertFalse(pstat.failed)
+        self.assertGreater(pstat.steps, -1)
+        self.assertTrue(pstat.message)
+
+        self.assertEqual(list(self.svc.active_aip_ids()), [self.aipid])
+
+        # wait until started
+        done = 0
+        for i in range(10):
+            time.sleep(0.2)
+            pstat = self.svc.status_of(self.aipid)
+            if pstat.get('jobpid'):
+                break
+        self.assertEqual(pstat.aipid, self.aipid)
+        self.assertFalse(pstat.failed)
+        self.assertGreater(pstat.steps, 0)
+        self.assertTrue(pstat.message)
+        self.assertTrue(pstat.get('jobpid'))
+
+        for i in range(10):
+            if pstat.successful:
+                break
+            time.sleep(0.05)
+            pstat = self.svc.status_of(self.aipid)
+        self.assertEqual(pstat.aipid, self.aipid)
+        self.assertFalse(pstat.failed)
+        self.assertFalse(pstat.in_progress)
+        self.assertTrue(pstat.message)
+        self.assertTrue(pstat.successful)
+        self.assertEqual(pstat.get('exitcode'), 0)
+
+        self.assertTrue(not os.path.exists(self.bagdir))
+        pworkdir = os.path.join(self.workdir, 'preserve',self.aipid)
+        self.assertTrue(os.path.exists(pworkdir))
+        hfile = self.svc._history_file_for(self.aipid)
+        lfile = self.svc.preslogdir/f"{self.aipid}.log"
+        self.assertTrue(not os.path.exists(hfile))
+        self.assertTrue(not os.path.exists(lfile))
+
+        jobfile = os.path.join(self.workdir, 'preserve', '_jobs', self.aipid+".json")
+        self.assertTrue(os.path.isfile(jobfile))
+
+        # test call-back function used to clean-up
+        self.svc._notify_job_exited(jobfile)
+        self.assertTrue(os.path.exists(hfile))
+        self.assertTrue(os.path.exists(lfile))
+        self.assertTrue(not os.path.exists(pworkdir))
+        self.assertTrue(os.path.isfile(jobfile))
+        
+        
+        
+        
                          
 
 

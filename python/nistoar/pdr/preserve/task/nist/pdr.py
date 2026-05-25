@@ -282,9 +282,6 @@ class PDR1AIPArchiving(fw.AIPArchiving):
 
     ``store_dir``   
          (str) the storage transfer directory that files are copied to 
-    ``public_bucket``
-         (str) the S3 address representing the final storage bucket where the files should
-         eventually arrive to be considered complete.  
     ``allow_overwrite``  
          (bool) If False (default) do not allow pre-existing files with the same names as
          any being transfered from that staging area to be replaced; if any such files are 
@@ -1021,6 +1018,51 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
     a factory for creating a :py:class:`PreservationTask` injected with necessary 
     :py:class:PreservationStep instances appropriate for preserving SIPs submitted for 
     publication to the NIST PDR.  
+
+    The implementation (as of this writing) only allows single implementations of each of the 
+    task steps; that is, "pdr" is the only step type allowed in the step configurations.  The steps 
+    are configured with the following configuration dictionaries:
+
+    ``finalize``:       
+         properties that configure the finalization step; see :py:class:`PDRBagFinalizaiton` for 
+         details.
+    ``validate``       
+         properties that configure the validation step; see 
+         :py:class:`~nistoar.pdr.preserve.task.validate.NISTBagValidation` for details.
+    ``serialize``
+         properties that configure the serialization step; see 
+         :py:class:`~nistoar.pdr.preserve.task.serialize.NISTBagSerialization` for details.
+    ``archive``
+         properties that configure the archiving step; see :py:class:`PDR1AIPArchiving` for 
+         details.
+    ``publish``
+         properties that configure the publication step; see :py:class:`PDRPublication` for 
+         details.
+    ``cleanup``
+         properties that configure the clean-up step; see :py:class:`PDRPreservationCleanup` for 
+         details.
+
+    Several of these share common configuration properties; instead of providiing them as part of the 
+    individual step level, they can be provided at the top level.  This factory will ensure that the 
+    common parameters are distributed appropriately.  If common parameters is shared at both the top
+    level and within a particular step, the latter takes precedence.  The common properties that this 
+    factory will look for are:
+
+    ``repo_access``
+           (dict) a configuration dictionary that describe access points to the public side of the 
+           repository.  This is used to interrogate details of previous publications of a
+           dataset.  
+    ``ingest``
+           (dict) a configuration dictionary for the ingest functions that require preparation.
+           recognized keys include ``rmm`` and ``doi`` (see :py:class:`PDRBagFinalizaiton` for more 
+           details).
+    ``store_dir``
+         (str) the storage transfer directory that public AIP bags files are copied to for long-term
+         storage.
+    ``restricted_store_dir``
+         (str) the storage transfer directory that non-public AIP bags files are copied to for long-term
+         storage.
+
     """
     def_supported_types = ["pdr", "def"]
 
