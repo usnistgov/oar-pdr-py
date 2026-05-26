@@ -118,7 +118,7 @@ def update_authors(bagbldr, as_annot=False, config=None):
     return AuthorFetcher(config).update_authors(bagbldr, as_annot)
 
 
-_altdoifmt = re.compile('^((https?://dx.doi.org/)|(doi:))')
+_altdoifmt = re.compile('^((https?://dx\.doi\.org/)|(doi:))')
 def normalize_doi(doi):
     """
     convert a DOI recognized as using an alternate format (i.e., beginning with "doi:" or 
