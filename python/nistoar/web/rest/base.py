@@ -561,10 +561,10 @@ class WSGIApp(metaclass=ABCMeta):
             who = self.authenticate(env)
         except Unauthenticated as ex:
             self.log.debug("Authentication failure: %s", str(ex))
-            self.send_error(401, "Authentication Failure")
+            return Handler(path, env, start_resp).send_error(401, "Authentication Failure")
         except Exception as ex:
-            self.log.error("Unexpected failure while authenticating: %s", str(ex))
-            self.send_error(500, "Internal Server Error")
+            self.log.exception("Unexpected failure while authenticating: %s", str(ex))
+            return Handler(path, env, start_resp).send_error(500, "Internal Server Error")
 
         if self.base_ep:
             if path.startswith(self.base_ep):
@@ -744,7 +744,7 @@ def authenticate_via_authkey(svcname: str, env: Mapping, authcfg: Mapping, log: 
 
     :param str   svcname: a name to provide as the agent software vehicle
     :param dict      env: the WSGI environment containing the request data
-    :param dict  authcfg: the JWT decoding configuration (see above)
+    :param dict  authcfg: the supported keys and user configuration (see above)
     :param Logger    log: the logger that can be used to record messages
     :param [str]  agents: an optional list of agent strings to attach to output agent
     :param str client_id: an ID representing the OAR client being used to connect.  If None,

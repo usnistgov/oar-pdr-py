@@ -1160,6 +1160,9 @@ class ProjectStatusHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id, ashead=ashead)
 
+        if re.search(r'^external_review\b', path):
+            revname = '/'.join(path.split('/')[1:])
+            return self.external_review_status(out, path, self._id)
         if path == "state":
             out = out.state
         elif path == "action":
@@ -1248,6 +1251,19 @@ class ProjectStatusHandler(ProjectRecordHandler):
             return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit or ready")
 
         return self.send_json(stat.to_dict())
+
+    def external_review_status(self, prjstatus, revname=None):
+        out = prjstatus.to_dict().get("external_review")
+        if not out:
+            return self.send_error_resp(404, "Not In Review",
+                                        "record has not been submitted for review, yet")
+        if revname:
+            if not out.get(revname):
+                return self.send_error_resp(404, "Not Reviewed",
+                                            f"record has not been submitted to {rename} for review, yet")
+            out = out[revname]
+
+        return self.send_json(out)
 
     def review(self, ashead=False):
         """
