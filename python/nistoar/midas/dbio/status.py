@@ -232,6 +232,14 @@ class RecordStatus:
             return "(not yet submitted)"
         return datetime.fromtimestamp(math.floor(self.submitted)).isoformat()
 
+    def get_review_systems(self) -> List[str]:
+        """
+        return a list of the review system names that the record has been submitted to.  
+
+        These are the systems that this status has data for.  
+        """
+        return list(self._data.get(_pubreview_p, {}).keys())
+
     def get_review_from(self, revsys: str) -> Mapping:
         """
         return the review data from the given system
@@ -243,7 +251,24 @@ class RecordStatus:
         revs = self._data.get(_pubreview_p, {})
         if not revs.get(revsys):
             return None
-        return deepcopy(revs[revsys])
+        out = deepcopy(revs[revsys])
+        out['system'] = revsys
+        return out
+
+    def delete_review_from(self, revsys: str) -> Mapping:
+        """
+        delete the review data from the given system (as if it never happened).
+        :param str revsys:  the name of the review system that is managing the review
+        :return:  the deleted review state data or None if the review from that system 
+                  has not yet been started.
+                  :rtype: Mapping
+        """
+        revs = self._data.get(_pubreview_p, {})
+        target = revs.get(revsys)
+        if not target:
+            return None
+        del revs[revsys]
+        return target
 
     def get_review_phases(self) -> Mapping[str,str]:
         """
@@ -302,6 +327,7 @@ class RecordStatus:
             pubrev['@id'] = id
         if infourl:
             pubrev['info_at'] = infourl
+        pubrev['updated'] = time()
 
         oldrev = self._data.get(_pubreview_p, {}).get(revsys, {})
         oldfb = oldrev.get('feedback', [])

@@ -1009,8 +1009,8 @@ class ProjectACLsHandler(ProjectRecordHandler):
         else:
             # requesting update to to a single permission
             if '/' in path:
-                return self.send_error_resp(405, "PATCH not allowed",
-                                            "ACL PATCH request should not a member name")
+                return self.send_error_resp(405, f"{meth} not allowed",
+                                            f"ACL {meth} request should not include a member name")
             input = { path: input }
 
         # validate the input
@@ -1037,7 +1037,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
         for perm in input:
             if perm not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
-                return self.send_error_resp(405, "PATCH not allowed on provided permission type",
+                return self.send_error_resp(405, f"{meth} not allowed on provided permission type",
                                             "Updating non-standard permission is not allowed")
             identities = input[perm]
             try:
@@ -1160,6 +1160,9 @@ class ProjectStatusHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id, ashead=ashead)
 
+        if re.search(r'^external_review\b', path):
+            revname = '/'.join(path.split('/')[1:])
+            return self.external_review_status(out, path, self._id)
         if path == "state":
             out = out.state
         elif path == "action":
@@ -1171,7 +1174,8 @@ class ProjectStatusHandler(ProjectRecordHandler):
                 
         elif path:
             return self.send_error_resp(404, "Status property not accessible",
-                                        "Requested status property is not accessible", self._id, ashead=ashead)
+                                        "Requested status property is not accessible",
+                                        self._id, ashead=ashead)
         else:
             out = out.to_dict()
 
@@ -1247,6 +1251,19 @@ class ProjectStatusHandler(ProjectRecordHandler):
             return self.send_error_resp(409, "Not in editable state", "Record is not in state=edit or ready")
 
         return self.send_json(stat.to_dict())
+
+    def external_review_status(self, prjstatus, revname=None):
+        out = prjstatus.to_dict().get("external_review")
+        if not out:
+            return self.send_error_resp(404, "Not In Review",
+                                        "record has not been submitted for review, yet")
+        if revname:
+            if not out.get(revname):
+                return self.send_error_resp(404, "Not Reviewed",
+                                            f"record has not been submitted to {rename} for review, yet")
+            out = out[revname]
+
+        return self.send_json(out)
 
     def review(self, ashead=False):
         """
