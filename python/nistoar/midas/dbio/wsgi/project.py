@@ -1009,8 +1009,8 @@ class ProjectACLsHandler(ProjectRecordHandler):
         else:
             # requesting update to to a single permission
             if '/' in path:
-                return self.send_error_resp(405, "PATCH not allowed",
-                                            "ACL PATCH request should not a member name")
+                return self.send_error_resp(405, f"{meth} not allowed",
+                                            f"ACL {meth} request should not include a member name")
             input = { path: input }
 
         # validate the input
@@ -1037,7 +1037,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
 
         for perm in input:
             if perm not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
-                return self.send_error_resp(405, "PATCH not allowed on provided permission type",
+                return self.send_error_resp(405, f"{meth} not allowed on provided permission type",
                                             "Updating non-standard permission is not allowed")
             identities = input[perm]
             try:
@@ -1171,7 +1171,8 @@ class ProjectStatusHandler(ProjectRecordHandler):
                 
         elif path:
             return self.send_error_resp(404, "Status property not accessible",
-                                        "Requested status property is not accessible", self._id, ashead=ashead)
+                                        "Requested status property is not accessible",
+                                        self._id, ashead=ashead)
         else:
             out = out.to_dict()
 

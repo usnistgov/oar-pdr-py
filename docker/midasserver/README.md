@@ -97,7 +97,7 @@ The base URLs for the MIDAS services are as follows:
   - [`http://localhost:9091/midas/dmp/mdm1`](http://localhost:9091/midas/dmp/mdm1) -- the Data
     Management Plan (DMP) project service
   - `http://localhost:9091/midas/dap/mds3` -- the Digital Asset Publication (DAP) project service
-  - `http://localhost:9091/midas/groups`   -- the MIDAS user group service
+  - `http://localhost:9091/midas/group`   -- the MIDAS user group service
 
 Note that when you start the service, you also have access to online API documentation.  To view,
 open the URL,
@@ -220,7 +220,7 @@ The service provides other operations that a client can provide support for:
     `/name` sub-resource of a record.
   - **Add/Remove permissions for other users** - the `/acls` sub-resource endpoints allow one to manipulate
     permissions given to other users.
-  - **Create user groups**<sup>*</sup> -- the `/midas/groups` endpoint alls a user to create and manage 
+  - **Create user groups** - the `/midas/group` endpoint allows a user to create and manage 
     their own user groups that can be applied to a records ACLs.
 
 For more information, consult the [API documentation](https://localhost:9091/docs/dmpsvc-elements.html).  
