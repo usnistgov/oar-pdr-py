@@ -461,14 +461,14 @@ class NISTBag(PreservationSystem):
         cdir = self._full_dpath(comppath)
         if os.path.exists(cdir):
             for c in os.listdir(cdir):
-                if not c.startswith('.') and not c.startswith('_'):
+                if not c.startswith('.') and not c.startswith('#'):
                     children.add( c )
 
         cdir = os.path.join(self.metadata_dir, comppath)
         if os.path.exists(cdir):
             # add in child metadata directories that have a nerdm.json file
             for c in os.listdir(cdir):
-                if not c.startswith('.') and not c.startswith('_') \
+                if not c.startswith('.') and not c.startswith('#') \
                    and os.path.exists(os.path.join(cdir,c,NERDMD_FILENAME)):
                     children.add( c )
 
@@ -514,7 +514,7 @@ class NISTBag(PreservationSystem):
             for f in subdirs:
                 # if f.startswith('.'):
                 #     continue
-                if f.startswith('_'):
+                if f.startswith('#'):
                     continue
                 yield os.path.join(reldir, f)
 
