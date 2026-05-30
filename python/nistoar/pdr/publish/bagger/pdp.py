@@ -1170,7 +1170,7 @@ class NERDmBasedBagger(SIPBagger):
         self.ensure_preparation(True, who, _action)
         nerd = self.bagbldr.bag.nerd_metadata_for('', True)
         oldver = nerd.get("version", "")
-        oldnerdfile = os.path.join(self.bagdir, "__old_nerdm.json")
+        oldnerdfile = os.path.join(self.bagdir, "#old_nerdm.json")
         oldnerd = None
         ver = None
 
@@ -1558,6 +1558,12 @@ class PDPBagger(NERDmBasedBagger):
             if self.cfg.get('assign_doi') == ASSIGN_DOI_ALWAYS:
                 self._ensure_doi(who, hist, nerd)
 
+            # clean up any "#oldnerdm.json" files and the like
+            for d, sds, files in os.walk(self.bagbldr.bag.metadata_dir):
+                for f in files:
+                    if f.startswith('#'):
+                        os.remove(os.path.join(dir, f))
+
             self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
             hist.add_subaction(act)
 
@@ -1596,13 +1602,13 @@ class PDPBagger(NERDmBasedBagger):
         #  *  an access page is added or deleted
         #
         oldfiles = set([c.get('@id','') for c in oldmd.get('components',[])
-                                        if nerdutils.is_any_type(["DataFile", "AccessPage"])])
-        newfiles = set([c.get('@id','') for c in oldmd.get('components',[]) 
-                                        if nerdutils.is_any_type(["DataFile", "AccessPage"])])
+                                        if nerdutils.is_any_type(c, ["DataFile", "AccessPage"])])
+        newfiles = set([c.get('@id','') for c in newmd.get('components',[]) 
+                                        if nerdutils.is_any_type(c, ["DataFile", "AccessPage"])])
 
         # any files in the data directory?
         updatedfiles = False
-        for dir, sd, files in os.walk(self.bldr.bag.data_dir):
+        for dir, sd, files in os.walk(self.bagbldr.bag.data_dir):
             if files:
                 updatedfiles = True
                 break

@@ -1938,6 +1938,15 @@ class BagBuilder(PreservationSystem):
         if trim:
             self.trim_metadata_folders()
 
+        # Clean out non-standard files
+        topfiles = [ f for f in os.listdir(self.bagdir) if f.startswith('__') ]
+        for f in topfiles:
+            f = os.path.join(self.bagdir, f)
+            if os.path.isdir(f):
+                shutil.rmtree(f)
+            else:
+                os.remove(f)
+
         self.ensure_bagit_ver()
         self.write_data_manifest(finalcfg.get('confirm_checksums', False))
         self.write_mbag_files()
