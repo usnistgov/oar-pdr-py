@@ -4,14 +4,17 @@ Publishing (PDP) API.  In this framework, SIP inputs are primarily in the form o
 """
 import os, re, logging, json
 from collections import OrderedDict
-from collections.abc import Mapping
+from typing import Mapping, Union, List, Callable
 from abc import abstractmethod, abstractproperty
 from copy import deepcopy
 from urllib.parse import urlparse
+from pathlib import Path
+from logging import Logger
 
 import yaml, jsonpatch
 
-from .. import BadSIPInputError, SIPStateException, PublishingStateException, ConfigurationException
+from .. import (BadSIPInputError, SIPStateException, PublishingStateException,
+                ConfigurationException, PublishException)
 from ... import constants as const
 from ....nerdm.constants import (CORE_SCHEMA_URI, PUB_SCHEMA_URI, EXP_SCHEMA_URI, SIP_SCHEMA_URI,
                                  core_schema_base)
@@ -21,10 +24,11 @@ from ....nerdm import utils as nerdmutils
 from ....nerdm.convert import latest
 from ...preserve.bagit.builder import BagBuilder
 from ... import def_etc_dir
-from .base import SIPBagger
+from .base import SIPBagger, UNKNOWN_AGENT
 from .prepupd import UpdatePrepService, PENDING_VERSION_SFX
 from ..idmint import PDPMinter
 from ...utils.prov import Action, Agent, dump_to_history
+from nistoar.base.config import merge_config as merge_md_into
 
 SIPEXT_RE = re.compile(core_schema_base + r'sip/(v[^/]+)#/definitions/\w+Submission')
 ARK_PFX_RE = re.compile(const.ARK_PFX_PAT)
@@ -37,6 +41,90 @@ ASSIGN_DOI_NEVER   = 'never'
 ASSIGN_DOI_ALWAYS  = 'always'
 ASSIGN_DOI_REQUEST = 'request'
 
+def import_fs_files(bldr: BagBuilder, srcinfo: Mapping, filepaths: List[str],
+                    include_all: bool, examine: bool=False, log: Logger=None,
+                    _action: Action=None) -> List[str]:
+    """
+    import files found in an import directory.  
+
+    This importer function will attempt to import files from a locally-mounted directory.  The files
+    must be organized within the import directory in the hierarchy intended for the target bag.  
+    Files that start with a "." or a "#" are ignored.  
+
+    By default, hard links will be attempted first; if this fails (because the directory in not in the 
+    same filesystem as the target bag), then a regular copy will be done.  (Hard links are preferred as 
+    they require less space on the disk and make the import faster.)  
+
+    The following properties will be looked for in the ``srcinfo`` argument:
+
+    ``location``
+         (str) _required_. The full path to the directory (on a locally mounted filesystem) where files 
+         to be imported are located.  
+    ``hard_link_data``
+         (bool) _optional_. If True (default), attempt to import the files by creating a hard link 
+         (falling back to a regular copy if not possible).  If False, all files will explicitly copied.  
+    ``consumable``
+         (bool) _optional_.  if True (default), this function will remove each source file from the 
+         source directory after successfully importing it.  This can prevent the file from being 
+         imported multiple times unnecessarily.  If False, the file will be kept intact in the source 
+         directory.
+
+    :param BagBuilder bldr:  the bag builder that can take in files
+    :param dict    srcinfo:  the description of the source of files.  It requires only one property,
+                             ``location``; see above for additional supported properties.
+    :param list[str] filepaths:  a list of the filepaths that have already be registered with the 
+                             bag (i.e. their metadata has already been added; see ``include_all``).
+    :param bool include_all: if False, a file will only be imported if its path is given in filepaths;
+                             if True, all files will be imported and default metadata will be 
+                             initialized.
+    :param bool     examine: if True, examine the file, extract metadata, and register the metadata
+                             into the bag; this will fully replace any metadata already set for the 
+                             filepath.  Note that this can incur a significant time cost for large or 
+                             numerous files.  If False (default), only minimal metadata will be set if 
+                             metadata does not already exist for it.
+    :param Logger      log:  a logger to use to report messages 
+    :param Action  _action:  a provenance action that this import is part of; if provided additional
+                             sub actions will be added to record the loading of each file
+    :return:  a list of filepaths that were found and imported
+              :rtype: List[str]
+    """
+    location = srcinfo.get('location')
+    if not location:
+        raise PublishingStateException("location not set in fs source info dictionary")
+    if not os.path.isdir(location):
+        raise PublishingStateException("%s: import location not found as a directory" % location)
+    hardlinks = srcinfo.get('hard_link_data', True)
+
+    act = None
+    out = []
+    for dir, subdirs, files in os.walk(location):
+        for file in files:
+            fp = os.path.relpath(os.path.join(dir, file), location)
+            if not include_all and fp not in filepaths:
+                continue
+            src = os.path.join(location, fp)
+            
+            bldr.add_data_file(fp, src, False, hardlinks, comptype='DataFile')
+            if _action:
+                act = _action.add_subaction(Action(Action.PUT, fp, _action.agent, "Add a data file"))
+
+            if fp not in filepaths or examine:
+                # add its metadata if we don't know about it
+                bldr.register_data_file(fp, src, examine, comptype='DataFile')
+                if act:
+                    act.add_subaction(Action(Action.PUT, "#m", act.agent, "update file metadata"))
+
+            out.append(fp)
+            if act:
+                _action.add_subaction(act)
+
+            if srcinfo.get('consumable', True):
+                try:
+                    os.unlink(src)
+                except Exception as ex:
+                    log.error("%s: Failed to remove source data file as requested: %s", src, str(ex))
+
+    return out
 
 class NERDmBasedBagger(SIPBagger):
     """
@@ -60,6 +148,9 @@ class NERDmBasedBagger(SIPBagger):
                                         permitted to be included in the input NERDm metadata.
     """
     
+    _data_source_file = "__data_sources.lis"
+    _file_importers = { 'fs': import_fs_files }
+
     def __init__(self, sipid: str, bagparent: str, config: Mapping, convention: str,
                  prepsvc: UpdatePrepService=None, id:str=None):
         """
@@ -150,7 +241,7 @@ class NERDmBasedBagger(SIPBagger):
         :param Agent    who: an actor identifier object, indicating who is requesting this action.  This 
                              will get recorded in the history data.  If None, an internal administrative 
                              identity will be assumed.  This identity may affect the identifier assigned.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
@@ -192,10 +283,12 @@ class NERDmBasedBagger(SIPBagger):
         :param Agent    who: an actor identifier object, indicating who is requesting this action.  This 
                              will get recorded in the history data.  If None, an internal administrative 
                              identity will be assumed.  This identity may affect the identifier assigned.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
+        if not who:
+            who = UNKNOWN_AGENT
         if os.path.exists(self.bagdir):
             self.bagbldr.ensure_bagdir()  # sets builders bag instance
 
@@ -303,10 +396,12 @@ class NERDmBasedBagger(SIPBagger):
                            request may trigger the restaging of previously published data, in which 
                            case who triggered it will get recorded.  If None, an internal administrative 
                            identity will be assumed.  
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
+        if not who:
+            who = UNKNOWN_AGENT
         if not self.bagdir or not os.path.exists(self.bagdir):
             self.prepare(False, who, _action=_action)
         return self.bagbldr.bag.describe(relid)
@@ -323,94 +418,74 @@ class NERDmBasedBagger(SIPBagger):
                             identity will be assumed.  This identity may affect the identifier assigned.
         :param bool savefilemd:  if True (default), any DataFile or Subcollection metadata included will 
                                  be saved as well
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                self._set_res_nerdm(nerdm, who, savefilemd, _action)
+        if not who:
+            who = UNKNOWN_AGENT
+        with self._lock_when(lock):
+            nerdm = self._check_res_schema_id(nerdm)   # creates a deep copy of the record
 
-        else:
-            self._set_res_nerdm(nerdm, who, savefilemd, _action)
+            hist = Action(Action.PUT, self.id, who, "Set resource metadata")
+            if _action:
+                _action.add_subaction(hist)
+            self.ensure_preparation(True, who, hist)
 
-    def _set_res_nerdm(self, nerdm: Mapping, who: Agent=None, savecompmd: bool=True,
-                       _action: Action=None) -> None:
-        """
-        set the resource metadata (which may optionally include file component metadata) for the SIP.  
-        The input metadata should be as complete as is appropriate for the type of SIP being processed.  
+            # modify the input: remove properties that cannot be set, add others
+            handsoff = "@id @context publisher issued firstIssued revised annotated language " + \
+                       "bureauCode programCode doi ediid releaseHistory "
+            handsoff += " ".join([k for k in nerdm.keys() if k.startswith("pdr:")])
+            for prop in handsoff.strip().split():
+                if prop in nerdm:
+                    del nerdm[prop]
+            self._set_standard_res_modifications(nerdm)
+            self._set_provider_res_modifications(nerdm)
 
-        :param Mapping nerdm:  the resource-level NERDm metadata to save
-        :param who:         an actor identifier object, indicating who is requesting this action.  This 
-                            will get recorded in the history data.  If None, an internal administrative 
-                            identity will be assumed.  This identity may affect the identifier assigned.
-        :param bool savecompmd:  if True (default), any DataFile or Subcollection metadata included will 
-                                 be saved as well, replacing all previously set components.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
-                             that should be recorded within this function should be added as a subaction
-                             of this given one rather than recorded directly as a stand-alone action.
-        """
-        nerdm = self._check_res_schema_id(nerdm)   # creates a deep copy of the record
+            components = nerdm.get('components')
+            if 'components' in nerdm:
+                nerdm['components'] = []
 
-        hist = Action(Action.PUT, self.id, who, "Set resource metadata")
-        if _action:
-            _action.add_subaction(hist)
-        self.ensure_preparation(True, who, hist)
+            # set up history record (using who)
+            what = "Setting resource metadata"
+            if savefilemd and components:
+                what += " with components"
+            hist.add_subaction(self._history_comment("#m", who, what))
 
-        # modify the input: remove properties that cannot be set, add others
-        handsoff = "@id @context publisher issued firstIssued revised annotated language " + \
-                   "bureauCode programCode doi ediid releaseHistory "
-        handsoff += " ".join([k for k in nerdm.keys() if k.startswith("pdr:")])
-        for prop in handsoff.strip().split():
-            if prop in nerdm:
-                del nerdm[prop]
-        self._set_standard_res_modifications(nerdm)
-        self._set_provider_res_modifications(nerdm)
+            try:
+                old = self.bagbldr.bag.nerd_metadata_for('', True)   # for history record
 
-        components = nerdm.get('components')
-        if 'components' in nerdm:
-            nerdm['components'] = []
+                self.bagbldr.add_res_nerd(nerdm, False)
 
-        # set up history record (using who)
-        what = "Setting resource metadata"
-        if savecompmd and components:
-            what += " with components"
-        hist.add_subaction(self._history_comment("#m", who, what))
+                new = self.bagbldr.bag.nerd_metadata_for('', True)   # for history record
+                hist.add_subaction(self._putcreate_history_action("#m", who,
+                                                                  "Set resource-level metadata",
+                                                                  old, new))
 
-        try:
-            old = self.bagbldr.bag.nerd_metadata_for('', True)   # for history record
+                if savefilemd and components:
+                    # clear out any previously saved components
+                    oldcmps = self.bagbldr.bag.subcoll_children('')
+                    if oldcmps:
+                        for cmp in oldcmps:
+                            self.bagbldr.remove_component(cmp)
+                        hist.add_subaction(Action(Action.DELETE, FILE_DELIM, who,
+                                                  "Cleared previously added components"))
 
-            self.bagbldr.add_res_nerd(nerdm, False)
+                    for cmp in components:
+                        self._set_comp_nerdm(cmp, who, hist, False)
+                else:
+                    hist = hist.subactions[0]
 
-            new = self.bagbldr.bag.nerd_metadata_for('', True)   # for history record
-            hist.add_subaction(self._putcreate_history_action("#m", who, "Set resource-level metadata",
-                                                              old, new))
-
-            if savecompmd and components:
-                # clear out any previously saved components
-                oldcmps = self.bagbldr.bag.subcoll_children('')
-                if oldcmps:
-                    for cmp in oldcmps:
-                        self.bagbldr.remove_component(cmp)
-                    hist.add_subaction(Action(Action.DELETE, FILE_DELIM, who,
-                                              "Cleared previously added components"))
-
-                for cmp in components:
-                    self._set_comp_nerdm(cmp, who, hist, False)
-            else:
-                hist = hist.subactions[0]
-
-        except Exception as ex:
-            self.log.warning("Bag left in possible incomplete state due to error: %s", str(ex))
-            self.record_history(hist)
-            hist = self._history_comment("#m", who, "Failed to complete %s action" % hist.type)
-            raise
-
-        finally:
-            # record history record
-            if not _action:
+            except Exception as ex:
+                self.log.warning("Bag left in possible incomplete state due to error: %s", str(ex))
                 self.record_history(hist)
+                hist = self._history_comment("#m", who, "Failed to complete %s action" % hist.type)
+                raise
+
+            finally:
+                # record history record
+                if not _action:
+                    self.record_history(hist)
 
     def _check_res_schema_id(self, nerdm):
         if self._nerdmcore_re:
@@ -495,15 +570,12 @@ class NERDmBasedBagger(SIPBagger):
         a subcollection, it must contain a 'filepath' property.  
         :param Mapping nerdm:   the NERDm Component metadata.  
         """
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                return self._set_comp_nerdm(nerdm, who, _action=_action)
-
-        else:
+        with self._lock_when(lock):
             return self._set_comp_nerdm(nerdm, who, _action=_action)
 
     def _set_comp_nerdm(self, nerdm: Mapping, who: Agent=None, _action=None, tolatest=True) -> None:
+        if not who:
+            who = UNKNOWN_AGENT
         nerdm = self._check_input_comp(nerdm, tolatest)   # copies nerdm
 
         hist = Action(Action.PUT, self.id, who, "Set some component metadata")
@@ -733,6 +805,289 @@ class NERDmBasedBagger(SIPBagger):
                 else:
                     cmpmd['@id'] += cmpmd['proxyFor']
 
+    def add_data_file(self, srcfile: Union[str,Path], filepath: str, mdata: Mapping=None, 
+                      merge: bool=True, who: Agent=None, hardlink: bool=True, lock: bool=True,
+                      _action: Action=None):
+        """
+        add a data file to the bag
+
+        :param str|Path srcfile:  the path to the file to import
+        :param str     filepath:  the path relative to the bag's data directory to import the 
+                                  file into
+        :param dict       mdata:  the NERDm component metadata describeing the file to register.
+                                  if not provided and no metadata for the file has yet to be added
+                                  (via :py:meth:`set_comp_nerdm`), only minimal default metadata 
+                                  will be registered; otherwise, existing metadata will be unaltered.
+        :param bool       merge:  if True (default), the provided metadata will be merged with any 
+                                  existing metadata for the given filepath; if False, the given 
+                                  metadata will replace any previously registered metadata.  In either
+                                  case, this method will ensure that the save metadat includes the 
+                                  necessary minimum.
+        :param bool    hardlink:  If True (default), this method will attempt to import the file by 
+                                  creating a hard link to the source file; if it fails (because the 
+                                  filesystems for the source file and the bag are different), fallback 
+                                  to copying the file normally.  Specify False to force a hard copy.  
+        """
+        if not who:
+            who = UNKNOWN_AGENT
+
+        with self._lock_when(lock):
+            if not mdata and not self.bagbldr.bag.has_component(filepath):
+                mdata = self.bagbldr.describe_data_file(srcfile, filepath, examine=False)
+                mdata['filepath'] = filepath
+
+            hist = Action(Action.PUT, self.id+const.FILECMP_EXTENSION+'/'+filepath,
+                          who, "Add a data file")
+            self.ensure_preparation(True, who, hist)
+
+            message = f"Adding data file {filepath}"
+            if mdata:
+                message += " with metadata"
+            self.bagbldr.add_data_file(filepath, srcfile, False, hardlink, message, comptype='DataFile')
+                                    
+            if mdata:
+                if merge:
+                    self.bagbldr.update_metadata_for(filepath, mdata, message='', comptype='DataFile')
+                    hist.add_subaction(Action(Action.PATCH, "#m", who, "update file metadata"))
+                else:
+                    self.bagbldr.replace_metadata_for(filepath, mdata, message='', comptype='DataFile')
+                    hist.add_subaction(Action(Action.PUT, "#m", who, "add file metadata"))
+
+            if _action:
+                _action.add_subaction(hist)
+            else:
+                self.record_history(hist)
+                
+                
+    def import_data_files(self, srcinfo: Union[str, Mapping], include_all: bool=False, 
+                          examine: bool=False, who: Agent=None, forcecopy: bool=False, 
+                          lock: bool=True, _action: Action=None, _filepaths: List[str]=None) -> List[str]:
+        """
+        import data files found in a given data source.
+
+        The implementation can support multiple ways of importing data files of importing files into
+        the bag.  The where from and how of importing is specified in the ``srcinfo`` argument.  This 
+        argument can take one of two forms.  The brief format is in the form of a string representing 
+        a simple URN where the colon-delimited prefix indicates type type of source it is (e.g. "fs:"); 
+        the remainder is a location specifier appropriate for that type. More complex sources are 
+        described by by a dictionary that includes a ``type`` property indicating the type of the 
+        source; the remaining properties provide the details needed to access the source.
+
+        The types of sources that are supported is implementation-dependent.  This base implementation 
+        supports only the ``fs`` type which allows data to be imported from a filesystem-accessible 
+        directory.  In the brief format, the location specifier is the full path to the directory 
+        containing data files.  In the dictionary format, the following properties (in addition to 
+        ``type`` being set to ``fs``) are supported:
+
+        ``location``
+             (str) _required_.  the full path to the directory where files can be found
+        ``hard_link_data``
+             (bool) _optional_. If True (default), attempt to import the files by creating a hard link 
+             (falling back to a regular copy if not possible).  If False, all files will explicitly 
+             copied.  
+        ``consumbable``
+             (bool) _optional_.  If True (default), the file may be removed from the source directory
+             after it has been loaded into the bag; this is recommended to prevent the file from being 
+             inadvertantly reloaded with each call to :py:meth:`import_from_sources`.  False prevents
+             the removal of the source file after successful import.
+
+        See also :py:func:`import_fs_files` for more details on the import behavior for the ``fs`` type.
+
+        :param str|dict srcinfo:  a description of how and from where files can be pulled from (see above)
+        :param bool include_all:  if False (default), only files for which the bag holds file metadata 
+                                  for already will be imported.  If True, all files found in the source 
+                                  will be loaded; for any that the bag does not have metadata, default 
+                                  metadata will be created for it (see also the ``examine`` argument).
+        :param bool     examine:  If True, each file will be examined for extracting additional metadata
+                                  (e.g. a checksum hash).  A True value may incur a significant 
+                                  time cost.  If False (default), at most, only minimal metadata for the 
+                                  file will be created if it doesn't exist already.  
+        :return:  a list of the filepaths that were imported
+                  :rtype: List[str]
+        """
+        # convert string form to dict; can raise TypeError, ValueError
+        srcinfo = self._ensure_srcinfo_dict(srcinfo)
+        srctype = srcinfo['type']
+
+        if not who:
+            who = UNKNOWN_AGENT
+
+        with self._lock_when(lock):
+            self.ensure_preparation(True, who)
+            hmsg = "Importing data files from "+srcinfo.get('location', "source type="+srctype)
+            hist = Action(Action.PUT, self.id+const.FILECMP_EXTENSION+'/', who, hmsg)
+
+            if _filepaths is None:
+                _filepaths = list(self.bagbldr.bag.iter_data_components())
+
+            try:
+                return self._file_importers[srcinfo['type']](self.bagbldr, srcinfo, _filepaths,
+                                                             include_all, examine, self.log, hist)
+            except PublishingStateException as ex:
+                self.log.error("Unable to import data from source (type=%s): %s",
+                               srcinfo['type'], str(ex))
+            except PublishException as ex:
+                raise
+            except Exception as ex:
+                raise PublishException("Unexpected failure while importing files from source "
+                                       "type=%s: %s" % (srcinfo['type'], str(ex)))
+                                          
+            if _action:
+                _action.add_subaction(hist)
+            else:
+                self.record_history(hist)
+
+    def _ensure_srcinfo_dict(self, srcinfo):
+        if isinstance(srcinfo, str) and ':' in srcinfo:
+            # format should be type:location
+            srctp, loc = srcinfo.split(':', 1)
+            srcinfo = { 'type': srctp, 'location': loc }
+        elif not isinstance(srcinfo, Mapping):
+            raise TypeError("bagger: srcinfo not a str or Mapping")
+
+        if not srcinfo.get('type'):
+            raise ValueError("bagger: srcinfo dict is missing required 'type' property")
+        elif srcinfo['type'] not in self._file_importers:
+            raise ValueError("bagger: srcinfo type not supported: "+srcinfo['type'])
+
+        return srcinfo
+
+    def set_data_source(self, srcinfo: Union[str,Mapping], who: Agent=None,
+                        lock: bool=True, _action: Action=None):
+        """
+        declare a source for loading data files into this bag.  
+
+        Data files found at the source will be migrated into the bag when 
+        :py:meth:`ensure_data_files` is called (which is called by :py:meth:`finalize`).  The 
+        files themselves, therefore, do not need to be available at the source when this method
+        is called; they just need to be there by the time :py:meth:`finalize` is called.
+
+        :param str|dict srcinfo:  a description of the source.  The format is the same as ``srcinfo``
+                                  supported by the :py:meth:`import_data_files`.
+        :param Agent who:         an agent identifier object, indicating who is requesting this action.  
+                                  This will get recorded in the history data.  If None, an internal 
+                                  administrative identity will be assumed.  This identity may affect the 
+                                  identifier assigned.
+        """
+        # convert string form to dict; can raise TypeError, ValueError
+        srcinfo = self._ensure_srcinfo_dict(srcinfo)
+        try:
+            encoded = json.dumps(srcinfo)
+        except TypeError as ex:
+            raise TypeError("set_data_source: srcinfo is not a str or a JSON-encodable object (%s)" % \
+                            str(ex))
+
+        if not who:
+            who = UNKNOWN_AGENT
+
+        with self._lock_when(lock):
+            hist = Action(Action.COMMENT, self.id, who, "Setting payload data source", encoded)
+            self.ensure_preparation(True, who, hist)
+
+            dsrcf = os.path.join(self.bagdir, self._data_source_file)
+            try:
+                with open(dsrcf, 'a') as fd:
+                    fd.write(encoded)
+                    fd.write('\n')
+            except Exception as ex:
+                raise PublishingStateException("Unable to write data source to SIP bag: "+str(ex))
+
+            if _action:
+                _action.add_subaction(hist)
+            else:
+                self.record_history(hist)
+            
+    def ensure_data_files(self, include_all: bool=False, examine: bool=False, who: Agent=None,
+                          lock=True, _action: Action=None):
+        """
+        import all data found in the registered data sources into the bag
+
+        Data sources are registered via :py:meth:`set_data_source`.  This method will iterate through
+        the registered data sources and import the data files found there.  This method is called 
+        by :py:meth:`finalize` to ensure that all data has been imported.  
+
+        :param bool include_all:  if False (default), only files that currently have a component metadata 
+                                  description will get migrated.  If True, all files found in the 
+                                  sources will be imported; for those without a component metadata
+                                  description, a default description will be created.
+        :param bool     examine:  If True, each imported file will be examined for extracting additional 
+                                  metadata (e.g. a checksum hash).  A True value may incur a significant 
+                                  time cost if the files are large or numerous.  If False (default), at 
+                                  most, only minimal metadata for the file will be created if it doesn't 
+                                  exist already.  
+        """
+        if not who:
+            who = UNKNOWN_AGENT
+
+        with self._lock_when(lock):
+            filepaths = list(self.bagbldr.bag.iter_data_components())
+
+            hist = Action(Action.PATCH, self.id, who, "Ensuring all data imported")
+
+            imported = set()
+            dsrcf = os.path.join(self.bagdir, self._data_source_file)
+            if os.path.isfile(dsrcf):
+                with open(dsrcf) as fd:
+                    for line in fd:
+                        try:
+                            srcinfo = json.loads(line.strip())
+                        except ValueError as ex:
+                            self.log.error("Corrupted data source entry: %s; skipping", line.strip())
+                        else:
+                            imported |= set(self.import_data_files(srcinfo, include_all, examine, who,
+                                                                   False, False, hist, filepaths))
+
+            if _action:
+                _action.add_subaction(hist)
+            else:
+                self.record_history(hist)
+
+            return list(imported)
+
+    @classmethod
+    def register_data_source_type(cls, type: str, importer: Callable):
+        """
+        add support for a mechanism for importing data files into a bag
+
+        This function can be used to extend this class to support additional mechanisms for 
+        importing data files.  The ``type`` value corresponds to a supported ``type`` property 
+        in the ``srcinfo`` provided to :py:meth:`import_data_files`` and :py:meth:`set_data_source`.
+        The mechanism implementation is given by ``importer`` which is a callable that must 
+        support the following arguments:
+
+        ``bldr``
+             (BagBuilder)  the bag builder instance to use to load the file from the source
+        ``srcinfo``
+             (dict)  the description of the data source in which the properties controls how 
+             and from where the files are loaded.  These properties are implementation-specific
+             (so it is recommended that the function definition document what is supported).
+        ``filepaths``
+             (list of str)  a list of the filepaths whose metadata have already been committed
+             to the bag.
+        ``include_all``
+             (bool)  if True, all eligible files found in the data source will be imported; 
+             otherwise, only those files corresponding to those listed in ``filepaths`` will 
+             be loaded.
+        ``examine``
+             (bool)  if True and if possible, each file should be examined for extractable metadata;
+             otherwise, only minimal metadata will be set if none already exist in the bag.
+        ``log``
+             (Logger) a Logger that should be used to record log messages
+        ``_action``
+             (Action) a provenance Action instance representing an aggregate action that this import 
+             function call is part of.  If provided, file loading actions will be recorded as 
+             sub-action into this Action.  If None, no provenance actions are recorded. 
+
+        The function must return a list of the filepaths that files were imported into.  The function
+        may raise exceptions; they will be handled.  
+
+        :param          str type:  the label that identifies the type of data source to support
+        :param function importer:  a function that implements the import mechanism (see above for 
+                                   description of the required function signature).  This will replace
+                                   any previously registered function for this type.
+        """
+        cls._file_importers[type] = importer
+
     def delete(self, who: Agent=None, lock=True):
         """
         delete the working bag from store; this sets the bagger to a virgin state.
@@ -741,11 +1096,7 @@ class NERDmBasedBagger(SIPBagger):
         if who:
             msg += " by "+str(who)
         self.log.info(msg)
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                self.bagbldr.destroy()
-        else:
+        with self._lock_when(lock):
             self.bagbldr.destroy()
 
     def ensure_doi(self, who: Agent=None, lock: bool=True, _action=None):
@@ -759,15 +1110,13 @@ class NERDmBasedBagger(SIPBagger):
         """
         if self.cfg.get('assign_doi') == ASSIGN_DOI_NEVER:
             return
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                self._ensure_doi(who, _action=_action)
-
-        else:
-            self._ensure_doi
+        with self._lock_when(lock):
+            self._ensure_doi(who, _action)
 
     def _ensure_doi(self, who, _action=None, nerd=None):
+        if not who:
+            who = UNKNOWN_AGENT
+
         if not nerd:
             self.ensure_preparation(who, _action)
             nerd = self.bagbldr.bag.nerd_metadata_for('', True)
@@ -977,6 +1326,7 @@ class NERDmBasedBagger(SIPBagger):
     def _jsondiff(self, old, new):
         return {"jsonpatch": jsonpatch.make_patch(old, new)}
 
+NERDmBasedBagger.register_data_source_type('fs', import_fs_files)
 
 class PDPBagger(NERDmBasedBagger):
     """
@@ -1026,6 +1376,8 @@ class PDPBagger(NERDmBasedBagger):
                                         BagBuilder.finalize for supported config subparameters; however,
                                         subclasses of this Bagger may support additional parameters.
     """
+
+    _file_importers = { 'fs': import_fs_files }
 
     def __init__(self, sipid: str, config: Mapping, idminter: PDPMinter, prepsvc: UpdatePrepService=None, 
                  convention: str="pdp0", id:str=None):
@@ -1205,6 +1557,9 @@ class PDPBagger(NERDmBasedBagger):
 
             self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
             hist.add_subaction(act)
+
+            # pull in any data still waiting to be imported
+            self.ensure_data_files(lock=False, _action=hist)
 
         except Exception as ex:
             self.log.warning("Failed to complete finalization: "+str(ex))

@@ -28,6 +28,9 @@ from nistoar.pdr.utils import prov
 datadir = Path(__file__).parents[2] / 'preserve' / 'data'
 datadir2 = Path(__file__).parents[1] / 'data'
 simplenerd = datadir / '1491nerdm.json'
+sipbag = datadir / 'mds3sipbag'
+sipbagd = sipbag / 'data'
+sipbagmd = sipbag / 'metadata'
 
 loghdlr = None
 rootlog = None
@@ -321,6 +324,223 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(saved['filepath'], '1491_README.txt')
         self.assertEqual(saved['downloadURL'], "https://s3.amazonaws.com/nist-midas/1491_README.txt")
         self.assertEqual(saved['mediaType'], "text/plain")
+
+    def test_add_data_file(self):
+        self.set_bagger_for("pdp1:goob")
+        self.bgr.prepare()
+        bnerd = self.bgr.bag.nerdm_record()
+        self.assertEqual(len(bnerd.get('components', [])), 0)
+        
+        nerd = utils.read_json(str(sipbagmd/'trial1.json'/'nerdm.json'))
+        self.bgr.set_comp_nerdm(nerd, None, True) 
+        dfile = sipbagd/'trial1.json'
+
+        # add file after metadata
+        self.bgr.add_data_file(dfile, 'trial1.json')
+        self.assertTrue(os.path.isfile(os.path.join(self.bgr.bag.data_dir, nerd['filepath'])))
+        bnerd = self.bgr.bag.nerdm_record()
+        self.assertEqual(len(bnerd['components']), 1)
+        cnerd = bnerd['components'][0]
+        self.assertEqual(cnerd['filepath'], nerd['filepath'])
+        self.assertEqual(cnerd['size'], nerd['size'])
+        self.assertIn('checksum', cnerd)
+
+        # add file with metadata (and in subcollection)
+        nerd = utils.read_json(str(sipbagmd/'trial3'/'trial3a.json'/'nerdm.json'))
+        self.assertIn('checksum', nerd)
+        dfile = sipbagd/'trial3'/'trial3a.json'
+        self.bgr.add_data_file(dfile, 'trial3/trial3a.json', nerd)
+        self.assertTrue(os.path.isfile(os.path.join(self.bgr.bag.data_dir, nerd['filepath'])))
+        bnerd = self.bgr.bag.nerdm_record()
+        self.assertEqual(len(bnerd['components']), 3)
+        fps = [c['filepath'] for c in bnerd['components']]
+        self.assertIn('trial1.json', fps)
+        self.assertIn('trial3', fps)
+        self.assertIn('trial3/trial3a.json', fps)
+        cnerd = list(c for c in bnerd['components'] if c['filepath'] == 'trial3/trial3a.json')[0]
+        self.assertEqual(cnerd['filepath'], nerd['filepath'])
+        self.assertEqual(cnerd['size'], nerd['size'])
+        self.assertIn('checksum', cnerd)
+
+        # add file before metadata
+        dfile = sipbagd/'trial2.json'
+        self.bgr.add_data_file(dfile, 'trial4.json')
+        self.assertTrue(os.path.isfile(os.path.join(self.bgr.bag.data_dir, 'trial4.json')))
+        bnerd = self.bgr.bag.nerdm_record()
+        self.assertEqual(len(bnerd['components']), 4)
+        fps = [c['filepath'] for c in bnerd['components']]
+        self.assertIn('trial4.json', fps)
+        self.assertIn('trial1.json', fps)
+        self.assertIn('trial3', fps)
+        self.assertIn('trial3/trial3a.json', fps)
+        cnerd = list(c for c in bnerd['components'] if c['filepath'] == 'trial4.json')[0]
+        self.assertEqual(cnerd['filepath'], 'trial4.json')
+        self.assertIn('@id', cnerd)
+        self.assertIn('size', cnerd)
+        self.assertNotIn('checksum', cnerd)
+
+        # add metadata after file
+        nerd = utils.read_json(str(sipbagmd/'trial2.json'/'nerdm.json'))
+        nerd['filepath'] = 'trial4.json'
+        nerd['downloadURL'] = re.sub(r'trial2', 'trial4', nerd['downloadURL'])
+        nerd['accessLevel'] = 'public'
+        self.bgr.set_comp_nerdm(nerd, None, True) 
+        self.assertTrue(os.path.isfile(os.path.join(self.bgr.bag.data_dir, 'trial4.json')))
+        bnerd = self.bgr.bag.nerdm_record()
+        cnerd = list(c for c in bnerd['components'] if c['filepath'] == 'trial4.json')[0]
+        self.assertEqual(cnerd['filepath'], 'trial4.json')
+        self.assertIn('@id', cnerd)
+        self.assertIn('size', cnerd)
+        self.assertIn('checksum', cnerd)
+        self.assertEqual(cnerd['accessLevel'], 'public')
+
+        # add file with metadata to merge
+        dfile = sipbagd/'trial2.json'
+        nerd = utils.read_json(str(sipbagmd/'trial2.json'/'nerdm.json'))
+        self.assertIn('checksum', nerd)
+        self.assertNotIn('accessLevel', nerd)
+        self.bgr.set_comp_nerdm(nerd, None, True)
+
+        self.bgr.add_data_file(dfile, 'trial2.json', {'accessLevel': 'public'})
+        self.assertTrue(os.path.isfile(os.path.join(self.bgr.bag.data_dir, 'trial2.json')))
+        bnerd = self.bgr.bag.nerdm_record()
+        self.assertEqual(len(bnerd['components']), 5)
+        fps = [c['filepath'] for c in bnerd['components']]
+        self.assertIn('trial2.json', fps)
+        self.assertIn('trial4.json', fps)
+        self.assertIn('trial1.json', fps)
+        self.assertIn('trial3', fps)
+        self.assertIn('trial3/trial3a.json', fps)
+        cnerd = list(c for c in bnerd['components'] if c['filepath'] == 'trial2.json')[0]
+        self.assertEqual(cnerd['filepath'], 'trial2.json')
+        self.assertIn('@id', cnerd)
+        self.assertIn('size', cnerd)
+        self.assertIn('checksum', cnerd)
+        self.assertIn('accessLevel', cnerd)
+
+    def test_ensure_srcinfo_dict(self):
+        self.set_bagger_for("pdp1:goob")
+        si = {"type": "fs", "a": "b"}
+        self.assertEqual(self.bgr._ensure_srcinfo_dict(si), si)
+        self.assertEqual(self.bgr._ensure_srcinfo_dict("fs:gurn"), {"type": "fs", "location": "gurn"})
+        with self.assertRaises(TypeError):
+            self.bgr._ensure_srcinfo_dict([])
+        with self.assertRaises(ValueError):
+            self.bgr._ensure_srcinfo_dict({})
+        with self.assertRaises(ValueError):
+            self.bgr._ensure_srcinfo_dict("goo:gurn")
+
+        si['type'] = 'goo'
+        with self.assertRaises(ValueError):
+            self.bgr._ensure_srcinfo_dict(si)
+
+    def test_import_data_files(self):
+        uploads = os.path.join(self.workdir, 'uploads')
+        shutil.copytree(sipbagd, uploads)
+        self.set_bagger_for("pdp1:goob")
+        src = "fs:"+str(uploads)
+
+        # no file metadata loaded, so no files loaded
+        self.bgr.import_data_files(src)
+        bnerd = self.bgr.bag.nerdm_record()
+        self.assertEqual(len(bnerd.get('components', [])), 0)
+
+        # pull in data matching metadata
+        self.assertTrue(os.path.isfile(os.path.join(uploads,'trial1.json')))
+        self.assertTrue(os.path.isfile(os.path.join(uploads,'trial2.json')))
+        nerd = utils.read_json(str(sipbagmd/'trial1.json'/'nerdm.json'))
+        self.bgr.set_comp_nerdm(nerd, None, True) 
+        self.bgr.import_data_files(src)
+        self.assertTrue(not os.path.isfile(os.path.join(uploads,'trial1.json')))
+        self.assertTrue(os.path.isfile(os.path.join(uploads,'trial2.json')))
+        self.assertTrue(os.path.isfile(os.path.join(self.bgr.bag.data_dir, 'trial1.json')))
+        bnerd = self.bgr.bag.nerdm_record()
+        self.assertEqual(len(bnerd['components']), 1)
+        cnerd = bnerd['components'][0]
+        self.assertEqual(cnerd['filepath'], nerd['filepath'])
+        self.assertEqual(cnerd['size'], nerd['size'])
+        self.assertIn('checksum', cnerd)
+
+        # load everything but don't delete source files
+        src = {'type': 'fs', 'location': uploads, 'consumable': False }
+        self.bgr.import_data_files(src, include_all=True)
+        self.assertTrue(not os.path.isfile(os.path.join(uploads,'trial1.json')))
+        self.assertTrue(os.path.isfile(os.path.join(uploads,'trial2.json')))
+        self.assertTrue(os.path.isfile(os.path.join(self.bgr.bag.data_dir, 'trial1.json')))
+        self.assertTrue(os.path.isfile(os.path.join(self.bgr.bag.data_dir, 'trial2.json')))
+        self.assertTrue(os.path.isfile(os.path.join(self.bgr.bag.data_dir, 'trial3/trial3a.json')))
+        bnerd = self.bgr.bag.nerdm_record()
+        self.assertEqual(len(bnerd['components']), 4)
+        fps = [c['filepath'] for c in bnerd['components']]
+        self.assertIn('trial2.json', fps)
+        self.assertIn('trial1.json', fps)
+        self.assertIn('trial3', fps)
+        self.assertIn('trial3/trial3a.json', fps)
+
+        # hard link?
+        self.assertTrue(os.path.samefile(os.path.join(uploads,'trial2.json'),
+                                         os.path.join(self.bgr.bag.data_dir, 'trial2.json')))
+
+    def test_set_data_source(self):
+        self.set_bagger_for("pdp1:goob")
+        dsf = os.path.join(self.bgr.bagdir, '__data_sources.lis')
+        self.assertTrue(not os.path.exists(dsf))
+
+        self.bgr.set_data_source("fs:"+str(sipbagd))
+        self.assertTrue(os.path.exists(dsf))
+        src = utils.read_json(dsf)
+        self.assertEqual(src, {"type": 'fs', 'location': str(sipbagd)})
+
+        self.bgr.set_data_source({'type': 'fs', 'location': "goober", 'consumable': False})
+        self.assertTrue(os.path.exists(dsf))
+        srcs = []
+        with open(dsf) as fd:
+            for line in fd:
+                srcs.append(json.loads(line))
+        self.assertEqual(len(srcs), 2)
+        self.assertEqual(srcs[0], {"type": 'fs', 'location': str(sipbagd)})
+        self.assertEqual(srcs[1], {"type": 'fs', 'location': 'goober', 'consumable': False})
+
+    def test_ensure_data_files(self):
+        self.set_bagger_for("pdp1:goob")
+        self.bgr.prepare()
+
+        uploads1 = os.path.join(self.workdir, 'uploads1')
+        shutil.copytree(sipbagd, uploads1)
+        uploads2 = os.path.join(self.workdir, 'uploads2')
+        shutil.copytree(sipbagd, uploads2)
+        c = 0
+        for dir, sub, files in os.walk(uploads1):
+            c += len(files)
+        self.assertEqual(c, 3)
+        c = 0
+        for dir, sub, files in os.walk(uploads2):
+            c += len(files)
+        self.assertEqual(c, 3)
+        c = 0
+        for dir, sub, files in os.walk(self.bgr.bag.data_dir):
+            c += len(files)
+        self.assertEqual(c, 0)
+        self.assertEqual(len(self.bgr.bag.nerdm_record().get('components',[])), 0)
+
+        self.bgr.set_data_source("fs:"+str(uploads1))
+        self.bgr.set_data_source("fs:"+str(uploads2))
+
+        self.bgr.ensure_data_files(True)
+        
+        c = 0
+        for dir, sub, files in os.walk(uploads1):
+            c += len(files)
+        self.assertEqual(c, 0)
+        c = 0
+        for dir, sub, files in os.walk(uploads2):
+            c += len(files)
+        self.assertEqual(c, 0)
+        c = 0
+        for dir, sub, files in os.walk(self.bgr.bag.data_dir):
+            c += len(files)
+        self.assertEqual(c, 3)
+        self.assertEqual(len(self.bgr.bag.nerdm_record().get('components',[])), 4)
 
     def test_delete(self):
         bagdir = self.bagparent / 'pdp1:goob'

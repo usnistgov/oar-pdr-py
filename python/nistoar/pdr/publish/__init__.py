@@ -39,7 +39,7 @@ class PublishException(PDRException):
         if not msg and not cause:
             msg = "Unknown publishing error"
         if not sys:
-            sys = pdrsys.get_global_system() or system
+            sys = system.get_global_system() or system
         super(PublishException, self).__init__(msg, cause, sys)
 
 class PublishingStateException(PublishException):
@@ -78,6 +78,28 @@ class BadSIPInputError(PublishException):
             if cause:
                 msg += ": " + str(cause)
         super(BadSIPInputError, self).__init__(msg, cause)
+
+class UploadMethodNotSupported(BadSIPInputError):
+    """
+    an exception indicating that a publishing client requested an data upload method that is not 
+    supported the service.  
+
+    .. seealso:: :py:meth:`nistoar.pdr.publish.service.base.SimpleNerdmPublishingService.init_data_upload`
+    """
+    def __init__(self, method: str, msg=None, cause=None):
+        """
+        create the exception
+
+        :param str method: the name of the method that was requested for uploading
+        :param str    msg: a message to override the default
+        :param Exception cause: a caught exception that represents the underlying cause of the problem.  
+        """
+        if not msg:
+            msg = f"{method}: upload method is not supported"
+            if cause:
+                msg += f" ({str(cause)})"
+        super(UploadMethodNotSupported, self).__init__(msg, cause)
+        self.method = method
 
 class SIPStateException(PublishingStateException):
     """

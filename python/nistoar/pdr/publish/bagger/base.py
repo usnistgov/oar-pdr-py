@@ -16,6 +16,8 @@ from ...preserve.bagit.builder import checksum_of
 from ....base.config import merge_config
 from ...utils.prov import Agent, Action
 
+UNKNOWN_AGENT = Agent("", Agent.UNKN, Agent.ANONYMOUS)
+
 def moddate_of(filepath):
     """
     return a file's modification time (as a float)
@@ -89,7 +91,7 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
         :param Agent    who: an actor identifier object, indicating who is requesting this action.  This 
                              will get recorded in the history data.  If None, an internal administrative 
                              identity will be assumed.  This identity may affect the identifier assigned.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
@@ -106,6 +108,25 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
             self.ensure_bag_parent_dir()
             self.lock = filelock.FileLock(lockfile)
 
+    class _nolock:
+        def __enter__(self):
+            return None
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    def _lock_when(self, dolock: bool):
+        """
+        return a context manager that, if requested, will lock this bag.  
+
+        This is a convenience function intended for use internally by this class and subclasses
+
+        :param bool dolock:  if True, lock the bag; otherwise, do nothing
+        """
+        if dolock:
+            self.ensure_filelock()
+            return self.lock
+        return self._nolock()
+
     def prepare(self, nodata=False, who=None, lock=True, _action: Action=None):
         """
         initialize the output working bag directory by calling 
@@ -120,12 +141,7 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
         :param lock bool:   if True (default), acquire a lock before executing
                             the preparation.
         """
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                self.ensure_preparation(nodata, who, _action)
-
-        else:
+        with self._lock_when(lock):
             self.ensure_preparation(nodata, who, _action)
 
     def finalize(self, who: Agent=None, lock=True, _action: Action=None):
@@ -138,16 +154,11 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
                              identity will be assumed.  This identity may affect the identifier assigned.
         :param bool lock:    if True (default), acquire a lock before executing
                              the preparation.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                self.ensure_finalize(who, _action)
-
-        else:
+        with self._lock_when(lock):
             self.ensure_finalize(who, _action)
 
     @abstractmethod
@@ -159,7 +170,7 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
         :param Agent    who:  an actor identifier object, indicating who is requesting this action.  This 
                               will get recorded in the history data.  If None, an internal administrative 
                               identity will be assumed.  This identity may affect the identifier assigned.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
