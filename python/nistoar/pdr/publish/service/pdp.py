@@ -798,6 +798,9 @@ class PDPublishingService(BagBasedPublishingService):
     
     def __init__(self, config: Mapping, convention: str, working_dir: str=None, bagdir: str=None, 
                  status_dir: str=None, idregdir: str=None, ingestsvc=None):    # : IngestService
+
+        pdpinfo = "__pdp.json"
+        
         """
         initialize the service.
 
@@ -820,6 +823,12 @@ class PDPublishingService(BagBasedPublishingService):
                                                   status_dir, ingestsvc)
         self.idregdir = self._resolve_dir('id_registry_dir', idregdir, self.workdir, 'idregs')
         self._minters = {}
+        self.uplparent = None
+        if self.cfg.get('uploads_dir'):
+            self.uplparent = Path(self.cfg['uploads_dir'])
+            if not self.uplparent.is_dir():
+                raise ConfigurationException(f"uploadsdir: {self.uplparent}: does not exist "+
+                                             "as a directory")
 
     def _get_id_shoulder(self, who, sipid: str, create: bool):
         """
@@ -1038,6 +1047,54 @@ class PDPublishingService(BagBasedPublishingService):
                                              +factoryid+": "+str(ex))
 
         return PDP0Minter(mntrcfg, shoulder)
+
+    def init_data_upload(self, sipid: str, method: str, who: Agent=None) -> str:
+        """
+        prepare a space for uploading data files that should be a part of the publication.
+
+        This service supports one method for uploading named 'fs`: the client and this service 
+        are assumed to have both have direct filesystem access to an uploads directory.  In 
+        particular, this service and the client are configured with root directory on a shared
+        filesystem where uploads can occur.  (The server and the client may have different paths 
+        to that same root directory.)  When this method is called with method='fs', a 
+        dedicated subdirectory will be created under that root uploads directory; its path
+        relative to the shared root is returned to the client.  The client then uploads the data
+        files--using the same hierarchical organization as is desired for within the bag--to the 
+        dedicated subdirectory.  After all files are uploaded, the client is free to call 
+        :py:meth:`finalize` or :py:meth:`publish` to submit the SIP.  
+
+        .. seealso the documentation for the parent abstract method, 
+        :py:meth:`~nistoar.pdr.publish.service.base.SimpleNerdmPublishingService.upsert_component_metadata`,
+        for more information about how this method should be used by the client in concert with 
+        other methods used to submit the SIP.  
+
+        :param str  sipid:  the identifier for the SIP being prepared
+        :param str method:  the name of the mechanism that will be engaged to upload files; currently,
+                            only 'fs' is supported.
+        :param who:         an actor identifier object, indicating who is requesting this action.  This 
+                            will get recorded in the history data.  If None, an internal administrative 
+                            identity will be assumed.  This identity may affect the identifier assigned.
+        :raises UploadMethodNotSupported: if ``method`` is not recognized as a supported upload method
+        """
+        if method != 'fs':
+            raise UploadMethodNotSupported(method)
+        if not sself.uplparent:
+            raise UploadMethodNotSupported(method, "fs uploads are not configured in this service")
+
+        upldir = self.uplparent/sipid
+        try:
+            if not upldir.exists():
+                upldir.mkdir()
+        except Exception as ex:
+            raise PreservationStateException(f"{sipid}: Unable to create uploads directory: {str(ex)}") \
+                from ex
+
+        shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
+        bagger = self._get_bagger_for(shoulder, sipid)
+
+        bagger.set_data_source("fs:"+upldir, who)
+        
+        return sipid
                     
         
 PDP0Service = PDPublishingService

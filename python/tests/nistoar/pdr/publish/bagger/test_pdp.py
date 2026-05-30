@@ -580,6 +580,41 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(saved.get('doi'), "doi:10.22222/pdp1-0017sm")
         self.assertFalse(any([s for s in saved['_extensionSchemas'] if 'Submission' in s]))
 
+    def test_determine_version(self):
+        bagdir = self.bagparent / 'pdp1:goob'
+        self.assertTrue(not bagdir.exists())
+        self.set_bagger_for("pdp1:goob")
+        self.bgr.prepare(who=tstag)
+        self.assertTrue(bagdir.exists())
+
+        nerd = utils.read_json(str(simplenerd))
+        self.bgr.set_res_nerdm(nerd, tstag, True)
+        nerd = self.bgr.bagbldr.bag.nerdm_record()
+
+        incr, msg = self.bgr._determine_update_level(self.bgr.bagbldr.bag.nerdm_record(), nerd)
+        self.assertEqual(incr, 2)
+        self.assertTrue(msg)
+
+        del nerd['components'][2]
+        incr, msg = self.bgr._determine_update_level(self.bgr.bagbldr.bag.nerdm_record(), nerd)
+        self.assertEqual(incr, 1)
+        self.assertTrue(msg)
+
+        incr, msg = self.bgr._determine_update_level(nerd, self.bgr.bagbldr.bag.nerdm_record())
+        self.assertEqual(incr, 1)
+        self.assertTrue(msg)
+
+        fps = [c['filepath'] for c in nerd['components'] if c.get('filepath') and '/' not in c['filepath']]
+        with open(os.path.join(self.bgr.bagbldr.bag.data_dir, fps[0]), 'w') as fd:
+            fd.write("\n")
+        
+        incr, msg = self.bgr._determine_update_level(self.bgr.bagbldr.bag.nerdm_record(),
+                                                     self.bgr.bagbldr.bag.nerdm_record())
+        self.assertEqual(incr, 1)
+        self.assertTrue(msg)
+
+
+
     def test_finalize_version(self):
         bagdir = self.bagparent / 'pdp1:goob'
         self.assertTrue(not bagdir.exists())
