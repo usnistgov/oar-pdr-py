@@ -1538,6 +1538,9 @@ class PDPBagger(NERDmBasedBagger):
         self.ensure_preparation(True, who, hist)
 
         try:
+            # pull in any data still waiting to be imported
+            self.ensure_data_files(lock=False, _action=hist)
+
             self.finalize_version(who, _action=hist)
 
             # remove use of Submission types
@@ -1557,9 +1560,6 @@ class PDPBagger(NERDmBasedBagger):
 
             self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
             hist.add_subaction(act)
-
-            # pull in any data still waiting to be imported
-            self.ensure_data_files(lock=False, _action=hist)
 
         except Exception as ex:
             self.log.warning("Failed to complete finalization: "+str(ex))
@@ -1600,12 +1600,21 @@ class PDPBagger(NERDmBasedBagger):
         newfiles = set([c.get('@id','') for c in oldmd.get('components',[]) 
                                         if nerdutils.is_any_type(["DataFile", "AccessPage"])])
 
+        # any files in the data directory?
+        updatedfiles = False
+        for dir, sd, files in os.walk(self.bldr.bag.data_dir):
+            if files:
+                updatedfiles = True
+                break
+
         if newfiles > oldfiles:
             return (1, "data links added")
         elif oldfiles > newfiles:
             return (1, "data links removed")
         elif oldfiles != newfiles:
             return (1, "data links added and removed")
+        elif updatedfiles:
+            return (1, "data files updated")
 
         # metadata change only
         return (2, "metadata updates only")
