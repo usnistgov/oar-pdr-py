@@ -565,11 +565,32 @@ class TestPDPBagger(test.TestCase):
         saved = self.bgr.bag.nerdm_record('', True)
         self.assertNotIn('doi', saved)
 
+        # set a data source file and add some other files to confirm they get cleaned up
+        self.bgr.set_data_source("fs:/goober/gurn")
+        f = os.path.join(self.bgr.bagbldr.bagdir, "#goobs.lis")
+        open(f, 'w').close()
+        self.assertTrue(os.path.isfile(f))
+        f = os.path.join(self.bgr.bagbldr.bagdir, "_goobs.lis")
+        open(f, 'w').close()
+        self.assertTrue(os.path.isfile(f))
+        f = os.path.join(self.bgr.bagbldr.bag.metadata_dir, "#oldnerdm.json")
+        open(f, 'w').close()
+        self.assertTrue(os.path.isfile(f))
+
         self.bgr.cfg['assign_doi'] = 'always'
         self.assertTrue(not os.path.exists(os.path.join(self.bgr.bagdir, "bag-info.txt")))
         self.bgr.finalize(who=tstag)
         self.assertTrue(os.path.exists(os.path.join(self.bgr.bagdir, "bag-info.txt")))
         self.assertTrue(os.path.exists(os.path.join(self.bgr.bagdir, "publish_history.yml")))
+
+        f = os.path.join(self.bgr.bagbldr.bagdir, "#goobs.lis")
+        self.assertFalse(os.path.exists(f))
+        f = os.path.join(self.bgr.bagbldr.bagdir, "_goobs.lis")
+        self.assertFalse(os.path.exists(f))
+        f = os.path.join(self.bgr.bagbldr.bag.metadata_dir, "#oldnerdm.json")
+        self.assertFalse(os.path.exists(f))
+        f = os.path.join(self.bgr.bagbldr.bagdir, self.bgr._data_source_file)
+        self.assertFalse(os.path.exists(f))
 
         with open(os.path.join(self.bgr.bagdir, "publish_history.yml")) as fd:
             history = prov.load_from_history(fd)

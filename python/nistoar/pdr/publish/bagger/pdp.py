@@ -920,9 +920,10 @@ class NERDmBasedBagger(SIPBagger):
             if _filepaths is None:
                 _filepaths = list(self.bagbldr.bag.iter_data_components())
 
+            out = []
             try:
-                return self._file_importers[srcinfo['type']](self.bagbldr, srcinfo, _filepaths,
-                                                             include_all, examine, self.log, hist)
+                out = self._file_importers[srcinfo['type']](self.bagbldr, srcinfo, _filepaths,
+                                                            include_all, examine, self.log, hist)
             except PublishingStateException as ex:
                 self.log.error("Unable to import data from source (type=%s): %s",
                                srcinfo['type'], str(ex))
@@ -936,6 +937,8 @@ class NERDmBasedBagger(SIPBagger):
                 _action.add_subaction(hist)
             else:
                 self.record_history(hist)
+
+            return out
 
     def _ensure_srcinfo_dict(self, srcinfo):
         if isinstance(srcinfo, str) and ':' in srcinfo:
@@ -1540,6 +1543,9 @@ class PDPBagger(NERDmBasedBagger):
         try:
             # pull in any data still waiting to be imported
             self.ensure_data_files(lock=False, _action=hist)
+            dsrcf = os.path.join(self.bagdir, self._data_source_file)
+            if os.path.isfile(dsrcf):
+                os.remove(dsrcf)
 
             self.finalize_version(who, _action=hist)
 
@@ -1562,7 +1568,10 @@ class PDPBagger(NERDmBasedBagger):
             for d, sds, files in os.walk(self.bagbldr.bag.metadata_dir):
                 for f in files:
                     if f.startswith('#'):
-                        os.remove(os.path.join(dir, f))
+                        os.remove(os.path.join(d, f))
+            for f in os.listdir(self.bagbldr.bagdir):   # top-level files starting with '#' or '_'
+                if f.startswith('#') or f.startswith('_'):
+                    os.remove(os.path.join(self.bagbldr.bagdir, f))
 
             self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
             hist.add_subaction(act)
