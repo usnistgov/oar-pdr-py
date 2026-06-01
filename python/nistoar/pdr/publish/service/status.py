@@ -10,7 +10,6 @@ from copy import deepcopy
 
 from ...exceptions import StateException
 from .. import system as pubsys
-
 NOT_FOUND  = "not found"     # SIP has not been created
 AWAITING   = "awaiting"      # SIP requires an update before it can be published
 PENDING    = "pending"       # SIP has been created/updated but not yet published
@@ -22,9 +21,10 @@ SUBMITTED  = "submitted"     # The SIP was submitted for preservation
 PUBLISHED  = "published"     # SIP was successfully published
 FAILED     = "failed"        # an attempt to publish (or finalize) was made but failed due to an
                              #  unexpected state or condition; SIP must be updated (or rebuilt from
-                             #  scratch) before it can be published 
+                             #  scratch) before it can be published
+ONHOLD     = "on-hold"       # Processing has been paused due to an internal issue or system error
 
-states = [ NOT_FOUND, AWAITING, PENDING, PROCESSING, FINALIZED, SUBMITTED, PUBLISHED, FAILED ]
+states = [ NOT_FOUND, AWAITING, PENDING, PROCESSING, FINALIZED, SUBMITTED, PUBLISHED, FAILED, ONHOLD ]
 
 user_message = {
     NOT_FOUND:   "Submission not found or available",
@@ -34,7 +34,8 @@ user_message = {
     FINALIZED:   "Submission is ready to be published",
     SUBMITTED:   "Submission was submitted for preservation and publication",
     PUBLISHED:   "Submission was successfully published",
-    FAILED:      "Submission cannot be published due to previous error"
+    FAILED:      "Submission cannot be published due to previous error",
+    ONHOLD:      "Submission processing is paused due to internal issue or system error"
 }
 
 LOCK_WRITE = fcntl.LOCK_EX
@@ -174,8 +175,9 @@ class SIPStatus(object):
     process progresses.  This data is cached to disk so that multiple processes can 
     access it.  
     """
+    DEF_CACHE_DIR = "/tmp/sipstatus"
 
-    def __init__(self, id: str, config: dict=None, sysdata: dict=None, _data: dict=None):
+    def __init__(self, id: str, statusdir: str=None, sysdata: dict=None, _data: dict=None):
         """
         open up the status for the given identifier.  Initial data can be 
         provided or, if no cached data exist, it can be initialized with 
@@ -193,11 +195,12 @@ class SIPStatus(object):
         """
         if not id:
             raise ValueError("SIPStatus(): id needs to be non-empty")
-        if not config:
-            config = {}
-        cachedir = config.get('cachedir', '/tmp/sipstatus')
+        if not statusdir:
+            statusdir = self.DEF_CACHE_DIR
+            if not os.path.isdir(statusdir):
+                os.mkdir(statusdir)
         fbase = re.sub(r'^ark:/\d+/', '', id)
-        self._cachefile = os.path.join(cachedir, fbase + ".json")
+        self._cachefile = os.path.join(statusdir, fbase + ".json")
 
         if _data:
             self._data = deepcopy(_data)
@@ -248,7 +251,7 @@ class SIPStatus(object):
         the SIP's status state.  
 
         :return str:  one of NOT_FOUND, AWAITING, PENDING, PROCESSING, FINALIZED, PUBLISHED, 
-                             SUBMITTED, FAILED
+                             SUBMITTED, FAILED, ONHOLD
         """
         return self._data['user']['state']
 
@@ -457,16 +460,33 @@ class SIPStatus(object):
         return out
 
     @classmethod
-    def requests(cls, config: Mapping, agents: Union[str,Iterable[str],None]=None) -> List:
+    def from_status_file(cls, statusfile):
+        """
+        instantiate an instance directly from the file containing the cached data
+        """
+        if not os.path.isfile(statusfile):
+            raise ValueError("Status does not exist as a file: "+statusfile)
+        statusdir = os.path.dirname(statusfile)
+        data = SIPStatusFile.read(statusfile)
+        id = data.get('user', {}).get('id')
+        if not id:
+            raise ValueError("Status file is missing user.id (correct file?): "+statusfile)
+        return SIPStatus(id, statusdir, _data=data)
+
+    @classmethod
+    def requests(cls, statusdir: str=None, agents: Union[str,Iterable[str],None]=None) -> List:
         """
         return a list of SIP IDs for which there exist status information.  
-        :param Mapping config:  the status configurtion (which should include the `cachedir` parameter)
+        :param statusdir  str:  the directory where SIP status files are cached
         :param str|list agents: a name or a list of names of agent groups; if provided, the 
                                 returned list will include only those SIPs whose authorized agent 
                                 groups include at least one of these. 
         """
-        cachedir = config.get('cachedir', '/tmp/sipstatus')
-        all = [ os.path.splitext(id)[0] for id in os.listdir(cachedir)
+        if not statusdir:
+            statusdir = '/tmp/sipstatus'
+        if not os.path.isdir(statusdir):
+            return []
+        all = [ os.path.splitext(id)[0] for id in os.listdir(statusdir)
                                         if not id.startswith('_') and
                                            not id.startswith('.')      ]
         if agents is None:
@@ -476,6 +496,6 @@ class SIPStatus(object):
             agents = [agents]
         if not isinstance(agents, set):
             agents = set(agents)
-        out = [s for s in all if SIPStatus(s, config).any_authorized(agents)]
+        out = [s for s in all if SIPStatus(s, statusdir).any_authorized(agents)]
         return out
             

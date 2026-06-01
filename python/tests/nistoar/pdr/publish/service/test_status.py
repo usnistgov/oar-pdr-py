@@ -173,8 +173,7 @@ class TestSIPStatus(test.TestCase):
     def setUp(self):
         self.tf = Tempfiles()
         self.cachedir = self.tf.mkdir("status")
-        self.cfg = { 'cachedir': self.cachedir }
-        self.status = status.SIPStatus("ffff", self.cfg)
+        self.status = status.SIPStatus("ffff", self.cachedir)
 
     def tearDown(self):
         self.tf.clean()
@@ -239,35 +238,35 @@ class TestSIPStatus(test.TestCase):
 
     def test_requests(self):
         self.assertTrue(not os.path.exists(self.status._cachefile))
-        self.assertEqual(status.SIPStatus.requests(self.cfg), [])
-        self.assertEqual(status.SIPStatus.requests(self.cfg, 'hank'), [])
+        self.assertEqual(status.SIPStatus.requests(self.cachedir), [])
+        self.assertEqual(status.SIPStatus.requests(self.cachedir, 'hank'), [])
         
         self.status.cache()
         self.assertTrue(os.path.exists(self.status._cachefile))
-        self.assertEqual(status.SIPStatus.requests(self.cfg), ['ffff'])
-        self.assertEqual(status.SIPStatus.requests(self.cfg, 'hank'), [])
-        self.assertEqual(status.SIPStatus.requests(self.cfg, ''), [])
+        self.assertEqual(status.SIPStatus.requests(self.cachedir), ['ffff'])
+        self.assertEqual(status.SIPStatus.requests(self.cachedir, 'hank'), [])
+        self.assertEqual(status.SIPStatus.requests(self.cachedir, ''), [])
 
         self.status.add_authorized_agent("hank", True)
-        self.assertEqual(status.SIPStatus.requests(self.cfg), ['ffff'])
-        self.assertEqual(status.SIPStatus.requests(self.cfg, 'hank'), ['ffff'])
-        self.assertEqual(status.SIPStatus.requests(self.cfg, ''), [])
+        self.assertEqual(status.SIPStatus.requests(self.cachedir), ['ffff'])
+        self.assertEqual(status.SIPStatus.requests(self.cachedir, 'hank'), ['ffff'])
+        self.assertEqual(status.SIPStatus.requests(self.cachedir, ''), [])
 
-        stat = status.SIPStatus("goob", self.cfg)
+        stat = status.SIPStatus("goob", self.cachedir)
         stat.add_authorized_agent("gurn")
-        sips = status.SIPStatus.requests(self.cfg)
+        sips = status.SIPStatus.requests(self.cachedir)
         self.assertIn('ffff', sips)
         self.assertIn('goob', sips)
-        self.assertEqual(status.SIPStatus.requests(self.cfg, 'hank'), ['ffff'])
-        self.assertEqual(status.SIPStatus.requests(self.cfg, 'gurn'), ['goob'])
+        self.assertEqual(status.SIPStatus.requests(self.cachedir, 'hank'), ['ffff'])
+        self.assertEqual(status.SIPStatus.requests(self.cachedir, 'gurn'), ['goob'])
         stat.add_authorized_agent("hank")
-        sips = status.SIPStatus.requests(self.cfg)
+        sips = status.SIPStatus.requests(self.cachedir)
         self.assertIn('ffff', sips)
         self.assertIn('goob', sips)
-        sips = status.SIPStatus.requests(self.cfg, 'hank')
+        sips = status.SIPStatus.requests(self.cachedir, 'hank')
         self.assertIn('ffff', sips)
         self.assertIn('goob', sips)
-        self.assertEqual(status.SIPStatus.requests(self.cfg, 'gurn'), ['goob'])
+        self.assertEqual(status.SIPStatus.requests(self.cachedir, 'gurn'), ['goob'])
 
     def test_cache(self):
         self.assertTrue(not os.path.exists(self.status._cachefile))
@@ -290,7 +289,7 @@ class TestSIPStatus(test.TestCase):
         self.assertEqual(data['user']['message'], 
                          status.user_message[status.NOT_FOUND])
 
-        self.status = status.SIPStatus("ffff", self.cfg)
+        self.status = status.SIPStatus("ffff", self.cachedir)
         self.assertIn('gurn', self.status.data)
         self.assertEqual(self.status.data['gurn'], 'goob')
         self.assertEqual(self.status.data['user']['id'], 'ffff')
