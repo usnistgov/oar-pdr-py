@@ -481,25 +481,27 @@ class TestPDPBagger(test.TestCase):
         self.assertTrue(os.path.samefile(os.path.join(uploads,'trial2.json'),
                                          os.path.join(self.bgr.bag.data_dir, 'trial2.json')))
 
-    def test_set_data_source(self):
+    def test_add_data_source(self):
         self.set_bagger_for("pdp1:goob")
         dsf = os.path.join(self.bgr.bagdir, '__data_sources.lis')
         self.assertTrue(not os.path.exists(dsf))
+        self.assertEqual(self.bgr.get_data_sources(), [])
 
-        self.bgr.set_data_source("fs:"+str(sipbagd))
+        self.bgr.add_data_source("fs:"+str(sipbagd))
         self.assertTrue(os.path.exists(dsf))
         src = utils.read_json(dsf)
         self.assertEqual(src, {"type": 'fs', 'location': str(sipbagd)})
 
-        self.bgr.set_data_source({'type': 'fs', 'location': "goober", 'consumable': False})
+        self.bgr.add_data_source({'type': 'fs', 'location': "goober", 'consumable': False})
         self.assertTrue(os.path.exists(dsf))
-        srcs = []
-        with open(dsf) as fd:
-            for line in fd:
-                srcs.append(json.loads(line))
+        srcs = self.bgr.get_data_sources()
         self.assertEqual(len(srcs), 2)
         self.assertEqual(srcs[0], {"type": 'fs', 'location': str(sipbagd)})
         self.assertEqual(srcs[1], {"type": 'fs', 'location': 'goober', 'consumable': False})
+
+        self.bgr.remove_data_sources()
+        self.assertEqual(self.bgr.get_data_sources(), [])
+        
 
     def test_ensure_data_files(self):
         self.set_bagger_for("pdp1:goob")
@@ -523,8 +525,8 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(c, 0)
         self.assertEqual(len(self.bgr.bag.nerdm_record().get('components',[])), 0)
 
-        self.bgr.set_data_source("fs:"+str(uploads1))
-        self.bgr.set_data_source("fs:"+str(uploads2))
+        self.bgr.add_data_source("fs:"+str(uploads1))
+        self.bgr.add_data_source("fs:"+str(uploads2))
 
         self.bgr.ensure_data_files(True)
         
@@ -566,7 +568,7 @@ class TestPDPBagger(test.TestCase):
         self.assertNotIn('doi', saved)
 
         # set a data source file and add some other files to confirm they get cleaned up
-        self.bgr.set_data_source("fs:/goober/gurn")
+        self.bgr.add_data_source("fs:/goober/gurn")
         f = os.path.join(self.bgr.bagbldr.bagdir, "#goobs.lis")
         open(f, 'w').close()
         self.assertTrue(os.path.isfile(f))

@@ -955,7 +955,7 @@ class NERDmBasedBagger(SIPBagger):
 
         return srcinfo
 
-    def set_data_source(self, srcinfo: Union[str,Mapping], who: Agent=None,
+    def add_data_source(self, srcinfo: Union[str,Mapping], who: Agent=None,
                         lock: bool=True, _action: Action=None):
         """
         declare a source for loading data files into this bag.  
@@ -977,7 +977,7 @@ class NERDmBasedBagger(SIPBagger):
         try:
             encoded = json.dumps(srcinfo)
         except TypeError as ex:
-            raise TypeError("set_data_source: srcinfo is not a str or a JSON-encodable object (%s)" % \
+            raise TypeError("add_data_source: srcinfo is not a str or a JSON-encodable object (%s)" % \
                             str(ex))
 
         if not who:
@@ -999,13 +999,44 @@ class NERDmBasedBagger(SIPBagger):
                 _action.add_subaction(hist)
             else:
                 self.record_history(hist)
+
+    def get_data_sources(self) -> List[Mapping]:
+        """
+        return a list of data sources attached to this bagger.  
+
+        These are data source added via :py:meth:`add_data_source`.  
+
+        :return:  a list of data source objects, each conforming to the data source objects supported 
+                  by :py:meth:`add_data_source`.
+                  :rtype: List[dict]
+        """
+        out = []
+        dsrcf = os.path.join(self.bagdir, self._data_source_file)
+        if os.path.isfile(dsrcf):
+            with open(dsrcf) as fd:
+                for line in fd:
+                    try:
+                        out.append(json.loads(line.strip()))
+                    except ValueError as ex:
+                        self.log.error("Corrupted data source entry: %s; skipping", line.strip())
+
+        return out
+
+    def remove_data_sources(self):
+        """
+        unregister all data sources previously added via :py:meth:`add_data_source`.
+        """
+        dsrcf = os.path.join(self.bagdir, self._data_source_file)
+        if os.path.isfile(dsrcf):
+            os.remove(dsrcf)
+
             
     def ensure_data_files(self, include_all: bool=False, examine: bool=False, who: Agent=None,
                           lock=True, _action: Action=None):
         """
         import all data found in the registered data sources into the bag
 
-        Data sources are registered via :py:meth:`set_data_source`.  This method will iterate through
+        Data sources are registered via :py:meth:`add_data_source`.  This method will iterate through
         the registered data sources and import the data files found there.  This method is called 
         by :py:meth:`finalize` to ensure that all data has been imported.  
 
@@ -1054,7 +1085,7 @@ class NERDmBasedBagger(SIPBagger):
 
         This function can be used to extend this class to support additional mechanisms for 
         importing data files.  The ``type`` value corresponds to a supported ``type`` property 
-        in the ``srcinfo`` provided to :py:meth:`import_data_files`` and :py:meth:`set_data_source`.
+        in the ``srcinfo`` provided to :py:meth:`import_data_files`` and :py:meth:`add_data_source`.
         The mechanism implementation is given by ``importer`` which is a callable that must 
         support the following arguments:
 
