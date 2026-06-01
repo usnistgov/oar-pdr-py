@@ -280,6 +280,20 @@ class PreservationStateManager(PreservationStepsAware, metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
+    def record_completion(self, message: str):
+        """
+        Note in the state that a preservation has completed successfully.  
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def record_failure(self, message: str):
+        """
+        Note in the state that a failure occured that stopped preservation before completion
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def get_working_dir(self) -> str:
         """
         return the path to a directory where presevation steps can write intermediated data or 
@@ -861,13 +875,9 @@ class PreservationTask(PreservationStepsAware):
             if not self._statemgr.all_completed:
                 self.publish()
 
-            if self._notifier:
-                # celebrate!
-                self._notifier.alert("preserv.success", "New DAP published: "+self._statemgr.aipid,
-                                     id=self._statemgr.aipid,
-                                     version=self._statemgr.get_state_property('version', '??'))
-
         except Exception as ex:
+            self._statemgr.record_failure("Preservation task halted due to failure: "+str(ex))
+
             if self._notifier:
                 # admit failure
                 if isinstance(ex, PreservationTaskFailure):
@@ -892,7 +902,16 @@ class PreservationTask(PreservationStepsAware):
                                          [str(ex)], id=self._statemgr.aipid,
                                          version=self._statemgr.get_state_property('version', '??'))
             raise
-                
+
+        else:
+            self._statemgr.record_completion("Preservation and publication completed")
+
+            if self._notifier:
+                # celebrate!
+                self._notifier.alert("preserv.success", "New DAP published: "+self._statemgr.aipid,
+                                     id=self._statemgr.aipid,
+                                     version=self._statemgr.get_state_property('version', '??'))
+
         try:
             self.completion_clean_up()
         except Exception as ex:

@@ -2,7 +2,7 @@
 This module provides an implementation of the 
 :py:class:`~nistoar.pdr.preserve.task.framework.PreservationStateManager`.
 """
-import json
+import json, os
 from pathlib import Path
 from collections import OrderedDict
 from collections.abc import Mapping
@@ -74,15 +74,13 @@ class JSONPreservationStateManager(PreservationStateManager):
     """
 
     @classmethod
-    def from_file(cls, statefile: Union[str,Path], logger: Logger=None, pubstat: status.SIPStatus=None, 
+    def from_file(cls, statefile: Union[str,Path], logger: Logger=None, 
                   config: Mapping=None, persistin: Union[str,Path]=None):
         """
         create at state manager instance by loading the preservation state from a given file.  
 
         :param str|Path statefile:  the persisted preservation state file to load
         :param Logger      logger:  the logger to use in this state manager
-        :param SIPStatus  pubstat:  an SIPStatus tracking the overall publishing status; if provided,
-                                    it will be updated messages about what's happening with preservation.
         :param dict        config:  an optional configuration, used for filling in any configuration 
                                     information missing from ``statefile``.  
         :param Path     persistin:  the location to persist state information to.  Provide this if 
@@ -98,7 +96,7 @@ class JSONPreservationStateManager(PreservationStateManager):
             statefile = Path(statefile)
         if not persistin:
             persistin = statefile
-        return cls(_read_state_file(statefile), config, logger, pubstat, persistin=persistin)
+        return cls(_read_state_file(statefile), config, logger, persistin=persistin)
 
     @classmethod
     def for_aip(cls, config: Mapping, aipid: str, aiploc: str, logger: Logger=None,
@@ -168,6 +166,10 @@ class JSONPreservationStateManager(PreservationStateManager):
         self._data = statedata
         self._keepfresh = self.cfg.get("keep_fresh", True)
         self._pubstat = pubstat
+        if not self._pubstat:
+            psf = self._data.get("_pubstatfile")
+            if psf and os.path.exists(psf):
+                SIPStatus.from_file(psf)
 
         aipid = self._data.get("_aipid")
         if not aipid:
@@ -181,6 +183,8 @@ class JSONPreservationStateManager(PreservationStateManager):
         self._data.setdefault("_work_dir", self.cfg.get("working_dir"))
         self._data.setdefault("_completed", self.UNSTARTED)
         self._data.setdefault("_message", UNSTARTED_PROGRESS)
+        if self._pubstat:
+            self._data['_pubstatfile'] = self._pubstat._cachefile
 
         if not persistin:
             persistin = self.cfg.get("persist_in")
@@ -377,6 +381,34 @@ class JSONPreservationStateManager(PreservationStateManager):
 
         if self._pubstat:
             self._pubstat.record_progress(message)
+
+    def record_completion(self, message: str):
+        """
+        Note in the state that a failure occured that stopped preservation before completion
+
+        Not only will this set a progress message, it will set the published state to FAILED
+        """
+        if message is None:
+            message = ""
+        self._data["_message"] = message
+        self._cache()
+
+        if self._pubstat:
+            self._pubstat.update(status.PUBLISHED)
+
+    def record_failure(self, message: str):
+        """
+        Note in the state that a failure occured that stopped preservation before completion
+
+        Not only will this set a progress message, it will set the published state to FAILED
+        """
+        if message is None:
+            message = ""
+        self._data["_message"] = message
+        self._cache()
+
+        if self._pubstat:
+            self._pubstat.update(status.ONHOLD)
 
     def annotate(self, name, val):
         """

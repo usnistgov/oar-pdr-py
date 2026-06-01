@@ -241,6 +241,30 @@ class TestPreservationStateManager(test.TestCase):
         self.state.mark_completed(self.state.FINALIZED, "validating finalized bag")
         self.assertEqual(self.state.message, "validating finalized bag")
 
+    def test_record_failure(self):
+        statusdir = os.path.join(self.tmpdir.name, "_sipstatus")
+        pubstat = status.SIPStatus("goober", statusdir)
+        self.state = st.JSONPreservationStateManager.for_aip(self.cfg, "goober", "goober/bag",
+                                                             pubstat=pubstat)
+        self.assertEqual(self.state.message, st.UNSTARTED_PROGRESS)
+
+        self.state.record_failure("dang-it!")
+        self.assertEqual(self.state.message, "dang-it!")
+        self.assertEqual(pubstat.state, status.ONHOLD)
+        self.assertIn("paused", pubstat.message)
+        
+    def test_record_completion(self):
+        statusdir = os.path.join(self.tmpdir.name, "_sipstatus")
+        pubstat = status.SIPStatus("goober", statusdir)
+        self.state = st.JSONPreservationStateManager.for_aip(self.cfg, "goober", "goober/bag",
+                                                             pubstat=pubstat)
+        self.assertEqual(self.state.message, st.UNSTARTED_PROGRESS)
+
+        self.state.record_completion("Yay!")
+        self.assertEqual(self.state.message, "Yay!")
+        self.assertEqual(pubstat.state, status.PUBLISHED)
+        self.assertIn("published", pubstat.message)
+        
     def test_record_progress_with_sipstatus(self):
         self.state = st.JSONPreservationStateManager.for_aip(self.cfg, "goober", "goober/bag")
 
@@ -250,7 +274,7 @@ class TestPreservationStateManager(test.TestCase):
         if sipstatf.exists():
             sipstatf.unlink()
 
-        sipstat = status.SIPStatus("goober", {'cachedir': str(sipcache)})
+        sipstat = status.SIPStatus("goober", sipcache)
         sipstat.update(status.SUBMITTED, "submitted for preservation")
 
         self.state = st.JSONPreservationStateManager.for_aip(self.cfg, "goober", "goober/bag",
