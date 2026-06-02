@@ -365,7 +365,7 @@ class AIP1PreservationService(PreservationService):
 
     _state_file = "_state.json"
 
-    def __init__(self, config: Mapping, log: Logger=None, execmod=None, working_dir=None):
+    def __init__(self, config: Mapping, log: Logger=None, execmod=None):
         """
         initialize the service 
 
@@ -378,6 +378,7 @@ class AIP1PreservationService(PreservationService):
                              (:py:mod:`nistoar.pdr.preserve.task.jobexec) will be used.
                              Either a module (dot-delimited) name or an imported module object can 
                              be used as a value. 
+
         """
         super(AIP1PreservationService, self).__init__(config, log)
         if not execmod:
@@ -585,8 +586,8 @@ class AIP1PreservationService(PreservationService):
 
             # TODO: save history of previous failed attempt?
             
-            pstate = JSONPreservationStateManager.for_aip(smcfg, aipid, aipdir, self.log, # need SIPStatus
-                                                          clear_state=startover)
+            pstate = JSONPreservationStateManager.for_aip(smcfg, aipid, aipdir, self.log,
+                                                          pubstat, startover)
             pstate.set_state_property('version', version)
 
             # submit job
