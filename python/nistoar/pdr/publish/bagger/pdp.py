@@ -1385,8 +1385,6 @@ class PDPBagger(NERDmBasedBagger):
     """
     This bagger is a generic implementation of the NERDmBasedSIPBagger for the PDP API.  It implements 
     a base-level set of SIP assumptions that be used by many publishing clients with no special needs.
-    The resulting publications are file-less: no data files are preserved; any data files described 
-    are expected to be external.  
 
     This class will look for the following parameters in the configuration:
     :param str working_dir:             the directory where the default bag parent directory should 
@@ -1488,6 +1486,10 @@ class PDPBagger(NERDmBasedBagger):
                            not currently registered.
         """
         data = {'sipid': sipid}
+        if not self._idmntr:
+            if mint:
+                raise ConfigurationException("Unable to mint ID: no minter configured!")
+            return None
         matches = self._idmntr.search(data)
         if not matches or len(matches) > 1:
             # no one-to-one match found; this should indicate that one has not been minted yet
