@@ -3,9 +3,9 @@ This module provides publishing service implementations based around assembling 
 as the Archive Information Package (AIP).  This includes those supporting Submission Information Package
 (SIP) conventions PDP1 and PDP2.  
 """
-import os, re, importlib, inspect
+import os, re, importlib, inspect, shutil
 from copy import deepcopy
-from collections.abc import Mapping
+from typing import Mapping, List
 from abc import abstractmethod, abstractproperty
 
 from ... import constants as const
@@ -50,7 +50,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
     """
 
     def __init__(self, config: Mapping, convention: str, workdir: str=None, bagdir: str=None, 
-                 statusdir: str=None, ingestsvc: str=None):
+                 statusdir: str=None, pressvc=None):
         """
         initialize the service.
 
@@ -65,7 +65,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                                 (over-riding what's specified in config)
         :param str  statusdir:  the directory for recording SIP status 
                                 (over-riding what's specified in config)
-        :param IngestService ingestsvc: the ingest service to use to publish the resulting AIP
+        :param PreservationService pressvc: the preservation service to use to publish the resulting AIP
         """
         super(BagBasedPublishingService, self).__init__(convention, config)
 
@@ -76,9 +76,9 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         self.bagparent = self._resolve_dir('sip_bags_dir', bagdir, self.workdir, 'sipbags')
         self.statusdir = self._resolve_dir('sip_status_dir', statusdir, self.workdir, 'status')
 
-        self.ingestsvc = ingestsvc
-        if not self.ingestsvc:
-            self.ingestsvc = self._create_ingest_service()
+        self.pressvc = pressvc
+        if not self.pressvc:
+            self.pressvc = self._create_preservation_service()
 
         self._baggers = {}
 
@@ -121,7 +121,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         :return: an object describing the current status of the idenfied SIP
         :rtype: SIPStatus
         """
-        return status.SIPStatus(sipid, {"cachedir": self.statusdir})
+        return status.SIPStatus(sipid, self.statusdir)
 
     @abstractmethod
     def _get_id_shoulder(self, who: Agent, sipid: str, create: bool):
@@ -168,7 +168,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         raise NotImplementedError()
 
     @abstractmethod
-    def _create_ingest_service(self):
+    def _create_preservation_service(self):
         raise NotImplementedError()
 
     def accept_resource_metadata(self, nerdm: Mapping, who: Agent=None, sipid: str=None, create:
@@ -472,6 +472,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             sts.update(status.FAILED, sysdata={'errors': [str(ex)]})
             raise ex
 
+        return bagger
+
 
     def publish(self, sipid: str, who: Agent=None):
         """
@@ -499,11 +501,14 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                                           .format(sipid, sts.message))
 
         try:
-            self.finalize(sipid, who)
-            # sts.update(status.PROCESSING)
-            # self.ingester.ingest(sipid, who)
-            sts.update(status.PUBLISHED)
-            self.delete(sipid, who)
+            bagger = self.finalize(sipid, who)
+            sts.update(status.PROCESSING)
+            if self.pressvc:
+                # generally, preservation is asynchronous
+                self.pressvc.preserve_from(bagger.bagbldr.bagdir, sts, startover=True)
+            else:
+                self.log.warning("No preservation service configured; holding SIP in PROCESSING state")
+
         except Exception as ex:
             self.log.error("Failed to publish SIP {0}: {1}".format(sipid, str(ex)))
             sts.update(status.FAILED, sysdata={'errors': [str(ex)]})
@@ -654,6 +659,23 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             if extschema not in extschs and altextschema not in extschs:
                 extschs.add(extschema)
 
+class UploadMethodNotSupported(BadSIPInputError):
+    """
+    An exception indicating that a requested upload method is not recognized or not supported
+    """
+
+    def __init__(self, method: str, msg: str=None):
+        """
+        create the exceptions
+
+        :param str method:  the name for the requested upload method
+        :param str    msg:  a message to override the default
+        :param Exception cause:  a caught exception that represents the underlying cause of the problem.  
+        """
+        if not msg:
+            msg = "Requested uploads method is not supported: "+str(method)
+        super(UploadMethodNotSupported, self).__init__(msg)
+        self.method = method
 
 class PDPublishingService(BagBasedPublishingService):
     """
@@ -917,7 +939,13 @@ class PDPublishingService(BagBasedPublishingService):
 
         return sipid
 
-    def _create_ingest_service(self, ):
+    def _create_preservation_service(self):
+        if self.cfg.get('preservation'):
+            from nistoar.pdr.preserve.service import AIP1PreservationService
+            log = self.log.getChild('preserve')
+            return AIP1PreservationService(self.cfg['preservation'], log)
+
+        self.log.warning("No preservation service configured!")
         return None
 
     def _create_bagger(self, shoulder: str, sipid: str, minter=None):
@@ -1048,7 +1076,7 @@ class PDPublishingService(BagBasedPublishingService):
 
         return PDP0Minter(mntrcfg, shoulder)
 
-    def init_data_upload(self, sipid: str, method: str, who: Agent=None) -> str:
+    def init_data_upload(self, sipid: str, method: str, who: Agent=None) -> Mapping:
         """
         prepare a space for uploading data files that should be a part of the publication.
 
@@ -1076,9 +1104,19 @@ class PDPublishingService(BagBasedPublishingService):
                             identity will be assumed.  This identity may affect the identifier assigned.
         :raises UploadMethodNotSupported: if ``method`` is not recognized as a supported upload method
         """
+        sts = self.status_of(sipid)
+        if sts.state == status.NOT_FOUND:
+            raise SIPNotFoundError(sipid)
+        if sts.state != status.PENDING and sts.state != status.FINALIZED and sts.stat != status.AWAITING:
+            raise SIPConflictError(sipid, "SIP {0} is not ready for receiving data: {1}"
+                                          .format(sipid, sts.message))
+        if sts.siptype != self.convention:
+            raise SIPConflictError(sipid, "SIP {0} is being handled by a different convention: {1}"
+                                          .format(sipid, sts.message))
+
         if method != 'fs':
             raise UploadMethodNotSupported(method)
-        if not sself.uplparent:
+        if not self.uplparent:
             raise UploadMethodNotSupported(method, "fs uploads are not configured in this service")
 
         upldir = self.uplparent/sipid
@@ -1086,15 +1124,93 @@ class PDPublishingService(BagBasedPublishingService):
             if not upldir.exists():
                 upldir.mkdir()
         except Exception as ex:
-            raise PreservationStateException(f"{sipid}: Unable to create uploads directory: {str(ex)}") \
+            raise PublishingStateException(f"{sipid}: Unable to create uploads directory: {str(ex)}") \
                 from ex
 
         shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
         bagger = self._get_bagger_for(shoulder, sipid)
 
-        bagger.set_data_source("fs:"+upldir, who)
+        if upldir not in [s.get('location','') for s in bagger.get_data_sources()]:
+            bagger.add_data_source("fs:"+str(upldir), who)
         
-        return sipid
+        return { "type": 'fs', "location": sipid }
+
+    def get_upload_space(self, sipid: str, who: Agent=None) -> Mapping:
+        """
+        return a description of the space that has been set up for data uploads or None one 
+        has not yet be initialized.  
+
+        :param str sipid:  the identifier for the SIP being assembled
+        :param Agent who:  the user requesting this information; this is used to determine 
+                           authorization to get this info.
+        """
+        sts = self.status_of(sipid)
+        if sts.state == status.NOT_FOUND:
+            raise SIPNotFoundError(sipid)
+        if not self.uplparent:
+            return None
+
+        shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
+        bagger = self._get_bagger_for(shoulder, sipid)
+
+        srcs = bagger.get_data_sources()
+        if not srcs or not srcs[0].get('location'):
+            return None
+        srcs[0]['location'] = os.path.relpath(srcs[0]['location'], self.uplparent)
+        return srcs[0]
+
+    def cancel_upload_space(self, sipid: str, who: Agent=None) -> bool:
+        """
+        delete the space previously set up for uploads.  
+
+        Caution: Any data previously upload will be deleted.
+
+        :param str sipid:  the identifier for the SIP being assembled
+        :param Agent who:  the user requesting this information; this is used to determine 
+                           authorization to get this info and record provenance
+        :return:  True if the space had been set-up and was deleted; False if no such space existed
+        """
+        sts = self.status_of(sipid)
+        if sts.state == status.NOT_FOUND:
+            raise SIPNotFoundError(sipid)
+        if not self.uplparent:
+            return False
+
+        shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
+        bagger = self._get_bagger_for(shoulder, sipid)
+
+        removed = False
+        upldir = os.path.join(self.uplparent, sipid)
+        if os.path.isdir(upldir):
+            shutil.rmtree(upldir)
+            removed = True
+        bagger.remove_data_sources()
+        return removed
+
+    def import_files(self, sipid: str, who: Agent=None) -> List[str]:
+        """
+        import all data found in the registered data source
+        :param str sipid:  the identifier for the SIP being assembled
+        :param Agent who:  the user requesting this information; this is used to determine 
+                           authorization to get this info and record provenance
+        """
+        sts = self.status_of(sipid)
+        if sts.state == status.NOT_FOUND:
+            raise SIPNotFoundError(sipid)
+        if sts.state != status.PENDING and sts.state != status.FINALIZED and sts.stat != status.AWAITING:
+            raise SIPConflictError(sipid, "SIP {0} is not ready for receiving data: {1}"
+                                          .format(sipid, sts.message))
+
+        shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
+        bagger = self._get_bagger_for(shoulder, sipid)
+
+        return bagger.ensure_data_files(who=who)
+
+
+        
+
+
+        
                     
         
 PDP0Service = PDPublishingService

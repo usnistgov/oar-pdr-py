@@ -5,7 +5,7 @@ import re, logging
 from abc import ABCMeta, abstractmethod, abstractproperty
 from collections.abc import Mapping
 from ...utils.prov import Agent
-from .. import PublishSystem, PublishingStateException, ConfigurationException
+from .. import PublishSystem, PublishingStateException, UploadMethodNotSupported, ConfigurationException
 from ....nerdm.constants import core_schema_base as NERDM_SCHEMA_BASE, CORE_SCHEMA_URI
 from ....nerdm import validate
 from .. import PublishSystem
@@ -344,4 +344,33 @@ class SimpleNerdmPublishingService(PublishingService):
 
         return schema
 
+    def init_data_upload(self, sipid: str, method: str, who: Agent=None) -> str:
+        """
+        prepare a space for uploading data files that should be a part of the publication.
+
+        This service may support zero, one, or multiple methods for delivering data files to 
+        be included in a publication.  This method allows the client to declare to the service 
+        how the files will be delivered to the server; this service will then set up the space to 
+        receive the data.  If data files are to be included in the publication, this method must 
+        be called before a call to :py:meth:`finalize` or :py:meth:`publish` (but it does not 
+        have to be called before calls to :py:meth:`accept_resource_metadata` or 
+        :py:meth:`upsert_component_metadata`).  The service responds with a name of a destination 
+        that is appropriate for the method requested (e.g. a folder name, a base URL, etc.).
+        After calling this method, the client is responsible for delivering all of the data 
+        files via the requested method before :py:meth:`finalize` or :py:meth:`publish` are called; 
+        furthermore, the client must ensure that the metadata uploaded via 
+        :py:meth:`accept_resource_metadata` and :py:meth:`upsert_component_metadata` describe all 
+        the files that get uploaded.  Generally, the :py:meth:`finalize` method is responsible for 
+        checking that the SIP is complete and ready for publication.
+
+        This default implementation assumes that no methods for uploading are supported.
+
+        :param str  sipid:  the identifier for the SIP being prepared
+        :param str method:  the name of the mechanism that will be engaged to upload files
+        :param who:         an actor identifier object, indicating who is requesting this action.  This 
+                            will get recorded in the history data.  If None, an internal administrative 
+                            identity will be assumed.  This identity may affect the identifier assigned.
+        :raises UploadMethodNotSupported: if ``method`` is not recognized as a supported upload method
+        """
+        raise UploadMethodNotSupported(method)
 

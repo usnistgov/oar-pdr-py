@@ -14,6 +14,7 @@ import nistoar.pdr.exceptions as exceptions
 from nistoar.pdr.utils import prov
 
 from nistoar.pdr.publish.service import pdp
+from nistoar.pdr.publish.bagger.pdp import PDPBagger
 from nistoar.pdr.publish.service import status
 
 # datadir = nistoar/preserve/data
@@ -522,6 +523,37 @@ class TestPDPublishingService(test.TestCase):
         bagdir = self.bagparent / sipid
         self.assertFalse(bagdir.exists())
 
+    def test_init_data_upload(self):
+        with self.assertRaises(pdp.SIPNotFoundError):
+            self.pubsvc.init_data_upload("ncnr0:hello", 'fs', ncnrag)
+
+        nerd = utils.read_json(str(simplenerd))
+        sipid = self.pubsvc.accept_resource_metadata(nerd, ncnrag, sipid="ncnr0:hello", create=True)
+        self.assertEqual(sipid, "ncnr0:hello")
+        with self.assertRaises(pdp.UploadMethodNotSupported):
+            self.pubsvc.init_data_upload(sipid, 'fs', ncnrag)
+
+        uplparent = os.path.join(self.workdir, "uploads")
+        os.mkdir(uplparent)
+        self.pubsvc.uplparent = Path(uplparent)
+        
+        self.assertEqual(self.pubsvc.init_data_upload(sipid, 'fs', ncnrag),
+                         { "type": 'fs', "location": sipid })
+        bagdir = self.bagparent / sipid
+        self.assertTrue(bagdir.is_dir())
+        self.assertTrue((bagdir / PDPBagger._data_source_file).is_file())
+        self.assertEqual(self.pubsvc.get_upload_space(sipid, ncnrag),
+                         { "type": 'fs', "location": sipid })
+
+        with self.assertRaises(pdp.UploadMethodNotSupported):
+            self.pubsvc.init_data_upload(sipid, 'url', ncnrag)
+
+        self.assertTrue(self.pubsvc.cancel_upload_space(sipid, ncnrag))
+        self.assertTrue(bagdir.is_dir())
+        self.assertFalse((bagdir / PDPBagger._data_source_file).exists())
+        self.assertFalse(self.pubsvc.cancel_upload_space(sipid, ncnrag))
+        
+
     def test_finalized(self):
         nerd = utils.read_json(str(simplenerd))
         nerd['version'] = "1.0.0+ (in edit)"
@@ -578,9 +610,8 @@ class TestPDPublishingService(test.TestCase):
         self.assertTrue(len(bnerd.get('components',[])) > 0)
         self.assertEqual(bnerd['version'], "1.0.0+ (in edit)")
 
-        # WARNING: Implmentation is not complete!
         self.pubsvc.publish(sipid, ncnrag)
-        self.assertEqual(self.pubsvc.status_of(sipid).state, status.PUBLISHED)
+        self.assertEqual(self.pubsvc.status_of(sipid).state, status.PROCESSING)
 
                          
 if __name__ == '__main__':
