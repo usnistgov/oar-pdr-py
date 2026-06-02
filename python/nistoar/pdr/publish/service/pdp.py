@@ -1,12 +1,22 @@
 """
 This module provides publishing service implementations based around assembling a preservation bag 
 as the Archive Information Package (AIP).  This includes those supporting Submission Information Package
-(SIP) conventions PDP1 and PDP2.  
+(SIP) conventions pdp0 and pdp1.  
+
+The pdp0 convention is based on the following assumptions and requirements:
+  * An SIP is provided in the form of a Bagit bag that conforms to the NIST Bagit Profile
+  * An SIP can be assembled via submitted NERDm metadata documents
+  * The SIP cannot include actual data files (i.e. in the bag's ``data`` folder)
+
+The pdp1 convention modifies the pdp0 in that it supports including data files in the SIP.  This 
+convention is intended for use by the MIDAS DAP service.  
 """
 import os, re, importlib, inspect, shutil
 from copy import deepcopy
-from typing import Mapping, List
+from typing import Mapping, List, Union
 from abc import abstractmethod, abstractproperty
+from logging import Logger
+from pathlib import Path
 
 from ... import constants as const
 from ....nerdm import constants as nrdconst
@@ -49,14 +59,16 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                                  directory (e.g. the OAR system's etc/schemas directory).
     """
 
-    def __init__(self, config: Mapping, convention: str, workdir: str=None, bagdir: str=None, 
-                 statusdir: str=None, pressvc=None):
+    def __init__(self, config: Mapping, convention: str, baselog: Logger=None, workdir: str=None, 
+                 bagdir: str=None, statusdir: str=None, pressvc=None):
         """
         initialize the service.
 
         :param dict    config:  the configuration parameters for this service
         :param str convention:  the label indicating the SIP convention implemented by this class.
                                 (This is usually supplied by the subclass.)
+        :param Logger baselog:  the Logger to derive this instance's Logger from; this constructor will 
+                                call getChild() on this log to instantiate its Logger.
         :param str    workdir:  the default location for this instance's internal data (over-riding
                                 what's specified in config).  It will be used as the parent directory
                                 bagdir, statusdir, and idregdir if these are not specified, either as 
@@ -67,7 +79,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                                 (over-riding what's specified in config)
         :param PreservationService pressvc: the preservation service to use to publish the resulting AIP
         """
-        super(BagBasedPublishingService, self).__init__(convention, config)
+        super(BagBasedPublishingService, self).__init__(convention, config, baselog)
 
         if not workdir:
             workdir = self.cfg.get("working_dir")
@@ -816,19 +828,18 @@ class PDPublishingService(BagBasedPublishingService):
     :param str registry.store_dir:  the directory to store the registry file in; if not specified, the 
                                  'id_registry_dir' value set above will be used.  
     """
-
     
-    def __init__(self, config: Mapping, convention: str, working_dir: str=None, bagdir: str=None, 
-                 status_dir: str=None, idregdir: str=None, ingestsvc=None):    # : IngestService
-
-        pdpinfo = "__pdp.json"
-        
+    def __init__(self, config: Mapping, convention: str="pdp0", baselog: Logger=None, workdir: str=None, 
+                 bagdir: str=None, status_dir: str=None, idregdir: str=None, pressvc=None):
         """
         initialize the service.
 
         :param dict    config:  the configuration parameters for this service
         :param str convention:  the label indicating the SIP convention implemented by this class.
-                                (This is usually supplied by the subclass.)
+                                It defaults to "pdp0".  A non-default value can reflect a different 
+                                configuration on than what is otherwise expected for "pdp0".  
+        :param Logger baselog:  the Logger to derive this instance's Logger from; this constructor will 
+                                call getChild() on this log to instantiate its Logger.
         :param str    workdir:  the default location for this instance's internal data (over-riding
                                 what's specified in config).  It will be used as the parent directory
                                 bagdir, statusdir, and idregdir if these are not specified, either as 
@@ -839,18 +850,15 @@ class PDPublishingService(BagBasedPublishingService):
                                 (over-riding what's specified in config)
         :param str   idregdir:  the default directory for persisting ID registries
                                 (over-riding what's specified in config)
-        :param IngestService ingestsvc: the ingest service to use to publish the resulting AIP
+
+        :param PreservationService pressvc: the service to use to publish the resulting AIP
         """
-        super(PDPublishingService, self).__init__(config, convention, working_dir, bagdir,
-                                                  status_dir, ingestsvc)
+        if not convention:
+            convention = "pdp0"
+        super(PDPublishingService, self).__init__(config, convention, baselog, workdir, bagdir,
+                                                  status_dir, pressvc)
         self.idregdir = self._resolve_dir('id_registry_dir', idregdir, self.workdir, 'idregs')
         self._minters = {}
-        self.uplparent = None
-        if self.cfg.get('uploads_dir'):
-            self.uplparent = Path(self.cfg['uploads_dir'])
-            if not self.uplparent.is_dir():
-                raise ConfigurationException(f"uploadsdir: {self.uplparent}: does not exist "+
-                                             "as a directory")
 
     def _get_id_shoulder(self, who, sipid: str, create: bool):
         """
@@ -1076,6 +1084,75 @@ class PDPublishingService(BagBasedPublishingService):
 
         return PDP0Minter(mntrcfg, shoulder)
 
+PDP0Service = PDPublishingService
+
+class PDP1Service(PDPublishingService):
+    """
+    This :py:class:`~nistoar.pdr.publish.service.base.PublishingService` extends the 
+    :py:class:`PDP0Service <PDPublishingService>` to allow including data files in the SIP.  
+
+    It does this by adding methods that set up and manage an _upload space_ where data files 
+    can be delivered and then imported into the SIP.  Often (and by default), the data is 
+    delivered to the space "out of band"; once the files are in place, the client may request 
+    to this service that files be imported; otherwise, the files will be imported automatically 
+    during finalization (and publishing).  See :py:meth:`add_data_source` and :py:meth:`import_files`
+    for more details.  
+
+    This class supports the same configuration as described for :py:class:`PDPublishingService` with
+    an additional parameter (facilitating the so-called _fs_ method for data file uploads):
+
+    ``uploads_dir``
+         (str) _optional_.  the path to a local directory which is also accesible to the client 
+                            where upload directories will be created on request via 
+                            :py:meth:`init_data_upload`.  If not provided, data uploads will not 
+                            be enabled, and this service will behave essentially like the
+                            :py:class:`PDP0Service <PDPublishingService>`.
+    """
+
+    def __init__(self, config: Mapping, baselog: Logger=None, working_dir: str=None, bagdir: str=None, 
+                 status_dir: str=None, idregdir: str=None, pressvc=None,
+                 uploadsroot: Union[str,Path]=None, convention: str="pdp1"):
+        """
+        initialize the service.
+
+        :param dict    config:  the configuration parameters for this service
+        :param Logger baselog:  the Logger to derive this instance's Logger from; this constructor will 
+                                call getChild() on this log to instantiate its Logger.
+        :param str    workdir:  the default location for this instance's internal data (over-riding
+                                what's specified in config).  It will be used as the parent directory
+                                bagdir, statusdir, and idregdir if these are not specified, either as 
+                                parameter or within config.
+        :param str     bagdir:  the directory where bags are assembled 
+                                (over-riding what's specified in config)
+        :param str  statusdir:  the directory for recording SIP status 
+                                (over-riding what's specified in config)
+        :param str   idregdir:  the default directory for persisting ID registries
+                                (over-riding what's specified in config)
+        :param PreservationService pressvc: the service to use to publish the resulting AIP
+        :param str|Path uploadsroot:  the root directory to use for uploads, overriding what's in the 
+                                configuration.  Use this to enable uploads with a
+                                :py:class:`PDP0Service <PDPublishingService>` configuration.
+        :param str convention:  the label indicating the SIP convention implemented by this class.
+                                (This is usually supplied by the subclass.)  It defaults to "pdp1".
+        """
+        if not convention:
+            convention = "pdp1"
+        super(PDP1Service, self).__init__(config, convention, baselog, working_dir, bagdir, status_dir,
+                                          idregdir, pressvc)
+        if not uploadsroot:
+            if not self.cfg.get('uploads_dir'):
+                self.log.warning("PDP1Service: uploads_dir config param not set; "
+                                 "data file uploads not supported.")
+            else:
+                uploadsroot = self.cfg['uploads_dir']
+        if isinstance(uploadsroot, str):
+            uploadsroot = Path(uploadsroot)
+
+        if uploadsroot and not uploadsroot.is_dir():
+            raise ConfigurationException("PDP1Service: uploads_dir does exist as a directory: "+
+                                         str(uploadsroot))
+        self.uplparent = uploadsroot
+
     def init_data_upload(self, sipid: str, method: str, who: Agent=None) -> Mapping:
         """
         prepare a space for uploading data files that should be a part of the publication.
@@ -1128,7 +1205,8 @@ class PDPublishingService(BagBasedPublishingService):
                 from ex
 
         shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
-        bagger = self._get_bagger_for(shoulder, sipid)
+        minter = self._get_minter(shoulder)
+        bagger = self._get_bagger_for(shoulder, sipid, minter)
 
         if upldir not in [s.get('location','') for s in bagger.get_data_sources()]:
             bagger.add_data_source("fs:"+str(upldir), who)
@@ -1206,14 +1284,6 @@ class PDPublishingService(BagBasedPublishingService):
 
         return bagger.ensure_data_files(who=who)
 
-
-        
-
-
-        
-                    
-        
-PDP0Service = PDPublishingService
 
 
 class PDPBaggerFactory(SIPBaggerFactory):
