@@ -1022,17 +1022,25 @@ class NERDmBasedBagger(SIPBagger):
 
         return out
 
-    def remove_data_sources(self):
+    def remove_data_sources(self, who: Agent=None, lock: bool=True, _action: Action=None):
         """
         unregister all data sources previously added via :py:meth:`add_data_source`.
         """
         dsrcf = os.path.join(self.bagdir, self._data_source_file)
+        
         if os.path.isfile(dsrcf):
-            os.remove(dsrcf)
+            hist = Action(Action.COMMENT, self.id, who, "Removing all payload data sources")
+            with self._lock_when(lock):
+                os.remove(dsrcf)
+
+                if _action:
+                    _action.add_subaction(hist)
+                else:
+                    self.record_history(hist)
 
             
     def ensure_data_files(self, include_all: bool=False, examine: bool=False, who: Agent=None,
-                          lock=True, _action: Action=None):
+                          lock=True, _action: Action=None) -> List[str]:
         """
         import all data found in the registered data sources into the bag
 
@@ -1049,6 +1057,8 @@ class NERDmBasedBagger(SIPBagger):
                                   time cost if the files are large or numerous.  If False (default), at 
                                   most, only minimal metadata for the file will be created if it doesn't 
                                   exist already.  
+        :return:  a list of the filepaths of the files imported.  
+                  :rtype: List[str]
         """
         if not who:
             who = UNKNOWN_AGENT
@@ -1071,10 +1081,16 @@ class NERDmBasedBagger(SIPBagger):
                             imported |= set(self.import_data_files(srcinfo, include_all, examine, who,
                                                                    False, False, hist, filepaths))
 
-            if _action:
-                _action.add_subaction(hist)
+                if _action:
+                    _action.add_subaction(hist)
+                else:
+                    self.record_history(hist)
+                    
+            elif not os.path.exists(dsrcf):
+                self.log.info("No data sources registered; no data files imported")
+
             else:
-                self.record_history(hist)
+                self.log.warning("Data source file exists but is not a file: "+dscrf)
 
             return list(imported)
 
