@@ -1029,6 +1029,9 @@ class NERDmBasedBagger(SIPBagger):
         dsrcf = os.path.join(self.bagdir, self._data_source_file)
         
         if os.path.isfile(dsrcf):
+            if not who:
+                who = UNKNOWN_AGENT
+
             hist = Action(Action.COMMENT, self.id, who, "Removing all payload data sources")
             with self._lock_when(lock):
                 os.remove(dsrcf)
