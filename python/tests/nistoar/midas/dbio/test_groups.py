@@ -311,6 +311,29 @@ class TestDBGroups(test.TestCase):
         self.assertIn(base.PUBLIC_GROUP, matches)
         self.assertEqual(len(matches), 4)
 
+    def test_select_for_user(self):
+        # two groups owned by self.user
+        g1 = self.dbg.create_group("team-a")
+        g2 = self.dbg.create_group("team-b")
+
+        # one group created by another user, with self.user added as member
+        other_cli = self.fact.create_client(base.DMP_PROJECTS, self.cfg, "other-user")
+        g3 = other_cli.groups.create_group("other-team")
+        g3.add_member(self.user)
+        g3.save()
+
+        results = list(self.dbg.select_for_user(self.user))
+        ids = [g.id for g in results]
+        self.assertIn(g1.id, ids)
+        self.assertIn(g2.id, ids)
+        self.assertIn(g3.id, ids)   # member but not owner
+        self.assertEqual(len(ids), 3)  # no duplicates
+
+        # user with no groups sees nothing
+        stranger_cli = self.fact.create_client(base.DMP_PROJECTS, self.cfg, "stranger")
+        results = list(stranger_cli.groups.select_for_user("stranger"))
+        self.assertEqual(len(results), 0)
+
 
 class MockPeopleService(base.PeopleService):
     def __init__(self, staffdata):

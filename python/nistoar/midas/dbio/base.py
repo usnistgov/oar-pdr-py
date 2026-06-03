@@ -819,6 +819,19 @@ class DBGroups(object):
 
         return out
 
+    def select_for_user(self, user_id: str) -> Iterator[Group]:
+        """
+        return all groups the user owns or is a direct member of.
+        """
+        seen = set()
+        for rec in self._cli._select_from_coll(GROUPS_COLL, owner=user_id):
+            seen.add(rec['id'])
+            yield Group(rec, self._cli)
+        for rec in self._cli._select_prop_contains(GROUPS_COLL, 'members', user_id):
+            if rec['id'] not in seen:
+                seen.add(rec['id'])
+                yield Group(rec, self._cli)
+
     def delete_group(self, gid: str) -> bool:
         """
         delete the specified group from the database.  The user attached to the underlying

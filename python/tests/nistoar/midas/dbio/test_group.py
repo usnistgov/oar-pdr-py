@@ -84,18 +84,18 @@ class TestMIDASGroupApp(test.TestCase):
 
     def test_no_shoulder_provided(self):
         """
-        If we call /midas/group/ with no <shoulder>, we expect a 500 or 400
-        because group.py expects a shoulder.
+        GET /midas/group/ with no shoulder uses the default shoulder and returns 200.
         """
         path = ""
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path
         }
-        # This should fail because group.py checks for a shoulder
         hdlr = self.app.create_handler(req, self.start, path, test_agent)
         body = hdlr.handle()
-        self.assertIn("405 ", self.resp[0])
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIsInstance(resp, list)
 
     def test_create_group(self):
         """
@@ -119,6 +119,37 @@ class TestMIDASGroupApp(test.TestCase):
         # The ID can be "grp0:tester1:my-test-group" or similar
         self.assertIn("grp0:tester1:", resp['id'])
         self.assertEqual(resp['members'], ["tester1"])  # By default, the group is owned by user
+
+    def test_list_groups(self):
+        """
+        GET /midas/group/grp0 returns all groups the caller owns or belongs to.
+        """
+        path = "grp0"
+
+        # create two groups as test_agent (tester1)
+        for name in ["alpha", "beta"]:
+            req = {
+                'REQUEST_METHOD': 'POST',
+                'PATH_INFO': self.rootpath + path,
+                'wsgi.input': StringIO(json.dumps({"name": name}))
+            }
+            self.app.create_handler(req, self.start, path, test_agent).handle()
+            self.resp = []
+
+        # list groups
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, test_agent)
+        body = hdlr.handle()
+
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIsInstance(resp, list)
+        self.assertEqual(len(resp), 2)
+        names = {g['name'] for g in resp}
+        self.assertEqual(names, {"alpha", "beta"})
 
     def test_create_group_missing_name(self):
         """

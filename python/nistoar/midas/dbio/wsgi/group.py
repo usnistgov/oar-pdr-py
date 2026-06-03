@@ -125,6 +125,11 @@ class GroupService:
         grp.save()
         return True
 
+    def list_groups(self) -> list:
+        """Return all groups the current user owns or belongs to."""
+        user_id = self._cli.user_id
+        return [g.to_dict() for g in self._groups.select_for_user(user_id)]
+
 
 class GroupServiceFactory:
     """
@@ -158,7 +163,17 @@ class GroupSelectionHandler(DBIOHandler):
         self._shoulder = shoulder
 
     def do_OPTIONS(self, path):
-        return self.send_options(["POST"])
+        return self.send_options(["GET", "POST"])
+
+    def do_GET(self, path, ashead=False):
+        """
+        GET /{shoulder} — list all groups the caller owns or belongs to.
+        """
+        try:
+            groups = self.svc.list_groups()
+            return self.send_json(groups, ashead=ashead)
+        except NotAuthorized:
+            return self.send_unauthorized()
 
     def do_POST(self, path):
         """
