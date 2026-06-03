@@ -49,7 +49,7 @@ def process(dataid: str, config: Mapping, args: List[str], log=None):
         ptask.run()
 
     except PreservationException as ex:
-        log.failure("Preservation task endeed with error: "+str(ex))
+        log.critical("Preservation task endeed with error: "+str(ex))
         raise FatalError(str(ex), 1) from ex
 
     except Exception as ex:
@@ -71,6 +71,7 @@ def process(dataid: str, config: Mapping, args: List[str], log=None):
 def notify(jobstatefile, config, log):
     cfg = config.get('callback')
     if not cfg:
+        log.debug("No job notification callback configured")
         return
     
     ep = cfg.get('service_endpoint')
