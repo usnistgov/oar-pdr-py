@@ -272,12 +272,12 @@ class TestPDPWSGI(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
         self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:status"], 'published')
+        self.assertEqual(bnerd["pdr:status"], 'processing')
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
-        # bag dir was cleaned up
-        self.assertFalse((self.bagparent / "pdp0-0017").is_dir())
+        # being processed by preservation service; not cleaned up yet
+        self.assertTrue((self.bagparent / "pdp0-0017").is_dir())
 
 
 

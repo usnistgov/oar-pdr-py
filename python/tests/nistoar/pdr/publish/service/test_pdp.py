@@ -121,7 +121,7 @@ class TestPDPublishingService(test.TestCase):
                 }
             }
         }
-        self.pubsvc = pdp.PDPublishingService(self.cfg, 'pdp0')
+        self.pubsvc = pdp.PDPublishingService(self.cfg)
 
     def tearDown(self):
         self.tf.clean()
@@ -145,7 +145,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(self.pubsvc.statusdir, "/tmp/sip_stat")
         self.assertEqual(self.pubsvc.convention, "pdp12")
 
-        self.pubsvc = pdp.PDPublishingService(self.cfg, 'pdp12', self.tf.mkdir('pdr'))
+        self.pubsvc = pdp.PDPublishingService(self.cfg, 'pdp12', workdir=self.tf.mkdir('pdr'))
 
         workdir = os.path.join(self.tf.root,'pdr')
         self.assertEqual(self.pubsvc.workdir, workdir)
@@ -155,8 +155,13 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(self.pubsvc.convention, "pdp12")
 
         with self.assertRaises(pdp.PublishingStateException):
-            self.pubsvc = pdp.PDPublishingService(self.cfg, 'pdp12', "/oar/data/pdr")
+            self.pubsvc = pdp.PDPublishingService(self.cfg, 'pdp12', workdir="/oar/data/pdr")
 
+        self.pubsvc = pdp.PDP1Service(self.cfg)
+        self.assertEqual(self.pubsvc.workdir, "/tmp")
+        self.assertEqual(self.pubsvc.convention, "pdp1")
+        self.assertIsNone(self.pubsvc.uplparent)
+            
     def test_get_id_shoulder(self):
         self.assertEqual(self.pubsvc._get_id_shoulder(tstag, "", True), "pdp0")
         self.assertEqual(self.pubsvc._get_id_shoulder(tstag, None, True), "pdp0")
@@ -524,6 +529,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertFalse(bagdir.exists())
 
     def test_init_data_upload(self):
+        self.pubsvc = pdp.PDP1Service(self.cfg)
         with self.assertRaises(pdp.SIPNotFoundError):
             self.pubsvc.init_data_upload("ncnr0:hello", 'fs', ncnrag)
 
@@ -535,7 +541,7 @@ class TestPDPublishingService(test.TestCase):
 
         uplparent = os.path.join(self.workdir, "uploads")
         os.mkdir(uplparent)
-        self.pubsvc.uplparent = Path(uplparent)
+        self.pubsvc = pdp.PDP1Service(self.cfg, uploadsroot=uplparent)
         
         self.assertEqual(self.pubsvc.init_data_upload(sipid, 'fs', ncnrag),
                          { "type": 'fs', "location": sipid })

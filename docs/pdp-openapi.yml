@@ -5,16 +5,34 @@ info:
   description: |-
     A client uses the PDP interface to submit a Submission Information Package (SIP) and
     publish it into the PDR.  Clients may submit and publish and SIP all in one call or
-    via a sequence of calls in which the last call explicitly commits the SIP to
-    publication.  This interface is intended for use by automated clients that, apart from 
-    the initial call, is not driven by human action.  Nevertheless, the multi-call
-    approach does allow the client to see the status of the SIP prior to final
+    via a sequence of calls that assemble the SIP followed by a final call to explicitly 
+    commit the SIP to publication.  This interface is intended for use by automated clients 
+    that, apart from the initial call, is not driven by human action.  Nevertheless, the 
+    multi-call approach does allow the client to see the status of the SIP prior to final
     publication.
 
     The pdp0 convention is based on the following assumptions and requirements:
       * An SIP is described by a NERDm-compliant document encoding the metadata for the publicaiton.
       * The SIP does not include data files to be preserved with the metadata (although the 
-        metadata may refer to externally stored data).
+        metadata may refer to externally stored data).  In this convention, the ':data'
+        path 
+
+    The single-call approach can be accomplished by submitting a complete NERDm
+    record describing the SIP with a POST to the '/pdp0' endpoint with the 'action'
+    query parameter set to 'publish'.
+
+    A multi-call approach would start with a POST to the '/pdp0' endpoint (without the
+    'action' query parameter).  Subsequent PUTs or POSTs can be made to add NERDm components
+    to SIP.  An optional PATCH with 'action=finalize` will make final modifications to
+    SIP as if publication is the next step; this allows the client to GET the SIP's full
+    NERDm record, correct mistakes or cancel the SIP entirely.  Finally, a PATCH with 
+    'action=publish' commits the SIP for publication.
+
+    The pdp1 convention differs in that allows for the uploading of data files.  An
+    upload space is initialized via the ":data" endpoint.  Currently, only the so-called
+    'fs' method is supported: this requires that the client and server share a common
+    mounted filesystem for passing the data.  To import data into an SIP, a multi-call
+    approach must be used.  
 
   contact:
     name:  PDR support office
@@ -274,6 +292,31 @@ paths:
             "application/json":
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+
+    patch:
+      operationId: actonSIP
+      summary: Apply an action to an SIP
+      description: |-
+        This method is reserved for applying actions, such as 'finalize', 'preserve',
+        and 'import'.  If an action parameter is not provided or is not recognized, 
+        this will simply return the SIP's resource meta data.  This method does not
+        accept an input body; providing one results in a 400 response.  
+
+        'import' will import all data found in the uploads directory that was
+        initialized in a previous call to the ':data' endpoint.  Only files that were
+        provided metadata for previously will be loaded.  Note that this action is not
+        supported by all API conventions.
+
+        'finalize' will complete the contents of the SIP as if no further inputs will
+        be provided.  This allows the client to have one last look at the SIP before 
+        submitting it for publication.  The client is allowed to make further changes 
+        after applying this action.
+
+        'publish' will assume that the SIP is now complete and submit it for
+        publication.  The finalization action will be applied first automatically.  
+        The publication process is asynchronous, so when the request returns, the 
+        status will usually be marked as 'processling'.  
+
     delete:
       operationId: deleteSIP
       summary: Remove the previously submitted SIP
@@ -305,6 +348,95 @@ paths:
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
 
+  "/pdp0/{sipid}/:data":
+    get:
+      operationId: getUploadSpace
+      summary:  return a description of the upload space attached to an SIP
+      description:
+        If the specified SIP exists and an data upload space has been initialized
+        for it (from a previous PUT operation), return a description of the space.
+      responses:
+        "200":
+          description:
+            the space is available and a description of it (including its location)
+            is returned.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/UploadSpace"
+        "401":
+          description:
+            The client did not submit a credential that allows access to this SIP
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            the SIP does not exist yet or the space has not yet been requested (see PUT)
+    put:
+      operationId: initUploadSpace
+      summary: request initialization of an data file upload space
+      description:
+        PUT to this endpoint to have a space initialized where the client can upload
+        data files to be include in the SIP.  Generally, the input would include the
+        type of space to set up; however, this implementation only supports one type
+        called 'fs'.  With this upload type, there is a root directory accessible to both
+        the client and the server (agreed to out-of-band).  With a PUT to this endpoint,
+        a subdirectory is created there where the client may copy files for uploading.
+        The path relative to the root is returned, and the client may start copying
+        files.  The files will be imported into the SIP automatically when the SIP is
+        finalized or published.  If no input is provided, the 'fs' type is assumed.
+      properties:
+        type:
+          type: string
+          description:
+            the type of space to set up (only fs is supported)
+          enum: [ 'fs']
+      responses:
+        "200":
+          description:
+            the space was initialized and is available and a description of it (including its location)
+            is returned.
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/UploadSpace"
+        "401":
+          description:
+            The client did not submit a credential that allows access to this SIP
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            the SIP does not exist yet
+
+    delete:
+      operationId: cancelUploadSpace
+      summary: cancel the data file uploads
+      description:
+        This cancels the importing of data files via the initialized uploads space.  The
+        space will be deleted and any files uploaded there will be lost.  This will not
+        remove files that were already imported with a request to import or finalize.  
+      responses:
+        "200":
+          description:
+            the space was initialized and is available and a description of it (including its location)
+            is returned.
+        "401":
+          description:
+            The client did not submit a credential that allows access to this SIP
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        "404":
+          description:
+            the SIP does not exist yet
+      
+                
   /pdp0/{sipid}/{comppath}:
     get:
       operationId: getComp
@@ -353,10 +485,22 @@ components:
       required: false
       schema:
         type: string
-        enum: [ 'finalize', 'publish' ]
-        description:
-          finalize/publish defs
-
+        enum: [ 'finalize', 'publish', 'import' ]
+        description: |-
+          The supported actions are:
+            * import - import data files from the import space previously established
+              via the ':data' endpoint.  Only files that correspond to component
+              metadata that has already been submitted will be loaded.  This action is
+              not supported by all conventions of this API.
+            * finalize - complete the contents of the SIP as if no further inputs will
+              be provided.  This allows the client to have one last look at the SIP
+              before submitting it for publication.  The client is allowed to make
+              further changes after applying this action.
+            * publish - assume that the SIP is now complete and submit it for
+              publication.  The finalization action will be applied first
+              automatically.  The publication process is asynchronous, so when the 
+              request returns, the status will usually be marked as 'processling'.  
+  
     sipid:
       name: sipid
       in: path
@@ -423,11 +567,8 @@ components:
         { "$ref": "https://data.nist.gov/od/dm/nerdm-schema/v0.6#/definitions/Resource" }
       ]
 
-    SIPStatus:
+    StatusInfo:
       title: SIP Status Annotations
-      description:
-        This type defines properties that are included in responses from the service that
-        indicate the processing status of the SIP submission.
       properties:
         "pdr:status":
           description: |-
@@ -474,6 +615,13 @@ components:
             published.  (If the status is published, then this is the identifier that was
             assigned.)
           type: string
+
+    SIPStatus:
+      title: SIP Status Annotations
+      description:
+        This type defines properties that are included in responses from the service that
+        indicate the processing status of the SIP submission.
+      "$ref": "#/components/schemas/StatusInfo"
       required: [ "pdr:status", "pdr:message", "pdr:sipid" ]
 
     FullAnnotatedSIP:
@@ -495,10 +643,29 @@ components:
         At some point after an SIP is published, the SIP will be removed from the server;
         at this point, only an abbreviated record will be available for retrieval (via
         GET).
-      anyOf: [
-        { "$ref": "#/components/schemas/FullAnnotatedSIP" },
-        { "$ref": "#/components/schemas/SIPStatus" }
-      ]
+      anyOf: 
+        - "$ref": "#/components/schemas/FullAnnotatedSIP" 
+        - "$ref": "#/components/schemas/SIPStatus" 
+
+    UploadSpace:
+      title:  a JSON-encoded description of an upload space 
+      description: a description of an upload space attached to an SIP
+      allOf: 
+        - properties:
+            type:
+              type: string
+              enum: [ "fs" ]
+              description:
+                a label indicating that a directory was set up on a filesystem
+                that is available to both the client and this service's server
+                where the client may copy files to.
+
+            location:
+              type: string
+              description:
+                a path relative to an aggreed base directory on the client's local
+                filesystem where files can be copied to.
+        - "$ref": "#/components/schemas/StatusInfo"
 
   requestBodies:
     SIPResource:

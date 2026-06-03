@@ -1,12 +1,16 @@
 """
-WSGI support for the pdp0 convention of the Programmatic Data Publishing (PDP) service
+WSGI support for the pdp0 and pdp1 conventions of the Programmatic Data Publishing (PDP) service.
+
+The pdp1 convention differs from pdp0 in that it supports providing data files to SIPs.  It 
+relies on a shared filesystem mounted on both the client and server machines to facilitate the 
+importation of data.  It is intended for use by the MIDAS DAP client.  
 """
 import logging, json
 from collections import OrderedDict
-from typing import Callable
+from typing import Callable, Mapping
 from urllib.parse import parse_qs
 
-from .. import PDP0Service, status
+from .. import PDPublishingService, PDP0Service, PDP1Service, status, UploadMethodNotSupported
 from ... import (PublishingStateException, SIPNotFoundError, BadSIPInputError, NERDError,
                  SIPStateException, SIPConflictError, UnauthorizedPublishingRequest)
 from .base import PDPHandler
@@ -17,17 +21,14 @@ from nistoar.web.utils import order_accepts
 from nistoar.web.rest import Handler
 from nistoar.nerdm.validate import ValidationError
 
-class PDP0App(ServiceApp):
+class PDPApp(ServiceApp):
     """
-    The WSGI SubApp that handles the pdp0 convention of the PDP service
+    The WSGI SubApp that handles the pdp0 and pdp1 conventions of the PDP service.
     """
 
-    def __init__(self, parentlog, config={}):
-        convention = config.get('convention', 'pdp0')
-        super(PDP0App, self).__init__(convention, parentlog.getChild(convention), config)
-
-        self.svc = PDP0Service(self.cfg, convention)   # IngestService?
-        self.statuscfg = {"cachedir": self.svc.statusdir}
+    def __init__(self, service: PDPublishingService, parentlog: logging.Logger, config: Mapping={}):
+        super(PDPApp, self).__init__(service.convention, parentlog.getChild(service.convention), config)
+        self.svc = service
 
     def sips_for(self, who: Agent):
         """
@@ -36,7 +37,7 @@ class PDP0App(ServiceApp):
         """
         if who.agent_class is None:
             return []
-        return status.SIPStatus.requests(self.statuscfg, who.agent_class)
+        return status.SIPStatus.requests(self.svc.statusdir, who.agent_class)
         
     def create_handler(self, env: dict, start_resp: Callable, path: str, who: Agent) -> Handler:
         """
@@ -97,11 +98,27 @@ class PDP0App(ServiceApp):
                     return self.send_error_resp(404, "Authorized SIP Not Found",
                                 "There are no SIP submissions viewable for the client's authorization.")
 
-                out = self._app.svc.describe(path)
-                out['pdr:status'] = stat.state
-                if out.get('pdr:message') is not None:
-                    out['pdr:message'] = status.user_message[stat.state]
-                return self.send_json(out, ashead=ashead)
+                if len(parts) > 1 and parts[1] == ":data":
+                    # request for current data uploads directory
+                    if not getattr(self._app.svc, 'uplparent', None):
+                        return self.send_error_resp(403, "Data uploads not supported",
+                                                    "Data uploads are not allowed on this SIP: "+parts[0])
+                    datasrc = self._app.svc.get_upload_space(parts[0], self.who)
+                    if not datasrc:
+                        return self.send_error_resp(404, "No data sources set",
+                                                    "A data uploads directory has not yet been "
+                                                    "initialized")
+                    datasrc['pdr:sipid'] = parts[0]
+                    datasrc['pdr:status'] = stat.state
+                    return self.send_json(datasrc, ashead=ashead)
+
+                else:
+                    # request for nerdm metadata
+                    out = self._app.svc.describe(path)
+                    out['pdr:status'] = stat.state
+                    if out.get('pdr:message') is not None:
+                        out['pdr:message'] = status.user_message[stat.state]
+                    return self.send_json(out, ashead=ashead)
 
             except SIPNotFoundError as ex:
                 return self.send_error_resp(404, "Not Found", "Requested SIP not found", parts[0])
@@ -145,7 +162,7 @@ class PDP0App(ServiceApp):
                 else:
                     nerdm = json.load(bodyin, object_pairs_hook=OrderedDict)
                 if self._reqrec:
-                    self._reqrec.add_body_text(json.dumps(pod, indent=2)).record()
+                    self._reqrec.add_body_text(json.dumps(nerdm, indent=2)).record()
 
             except (ValueError, TypeError) as ex:
                 if self.log.isEnabledFor(logging.DEBUG):
@@ -208,20 +225,28 @@ class PDP0App(ServiceApp):
 
             except NERDError as ex:
                 self.log.error("Bad NERDm data POSTed to %s: %s", path, str(ex))
-                self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
+                return self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
 
             except ValidationError as ex:
                 self.log.error("Invalid NERDm data POSTed to %s: %s", path, str(ex))
-                self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
+                return self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
+
+            except SIPNotFoundError as ex:
+                return self.send_error_resp(404, "Not Found", "Requested SIP not found", parts[0])
 
             except UnauthorizedPublishingRequest as ex:
                 self.log.warning("Unauthorized create request to %s: %s", path, str(ex))
                 return self.send_unauthorized()
 
+            except BadSIPInputError as ex:
+                msg = "Bad Input: "+str(ex)
+                self.log.error(msg)
+                return self.send_error_resp(400, "Bad Input", msg, sipid)
+
             except PublishingStateException as ex:
                 msg = "Attempt to update SIP in un-update-able state: %s" % str(ex)
                 self.log.error(msg)
-                self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
+                return self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
 
             except Exception as ex:
                 if sipid:
@@ -254,18 +279,19 @@ class PDP0App(ServiceApp):
 
             try:
                 bodyin = self._env.get('wsgi.input')
-                if bodyin is None:
+                if bodyin is None and compid != ":data":
                     if self._reqrec:
                         self._reqrec.record()
                     return self.send_error_resp(400, "Missing input NERDm document",
                                                 "No input NERDm document provided to PUT", sipid)
-                if self.log.isEnabledFor(logging.DEBUG) or self._reqrec:
-                    body = bodyin.read()
-                    nerdm = json.loads(body, object_pairs_hook=OrderedDict)
-                else:
-                    nerdm = json.load(bodyin, object_pairs_hook=OrderedDict)
-                if self._reqrec:
-                    self._reqrec.add_body_text(json.dumps(pod, indent=2)).record()
+                elif bodyin:
+                    if compid == ':data' or self.log.isEnabledFor(logging.DEBUG) or self._reqrec:
+                        body = bodyin.read()
+                        nerdm = json.loads(body, object_pairs_hook=OrderedDict) if body else {}
+                    else:
+                        nerdm = json.load(bodyin, object_pairs_hook=OrderedDict)
+                    if self._reqrec:
+                        self._reqrec.add_body_text(json.dumps(nerdm, indent=2)).record()
 
             except (ValueError, TypeError) as ex:
                 if self.log.isEnabledFor(logging.DEBUG):
@@ -282,7 +308,18 @@ class PDP0App(ServiceApp):
                 raise
 
             try:
-                if compid:
+                if compid == ":data":
+                    # requesting space for uploads; nerdm is the data source details
+                    if nerdm and nerd.get('type','') != 'fs':
+                        return self.send_error_resp(400, "Bad uploads request",
+                                                    "Data uploads request only supports type='fs'")
+                    out = self._app.svc.init_data_upload(sipid, 'fs', self.who)
+                    out['pdr:sipid'] = sipid
+                    if action and action != self.ACTION_UPDATE:
+                        out['pdr:message'] = f"Note: action={action} ignored on :data endpoint"
+                    
+                elif compid:
+                    # adding component metadata
                     nerdm['@id'] = compid
                     self._app.svc.upsert_component_metadata(sipid, nerdm, self.who)
 
@@ -321,20 +358,33 @@ class PDP0App(ServiceApp):
 
             except NERDError as ex:
                 self.log.error("Bad NERDm data PUT to %s: %s", path, str(ex))
-                self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
+                return self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
 
             except ValidationError as ex:
                 self.log.error("Invalid NERDm data PUT to %s: %s", path, str(ex))
-                self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
+                return self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
+
+            except SIPNotFoundError as ex:
+                return self.send_error_resp(404, "Not Found", "Requested SIP not found", parts[0])
 
             except UnauthorizedPublishingRequest as ex:
                 self.log.warning("Unauthorized update request to %s: %s", path, str(ex))
                 return self.send_unauthorized()
 
+            except UploadMethodNotSupported as ex:
+                msg = "Data uploads not supported on this API"
+                self.log.error(msg)
+                return self.send_error_resp(400, "Unsupported uploads method", msg, sipid)
+
+            except BadSIPInputError as ex:
+                msg = "Bad Input: "+str(ex)
+                self.log.error(msg)
+                return self.send_error_resp(400, "Bad Input", msg, sipid)
+
             except PublishingStateException as ex:
                 msg = "Attempt to update SIP in un-update-able state: %s" % str(ex)
                 self.log.error(msg)
-                self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
+                return self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
 
             except Exception as ex:
                 self.log.exception("Failed to accept SIP update: %s: %s", path, str(ex))
@@ -366,6 +416,16 @@ class PDP0App(ServiceApp):
                 return self.send_unauthorized()
 
             try:
+                if compid == ":data":
+                    # forget about uploads space
+                    try:
+                        self._app.svc.cancel_upload_space(sipid, self.who)
+                    except SIPConflictError as ex:
+                        self.log.error("%s: unable to remove component, %s: %s", sipid, compid, str(ex))
+                        return self.send_error_resp(409, "Not in DELETEable state",
+                                                    "SIP is not in a DELETEable state: status="+
+                                                    status.user_message[stat.state], sipid)
+                    
                 if compid:
                     try:
 
@@ -433,6 +493,13 @@ class PDP0App(ServiceApp):
                     if action == self.ACTION_PUBLISH:
                         self._app.svc.publish(sipid, self.who)
 
+                elif action == self.ACTION_IMPORTDATA:
+                    imported = self._app.svc.import_files(sipid, self.who)
+                    out = self._app.svc.describe(sipid)
+                    out['pdr:message'] = f"Imported {len(imported)} file" + \
+                        "s" if len(imported) > 0 else ""
+                    out['pdr:imported'] = imported
+
                 if not out:
                     out = self._app.svc.describe(sipid)
 
@@ -450,9 +517,36 @@ class PDP0App(ServiceApp):
                 self.log.warning("Unauthorized %s request on %s: %s", action, path, str(ex))
                 return self.send_unauthorized()
 
+            except BadSIPInputError as ex:
+                msg = "Bad Input: "+str(ex)
+                self.log.error(msg)
+                return self.send_error_resp(400, "Bad Input", msg, sipid)
+
             except Exception as ex:
                 self.log.exception("Failed to take %s action on %s: %s", action, path, str(ex))
                 return self.send_error(500, "Server error")
+
+
+class PDP0App(PDPApp):
+    """
+    The WSGI SubApp that handles the pdp0 convention of the PDP service.
+    """
+
+    def __init__(self, parentlog: logging.Logger, config: Mapping={}):
+        convention = config.get('convention', 'pdp0')
+        pdpsvc = PDP0Service(config, convention, parentlog)
+        super(PDP0App, self).__init__(pdpsvc, parentlog.getChild(convention), config)
+
+class PDP1App(PDPApp):
+    """
+    The WSGI SubApp that handles the pdp0 convention of the PDP service.
+    """
+
+    def __init__(self, parentlog: logging.Logger, config: Mapping={}):
+        convention = config.get('convention', 'pdp1')
+        pdpsvc = PDP1Service(config, parentlog, convention=convention) 
+        super(PDP1App, self).__init__(pdpsvc, parentlog.getChild(convention), config)
+
 
 
             

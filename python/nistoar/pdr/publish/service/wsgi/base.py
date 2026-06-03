@@ -29,6 +29,7 @@ class PDPHandler(Handler):
     ACTION_UPDATE   = ''
     ACTION_FINALIZE = "finalize"
     ACTION_PUBLISH  = "publish"
+    ACTION_IMPORTDATA = "import"
 
     def get_action(self):
         """
@@ -40,7 +41,8 @@ class PDPHandler(Handler):
 
         params = parse_qs(qstr)
         action = params.get('action')
-        if len(action) > 0 and action[0] in [self.ACTION_FINALIZE, self.ACTION_PUBLISH]:
+        if len(action) > 0 and action[0] in [ self.ACTION_FINALIZE, self.ACTION_PUBLISH,
+                                              self.ACTION_IMPORTDATA ]:
             return action[0]
         return self.ACTION_UPDATE
 
