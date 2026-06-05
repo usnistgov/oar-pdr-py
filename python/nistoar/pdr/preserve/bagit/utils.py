@@ -20,7 +20,7 @@ from .builder import (NERDM_SCH_ID_BASE, NERDM_SCH_VER, NERDMPUB_SCH_VER,
 from nistoar.id.versions import Version, cmp_versions
 
 DEF_MBAG_VERSION = "0.4"
-DEF_NIST_PROF_VERSION = "0.4"
+DEF_NIST_PROF_VERSION = "0.5"
 
 def form_bag_name(aipid, bagseq=0, dsver="1.0", mbver=DEF_MBAG_VERSION,
                   namefmt=None):

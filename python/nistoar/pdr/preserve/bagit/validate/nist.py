@@ -15,6 +15,7 @@ from .multibag import MultibagValidator
 from ..bag import NISTBag
 from ..... import pdr
 from .. import ConfigurationException
+from nistoar.id.versions import cmp_versions
 
 DEF_BASE_NERDM_SCHEMA = "https://data.nist.gov/od/dm/nerdm-schema/v0.1#"
 DEF_NERDM_RESOURCE_SCHEMA = DEF_BASE_NERDM_SCHEMA + "/definitions/Resource"
@@ -35,10 +36,14 @@ class NISTBagValidator(ValidatorBase):
     namere02 = re.compile("^(\w[\w\-]*).mbag(\d+)_(\d+)-(\d+)$")
     namere04 = re.compile("^(\w[\w\-]*).(\d+(_\d+)*).mbag(\d+)_(\d+)-(\d+)$")
     
-    def __init__(self, config=None, profver="0.4"):
+    def __init__(self, config=None, profver=None):
         super(NISTBagValidator, self).__init__(config)
         self._validatemd = self.cfg.get('validate_metadata', True)
         self.mdval = None
+        if not profver:
+            profver = self.cfg.get("profile_version", "0.4")
+        if not re.match(r"^\d+(\.\d+)*$", profver):
+            raise ConfigurationException("profile_version: does not conform to N.N... format")
         self.profile = ("NIST", profver)
         if self._validatemd:
             schemadir = self.cfg.get('nerdm_schema_dir', pdr.def_schema_dir)
@@ -74,11 +79,12 @@ class NISTBagValidator(ValidatorBase):
         t = out._add_applied(t, nm)
 
         if nm:
+            mbver = [0, 4]
             t = self._warn("2-2",
-                           "Bag name should include profile version 'mbag{0}_{1}'"
+                           "Bag name should include multibag profile version 'mbag{0}_{1}'"
                             .format(*pver))
-            t = out._add_applied(t, nm.group(pverpos[0]) == str(pver[0]) and
-                                    nm.group(pverpos[1]) == str(pver[1]))
+            t = out._add_applied(t, nm.group(pverpos[0]) == str(mbver[0]) and
+                                    nm.group(pverpos[1]) == str(mbver[1]))
 
         return out
 
@@ -258,6 +264,10 @@ class NISTBagValidator(ValidatorBase):
         out = results
         if not out:
             out = ValidationResults(bag.name, want)
+        if cmp_versions(self.profile[1], "0.5") >= 0:
+            # starting with profile version 0.5, pod.json is no longer required
+            return out
+
         podfile = os.path.join(bag.metadata_dir, "pod.json")
         
         t = self._err("4.1-2-0", "Metadata tag directory must contain the file, pod.json")
