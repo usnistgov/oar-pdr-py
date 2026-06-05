@@ -106,8 +106,11 @@ class PDPMinter(IDMinter):
                 name = "%s%s%s" % (self.shldr, self.shldrdelim, seq)
                 if data.get('sipid') is None:
                     data['sipid'] = name
-                out = "%s/%s%s" % (self.naan, name, self.cfg.get('seqid_flag','s'))
-                out = "ark:/%s%s" % (out, checkdigit(out))
+                out = "%s/%s" % (self.naan, name)
+                if self.cfg.get('add_check_digit', True):
+                    out += self.cfg.get('seqid_flag', 's')
+                    out += checkdigit(out)
+                out = "ark:/"+out
                 if self.issued(out):
                     out = None
 
@@ -130,9 +133,11 @@ class PDPMinter(IDMinter):
         locid = self._make_localkey(data, _data_update_allowed)
         if not locid:
             return None
-        out = "%s/%s%s%s%s" % (self.naan, self.shldr, self.shldrdelim, locid,
-                               self.cfg.get('clientid_flag', 'p'))
-        return "ark:/%s%s" % (out, checkdigit(out))
+        out = "%s/%s%s%s" % (self.naan, self.shldr, self.shldrdelim, locid)
+        if self.cfg.get('add_check_digit', True):
+            out += self.cfg.get('clientid_flag', 'p')
+            out += checkdigit(out)
+        return "ark:/" + out
 
     @abstractmethod
     def _make_localkey(self, data, data_update_allowed):
