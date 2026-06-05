@@ -151,6 +151,9 @@ class TestPreservationTask(test.TestCase):
             },
             "validate": {
                 "check_data_files": False,
+                "nist": {
+                    "profile_version": "0.5"
+                }
             },
             "serialize": {
                 "multibag": {
@@ -286,7 +289,7 @@ class TestPreservationTask(test.TestCase):
 
     def test_serialize_split(self):
         # force multibag splitting
-        self.factory.cfg['serialize']['multibag']['max_bag_size'] = 9000
+        self.factory.cfg['serialize']['multibag']['max_bag_size'] = 8000
         task = self.factory.create_task(self.sm)
         mgr = task._statemgr
         self.assertTrue(not task.finalized())

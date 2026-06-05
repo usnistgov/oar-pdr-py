@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 from . import framework as fw
 from nistoar.pdr.preserve.bagit import NISTBag
-from nistoar.pdr.preserve.bagit.validate import NISTBagValidator
+from nistoar.pdr.preserve.bagit.validate import NISTAIPValidator
 from nistoar.pdr.preserve.bagit.validate.base import ValidationIssue, ValidationResults
 from nistoar.pdr.preserve import AIPValidationError
 from nistoar.pdr.preserve.datachecker import DataChecker
@@ -122,7 +122,7 @@ class NISTBagValidation(fw.AIPValidation):
 
         else:
             # Run our bag validators
-            vld8r = NISTBagValidator(self.cfg)
+            vld8r = NISTAIPValidator(self.cfg)
             res = vld8r.validate(bag, results=res)
 
             # process the results

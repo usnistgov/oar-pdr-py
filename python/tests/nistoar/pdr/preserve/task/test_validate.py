@@ -23,6 +23,7 @@ def setUpModule():
 
     with zipfile.ZipFile(storedir/"mds2-7223.1_0_0.mbag0_4-0.zip") as zip:
         zip.extractall(os.path.join(tmpdir.name))
+    os.getcwd()
     # (Path(tmpdir.name)/"mds2-7223.1_0_0.mbag0_4-0").rename(testbag)
 
 def tearDownModule():
@@ -72,7 +73,9 @@ class TestNISTBagValidation(test.TestCase):
         self.assertIs(data['is_valid'], True)
         self.assertIn('failed', data)
         self.assertNotIn('passed', data)
-        self.assertEqual(len(data['failed']), 0)
+        self.assertEqual(len(data['failed']), 2)
+        self.assertEqual(len([f for f in data['failed'] if f['type'] != 'recommendation']), 0)
+        
 
     def test_noresults(self):
         self.mgr = st.JSONPreservationStateManager.for_aip({"persist_in": self.tmpdir.name},
@@ -94,7 +97,8 @@ class TestNISTBagValidation(test.TestCase):
         self.assertIs(data['is_valid'], True)
         self.assertIn('failed', data)
         self.assertIn('passed', data)
-        self.assertEqual(len(data['failed']), 0)
+        self.assertEqual(len(data['failed']), 2)
+        self.assertEqual(len([f for f in data['failed'] if f['type'] != 'recommendation']), 0)
         
 
     def test_failure(self):
@@ -114,7 +118,8 @@ class TestNISTBagValidation(test.TestCase):
         self.assertIs(data['is_valid'], False)
         self.assertIn('failed', data)
         self.assertNotIn('passed', data)
-        self.assertEqual(len(data['failed']), 1)
+        self.assertEqual(len(data['failed']), 5)
+        self.assertEqual(len([f for f in data['failed'] if f['type'] != 'recommendation']), 3)
         
 
 
