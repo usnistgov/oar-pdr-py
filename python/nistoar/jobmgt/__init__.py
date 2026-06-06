@@ -657,6 +657,7 @@ class JobRunner:
             cmd.extend(["-l", logfile])
 
         cmd.extend(job.info.get('args',[]))
+        self.log.debug("Launching Job %s with: %s", job.data_id, " ".join(cmd))
         # cmd = " ".join(cmd)
 
         proc = await asyncio.create_subprocess_exec(*cmd, stdin=sp.DEVNULL, stderr=sp.STDOUT, stdout=out)

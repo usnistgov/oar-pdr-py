@@ -156,7 +156,10 @@ def main(args):
         errors.append(str(ex))
         if log:
             log.exception(ex)
-        raise FatalError("Failure occurred during processing: "+str(ex), 11) from ex
+        msg = str(ex)
+        if not msg:
+            msg = str(ex.__class__.__name__)
+        raise FatalError("Failure occurred during processing: "+msg, 11) from ex
     finally:
         ended = time.time()
         runt = ended - start
