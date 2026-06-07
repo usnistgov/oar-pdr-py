@@ -5,7 +5,7 @@ import os, logging, re, json, time, shutil
 from typing import Mapping, Iterator, List, NewType
 from abc import ABC, ABCMeta, abstractmethod
 from logging import Logger
-from collections import namedtuple
+from collections import namedtuple, deque
 from typing import Iterator, Tuple
 from pathlib import Path
 from copy import deepcopy
@@ -176,7 +176,7 @@ class PreservationStatus(PreservationStepsAware):
         with open(histfile) as fd:
             for line in fd:
                 entries.append(line.strip())
-        if entries.count() == 0:
+        if len(entries) == 0:
             return None
 
         return cls.from_json(entries.pop())
@@ -435,7 +435,8 @@ class AIP1PreservationService(PreservationService):
                     raise ConfigurationException("%s: does not exist and cannot be created: %s" %
                                                  (dir, str(ex)))
 
-        self.presq = jobmgt.JobQueue("preservation", self.jobdir, execmod, jqcfg, None, True)
+        self.presq = jobmgt.JobQueue("preservation", self.jobdir, execmod, jqcfg,
+                                     self.log.getChild('jobq'), self._pres_job_exited, True)
 
 
     def _state_file_for(self, aipid):
@@ -605,29 +606,30 @@ class AIP1PreservationService(PreservationService):
         if isinstance(self.cfg.get('wait_to_start'), (int, float)):
             time.sleep(self.cfg['wait_to_start'])
         return self.status_of(aipid)
-            
-    def _notify_job_exited(self, jobfile: str):
+
+    def _pres_job_exited(self, job: jobmgt.Job, ec: int):
         """
-        recieve a signal from the job management system that a preservation job has exited.
+        the post-preservation callback function
 
-        This method is intended for use by the preservation job management system to give this 
-        service a chance to tidy-up after an asynchronous job has exited (whether successfully 
-        or with an error).  It should not be called by clients who submit preservation requests.
+        This function is not intended to be called by external clients.  It is called by the 
+        preservation job queue each time a preservation job completes.  This can be overridden 
+        by subclasses.  This implementation will update the SIP status object associated with 
+        the input.  If the job completed successfully, it will set that status to PUBLISHED;
+        if it failed, the status will be set to ONHOLD.  
 
-        :param str jobfile:  the path to the job state file corresponding to the job that exited. 
+        :param Job job:  the job that completed
+        :param int  ec:  the exit code from the job
         """
-        if not os.path.isfile(jobfile):
-            self.log.error("Job file %s: does not exist as a file", jobfile)
-            return
-
         try:
-            job = jobmgt.Job.from_state_file(jobfile)
             aipid = job.data_id
             workdir = self.inprogdir/aipid
-            if job.successful:
+            if ec != 0:
+                self.log.error("Job %s reporting failure (see state under %s)", aipid, workdir)
+            elif job.successful:
                 self.log.info("Job %s reporting successful completion; filing results", aipid)
             else:
-                self.log.info("Job %s reporting failure (see state under %s)", aipid, workdir)
+                self.log.warning("Job %s exited with exit-code=0 but was apparently not fully complete"
+                                 " (see state under %s)", aipid, workdir)
 
             lockfile = self._lock_file_for(aipid)
             with filelock.FileLock(lockfile):
@@ -647,7 +649,7 @@ class AIP1PreservationService(PreservationService):
             lockfile.unlink()
 
         except Exception as ex:
-            self.log.error("Unable able to clean-up preservation job (%s): %s", jobfile, str(ex))
+            self.log.error("Unable able to clean-up preservation job %s: %s", job.data_id, str(ex))
 
     def _cleanup_pres_job(self, aipid, job):
         # this assumes that we've already checked that the job is not running
@@ -663,7 +665,8 @@ class AIP1PreservationService(PreservationService):
                 self.log.error("%s: does not exist as a file", preslog)
             else:
                 with open(fulllog, 'a') as dest:
-                    dest.write(f"---------- {aipid}: {job.info.get('reqdate')} --------------\n")
+                    reqdate = datetime.fromtimestamp(job.request_time or time.time())
+                    dest.write(f"---------- {aipid}: {reqdate} --------------\n")
                     with open(preslog) as src:
                         for line in src:
                             dest.write(line)
@@ -688,7 +691,7 @@ class AIP1PreservationService(PreservationService):
 
             else:
                 self.log.warning("Preservation job, %s, appears to have exited before completing; "+
-                                 "keeping state available for restart")
+                                 "keeping state available for restart", job.data_id)
 
                 bkupre = re.compile(r"^preservation.log.(\d+)$")
                 bkups = [f for f in os.listdir(workdir) if bkupre.match(f)]

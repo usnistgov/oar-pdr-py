@@ -748,14 +748,14 @@ class PDRPublication(fw.AIPPublication):
         if self._ingester and revertinfo.get("rmm_ingest"):
             resultdir = None
             if revertinfo["rmm_ingest"] == "succeeded":
-                resultdir = self._doiminter._successdir
+                resultdir = self._ingester._successdir
             elif revertinfo["rmm_ingest"] == "failed":
-                resultdir = self._doiminter._faildir
+                resultdir = self._ingester._faildir
             elif revertinfo["rmm_ingest"] == "interrupted":
-                resultdir = self._doiminter._inprogdir
+                resultdir = self._ingester._inprogdir
 
             if resultdir:
-                staged = os.path.join(self._doiminter._stagedir, statemgr.aipid+".json")
+                staged = os.path.join(self._ingester._stagedir, statemgr.aipid+".json")
                 handled = os.path.join(resultdir, statemgr.aipid+".json")
                 if not os.path.exists(staged) and os.path.isfile(handled):
                     try:

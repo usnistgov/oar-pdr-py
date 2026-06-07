@@ -1211,13 +1211,13 @@ class IngestError(AIPPublicationException):
             if aipid:
                 msg += f": {aipid}"
             msg = self._append_error_preview(msg, errors)
-        super(IngestError, self).__init__(msg, aipid, step, errors)
+        super(IngestError, self).__init__(msg, aipid, errors)
 
 class DOISubmissionError(AIPPublicationException):
     """
     an exception that occurs while attempting to apply the publication step in a processing task
     """
-    def __init__(self, aipid: str, msg: str=None, errors: List[str]=None, step: str=None):
+    def __init__(self, aipid: str, msg: str=None, errors: List[str]=None):
         """
         create the exception, optionally list things that went wrong for the AIP
         :param str     msg:  a general message describing the failure
@@ -1230,7 +1230,7 @@ class DOISubmissionError(AIPPublicationException):
             if aipid:
                 msg += f"for AIP={aipid}"
             msg = self._append_error_preview(msg, errors)
-        super(DOISubmissionError, self).__init__(msg, aipid, step, errors)
+        super(DOISubmissionError, self).__init__(msg, aipid, errors)
 
 class PreservationTaskFailure(PreservationTaskException):
     """
@@ -1241,7 +1241,7 @@ class PreservationTaskFailure(PreservationTaskException):
     information for facilitating post-failure handling (like notifying an administrator).  
     """
 
-    def __init__(self, aipid: str, message: str, errors: List[str], origin: str=None,
+    def __init__(self, aipid: str, message: str, errors: List[str], step: str=None,
                  notify_type: str=None, cause=None, **kw):
         """
         initialize the exception.

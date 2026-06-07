@@ -29,6 +29,7 @@ from .prepupd import UpdatePrepService, PENDING_VERSION_SFX
 from ..idmint import PDPMinter
 from ...utils.prov import Action, Agent, dump_to_history
 from nistoar.base.config import merge_config as merge_md_into
+from nistoar.id.versions import cmp_versions
 
 SIPEXT_RE = re.compile(core_schema_base + r'sip/(v[^/]+)#/definitions/\w+Submission')
 ARK_PFX_RE = re.compile(const.ARK_PFX_PAT)
@@ -550,7 +551,8 @@ class NERDmBasedBagger(SIPBagger):
 
         if 'contactPoint' in resmd:
             resmd['contactPoint']['@type'] = "vcard:Contact"
-
+        if not resmd.get('ediid'):
+            resmd['ediid'] = self.id
         if not resmd.get('accessLevel'):
             resmd['accessLevel'] = "public"
 
@@ -602,7 +604,8 @@ class NERDmBasedBagger(SIPBagger):
         
         if 'filepath' in nerdm:
             if not self.bagbldr.bag.has_component(nerdm['filepath']):
-                self.bagbldr.register_data_file(nerdm['filepath'], comptype="DataFile")
+                ctype = nerdutils.which_type(nerdm, ['DataFile', 'Subcollection', 'ChecksumFile'])
+                self.bagbldr.register_data_file(nerdm['filepath'], comptype=ctype)
             self.bagbldr.update_metadata_for(nerdm['filepath'], nerdm)
         else:
             # add to non-file list of components

@@ -82,7 +82,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         super(BagBasedPublishingService, self).__init__(convention, config, baselog)
 
         if not workdir:
-            workdir = self.cfg.get("working_dir")
+            workdir = self.cfg.get("working_dir")   # typeically the "pdr" directory
         self.workdir = workdir
 
         self.bagparent = self._resolve_dir('sip_bags_dir', bagdir, self.workdir, 'sipbags')
@@ -440,7 +440,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         return True
 
-    def finalize(self, sipid: str, who: Agent=None) -> None:
+    def finalize(self, sipid: str, who: Agent=None) -> SIPBagger:
         """
         process all SIP input to get it ready for publication.  The SIP metadata will be updated 
         accordingly (which will affect what is returned from :py:method:`describe`).  
@@ -457,9 +457,13 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         sts = self.status_of(sipid)
         if sts.state == status.NOT_FOUND:
             raise SIPNotFoundError(sipid)
+
+        shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
+        bagger = self._get_bagger_for(shoulder, sipid)
+        
         if sts.state == status.FINALIZED:
             self.log.info("SIP %s is already finalized (skipping)", sipid)
-            return
+            return bagger
         if sts.state != status.PENDING:
             raise SIPConflictError(sipid, "SIP {0} is not ready for finalizing: {1}"
                                           .format(sipid, sts.message))
@@ -467,8 +471,6 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             raise SIPConflictError(sipid, "SIP {0} is being handled by a different convention: {1}"
                                           .format(sipid, sts.message))
 
-        shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
-        bagger = self._get_bagger_for(shoulder, sipid)
         try:
             bagger.finalize(who)
 
@@ -517,7 +519,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             sts.update(status.PROCESSING)
             if self.pressvc:
                 # generally, preservation is asynchronous
-                self.pressvc.preserve_from(bagger.bagbldr.bagdir, sts, startover=True)
+                self.pressvc.preserve_from(bagger.bagdir, sts, startover=True)
+                sts.update(status.SUBMITTED)
             else:
                 self.log.warning("No preservation service configured; holding SIP in PROCESSING state")
 
@@ -950,8 +953,14 @@ class PDPublishingService(BagBasedPublishingService):
     def _create_preservation_service(self):
         if self.cfg.get('preservation'):
             from nistoar.pdr.preserve.service import AIP1PreservationService
+
             log = self.log.getChild('preserve')
-            return AIP1PreservationService(self.cfg['preservation'], log)
+            prescfg = self.cfg['preservation']
+            if not prescfg.get('working_dir'):
+                prescfg['working_dir'] = self.workdir
+            prescfg['sip_dir'] = self.bagparent
+            
+            return AIP1PreservationService(prescfg, log)
 
         self.log.warning("No preservation service configured!")
         return None

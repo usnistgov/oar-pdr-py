@@ -106,7 +106,7 @@ def tearDownModule():
 from nistoar.pdr.constants import ARK_PFX_PAT
 ARK_PFX_RE = re.compile(ARK_PFX_PAT)
 
-class TEstPreservationStatus(test.TestCase):
+class TestPreservationStatus(test.TestCase):
     def setUp(self):
         self.pstat = pres.PreservationStatus("mds5-2188", "ready!")
 

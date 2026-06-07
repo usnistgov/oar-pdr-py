@@ -169,7 +169,7 @@ class JSONPreservationStateManager(PreservationStateManager):
         if not self._pubstat:
             psf = self._data.get("_pubstatfile")
             if psf and os.path.exists(psf):
-                SIPStatus.from_file(psf)
+                self._pubstat = status.SIPStatus.from_status_file(psf)
 
         aipid = self._data.get("_aipid")
         if not aipid:

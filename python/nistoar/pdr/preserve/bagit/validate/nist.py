@@ -41,7 +41,7 @@ class NISTBagValidator(ValidatorBase):
         self._validatemd = self.cfg.get('validate_metadata', True)
         self.mdval = None
         if not profver:
-            profver = self.cfg.get("profile_version", "0.4")
+            profver = self.cfg.get("profile_version", "0.5")
         if not re.match(r"^\d+(\.\d+)*$", profver):
             raise ConfigurationException("profile_version: does not conform to N.N... format")
         self.profile = ("NIST", profver)
