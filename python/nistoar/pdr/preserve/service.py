@@ -424,9 +424,6 @@ class AIP1PreservationService(PreservationService):
 
         self.preslogdir = self.cfg.get('history_dir', self.historydir)
 
-        self.hbagdir = self.cfg.get('headbag_cache')
-        # required?
-
         for dir in (self.inprogdir, self.jobdir, self.historydir, self.preslogdir):
             if not dir.exists():
                 try:
@@ -598,6 +595,8 @@ class AIP1PreservationService(PreservationService):
                 "logfile": str(workparent/"preservation.log"),
                 "history_dir": self.historydir
             }
+            if self.cfg.get('repo_access') and not jcfg['task'].get('repo_access'):
+                jcfg['task']['repo_access'] = self.cfg['repo_access']
             self.presq.submit(aipid, [self._state_file_for(aipid)], jcfg)
 
         self.presq.clean()

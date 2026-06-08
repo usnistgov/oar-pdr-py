@@ -16,6 +16,7 @@ tstdir = Path(__file__).resolve().parent
 pdrdir = tstdir.parents[1]
 datadir = pdrdir / "preserve" / "data"
 storedir = pdrdir / "distrib" / "data"
+archdatadir = pdrdir / "describe" / "data" / "rmm-test-archive"
 basedir = pdrdir.parents[3]
 ormdir = basedir / "metadata"
 assert storedir.is_dir()
@@ -56,6 +57,16 @@ def startServices(authmeth=None):
           "--wsgi-file {3} --pidfile {4} --set-ph prefixes={5}"
     cmd = cmd.format(os.path.join(tdir,"simsdcrv.log"), uwsgi_opts, srvport, mocksvr,
                      pidfile, ",".join(prefixes))
+    os.system(cmd)
+
+    srvport += 1
+    arcdir = os.path.join(tdir, "archive")
+    shutil.copytree(archdatadir, arcdir)
+    wpy = "python/tests/nistoar/pdr/describe/sim_describe_svc.py"
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --pidfile {4} --set-ph archive_dir={5}"
+    cmd = cmd.format(os.path.join(tdir,"simdescsrv.log"), uwsgi_opts, srvport,
+                     os.path.join(basedir, wpy), pidfile, arcdir)
     os.system(cmd)
 
     time.sleep(0.5)
@@ -122,13 +133,13 @@ class TestFullPDP1Process(test.TestCase):
         self.tf = Tempfiles(tmpdir())
         self.workdir = self.tf.mkdir("pdr")
         self.statedir   = os.path.join(self.workdir, "state")
-        self.stagedir   = os.path.join(self.workdir, "stage")
+        self.hbagdir    = os.path.join(self.workdir, "headbags")
         self.storedir   = os.path.join(self.workdir, "store")
         self.restricted = os.path.join(self.workdir, "restricted")
         self.ingestdir  = os.path.join(self.workdir, "ingest")
         self.dcdir      = os.path.join(self.workdir, "doimint")
         self.upldir     = os.path.join(self.workdir, "uploads")
-        for d in (self.statedir, self.stagedir, self.storedir, self.restricted,
+        for d in (self.statedir, self.hbagdir, self.storedir, self.restricted,
                   self.ingestdir, self.dcdir, self.upldir):
             if not os.path.exists(d):
                 os.mkdir(d)
@@ -185,16 +196,20 @@ class TestFullPDP1Process(test.TestCase):
                     }
                 }
             },
+            'repo_access': {
+                'headbag_cache': self.hbagdir,
+                'distrib_service': {
+                    'service_endpoint': "http://localhost:9991/"
+                },
+                'metadata_service': {
+                    'service_endpoint': "http://localhost:9994"
+                },
+                'store_dir': self.storedir,
+                'restricted_store_dir': self.restricted,
+            },
             "preservation": {
                 "wait_to_start": 0.1,
                 "task": {
-                    "store_dir": self.storedir,
-                    'restricted_store_dir': self.restricted,
-                    'repo_access': {
-                        'distrib_service': {
-                            'service_endpoint': "http://localhost:9991/"
-                        }
-                    },
                     'ingest': {
                         'rmm': {
                             'data_dir': self.ingestdir,

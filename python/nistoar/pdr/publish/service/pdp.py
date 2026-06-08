@@ -25,6 +25,7 @@ from .base import SimpleNerdmPublishingService
 from .. import (PublishingStateException, SIPConflictError, SIPNotFoundError, BadSIPInputError,
                 ConfigurationException, UnauthorizedPublishingRequest)
 from ..bagger import SIPBagger, SIPBaggerFactory, PDPBagger
+from ..bagger.prepupd import UpdatePrepService
 from ...utils.prov import Agent, Action
 from ..idmint import PDP0Minter
 from ....nerdm import utils as nerdutils
@@ -958,6 +959,8 @@ class PDPublishingService(BagBasedPublishingService):
             prescfg = self.cfg['preservation']
             if not prescfg.get('working_dir'):
                 prescfg['working_dir'] = self.workdir
+            if not prescfg.get('repo_access') and self.cfg.get('repo_access') is not None:
+                prescfg['repo_access'] = self.cfg['repo_access']
             prescfg['sip_dir'] = self.bagparent
             
             return AIP1PreservationService(prescfg, log)
@@ -1044,7 +1047,8 @@ class PDPublishingService(BagBasedPublishingService):
             func = getattr(func, parts[0])
             funcid = (len(parts) > 1 and parts[1]) or None
 
-        if inspect.isclass(func) and hasattr(func, 'create') and hasattr(getattr(func, 'create'), '__call__'):
+        if inspect.isclass(func) and hasattr(func, 'create') and \
+           hasattr(getattr(func, 'create'), '__call__'):
             factory = func(self.cfg)
             func = getattr(factory, 'create')
             factoryid += ".create"
@@ -1343,7 +1347,8 @@ class PDPBaggerFactory(SIPBaggerFactory):
 
         :param           sipid:  the ID for the SIP to create a bagger for; this is usually a str, 
                                  subclasses may support more complicated ID types.
-        :param str     siptype:  the name given to the SIP convention supported by the SIP reference by sipid
+        :param str     siptype:  the name given to the SIP convention supported by the SIP reference 
+                                 by sipid
         :param Mapping  config:  bagger configuration parameters that should override the default
         :param IDMinter minter:  an IDMinter instance that should be used to mint a new PDR-ID
         """

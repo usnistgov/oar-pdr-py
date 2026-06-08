@@ -135,6 +135,22 @@ class TestPDRPreservationCleanup(test.TestCase):
         self.assertTrue((self.workdir/self.aipid).is_dir())
 
     def test_clean_serialized_bags(self):
+        hbcache = self.workdir/"headbags"
+        os.mkdir(hbcache)
+        self.cfg['headbag_cache'] = str(hbcache)
+        self.cln = pdr.PDRPreservationCleanup(self.cfg)
+        hb = hbcache/f"{self.aipid}.1_0_0.mbag0_4-2.zip"
+        self.assertTrue(not hb.exists())
+
+        self.cln.clean_serialized_bags(self.mgr)
+
+        files = self.pstate['_serialized_files'] 
+        self.assertTrue(os.path.isdir(os.path.dirname(files[0])))
+        self.assertTrue(all(not os.path.exists(f) for f in files))
+        self.assertIsNone(self.mgr.get_serialized_files())
+        self.assertTrue(hb.is_file())
+
+    def test_clean_serialized_bags_nocache(self):
         hb = self.workdir/"stage"/f"{self.aipid}.1_0_0.mbag0_4-2.zip"
         self.assertTrue(hb.is_file())
         staged = self.pstate['_serialized_files']

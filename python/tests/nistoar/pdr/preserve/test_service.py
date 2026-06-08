@@ -151,8 +151,9 @@ class TestPreservationService(test.TestCase):
         self.restricted = os.path.join(self.workdir, "restricted")
         self.ingestdir  = os.path.join(self.workdir, "ingest")
         self.dcdir      = os.path.join(self.workdir, "doimint")
+        self.hbagdir    = os.path.join(self.workdir, "headbags")
         for d in (self.statedir, self.stagedir, self.storedir, self.restricted,
-                  self.ingestdir, self.dcdir):
+                  self.ingestdir, self.dcdir, self.hbagdir):
             if not os.path.exists(d):
                 os.mkdir(d)
 
@@ -161,12 +162,13 @@ class TestPreservationService(test.TestCase):
             "sip_dir":     self.workdir,
             "wait_to_start": 0.1,
             "task": {
-                "store_dir": self.storedir,
-                'restricted_store_dir': self.restricted,
                 'repo_access': {
+                    "store_dir": self.storedir,
+                    'restricted_store_dir': self.restricted,
                     'distrib_service': {
                         'service_endpoint': "http://localhost:9991/"
-                    }
+                    },
+                    'headbag_cache': self.hbagdir
                 },
                 'ingest': {
                     'rmm': {
@@ -270,22 +272,14 @@ class TestPreservationService(test.TestCase):
         self.assertTrue(pstat.successful)
         self.assertEqual(pstat.get('exitcode'), 0)
 
+        # preservation space will be all cleaned up (callback will have been called)
         self.assertTrue(not os.path.exists(self.bagdir))
         pworkdir = os.path.join(self.workdir, 'preserve',self.aipid)
-        self.assertTrue(os.path.exists(pworkdir))
-        hfile = self.svc._history_file_for(self.aipid)
+        self.assertTrue(not os.path.exists(pworkdir))
         lfile = self.svc.preslogdir/f"{self.aipid}.log"
-        self.assertTrue(not os.path.exists(hfile))
-        self.assertTrue(not os.path.exists(lfile))
+        self.assertTrue(os.path.exists(lfile))
 
         jobfile = os.path.join(self.workdir, 'preserve', '_jobs', self.aipid+".json")
-        self.assertTrue(os.path.isfile(jobfile))
-
-        # test call-back function used to clean-up
-        self.svc._notify_job_exited(jobfile)
-        self.assertTrue(os.path.exists(hfile))
-        self.assertTrue(os.path.exists(lfile))
-        self.assertTrue(not os.path.exists(pworkdir))
         self.assertTrue(os.path.isfile(jobfile))
         
         

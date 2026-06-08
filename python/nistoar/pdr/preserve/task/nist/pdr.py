@@ -280,6 +280,12 @@ class PDR1AIPArchiving(fw.AIPArchiving):
 
     This implementation supports the following configuration parameters:
 
+    ``repo_access``
+         (dict) a configuration dictionary that describe access points to the public side of 
+         the repository.  See :py:class:`RepositoryAccess` for the properties supported by this 
+         configuration dictionary.  It _must_ include the ``store_dir`` property (setting where 
+         serialized pages should copied to to be preserved); if it doesn't include 
+         ``restricted_store``, archiving restricted access datasets will not be supported.  
     ``store_dir``   
          (str) the storage transfer directory that files are copied to 
     ``allow_overwrite``  
@@ -299,15 +305,17 @@ class PDR1AIPArchiving(fw.AIPArchiving):
         :param dict config:  the configuration for this step; if not provided, defaults will apply.
         """
         super(PDR1AIPArchiving, self).__init__(config)
-        self.storedir = self.cfg.get("store_dir")
+        self.storedir = self.cfg.get("repo_access", {}).get('store_dir')
         if not self.storedir:
-            self.storedir = self.cfg.get("repo_access", {}).get('store_dir')
-        if not self.storedir:
-            raise ConfiguationException("Missing required config parameter: store_dir")
+            raise ConfiguationException("Missing required config parameter: repo_access.store_dir")
         self.storedir = Path(self.storedir)
         if not self.storedir.is_dir() or not os.access(self.storedir, os.W_OK):
             raise ConfiguationException("store_dir is not an existing directory with write permission: "+
                                         str(self.storedir))
+        self.restricted = self.cfg.get("repo_access", {}).get('restricted_store_dir')
+        if self.restricted:
+            self.restricted = Path(self.restricted)
+        
 #        self.finalbucket = self.cfg.get("public_bucket")
 #        if not self.finalbucket:
 #            raise ConfigurationException("Missing required config parameter: public_bucket")
@@ -913,6 +921,10 @@ class PDRPreservationCleanup(fw.AIPCleanup):
 
     def __init__(self, config=None, finalizer: fw.AIPFinalization = None):
         super(PDRPreservationCleanup, self).__init__(config)
+        self.hbcachedir = self.cfg.get('headbag_cache')
+        if self.hbcachedir and not os.path.isdir(self.hbcachedir):
+            raise ConfigurationException("headbag_cache: does not exist as a directory: "+
+                                         self.hbcachedir)
         self.finalizer = finalizer
         
     def clean_serialized_bags(self, statemgr: fw.PreservationStateManager, 
@@ -922,10 +934,16 @@ class PDRPreservationCleanup(fw.AIPCleanup):
             head = None
             if not cancel:
                 head = find_latest_head_bag([b for b in staged if not b.endswith(".sha256")])
-                staged.remove(head)  # don't delete the head bag
                 statemgr.set_state_property('headbag', head)
+
+                if self.hbcachedir:
+                    # move the head bag to the head bag cache directory
+                    shutil.move(head, self.hbcachedir)
+                else:
+                    staged.remove(head)  # don't delete the head bag
+
             if self.delete_files(staged, statemgr, "serialized bags", log):
-                statemgr.set_serialized_files(None if cancel else [head])
+                statemgr.set_serialized_files(None if cancel or self.hbcachedir else [head])
 
     def clean_multibags(self, statemgr: fw.PreservationStateManager, cancel=False, log: Logger=None):
         if self.cfg.get("cleanup_unserialized_bags", True):
@@ -1056,13 +1074,6 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
            (dict) a configuration dictionary for the ingest functions that require preparation.
            recognized keys include ``rmm`` and ``doi`` (see :py:class:`PDRBagFinalizaiton` for more 
            details).
-    ``store_dir``
-         (str) the storage transfer directory that public AIP bags files are copied to for long-term
-         storage.
-    ``restricted_store_dir``
-         (str) the storage transfer directory that non-public AIP bags files are copied to for long-term
-         storage.
-
     """
     def_supported_types = ["pdr", "def"]
 
@@ -1078,6 +1089,10 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
                 if not self.cfg.get(step, {}).get('repo_access'):
                     self.cfg.setdefault(step, {})
                     self.cfg[step]['repo_access'] = self.cfg['repo_access']
+            self.cfg.setdefault('cleanup', {})
+            if self.cfg['repo_access'].get('headbag_cache') and \
+               not self.cfg['cleanup'].get('headbag_cache'):
+                self.cfg['cleanup']['headbag_cache'] = self.cfg['repo_access']['headbag_cache']
 
         if self.cfg.get('ingest'):
             # share the top level ingest with steps that need it
@@ -1086,12 +1101,12 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
                     self.cfg.setdefault(step, {})
                     self.cfg[step]['ingest'] = self.cfg['ingest']
 
-        for prop in ['store_dir', 'restricted_store_dir']:
-            if self.cfg.get(prop):
-                for step in ['finalize', 'archive']:
-                    if not self.cfg.get(step, {}).get(prop):
-                        self.cfg.setdefault(step, {})
-                        self.cfg[step][prop] = self.cfg[prop]
+        # for prop in ['store_dir', 'restricted_store_dir']:
+        #     if self.cfg.get(prop):
+        #         for step in ['finalize', 'archive']:
+        #             if not self.cfg.get(step, {}).get(prop):
+        #                 self.cfg.setdefault(step, {})
+        #                 self.cfg[step][prop] = self.cfg[prop]
 
     # def _create_state_manager(self, aipid: str, config: Mapping,
     #                           logger: Logger, startover=False) -> fw.PreservationStateManager:

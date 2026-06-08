@@ -98,9 +98,9 @@ class TestPDR1AIPArchiving(test.TestCase):
             "persist_in": self.workdir.name
         }
         self.cfg = {
-            "store_dir": self.storedir,
             "public_bucket": self.bucket,
             "repo_access": {
+                "store_dir": self.storedir,
                 "distrib_service": {
                     "service_endpoint": "http://localhost:9091"
                 }

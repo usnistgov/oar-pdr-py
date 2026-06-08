@@ -109,8 +109,9 @@ class TestPreservationTask(test.TestCase):
         self.restricted = os.path.join(self.workdir, "restricted")
         self.ingestdir  = os.path.join(self.workdir, "ingest")
         self.dcdir      = os.path.join(self.workdir, "doimint")
+        self.hbcache    = os.path.join(self.workdir, "headbags")
         for d in (self.statedir, self.stagedir, self.storedir, self.restricted,
-                  self.ingestdir, self.dcdir):
+                  self.ingestdir, self.dcdir, self.hbcache):
             if not os.path.exists(d):
                 os.mkdir(d)
 
@@ -122,12 +123,13 @@ class TestPreservationTask(test.TestCase):
         }
 
         self.config = {
-            "store_dir": self.storedir,
-            'restricted_store_dir': self.restricted,
             'repo_access': {
                 'distrib_service': {
                     'service_endpoint': "http://localhost:9991/"
-                }
+                },
+                "store_dir": self.storedir,
+                'restricted_store_dir': self.restricted,
+                'headbag_cache': self.hbcache
             },
             'ingest': {
                 'rmm': {
@@ -191,10 +193,7 @@ class TestPreservationTask(test.TestCase):
     def test_factory_ctor(self):
         self.assertIn('repo_access', self.factory.cfg)
         self.assertIn('repo_access', self.factory.cfg['archive'])
-        self.assertIn('store_dir', self.factory.cfg['finalize'])
-        self.assertIn('restricted_store_dir', self.factory.cfg['finalize'])
-        self.assertIn('store_dir', self.factory.cfg['archive'])
-        self.assertIn('restricted_store_dir', self.factory.cfg['archive'])
+        self.assertIn('repo_access', self.factory.cfg['finalize'])
 
     def test_create_task(self):
         task = self.factory.create_task(self.sm)
@@ -348,10 +347,12 @@ class TestPreservationTask(test.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(ingesteddir,self.aipid+".json")))
 
     def test_run(self):
+        cached = os.path.join(self.hbcache, f"{self.aipid}.1_0_0.mbag0_4-0.zip")
         task = self.factory.create_task(self.sm)
         mgr = task._statemgr
         self.assertTrue(not task.finalized())
         self.assertTrue(not task.published())
+        self.assertFalse(os.path.exists(cached))
         
         task.run()
         self.assertTrue(task.finalized())
@@ -361,10 +362,10 @@ class TestPreservationTask(test.TestCase):
         
         self.assertIsNone(mgr.get_finalized_aip())
         self.assertFalse(os.path.exists(mgr.get_sip()))
-        self.assertEqual(len(mgr.get_serialized_files()), 1)
+        self.assertIsNone(mgr.get_serialized_files())
         staged = list(os.listdir(self.stagedir))
-        self.assertEqual(len(staged), 1)
-        self.assertEqual(staged[0], f"{self.aipid}.1_0_0.mbag0_4-0.zip")
+        self.assertEqual(len(staged), 0)
+        self.assertTrue(os.path.isfile(cached))
         mbdir = os.path.join(self.workdir, "multibag")
         self.assertFalse(os.path.exists(mbdir))
                          
