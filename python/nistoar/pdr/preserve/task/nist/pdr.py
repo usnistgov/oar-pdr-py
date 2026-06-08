@@ -1086,9 +1086,13 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
         if self.cfg.get('repo_access'):
             # share the top level repo_access with steps that need it
             for step in ['archive', 'finalize']:
-                if not self.cfg.get(step, {}).get('repo_access'):
-                    self.cfg.setdefault(step, {})
+                self.cfg.setdefault(step, {})
+                if not self.cfg[step].get('repo_access'):
                     self.cfg[step]['repo_access'] = self.cfg['repo_access']
+                else:
+                    self.cfg[step]['repo_access'] = merge_config(self.cfg[step]['repo_access'],
+                                                                 deepcopy(self.cfg['repo_access']))
+                    
             self.cfg.setdefault('cleanup', {})
             if self.cfg['repo_access'].get('headbag_cache') and \
                not self.cfg['cleanup'].get('headbag_cache'):

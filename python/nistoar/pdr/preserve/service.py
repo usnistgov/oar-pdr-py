@@ -13,7 +13,7 @@ from datetime import datetime
 
 import filelock
 
-from nistoar.base.config import ConfigurationException
+from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.pdr.exceptions import IDNotFound, StateException
 from nistoar.pdr.utils import read_json
 from nistoar.pdr.publish.service.status import SIPStatus
@@ -595,8 +595,12 @@ class AIP1PreservationService(PreservationService):
                 "logfile": str(workparent/"preservation.log"),
                 "history_dir": self.historydir
             }
-            if self.cfg.get('repo_access') and not jcfg['task'].get('repo_access'):
-                jcfg['task']['repo_access'] = self.cfg['repo_access']
+            if self.cfg.get('repo_access'):
+                if not jcfg['task'].get('repo_access'):
+                    jcfg['task']['repo_access'] = self.cfg['repo_access']
+                else:
+                    jcfg['task']['repo_access'] = merge_config(jcfg['task']['repo_access'],
+                                                               deepcopy(self.cfg['repo_access']))
             self.presq.submit(aipid, [self._state_file_for(aipid)], jcfg)
 
         self.presq.clean()

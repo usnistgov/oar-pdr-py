@@ -959,8 +959,12 @@ class PDPublishingService(BagBasedPublishingService):
             prescfg = self.cfg['preservation']
             if not prescfg.get('working_dir'):
                 prescfg['working_dir'] = self.workdir
-            if not prescfg.get('repo_access') and self.cfg.get('repo_access') is not None:
-                prescfg['repo_access'] = self.cfg['repo_access']
+            if self.cfg.get('repo_access') is not None:
+                if not prescfg.get('repo_access'):
+                    prescfg['repo_access'] = self.cfg['repo_access']
+                else:
+                    prescfg['repo_access'] = cfgmod.merge_config(prescfg['repo_access'],
+                                                                 deepcopy(self.cfg['repo_access']))
             prescfg['sip_dir'] = self.bagparent
             
             return AIP1PreservationService(prescfg, log)
