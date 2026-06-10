@@ -275,18 +275,21 @@ class TestPDPublishingService(test.TestCase):
 
         # nerdm record has some arbitrary value for '@id'
         nerd['@id'] = "ark:/88434/goob"
+        with self.assertRaises(pdp.BadSIPInputError):
+            sipid = self.pubsvc.accept_resource_metadata(nerd, ncnrag, create=True)
+        nerd['@id'] = "ark:/88434/goob:gurn"
         with self.assertRaises(pdp.UnauthorizedPublishingRequest):
             sipid = self.pubsvc.accept_resource_metadata(nerd, ncnrag, create=True)
 
         del nerd['@id']
         sipid = self.pubsvc.accept_resource_metadata(nerd, ncnrag, create=True)
-        self.assertEqual(sipid, "ncnr0-0021")
+        self.assertEqual(sipid, "ncnr0-0021sh")
         bagdir = self.bagparent / sipid
         self.assertTrue(bagdir.is_dir())
         bag = NISTBag(bagdir)
         bnerd = bag.nerdm_record(True)
         self.assertEqual(bnerd["@id"], "ark:/88434/ncnr0-0021sh")
-        self.assertEqual(bnerd["pdr:sipid"], "ncnr0-0021")
+        self.assertEqual(bnerd["pdr:sipid"], "ncnr0-0021sh")
         self.assertEqual(bnerd["pdr:aipid"], "ncnr0-0021sh")
         self.assertEqual(bnerd["doi"], "doi:10.18434/ncnr0-0021sh")
         self.assertEqual(bnerd["title"], nerd['title'])
@@ -294,18 +297,18 @@ class TestPDPublishingService(test.TestCase):
 
         # nerdm record has some arbitrary value for '@id'
         nerd = utils.read_json(str(simplenerd))
-        with self.assertRaises(pdp.UnauthorizedPublishingRequest):
+        with self.assertRaises(pdp.BadSIPInputError):
             sipid = self.pubsvc.accept_resource_metadata(nerd, tstag, create=True)
 
         del nerd['@id']
         sipid = self.pubsvc.accept_resource_metadata(nerd, tstag, create=True)
-        self.assertEqual(sipid, "pdp0-0017")
+        self.assertEqual(sipid, "pdp0-0017sg")
         bagdir = self.bagparent / sipid
         self.assertTrue(bagdir.is_dir())
         bag = NISTBag(bagdir)
         bnerd = bag.nerdm_record(True)
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["title"], nerd['title'])
         self.assertEqual(bnerd["accessLevel"], 'public')
@@ -315,13 +318,13 @@ class TestPDPublishingService(test.TestCase):
         nerd['@id'] = sipid
         nerd['accessLevel'] = 'restricted public'
         sipid = self.pubsvc.accept_resource_metadata(nerd, tstag)
-        self.assertEqual(sipid, "pdp0-0017")
+        self.assertEqual(sipid, "pdp0-0017sg")
         bagdir = self.bagparent / sipid
         self.assertTrue(bagdir.is_dir())
         bag = NISTBag(bagdir)
         bnerd = bag.nerdm_record(True)
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["title"], nerd['title'])
         self.assertEqual(bnerd["accessLevel"], 'restricted public')
@@ -333,13 +336,13 @@ class TestPDPublishingService(test.TestCase):
         del nerd['@id']
         del nerd['components']
         sipid = self.pubsvc.accept_resource_metadata(nerd, tstag)
-        self.assertEqual(sipid, "pdp0-0018")
+        self.assertEqual(sipid, "pdp0-0018s0")
         bagdir = self.bagparent / sipid
         self.assertTrue(bagdir.is_dir())
         bag = NISTBag(bagdir)
         bnerd = bag.nerdm_record(True)
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0018s0")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0018")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0018s0")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0018s0")
         self.assertEqual(bnerd["title"], nerd['title'])
         self.assertEqual(bnerd["accessLevel"], 'restricted public')
@@ -353,7 +356,7 @@ class TestPDPublishingService(test.TestCase):
         schema = nerd['_schema'] + "/definitions/Component"
 
         sipid = self.pubsvc.accept_resource_metadata(nerd, tstag)
-        self.assertEqual(sipid, "pdp0-0017")
+        self.assertEqual(sipid, "pdp0-0017sg")
         bagdir = self.bagparent / sipid
         self.assertTrue(bagdir.is_dir())
         bag = NISTBag(bagdir)
@@ -468,8 +471,14 @@ class TestPDPublishingService(test.TestCase):
         with self.assertRaises(pdp.SIPNotFoundError):
             self.pubsvc.describe("ncnr0:goober")
 
-        self.assertEqual(self.pubsvc.describe("ark:/88434/ncnr0-hellopk/goober"), {})
-        self.assertEqual(self.pubsvc.describe("ncnr0:hello/goober"), {})
+        md = self.pubsvc.describe("ark:/88434/ncnr0-hellopk/goober")
+        self.assertEqual(md.get('pdr:sipid'), "ncnr0:hello")
+        self.assertIn('pdr:pub_status', md)
+        self.assertNotIn('@type', md)
+        md = self.pubsvc.describe("ncnr0:hello/goober")
+        self.assertEqual(md.get('pdr:sipid'), "ncnr0:hello")
+        self.assertIn('pdr:pub_status', md)
+        self.assertNotIn('@type', md)
         
     def test_remove_component(self):
         nerd = utils.read_json(str(simplenerd))

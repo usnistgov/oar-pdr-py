@@ -27,7 +27,8 @@ from .. import (PublishingStateException, SIPConflictError, SIPNotFoundError, Ba
 from ..bagger import SIPBagger, SIPBaggerFactory, PDPBagger
 from ..bagger.prepupd import UpdatePrepService
 from ...utils.prov import Agent, Action
-from ..idmint import PDP0Minter
+from ..idmint import PDPMinter, PDP0Minter
+from nistoar.id.minter import IDMinter
 from ....nerdm import utils as nerdutils
 from ....nerdm.validate import ValidationError
 from . import status
@@ -168,16 +169,16 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         """
         raise NotImplementedError()
         
-    def _get_bagger_for(self, shoulder, sipid, minter=None):
+    def _get_bagger_for(self, shoulder, sipid, idorminter=None):
         if sipid not in self._baggers:
-            out = self._create_bagger(shoulder, sipid, minter)
-            if minter: 
+            out = self._create_bagger(shoulder, sipid, idorminter)
+            if idorminter: 
                 self._baggers[sipid] = out
             return out
         return self._baggers[sipid]
 
     @abstractmethod
-    def _create_bagger(self, shoulder, sipid, minter=None):
+    def _create_bagger(self, shoulder, sipid, idorminter=None):
         raise NotImplementedError()
 
     @abstractmethod
@@ -256,15 +257,22 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         shoulder = self._get_id_shoulder(who, sipid, create)  # may raise UnauthorizedPublishingRequest
 
         minter = self._get_minter(shoulder)
-        sipid = self._set_identifiers(nerdm, minter, sipid)  # nerdm gets updated
-        sts = self.status_of(sipid)
+        pdrid = None
+        sts = None
+        if sipid:
+            sts = self.status_of(sipid)
+            if sts.data['user'].get('pdrid'):
+                pdrid = sts.data['user']['pdrid']   # caution: how reliable is this?
+        sipid = self._set_identifiers(nerdm, minter, sipid, pdrid)  # nerdm gets updated
+        if not sts:
+            sts = self.status_of(sipid)
 
         if create:
             if sts.state != status.NOT_FOUND and sts.state != status.PUBLISHED:
                 raise SIPConflictError(sipid, "Unable to create SIP {0}: already in process ({1}: {2})"
                                        .format(sipid, sts.siptype, sts.state))
 
-            bagger = self._get_bagger_for(shoulder, sipid, minter)
+            bagger = self._get_bagger_for(shoulder, sipid, nerdm['@id'])
             bagger.delete(who, "New SIP requested: clearing out any previously existing SIP")
             sts.start(self.convention, who.agent_class)
 
@@ -278,7 +286,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                 raise SIPConflictError(sipid, "Unable to update SIP {0}: SIP not established, yet"
                                        .format(sipid))
 
-            bagger = self._get_bagger_for(shoulder, sipid, minter)
+            bagger = self._get_bagger_for(shoulder, sipid, nerdm['@id'])
             if sts.state == status.NOT_FOUND or sts.state == status.PUBLISHED:
                 sts.start(self.convention, who.agent_class)
             elif sts.siptype != self.convention:
@@ -540,9 +548,14 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
     def describe(self, id: str, withcomps=True):
         """
-        returns a NERDm description of the entity with the given identifier.  If the identifier 
-        points to a resource, A NERDm Resource record is returned.  If it refers to a component
-        of an SIP, a Component record is returned.  
+        returns a NERDm description of the entity with the given identifier.  
+
+        If the identifier points to a resource, a NERDm Resource record is returned.  If it refers 
+        to a component of an SIP, a Component record is returned.  (The NERDm metadata could be 
+        incomplete if it hasn't been set yet.)  Extra status information is added, including the 
+        information returned by :py:meth:`status_of` in a property called ``pdr:pub_status``, the 
+        current publishing state (``pdr:state``) and possibly a ``pdr:message``.  
+
         :param str id:   an identifier identifying the SIP.  This is typically an SIP-ID, but it can 
                          also be a PDR-ID.
         :param bool withcomps:  if True, and the ID points to a resource, then the member component
@@ -955,10 +968,9 @@ class PDPublishingService(BagBasedPublishingService):
 
         return out
 
-    def _set_identifiers(self, nerdm, minter, sipid):
+    def _set_identifiers(self, nerdm, minter, sipid, pdrid=None):
         data = {'sipid': sipid}
-        pdrid = None
-        if sipid:
+        if not pdrid and sipid:
             matches = minter.search(data)
             if len(matches) > 1:
                 raise PublishingStateException("Multiple IDs have been registered for sipid="+sipid)
@@ -1002,7 +1014,7 @@ class PDPublishingService(BagBasedPublishingService):
         self.log.warning("No preservation service configured!")
         return None
 
-    def _create_bagger(self, shoulder: str, sipid: str, minter=None):
+    def _create_bagger(self, shoulder: str, sipid: str, idorminter=None):
 
         # build the bagger configuration
         bgrcfg = self.cfg.get('shoulders',{}).get(shoulder)
@@ -1043,7 +1055,7 @@ class PDPublishingService(BagBasedPublishingService):
 
         # call the factory function
         try:
-            return factory(sipid=sipid, siptype=shoulder, config=bgrcfg, minter=minter)
+            return factory(sipid=sipid, siptype=shoulder, config=bgrcfg, idorminter=idorminter)
         except TypeError as ex:
             raise ConfigurationException("factory_function: Does not resolve to an API-compliant callable: "+
                                          str(factoryid)+": "+str(ex))
@@ -1252,8 +1264,10 @@ class PDP1Service(PDPublishingService):
                 from ex
 
         shoulder = self._get_id_shoulder(who, sipid, False)  # may raise UnauthorizedPublishingRequest
-        minter = self._get_minter(shoulder)
-        bagger = self._get_bagger_for(shoulder, sipid, minter)
+        bagger = self._get_bagger_for(shoulder, sipid)
+        if not os.path.exists(bagger.bagdir):
+            # should not happen; NotFound should have been raised above
+            raise PublishingStateException(f"{sipid}: unable to register uploads dir: missing bag")
 
         if upldir not in [s.get('location','') for s in bagger.get_data_sources()]:
             bagger.add_data_source("fs:"+str(upldir), who)
@@ -1373,7 +1387,8 @@ class PDPBaggerFactory(SIPBaggerFactory):
         """
         return True
 
-    def create(self, sipid, siptype: str, config: Mapping=None, minter=None) -> SIPBagger:
+    def create(self, sipid: str, siptype: str, config: Mapping=None, 
+               idorminter: Union[str,IDMinter]=None) -> SIPBagger:
         """
         create a new instantiation of an SIPBagger that can process an SIP of the given type.  If config
         is provided, it may get merged in some way with the configuration set at construction time before
@@ -1384,10 +1399,24 @@ class PDPBaggerFactory(SIPBaggerFactory):
         :param str     siptype:  the name given to the SIP convention supported by the SIP reference 
                                  by sipid
         :param Mapping  config:  bagger configuration parameters that should override the default
-        :param IDMinter minter:  an IDMinter instance that should be used to mint a new PDR-ID
+        :param str|PDPMinter idorminter:  either the resource identifier (a str) to assign to the bag 
+                                 or an IDMinter instance to use to create an identifier when the bag
+                                 is eventually created.  Note that for this factory, this minter must 
+                                 be a PDPMinter
         """
         bgrcfg = self.cfg.get('bagger')
         if bgrcfg:
             config = cfgmod.merge_config(bgrcfg, deepcopy(config))
-        return PDPBagger(sipid, config, minter, self.prepsvc, siptype)
+
+        id = None
+        minter = None
+        if isinstance(idorminter, str):
+            id = idorminter
+        else:
+            minter = idorminter
+            if minter and not isinstance(minter, PDPMinter):
+                raise TypeError("PDPBaggerFactory.create: idorminter must be str or a PDPMinter "
+                                "(not an IDMinter)")
+        
+        return PDPBagger(sipid, config, minter, self.prepsvc, siptype, id)
 

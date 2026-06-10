@@ -387,7 +387,7 @@ class TestPDP0App(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
         self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:status"], 'finalized')
+        self.assertEqual(bnerd["pdr:state"], 'finalized')
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 

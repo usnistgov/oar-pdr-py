@@ -10,6 +10,7 @@ from copy import deepcopy
 from urllib.parse import urlparse
 from pathlib import Path
 from logging import Logger
+from nistoar.id.minter import IDMinter
 
 import yaml, jsonpatch
 
@@ -187,6 +188,11 @@ class NERDmBasedBagger(SIPBagger):
         if not self.prepsvc and not os.path.exists(self.bagdir):
             self.log.warning("Bagger operating without an UpdatePrepService!")
             # raise ValueError("NERDmBasedBagger: requires a UpdatePrepService instance for new bag")
+
+        if not self._id and self.bagbldr.bag and os.path.exists(self.bagbldr.bag.nerd_file_for('')):
+            nerd = self.bagbldr.bag.nerd_metadata_for('')
+            if nerd.get('@id'):
+                self._id = nerd.get('@id')
 
         self.prepared = False
         self._nerdmcore_re = None
@@ -1425,8 +1431,8 @@ class PDPBagger(NERDmBasedBagger):
     :param str default_*_md_file:       the path to the file containing (in YAML or JSON format)
                                         a collection of resource-level NERDm metadata common to all records
                                         processed under a specific convention, where * is the name of the 
-                                        convention.  Values in this file are overridden by metadata specified 
-                                        in "*_metadata".  
+                                        convention.  Values in this file are overridden by metadata 
+                                        specified in "*_metadata".  
     :param Mapping finalize:            the configuration specific to the finalize() function.  See 
                                         BagBuilder.finalize for supported config subparameters; however,
                                         subclasses of this Bagger may support additional parameters.
