@@ -60,6 +60,7 @@ def startServices(authmeth=None):
     os.system(cmd)
 
     srvport += 1
+    pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     arcdir = os.path.join(tdir, "archive")
     shutil.copytree(archdatadir, arcdir)
     wpy = "python/tests/nistoar/pdr/describe/sim_describe_svc.py"
@@ -75,7 +76,7 @@ def stopServices():
     tdir = tmpdir()
     srvport = port
 
-    for p in range(srvport, srvport+3):
+    for p in range(srvport, srvport+4):
         pidfile = os.path.join(tdir,"simsrv"+str(p)+".pid")
         if os.path.exists(pidfile):
             cmd = "uwsgi --stop {0}".format(pidfile)
@@ -293,7 +294,7 @@ class TestFullPDP1Process(test.TestCase):
         # copy in the data files
         self.pubsvc.init_data_upload(sipid, 'fs', tstag)
         uploaddir = os.path.join(self.upldir, sipid)
-        self.assertTrue(uploaddir)
+        self.assertTrue(os.path.isdir(uploaddir))
 
         for f in os.listdir(srcbag.data_dir):
             src = os.path.join(srcbag.data_dir, f)

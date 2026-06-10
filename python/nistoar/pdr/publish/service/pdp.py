@@ -20,7 +20,7 @@ from pathlib import Path
 
 from ... import constants as const
 from ....nerdm import constants as nrdconst
-from ....pdr import config as cfgmod
+from ....pdr import config as cfgmod, utils
 from .base import SimpleNerdmPublishingService
 from .. import (PublishingStateException, SIPConflictError, SIPNotFoundError, BadSIPInputError,
                 ConfigurationException, UnauthorizedPublishingRequest)
@@ -222,8 +222,12 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         if not sipid:
             sipid = nerdm.get("pdr:sipid") 
         if not sipid:
-            # assume that if the @id contains a value, it represents an SIP ID
-            sipid = nerdm.get("@id")
+            # try @id
+            sipid = nerdm.get("@id", '')
+            if ARK_PFX_RE.match(sipid):
+                # it's a pdrid; turn it into an sipid
+                sipid = ARK_PFX_RE.sub('', sipid)
+                sipid = re.sub(r'-', ':', sipid)
         if create is None:
             # if sipid is not provided, assume we're creating a new SIP (rather than updating)
             create = not bool(sipid)
@@ -261,7 +265,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                                        .format(sipid, sts.siptype, sts.state))
 
             bagger = self._get_bagger_for(shoulder, sipid, minter)
-            bagger.delete()
+            bagger.delete(who, "New SIP requested: clearing out any previously existing SIP")
             sts.start(self.convention, who.agent_class)
 
         else:
@@ -289,6 +293,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             bagger.prepare(who=who, _action=act)
             bagger.set_res_nerdm(nerdm, who, True, _action=act);
             bagger.record_history(act)
+            if bagger.id and not sts.data['user'].get('pdrid'):
+                sts.data['user']['pdrid'] = bagger.id
             sts.update(status.PENDING)
 
         except Exception as ex:
@@ -345,7 +351,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         bagger = self._get_bagger_for(shoulder, sipid)
 
         if sts.state == status.PUBLISHED:
-            bagger.delete()
+            bagger.delete(who, "Updating previously published SIP: clearing any out previous one")
             sts.start(self.convention, who.agent_class)
 
         elif sts.state == status.NOT_FOUND:
@@ -359,6 +365,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         try:
             bagger.prepare(who=who)
             cmpid = bagger.set_comp_nerdm(cmpmd, who)
+            if bagger.id and not sts.data['user'].get('pdrid'):
+                stat.data['user']['pdrid'] = bagger.id
             sts.update(status.PENDING)
 
         except Exception as ex:
@@ -594,19 +602,39 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                     out = {}
                 return out
 
-        elif self.mdcli and status.state == status.PUBLISHED:
-            # this has been published before; pull in the published record
-            out = self.mdcli.describe(self.id)
-            out.update({ "pdr:sipid": sipid, "pdr:status": sts.state, 
-                         "pdr:message": "SIP was published as "+self.id })
-            return out
-
         else:
-            # this is all we know about it
-            out = { "@id": id, "pdr:sipid": sipid, "pdr:status": sts.state, 
-                    "pdr:message": "Published SIP metadata is not currently available." }
-            if 'doi' in sts.data['user']:
-                out['doi'] = sts.data['user']['doi']
+            # not currently active
+            out = { '@id': sts.data['user'].get('pdrid') or bagger.id }
+            if out.get('@id'):
+                if sts.state == status.PUBLISHED:
+                    # this has been published before; try to find a published record
+                    if self.cfg.get('nerdm_cache'):
+                        # look for a cached record
+                        aipid = ARK_PFX_RE.sub('', out['@id'])
+                        nerdf = os.path.join(self.cfg['nerdm_cache'], aipid+".json")
+                        try:
+                            out = utils.read_nerd(nerdf)
+                        except:
+                            pass
+                    else:
+                        # consult metadata service, if we can
+                        prepper = bagger._get_prepper()
+                        if prepper and prepper.mdcli:
+                            try:
+                                out = prepper.mdcli.describe(id)
+                            except:
+                                pass
+            else:
+                # we don't know much about it
+                if 'pdrid' in sts.data['user']:
+                    out['@id'] = sts.data['user']['pdrid']
+                if 'doi' in sts.data['user']:
+                    out['doi'] = sts.data['user']['doi']
+                    
+            out.update({ "pdr:sipid": sipid, "pdr:status": sts.state, 
+                         "pdr:message": "SIP was published" })
+            if out.get('@id'):
+                out['pdr:message'] += " as "+out['@id']
             return out
 
     def _tweak_for_validation(self, nerdmd):

@@ -4,7 +4,7 @@ from io import StringIO
 import unittest as test
 
 from nistoar.testing import *
-from nistoar.pdr.publish.service import wsgi
+import nistoar.pdr.publish.service.wsgi.deprecated as wsgi
 import nistoar.pdr.preserve.bagit.builder as bldr
 from nistoar.pdr.utils import prov
 from nistoar.pdr import utils

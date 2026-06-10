@@ -20,6 +20,7 @@ from nistoar.pdr.utils.webrecord import WebRecorder
 from nistoar.web.utils import order_accepts
 from nistoar.web.rest import Handler
 from nistoar.nerdm.validate import ValidationError
+from nistoar.pdr.preserve.service import PreservationService
 
 class PDPApp(ServiceApp):
     """
@@ -310,7 +311,7 @@ class PDPApp(ServiceApp):
             try:
                 if compid == ":data":
                     # requesting space for uploads; nerdm is the data source details
-                    if nerdm and nerd.get('type','') != 'fs':
+                    if nerdm and nerdm.get('type','') != 'fs':
                         return self.send_error_resp(400, "Bad uploads request",
                                                     "Data uploads request only supports type='fs'")
                     out = self._app.svc.init_data_upload(sipid, 'fs', self.who)
@@ -482,7 +483,7 @@ class PDPApp(ServiceApp):
                 if bodyin:
                    body = bodyin.read(1)
                    if len(body) != 0:
-                       return self.send_error_resp(400, "Body not allowed"
+                       return self.send_error_resp(400, "Body not allowed", 
                          "PATCH request should not include a body--only the action query parameter", sipid)
 
                 out = None
@@ -532,9 +533,9 @@ class PDP0App(PDPApp):
     The WSGI SubApp that handles the pdp0 convention of the PDP service.
     """
 
-    def __init__(self, parentlog: logging.Logger, config: Mapping={}):
+    def __init__(self, parentlog: logging.Logger, config: Mapping={}, pressvc: PreservationService=None):
         convention = config.get('convention', 'pdp0')
-        pdpsvc = PDP0Service(config, convention, parentlog)
+        pdpsvc = PDP0Service(config, convention, parentlog, pressvc=pressvc)
         super(PDP0App, self).__init__(pdpsvc, parentlog.getChild(convention), config)
 
 class PDP1App(PDPApp):
@@ -542,9 +543,9 @@ class PDP1App(PDPApp):
     The WSGI SubApp that handles the pdp0 convention of the PDP service.
     """
 
-    def __init__(self, parentlog: logging.Logger, config: Mapping={}):
+    def __init__(self, parentlog: logging.Logger, config: Mapping={}, pressvc: PreservationService=None):
         convention = config.get('convention', 'pdp1')
-        pdpsvc = PDP1Service(config, parentlog, convention=convention) 
+        pdpsvc = PDP1Service(config, parentlog, pressvc=pressvc, convention=convention) 
         super(PDP1App, self).__init__(pdpsvc, parentlog.getChild(convention), config)
 
 
