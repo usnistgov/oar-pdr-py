@@ -236,9 +236,14 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
         return merge_config(updates, orig)
 
     @abstractmethod
-    def delete(self):
+    def delete(self, who: Agent=None, message: str=None):
         """
         delete the working bag from store; this sets the bagger to a virgin state.
+
+        :param Agent   who:  an actor identifier object, indicating who is requesting this action.  This 
+                             will get recorded in the history data.  If None, an internal administrative 
+                             identity will be assumed.  This identity may affect the identifier assigned.
+        :param str message:  a message to record to the log describing the reason for deleting the bag.
         """
         raise NotImplementedError()
     

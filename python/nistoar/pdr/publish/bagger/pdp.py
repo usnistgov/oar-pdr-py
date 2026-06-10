@@ -1144,14 +1144,15 @@ class NERDmBasedBagger(SIPBagger):
         """
         cls._file_importers[type] = importer
 
-    def delete(self, who: Agent=None, lock=True):
+    def delete(self, who: Agent=None, message: str=None, lock=True):
         """
         delete the working bag from store; this sets the bagger to a virgin state.
         """
-        msg = "Deleting SIP bag by request"
+        if not message:
+            message = "Deleting SIP bag by request"
         if who:
-            msg += " by "+str(who)
-        self.log.info(msg)
+            message += " by "+str(who)
+        self.log.info(message)
         with self._lock_when(lock):
             self.bagbldr.destroy()
 
