@@ -591,8 +591,9 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             if len(parts) == 1 or not parts[1]:
                 # resource-level requested
                 if withcomps:
-                    return bagger.bag.nerdm_record(True)
-                return bagger.bag.describe("pdr:r")
+                    out = bagger.bag.nerdm_record(True)
+                else:
+                    out = bagger.bag.describe("pdr:r")
 
             else:
                 # component item requested
@@ -600,7 +601,6 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                 if not out:
                     # component has not been created yet
                     out = {}
-                return out
 
         else:
             # not currently active
@@ -630,12 +630,14 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                     out['@id'] = sts.data['user']['pdrid']
                 if 'doi' in sts.data['user']:
                     out['doi'] = sts.data['user']['doi']
-                    
-            out.update({ "pdr:sipid": sipid, "pdr:status": sts.state, 
-                         "pdr:message": "SIP was published" })
+
+            out['pdr:message'] = "SIP was published"
             if out.get('@id'):
                 out['pdr:message'] += " as "+out['@id']
-            return out
+                    
+        out.update({ "pdr:sipid": sipid, "pdr:status": sts.state,   # pdr:status is deprecated
+                     "pdr:state": sts.state, "pdr:pub_status": sts.user_export() })
+        return out
 
     def _tweak_for_validation(self, nerdmd):
         """

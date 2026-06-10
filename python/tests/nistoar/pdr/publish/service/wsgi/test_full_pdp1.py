@@ -298,6 +298,8 @@ class TestPDPApp(test.TestCase):
         self.assertEqual(resp.status_code, 201)
         saved = resp.json()
         self.assertEqual(saved['@id'], pdrid)
+        self.assertIn('nanoparticles', saved['keyword'])
+        self.assertNotIn('testing', saved['keyword'])
         self.assertEqual(saved['pdr:sipid'], sipid)
         self.assertEqual(saved['pdr:status'], 'pending')
 
@@ -310,10 +312,15 @@ class TestPDPApp(test.TestCase):
         self.assertEqual(resp.status_code, 200)
         saved = resp.json()
         self.assertEqual(saved['@id'], pdrid)
+        self.assertIn('nanoparticles', saved['keyword'])
+        self.assertNotIn('testing', saved['keyword'])
         self.assertEqual(saved['pdr:sipid'], sipid)
-        self.assertEqual(saved['pdr:status'], 'pending')
+        self.assertEqual(saved['pdr:state'], 'pending')
+        self.assertIn('pdrid', saved['pdr:pub_status'])
+        self.assertNotIn('bagfiles', saved['pdr:pub_status'])
 
         # update via PUT
+        saved['keyword'].append('testing')
         input = StringIO(json.dumps(saved))
         req = Req.put(basep+sipid, self.token, input)
         body = self.app(req.env, req.start)
@@ -321,8 +328,10 @@ class TestPDPApp(test.TestCase):
         self.assertEqual(resp.status_code, 200)
         saved = resp.json()
         self.assertEqual(saved['@id'], pdrid)
+        self.assertIn('nanoparticles', saved['keyword'])
+        self.assertIn('testing', saved['keyword'])
         self.assertEqual(saved['pdr:sipid'], sipid)
-        self.assertEqual(saved['pdr:status'], 'pending')
+        self.assertEqual(saved['pdr:state'], 'pending')
         
         # copy in the data files
         input = StringIO(json.dumps({'type': 'fs'}))
@@ -354,7 +363,7 @@ class TestPDPApp(test.TestCase):
         saved = resp.json()
         self.assertEqual(saved['@id'], pdrid)
         self.assertEqual(saved['pdr:sipid'], sipid)
-        self.assertEqual(saved['pdr:status'], 'pending')
+        self.assertEqual(saved['pdr:state'], 'pending')
         self.assertTrue(saved.get('pdr:message'))
         self.assertIn('trial1.json', saved['pdr:imported'])
         self.assertIn('trial2.json', saved['pdr:imported'])
@@ -371,7 +380,7 @@ class TestPDPApp(test.TestCase):
         saved = resp.json()
         self.assertEqual(saved['@id'], pdrid)
         self.assertEqual(saved['pdr:sipid'], sipid)
-        self.assertEqual(saved['pdr:status'], 'finalized')
+        self.assertEqual(saved['pdr:state'], 'finalized')
 
         req = Req.patch(basep+sipid, self.token, qparams={'action': 'publish'})
         body = self.app(req.env, req.start)
@@ -380,7 +389,7 @@ class TestPDPApp(test.TestCase):
         saved = resp.json()
         self.assertEqual(saved['@id'], pdrid)
         self.assertEqual(saved['pdr:sipid'], sipid)
-        state = saved['pdr:status']
+        state = saved['pdr:state']
         self.assertIn(state, ['submitted', 'published'])
 
         if state != 'published':
@@ -393,7 +402,7 @@ class TestPDPApp(test.TestCase):
             self.assertEqual(saved['@id'], pdrid)
             self.assertEqual(saved['pdr:sipid'], sipid)
             
-        self.assertEqual(saved['pdr:status'], 'published')
+        self.assertEqual(saved['pdr:state'], 'published')
 
 
             

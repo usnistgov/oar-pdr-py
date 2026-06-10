@@ -99,6 +99,10 @@ class PDPApp(ServiceApp):
                     return self.send_error_resp(404, "Authorized SIP Not Found",
                                 "There are no SIP submissions viewable for the client's authorization.")
 
+                if len(parts) > 1 and parts[1] == ":status":
+                    # just want status information
+                    return self.send_json(stat.user_export(), ashead=ashead)
+
                 if len(parts) > 1 and parts[1] == ":data":
                     # request for current data uploads directory
                     if not getattr(self._app.svc, 'uplparent', None):
@@ -110,7 +114,8 @@ class PDPApp(ServiceApp):
                                                     "A data uploads directory has not yet been "
                                                     "initialized")
                     datasrc['pdr:sipid'] = parts[0]
-                    datasrc['pdr:status'] = stat.state
+                    datasrc['pdr:status'] = stat.state   # pdr:status is deprecated
+                    datasrc['pdr:state'] = stat.state
                     return self.send_json(datasrc, ashead=ashead)
 
                 else:
@@ -506,6 +511,8 @@ class PDPApp(ServiceApp):
 
                 stat = self._app.svc.status_of(sipid)
                 out['pdr:status'] = stat.state
+                out['pdr:state'] = stat.state
+                out['pdr:pub_status'] = stat.user_export()
                 if out.get('pdr:message') is not None:
                     out['pdr:message'] = status.user_message[stat.state]
                 return self.send_json(out)
