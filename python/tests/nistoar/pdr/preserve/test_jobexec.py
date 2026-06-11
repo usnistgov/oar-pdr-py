@@ -134,7 +134,9 @@ class TestPreservationJobexec(test.TestCase):
                 'repo_access': {
                     'distrib_service': {
                         'service_endpoint': "http://localhost:9991/"
-                    }
+                    },
+                    'store_dir': self.storedir,
+                    'restricted_store_dir': self.restricted
                 },
                 'ingest': {
                     'rmm': {
