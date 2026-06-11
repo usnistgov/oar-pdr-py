@@ -49,7 +49,6 @@ class TestPDP0App(test.TestCase):
     def setUp(self):
         self.tf = Tempfiles()
         self.workdir = self.tf.mkdir("pdp0")
-        self.mintdir = self.tf.mkdir("idregs")
         self.bagparent = Path(self.workdir) / 'sipbags'
         bgrcfg = {
             "bag_builder": {
@@ -452,7 +451,6 @@ class TestPDP1App(test.TestCase):
     def setUp(self):
         self.tf = Tempfiles()
         self.workdir = self.tf.mkdir("pdp1")
-        self.mintdir = self.tf.mkdir("idregs")
         self.upldir = self.tf.mkdir("uploads")
         self.bagparent = Path(self.workdir) / 'sipbags'
         bgrcfg = {

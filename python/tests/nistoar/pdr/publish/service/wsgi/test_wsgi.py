@@ -49,7 +49,6 @@ class TestPDPWSGI(test.TestCase):
     def setUp(self):
         self.tf = Tempfiles()
         self.workdir = self.tf.mkdir("pdp0")
-        self.mintdir = self.tf.mkdir("idregs")
         self.bagparent = Path(self.workdir) / 'sipbags'
         bgrcfg = {
             "bag_builder": {

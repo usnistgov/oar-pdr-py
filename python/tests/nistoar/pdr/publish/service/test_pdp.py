@@ -31,7 +31,7 @@ def setUpModule():
 #    logging.basicConfig(filename=os.path.join(tmpdir(),"test_builder.log"),
 #                        level=logging.INFO)
     rootlog = logging.getLogger()
-    loghdlr = logging.FileHandler(os.path.join(tmpdir(),"test_bagger.log"))
+    loghdlr = logging.FileHandler(os.path.join(tmpdir(),"test_publisher.log"))
     loghdlr.setLevel(logging.DEBUG)
     loghdlr.setFormatter(logging.Formatter(bldr.DEF_BAGLOG_FORMAT))
     rootlog.addHandler(loghdlr)
@@ -86,6 +86,7 @@ class TestPDPublishingService(test.TestCase):
             
         self.cfg = {
             "working_dir": self.workdir,
+            "id_registry_dir": self.mintdir,
             "clients": {
                 "ncnr": {
                     "default_shoulder": "ncnr0",
@@ -128,7 +129,7 @@ class TestPDPublishingService(test.TestCase):
 
     def test_ctor(self):
         self.assertEqual(self.pubsvc.workdir, self.workdir)
-        self.assertEqual(self.pubsvc.idregdir, os.path.join(self.workdir, "idregs"))
+        self.assertEqual(self.pubsvc.idregdir, self.mintdir)
         self.assertEqual(self.pubsvc.bagparent, str(self.bagparent))
         self.assertEqual(self.pubsvc.statusdir, os.path.join(self.workdir, "status"))
         self.assertEqual(self.pubsvc.convention, "pdp0")
@@ -145,6 +146,7 @@ class TestPDPublishingService(test.TestCase):
         self.assertEqual(self.pubsvc.statusdir, "/tmp/sip_stat")
         self.assertEqual(self.pubsvc.convention, "pdp12")
 
+        del self.cfg['id_registry_dir']
         self.pubsvc = pdp.PDPublishingService(self.cfg, 'pdp12', workdir=self.tf.mkdir('pdr'))
 
         workdir = os.path.join(self.tf.root,'pdr')
@@ -159,6 +161,7 @@ class TestPDPublishingService(test.TestCase):
 
         self.pubsvc = pdp.PDP1Service(self.cfg)
         self.assertEqual(self.pubsvc.workdir, "/tmp")
+        self.assertEqual(self.pubsvc.idregdir, "/tmp/idregs")
         self.assertEqual(self.pubsvc.convention, "pdp1")
         self.assertIsNone(self.pubsvc.uplparent)
             

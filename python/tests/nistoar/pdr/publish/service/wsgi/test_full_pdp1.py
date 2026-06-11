@@ -226,21 +226,22 @@ class TestPDPApp(test.TestCase):
         self.tf = Tempfiles(tmpdir())
         self.workdir = self.tf.mkdir("pdr")
 
-        self.statedir   = os.path.join(self.workdir, "state")
         self.hbagdir    = os.path.join(self.workdir, "headbags")
         self.storedir   = os.path.join(self.workdir, "store")
         self.restricted = os.path.join(self.workdir, "restricted")
         self.ingestdir  = os.path.join(self.workdir, "ingest")
         self.dcdir      = os.path.join(self.workdir, "doimint")
         self.upldir     = os.path.join(self.workdir, "uploads")
-        for d in (self.statedir, self.hbagdir, self.storedir, self.restricted,
-                  self.ingestdir, self.dcdir, self.upldir):
+        self.idregdir   = os.path.join(self.workdir, "idregs")
+        for d in (self.hbagdir, self.storedir, self.restricted,
+                  self.ingestdir, self.dcdir, self.upldir, self.idregdir):
             if not os.path.exists(d):
                 os.mkdir(d)
 
         cfg = {
             'base_ep': "/pdp",
             'uploads_dir': self.upldir,
+            'id_registry_dir': self.idregdir,
             'repo_access': {
                 'headbag_cache': self.hbagdir,
                 'store_dir': self.storedir,
