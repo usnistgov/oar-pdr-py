@@ -105,7 +105,7 @@ class PDPMinter(IDMinter):
                 seq = self._seqminter.mint()
                 name = "%s%s%s" % (self.shldr, self.shldrdelim, seq)
                 if data.get('sipid') is None:
-                    data['sipid'] = name
+                    data['sipid'] = "%s:%s" % (self.shldr, seq)
                 out = "%s/%s" % (self.naan, name)
                 if self.cfg.get('add_check_digit', True):
                     out += self.cfg.get('seqid_flag', 's')

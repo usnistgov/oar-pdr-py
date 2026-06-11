@@ -204,24 +204,94 @@ class TestPDPublishingService(test.TestCase):
         
 
     def test_set_identifiers(self):
+        # pdp0: no given sipid, no nerd['@id'], no pdrid
+        # mint @id from sequence number, set sipid based on @id (with :)
         mntr = self.pubsvc._get_minter("pdp0")
         nerd = { }
         self.pubsvc._set_identifiers(nerd, mntr, None)
         self.assertEqual(nerd['@id'], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(nerd['pdr:sipid'], "pdp0-0017")
+        self.assertEqual(nerd['pdr:sipid'], "pdp0:0017")
+        self.assertEqual(nerd['pdr:aipid'], "pdp0-0017sg")
         self.assertIs(self.pubsvc._get_minter("pdp0"), mntr)
 
+        # ncnr0: no given sipid, no nerd['@id'], no pdrid
+        # mint @id from sequence number, set sipid based on @id (with :)
         mntr = self.pubsvc._get_minter("ncnr0")
         nerd = { }
         self.pubsvc._set_identifiers(nerd, mntr, None)
         self.assertEqual(nerd['@id'], "ark:/88434/ncnr0-0021sh")
-        self.assertEqual(nerd['pdr:sipid'], "ncnr0-0021")
+        self.assertEqual(nerd['pdr:sipid'], "ncnr0:0021")
+        self.assertEqual(nerd['pdr:aipid'], "ncnr0-0021sh")
 
+        # ncnr0: pdrid matching previous registration (above
+        # @id and sipid same as before
+        mntr = self.pubsvc._get_minter("ncnr0")
+        nerd = { }
+        self.pubsvc._set_identifiers(nerd, mntr, None, "ark:/88434/ncnr0-0021sh")
+        self.assertEqual(nerd['@id'], "ark:/88434/ncnr0-0021sh")
+        self.assertEqual(nerd['pdr:sipid'], "ncnr0:0021")
+        self.assertEqual(nerd['pdr:aipid'], "ncnr0-0021sh")
+        
+        # ncnr0: given sipid
+        # accept sipid, mint @id based on sip
         mntr = self.pubsvc._get_minter("ncnr0")
         nerd = { }
         self.pubsvc._set_identifiers(nerd, mntr, "ncnr0:fred")
         self.assertEqual(nerd['@id'], "ark:/88434/ncnr0-fredp7")
         self.assertEqual(nerd['pdr:sipid'], "ncnr0:fred")
+        self.assertEqual(nerd['pdr:aipid'], "ncnr0-fredp7")
+
+        # ncnr0: pdrid matching previous registration (above
+        # @id and sipid same as before
+        mntr = self.pubsvc._get_minter("ncnr0")
+        nerd = { }
+        self.pubsvc._set_identifiers(nerd, mntr, None, "ark:/88434/ncnr0-fredp7")
+        self.assertEqual(nerd['@id'], "ark:/88434/ncnr0-fredp7")
+        self.assertEqual(nerd['pdr:sipid'], "ncnr0:fred")
+        self.assertEqual(nerd['pdr:aipid'], "ncnr0-fredp7")
+        
+        # ncnr0: given pdrid (not yet registerd)
+        # accept pdrid as @id, sipid based on @id
+        mntr = self.pubsvc._get_minter("ncnr0")
+        nerd = { }
+        self.pubsvc._set_identifiers(nerd, mntr, None, 'ark:/88434/ncnr0-0013py')
+        self.assertEqual(nerd['@id'], "ark:/88434/ncnr0-0013py")
+        self.assertEqual(nerd['pdr:sipid'], "ncnr0:0013")
+        self.assertEqual(nerd['pdr:aipid'], "ncnr0-0013py")
+
+        # bad pdrid provided
+        with self.assertRaises(pdp.PublishingStateException):
+            self.pubsvc._set_identifiers(nerd, mntr, None, 'unassigned')
+
+        # pdp0: sipid has only shoulder given, taken from @id, @id not issued
+        # @id minted from seq on shoulder, sipid based on @id
+        mntr = self.pubsvc._get_minter("pdp0")
+        nerd = {'@id': "ark:/88434/pdp0:0001" }
+        self.pubsvc._set_identifiers(nerd, mntr, "pdp0:")
+        self.assertEqual(nerd['@id'], "ark:/88434/pdp0-0018s0")
+        self.assertEqual(nerd['pdr:sipid'], "pdp0:0018")
+        self.assertEqual(nerd['pdr:aipid'], "pdp0-0018s0")
+
+        # pdp0: sipid has only shoulder given, taken from @id, @id issued
+        # nerdm['@id'] accepted as @id, sipid based on @id
+        mntr = self.pubsvc._get_minter("pdp0")
+        nerd = {'@id': "ark:/88434/pdp0-0018s0" }
+        self.pubsvc._set_identifiers(nerd, mntr, "pdp0:")
+        self.assertEqual(nerd['@id'], "ark:/88434/pdp0-0018s0")
+        self.assertEqual(nerd['pdr:sipid'], "pdp0:0018")
+        self.assertEqual(nerd['pdr:aipid'], "pdp0-0018s0")
+
+        # pdp0: sipid from nerdm['@id'], pdp0 does not allow localid specified
+        # @id based on seq, but take sipid as is
+        # (because base_on_data=False; this won't occur due to _get_shoulder() impl)
+        mntr = self.pubsvc._get_minter("pdp0")
+        nerd = {'@id': "pdp0:goobpt" }
+        self.pubsvc._set_identifiers(nerd, mntr, "pdp0:goobpt")
+        self.assertEqual(nerd['@id'], "ark:/88434/pdp0-0019sh")
+        self.assertEqual(nerd['pdr:sipid'], "pdp0:goobpt")
+        self.assertEqual(nerd['pdr:aipid'], "pdp0-0019sh")
+        
+        
 
     def test_status_of(self):
         stat = self.pubsvc.status_of("ncnr0:fred")
@@ -283,13 +353,13 @@ class TestPDPublishingService(test.TestCase):
 
         del nerd['@id']
         sipid = self.pubsvc.accept_resource_metadata(nerd, ncnrag, create=True)
-        self.assertEqual(sipid, "ncnr0-0021sh")
+        self.assertEqual(sipid, "ncnr0:0021")
         bagdir = self.bagparent / sipid
         self.assertTrue(bagdir.is_dir())
         bag = NISTBag(bagdir)
         bnerd = bag.nerdm_record(True)
         self.assertEqual(bnerd["@id"], "ark:/88434/ncnr0-0021sh")
-        self.assertEqual(bnerd["pdr:sipid"], "ncnr0-0021sh")
+        self.assertEqual(bnerd["pdr:sipid"], "ncnr0:0021")
         self.assertEqual(bnerd["pdr:aipid"], "ncnr0-0021sh")
         self.assertEqual(bnerd["doi"], "doi:10.18434/ncnr0-0021sh")
         self.assertEqual(bnerd["title"], nerd['title'])
@@ -302,13 +372,13 @@ class TestPDPublishingService(test.TestCase):
 
         del nerd['@id']
         sipid = self.pubsvc.accept_resource_metadata(nerd, tstag, create=True)
-        self.assertEqual(sipid, "pdp0-0017sg")
+        self.assertEqual(sipid, "pdp0:0017")
         bagdir = self.bagparent / sipid
         self.assertTrue(bagdir.is_dir())
         bag = NISTBag(bagdir)
         bnerd = bag.nerdm_record(True)
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["title"], nerd['title'])
         self.assertEqual(bnerd["accessLevel"], 'public')
@@ -318,13 +388,13 @@ class TestPDPublishingService(test.TestCase):
         nerd['@id'] = sipid
         nerd['accessLevel'] = 'restricted public'
         sipid = self.pubsvc.accept_resource_metadata(nerd, tstag)
-        self.assertEqual(sipid, "pdp0-0017sg")
+        self.assertEqual(sipid, "pdp0:0017")
         bagdir = self.bagparent / sipid
         self.assertTrue(bagdir.is_dir())
         bag = NISTBag(bagdir)
         bnerd = bag.nerdm_record(True)
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["title"], nerd['title'])
         self.assertEqual(bnerd["accessLevel"], 'restricted public')
@@ -336,13 +406,13 @@ class TestPDPublishingService(test.TestCase):
         del nerd['@id']
         del nerd['components']
         sipid = self.pubsvc.accept_resource_metadata(nerd, tstag)
-        self.assertEqual(sipid, "pdp0-0018s0")
+        self.assertEqual(sipid, "pdp0:0018")
         bagdir = self.bagparent / sipid
         self.assertTrue(bagdir.is_dir())
         bag = NISTBag(bagdir)
         bnerd = bag.nerdm_record(True)
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0018s0")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0018s0")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0018")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0018s0")
         self.assertEqual(bnerd["title"], nerd['title'])
         self.assertEqual(bnerd["accessLevel"], 'restricted public')
@@ -356,7 +426,7 @@ class TestPDPublishingService(test.TestCase):
         schema = nerd['_schema'] + "/definitions/Component"
 
         sipid = self.pubsvc.accept_resource_metadata(nerd, tstag)
-        self.assertEqual(sipid, "pdp0-0017sg")
+        self.assertEqual(sipid, "pdp0:0017")
         bagdir = self.bagparent / sipid
         self.assertTrue(bagdir.is_dir())
         bag = NISTBag(bagdir)

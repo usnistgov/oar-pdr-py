@@ -35,6 +35,20 @@ from . import status
 
 ARK_PFX_RE = re.compile(const.ARK_PFX_PAT)
 ARK_ID_RE = re.compile(const.ARK_ID_PAT)
+SIP_PFX_RE = re.compile(r'^(\w+):')
+
+def _pdrid2sipid(pdrid, shoulder_only=False):
+    if not ARK_PFX_RE.match(pdrid):
+        raise ValueError("pdrid: Not a valid PDR ID: "+pdrid)
+    # it's a pdrid; turn it into an sipid
+    sipid = ARK_PFX_RE.sub('', pdrid)               # lop off ark:/NNNNN/
+    sipid = re.sub(r'-', ':', sipid)                # convert - to :
+    sipid = re.sub(r'(:\d+)[sp]\w$', r'\1', sipid)  # remove any check digits
+    if shoulder_only:
+        colon = ":" if ":" in sipid else ""
+        sipid = sipid.split(":", 1)[0] + colon
+    return sipid
+
 
 class BagBasedPublishingService(SimpleNerdmPublishingService):
     """
@@ -188,14 +202,18 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
     def accept_resource_metadata(self, nerdm: Mapping, who: Agent=None, sipid: str=None, create:
                                  bool=None) -> str:
         """
-        create or update an SIP for submission.  By default, a new SIP will be created if the input 
-        record is does not have an "@id" property, and an identifier is assigned to it; otherwise,
-        the metadata provided will be considered an update to the SIP with that identifier.  This 
-        behavior can be overridden with the sipid and create parameters.  Some implementations may 
-        allow the caller to create a new SIP with the given identifier if it does not exist; if this 
-        is not allowed, an exception is raised.  The metadata that is actually persisted may be 
-        modified from the submitted metadata according to the SIP convention.  The metadata that is 
-        actually persisted may be modified from the submitted metadata according to the SIP convention.
+        create or update an SIP for submission.  
+
+        By default, a new SIP will be created if the input record is does not have an "@id" property, 
+        and an identifier is assigned to it; otherwise, the metadata provided will be considered an 
+        update to the SIP with that identifier.  This behavior can be overridden with the ``sipid`` and 
+        ``create`` parameters.  When creating, ``sipid`` is a requested SIP identifier; if the client
+        is allowed to specify its SIP ID, it will be taken as such and a the "@id" property assigned
+        to the new record will be based on it.  If the client is not so allowed, an exception is raised.
+        
+        The resource metadata that is actually persisted may be modified from the submitted metadata 
+        according to the SIP convention.  The metadata that is actually persisted may be modified from 
+        the submitted metadata according to the SIP convention.
 
         The SIP must not be in the PROCESSING nor FAILED state when this method is called.  
 
@@ -207,7 +225,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         :param str sipid:   If provided, assume this to be the SIP's identifier.  If creating a new SIP,
                             then the value does not require the ARK prefix; the actual SIP assigned 
                             maybe modified from this input (see response).  If not provided, the SIP ID
-                            will be taken from the "@id" property.
+                            will be discerned from the "@id" property or minted anew if "@id" is not set.
         :param bool create: if True, assume this is a request to create a new SIP; if an SIP with the 
                             specified ID already exists, an error is raised.  If False, assume this is
                             an update; if the SIP doesn't exist, an error is raised.  If not provided,
@@ -222,13 +240,15 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         """
         if not sipid:
             sipid = nerdm.get("pdr:sipid") 
-        if not sipid:
-            # try @id
-            sipid = nerdm.get("@id", '')
-            if ARK_PFX_RE.match(sipid):
-                # it's a pdrid; turn it into an sipid
-                sipid = ARK_PFX_RE.sub('', sipid)
-                sipid = re.sub(r'-', ':', sipid)
+        if not sipid and nerdm.get('@id'):
+            # in some cases, we can use the value of @id in the given NERDm metadata
+            if not ARK_PFX_RE.match(nerdm['@id']) and SIP_PFX_RE.match(nerdm['@id']):
+                # nerdm['@id'] looks like an SIPID; let's use it
+                sipid = nerdm.get("@id", '')
+            elif ARK_PFX_RE.match(nerdm['@id']):
+                # if it is a valid pdrid in format, use just the sipid prefix (PFX:)
+                sipid = _pdrid2sipid(nerdm['@id'], shoulder_only=True)
+
         if create is None:
             # if sipid is not provided, assume we're creating a new SIP (rather than updating)
             create = not bool(sipid)
@@ -236,8 +256,6 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             raise SIPConflictError("unknown", "Requested update without providing SIP ID")
 
         nerdm = deepcopy(nerdm)
-        if not sipid:
-            nerdm["@id"] = "unassigned"
 
         # transform the resource metadata (filter, map, and/or enhance) to what will actually
         # get saved (apart from the possible assignment of an identifier)
@@ -245,6 +263,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         # validate the input
         if self.cfg.get('validate_nerdm', True):
+            nerdm.setdefault('@id', "unassigned")
+
             # ensure that input record has all necessary schema designations
             self._tweak_for_validation(nerdm)
 
@@ -255,11 +275,13 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         # account for the client under which this request will operate.  It determines the configuration
         # used by the bagger that will assemble the SIP.
         shoulder = self._get_id_shoulder(who, sipid, create)  # may raise UnauthorizedPublishingRequest
+        if sipid and sipid.endswith(':'):
+            sipid = shoulder+":"
 
         minter = self._get_minter(shoulder)
         pdrid = None
         sts = None
-        if sipid:
+        if sipid and not sipid.endswith(':'):
             sts = self.status_of(sipid)
             if sts.data['user'].get('pdrid'):
                 pdrid = sts.data['user']['pdrid']   # caution: how reliable is this?
@@ -918,7 +940,7 @@ class PDPublishingService(BagBasedPublishingService):
         :param Agent    who:  the user agent making the request
         :param str    sipid:  the requested SIP ID
         :param bool  create:  True if the user is requesting the publishing of a new SIP; False if 
-                              requesting an update to a previously published SIP.
+                              requesting an update to a previously submitted SIP.
         """
         # return an ID shoulder to mint an ID under given the permissions configured for the
         # given client (who)
@@ -935,14 +957,13 @@ class PDPublishingService(BagBasedPublishingService):
 
         if sipid:
             # sipid must begin with a shoulder name (or the form NAME: or NAME-)
-            m = re.search(r'^([a-zA-Z]\w+)([:\-])', sipid)
+            m = re.search(r'^([a-zA-Z]\w+):', sipid)
             if not m:
                 raise BadSIPInputError("Illegal SIP identifier requested: "+sipid)
             out = m.group(1)
-            isclientid = m.group(2) == ':'
 
             # is client allowed to specify its own local id portion to mint?
-            if isclientid and create and not client_ctl.get('localid_provider'):
+            if create and not sipid.endswith(':') and not client_ctl.get('localid_provider'):
                 raise UnauthorizedPublishingRequest(
                     "Client group, %s, is not allowed to request new SIP ID: %s"
                     % (who.agent_class, sipid)
@@ -969,6 +990,21 @@ class PDPublishingService(BagBasedPublishingService):
         return out
 
     def _set_identifiers(self, nerdm, minter, sipid, pdrid=None):
+        if pdrid and not ARK_PFX_RE.match(pdrid):
+            raise PublishingStateException("Given PDR-ID has invalid form: "+pdrid)
+
+        if sipid and sipid.endswith(':') and not pdrid and \
+           nerdm.get('@id') and ARK_PFX_RE.match(nerdm['@id']):
+            # the sipid only has a validated shoulder, we don't have a validated pdrid
+            # but the nerdm record has legit ARK id:
+            # allow client to request previously minted pdrid via the record
+            if minter.issued(nerdm['@id']):
+                _id = _pdrid2sipid(nerdm['@id'])
+                if _id.startswith(sipid):
+                    # the @id has the right shoulder
+                    pdrid = nerdm['@id']
+            sipid = None
+
         data = {'sipid': sipid}
         if not pdrid and sipid:
             matches = minter.search(data)
@@ -981,15 +1017,21 @@ class PDPublishingService(BagBasedPublishingService):
             pdrid = minter.mint(data)
 
         nerdm['@id'] = pdrid
+        aipid = ARK_PFX_RE.sub('', pdrid)
         if not sipid:
             iddata = minter.datafor(pdrid)
-            if iddata.get('sipid'):
-                sipid = iddata.get('sipid')
+            if iddata:
+                if iddata.get('sipid'):
+                    sipid = iddata.get('sipid')
+                if iddata.get('aipid'):
+                    aipid = iddata['aipid']
             else:
-                sipid = ARK_PFX_RE.sub('', pdrid)
+                sipid = _pdrid2sipid(pdrid)
+                if minter.registry:
+                    minter.registry.registerID(pdrid, {'sipid': sipid, 'aipid': aipid})
 
         nerdm['pdr:sipid'] = sipid
-        nerdm['pdr:aipid'] = ARK_PFX_RE.sub('', pdrid)
+        nerdm['pdr:aipid'] = aipid
 
         return sipid
 

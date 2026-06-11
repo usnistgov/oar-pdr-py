@@ -274,6 +274,7 @@ class TestPDPApp(test.TestCase):
         pdrid = nerdm['@id']
         aipid = ARK_PFX_RE.sub('', pdrid)
         sipid = re.sub(r'-', ':', aipid)
+        nerdm['@id'] = sipid
         # nerdm['pdr:sipid'] = sipid
 
         basep = '/pdp/pdp1/'

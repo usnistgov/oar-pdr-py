@@ -204,13 +204,13 @@ class TestPDPWSGI(test.TestCase):
 
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:status"], 'pending')
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
-        self.assertTrue((self.bagparent / "pdp0-0017sg").is_dir())
+        self.assertTrue((self.bagparent / "pdp0:0017").is_dir())
 
         self.resp = []
         req = {
@@ -221,7 +221,7 @@ class TestPDPWSGI(test.TestCase):
         }
         body = self.tostr( self.app.handle_request(req, self.start) )
         self.assertIn("200 ", self.resp[0])
-        self.assertEqual(body, ['[\n  "pdp0-0017sg"\n]'])
+        self.assertEqual(body, ['[\n  "pdp0:0017"\n]'])
 
         self.resp = []
         req = {
@@ -236,7 +236,7 @@ class TestPDPWSGI(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': 'GET',
-            'PATH_INFO': '/pdp0/pdp0-0017sg',
+            'PATH_INFO': '/pdp0/pdp0:0017',
             'HTTP_X_OAR_USER': "tester",
             'HTTP_AUTHORIZATION': "Bearer NCNRTOKEN"
         }
@@ -246,7 +246,7 @@ class TestPDPWSGI(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': 'GET',
-            'PATH_INFO': '/pdp0/pdp0-0017sg',
+            'PATH_INFO': '/pdp0/pdp0:0017',
             'HTTP_X_OAR_USER': "tester",
             'HTTP_AUTHORIZATION': "Bearer DRAFTTOKEN"
         }
@@ -254,7 +254,7 @@ class TestPDPWSGI(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:status"], 'pending')
         self.assertEqual(bnerd["accessLevel"], 'public')
@@ -264,7 +264,7 @@ class TestPDPWSGI(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': 'PATCH',
-            'PATH_INFO': '/pdp0/pdp0-0017sg',
+            'PATH_INFO': '/pdp0/pdp0:0017',
             'QUERY_STRING': "action=publish",
             'HTTP_X_OAR_USER': "tester",
             'HTTP_AUTHORIZATION': "Bearer DRAFTTOKEN"
@@ -273,14 +273,14 @@ class TestPDPWSGI(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:status"], 'processing')
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
         # being processed by preservation service; not cleaned up yet
-        self.assertTrue((self.bagparent / "pdp0-0017sg").is_dir())
+        self.assertTrue((self.bagparent / "pdp0:0017").is_dir())
 
 
 

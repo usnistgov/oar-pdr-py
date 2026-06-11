@@ -261,7 +261,7 @@ class TestPDP0App(test.TestCase):
         """
         create record via POST with no @id specified
         """
-        self.assertFalse((self.bagparent / "pdp0-0017").is_dir())
+        self.assertFalse((self.bagparent / "pdp0:0017").is_dir())
 
         nerd = utils.read_json(str(simplenerd))
         del nerd['@id']
@@ -276,13 +276,13 @@ class TestPDP0App(test.TestCase):
 
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:status"], 'pending')
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
-        self.assertTrue((self.bagparent / "pdp0-0017sg").is_dir())
+        self.assertTrue((self.bagparent / "pdp0:0017").is_dir())
 
         self.resp = []
         req = {
@@ -291,7 +291,7 @@ class TestPDP0App(test.TestCase):
         }
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
         self.assertIn("200 ", self.resp[0])
-        self.assertEqual(body, ['[\n  "pdp0-0017sg"\n]'])
+        self.assertEqual(body, ['[\n  "pdp0:0017"\n]'])
 
         self.resp = []
         req = {
@@ -305,7 +305,7 @@ class TestPDP0App(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': 'GET',
-            'PATH_INFO': '/pdp0-0017sg',
+            'PATH_INFO': '/pdp0-0017sq',
         }
         body = self.tostr( self.app.handle_path_request(req, self.start, who=ncnrag) )
         self.assertIn("404 ", self.resp[0])
@@ -313,13 +313,13 @@ class TestPDP0App(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': 'GET',
-            'PATH_INFO': '/pdp0-0017sg',
+            'PATH_INFO': '/pdp0:0017',
         }
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
         self.assertIn("200 ", self.resp[0])
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:status"], 'pending')
         self.assertEqual(bnerd["accessLevel"], 'public')
@@ -329,24 +329,24 @@ class TestPDP0App(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': 'PATCH',
-            'PATH_INFO': '/pdp0-0017sg',
+            'PATH_INFO': '/pdp0:0017',
             'QUERY_STRING': "action=publish"
         }
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
         self.assertIn("200 ", self.resp[0])
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:status"], 'processing')
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
         # being processed by preservation service; not cleaned up yet
-        self.assertTrue((self.bagparent / "pdp0-0017sg").is_dir())
+        self.assertTrue((self.bagparent / "pdp0:0017").is_dir())
 
     def test_create_publish(self):
-        self.assertFalse((self.bagparent / "pdp0-0017").is_dir())
+        self.assertFalse((self.bagparent / "pdp0:0017").is_dir())
 
         nerd = utils.read_json(str(simplenerd))
         del nerd['@id']
@@ -362,17 +362,17 @@ class TestPDP0App(test.TestCase):
 
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:status"], 'processing')
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
         # being processed by preservation service; not deleted yet
-        self.assertTrue((self.bagparent / "pdp0-0017sg").is_dir())
+        self.assertTrue((self.bagparent / "pdp0:0017").is_dir())
 
     def test_create_finalize(self):
-        self.assertFalse((self.bagparent / "pdp0-0017sg").is_dir())
+        self.assertFalse((self.bagparent / "pdp0:0017").is_dir())
 
         nerd = utils.read_json(str(simplenerd))
         del nerd['@id']
@@ -388,16 +388,16 @@ class TestPDP0App(test.TestCase):
 
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017sg")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:state"], 'finalized')
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
-        self.assertTrue((self.bagparent / "pdp0-0017sg").is_dir())
+        self.assertTrue((self.bagparent / "pdp0:0017").is_dir())
 
     def test_update(self):
-        self.assertFalse((self.bagparent / "pdp0-0017").is_dir())
+        self.assertFalse((self.bagparent / "pdp0:0017").is_dir())
 
         nerd = utils.read_json(str(simplenerd))
         del nerd['@id']
@@ -539,20 +539,20 @@ class TestPDP1App(test.TestCase):
         
         self.resp = []
         req = {
-            'REQUEST_METHOD': 'PUT',
-            'PATH_INFO': '/pdp0-0017',
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': '/',
         }
         req['wsgi.input'] = StringIO(json.dumps(nerd))
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
-        self.assertIn("200 ", self.resp[0])
+        self.assertIn("201 ", self.resp[0])
 
-        self.assertTrue((self.bagparent / "pdp0-0017").is_dir())
-        self.assertFalse((self.bagparent / "pdp0-0017" / "_data_sources.lis").exists())
+        self.assertTrue((self.bagparent / "pdp0:0017").is_dir())
+        self.assertFalse((self.bagparent / "pdp0:0017" / "_data_sources.lis").exists())
 
         self.resp = []
         req = {
             'REQUEST_METHOD': 'GET',
-            'PATH_INFO': '/pdp0-0017/:data',
+            'PATH_INFO': '/pdp0:0017/:data',
         }
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
         self.assertIn("404 ", self.resp[0])
@@ -560,29 +560,29 @@ class TestPDP1App(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': 'PUT',
-            'PATH_INFO': '/pdp0-0017/:data',
+            'PATH_INFO': '/pdp0:0017/:data',
         }
         req['wsgi.input'] = StringIO('')
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
         self.assertIn("200 ", self.resp[0])
         self.assertEqual(json.loads(''.join(body)),
-                         {"type": 'fs', "location": 'pdp0-0017',
-                          "pdr:sipid": "pdp0-0017", "pdr:status": "pending" })
+                         {"type": 'fs', "location": 'pdp0:0017',
+                          "pdr:sipid": "pdp0:0017", "pdr:status": "pending" })
 
-        self.assertTrue((self.bagparent / "pdp0-0017" / "__data_sources.lis").is_file())
+        self.assertTrue((self.bagparent / "pdp0:0017" / "__data_sources.lis").is_file())
 
         self.resp = []
         req['REQUEST_METHOD'] = 'GET'
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
         self.assertIn("200 ", self.resp[0])
         self.assertEqual(json.loads(''.join(body)),
-                         {"type": 'fs', "location": 'pdp0-0017', "pdr:sipid": "pdp0-0017", 
+                         {"type": 'fs', "location": 'pdp0:0017', "pdr:sipid": "pdp0:0017", 
                           "pdr:status": "pending", "pdr:state": "pending" })
 
         self.resp = []
         req = {
             'REQUEST_METHOD': 'PATCH',
-            'PATH_INFO': '/pdp0-0017',
+            'PATH_INFO': '/pdp0:0017',
             'QUERY_STRING': "action=import"
         }
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
@@ -591,12 +591,12 @@ class TestPDP1App(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': 'DELETE',
-            'PATH_INFO': '/pdp0-0017/:data',
+            'PATH_INFO': '/pdp0:0017/:data',
         }
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
         self.assertIn("200 ", self.resp[0])
 
-        self.assertFalse((self.bagparent / "pdp0-0017" / "_data_sources.lis").exists())
+        self.assertFalse((self.bagparent / "pdp0:0017" / "_data_sources.lis").exists())
 
         self.resp = []
         req['REQUEST_METHOD'] = 'GET'
