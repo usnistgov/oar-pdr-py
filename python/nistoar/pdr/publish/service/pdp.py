@@ -929,6 +929,14 @@ class PDPublishingService(BagBasedPublishingService):
         self.idregdir = self._resolve_dir('id_registry_dir', idregdir, self.workdir, 'idregs')
         self._minters = {}
 
+        if self.workdir and self.cfg.get('repo_access'):
+            if not self.cfg['repo_access'].get('working_dir'):
+                self.cfg['repo_access']['working_dir'] = self.workdir
+            elif not os.path.isabs(self.cfg['repo_access']['working_dir']):
+                self.cfg['repo_access']['working_dir'] = \
+                    os.path.join(workdir, self.cfg['repo_access']['working_dir'])
+            
+
     def _get_id_shoulder(self, who, sipid: str, create: bool):
         """
         determine the ID shoulder to be associated with a service request.  The ID shoulder (the prefix 
@@ -1161,7 +1169,7 @@ class PDPublishingService(BagBasedPublishingService):
             mntrcfg['id_shoulder'] = shoulder
 
         regdir = mntrcfg.setdefault('store_dir', self.idregdir)
-        if not os.path.abspath(regdir):
+        if not os.path.isabs(regdir):
             regdir = os.path.join(self.workdir, regdir)
             if not os.path.exists(regdir) and os.path.exists(self.workdir):
                 try:
@@ -1246,6 +1254,8 @@ class PDP1Service(PDPublishingService):
                                  "data file uploads not supported.")
             else:
                 uploadsroot = self.cfg['uploads_dir']
+                if not os.path.isabs(uploadsroot):
+                    uploadsroot = os.path.join(self.workdir, uploadsroot)
         if isinstance(uploadsroot, str):
             uploadsroot = Path(uploadsroot)
 

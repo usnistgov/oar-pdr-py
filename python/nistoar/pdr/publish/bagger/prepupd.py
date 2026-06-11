@@ -164,6 +164,9 @@ class UpdatePrepService(object):
     a factory class that creates UpdatePrepper instances
 
     This service is configured by the following parameters:
+    :param str   working_dir:  an umbrella directory for the other directories set in this 
+                               configuration: any of those directories specified as a relative 
+                               path will be taken has relative to this working directory.
     :param str headbag_cache:  the directory where retrieved serialized head bags are cached
     :param str     store_dir:  the directory where published bags are placed to be made public;
                                   often head bags can be retrieved from here.
@@ -176,14 +179,21 @@ class UpdatePrepService(object):
                                updated metadata is saved as annotations; if False (default), they 
                                are stored with the main metadata.
     """
-    def __init__(self, config: Mapping):
+    def __init__(self, config: Mapping, workdir: str=None):
         self.cfg = config
+
+        if not workdir:
+            workdir = self.cfg.get('working_dir')
 
         self.sercache = self.cfg.get('headbag_cache')
         if not self.sercache:
             raise ConfigurationException("UpdatePrepService: Missing property: "+
                                          "headbag_cache")
+        elif workdir and not os.path.isabs(self.sercache):
+            self.sercache = os.path.join(workdir, self.sercache)
         self.storedir = self.cfg.get('store_dir')
+        if workdir and not os.path.isabs(self.storedir):
+            self.sercache = os.path.join(workdir, self.storedir)
         scfg = self.cfg.get('distrib_service', {})
         self.distsvc = distrib.RESTServiceClient(scfg.get('service_endpoint'))
         self.cacher = HeadBagCacher(self.distsvc, self.sercache)

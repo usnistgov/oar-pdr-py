@@ -70,6 +70,12 @@ class PDPApp(WSGIAppSuite, PublishSystem):
             workdir = config.get('working_dir')
         if not workdir:
             raise ConfigurationException("PDPApp: missing required parameters: working_dir")
+        if config.get('repo_access'):
+            if not config['repo_access'].get('working_dir'):
+                config['repo_access']['working_dir'] = workdir
+            elif not os.path.isabs(config['repo_access']['working_dir']):
+                config['repo_access']['working_dir'] = \
+                    os.path.join(workdir, config['repo_access']['working_dir'])
 
         pressvc = None
         if config.get('preservation'):

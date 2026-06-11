@@ -286,8 +286,6 @@ class PDR1AIPArchiving(fw.AIPArchiving):
          configuration dictionary.  It _must_ include the ``store_dir`` property (setting where 
          serialized pages should copied to to be preserved); if it doesn't include 
          ``restricted_store``, archiving restricted access datasets will not be supported.  
-    ``store_dir``   
-         (str) the storage transfer directory that files are copied to 
     ``allow_overwrite``  
          (bool) If False (default) do not allow pre-existing files with the same names as
          any being transfered from that staging area to be replaced; if any such files are 
@@ -305,16 +303,25 @@ class PDR1AIPArchiving(fw.AIPArchiving):
         :param dict config:  the configuration for this step; if not provided, defaults will apply.
         """
         super(PDR1AIPArchiving, self).__init__(config)
+
+        # if necessary, to store dirs to absolute paths relative to a common working dir
         self.storedir = self.cfg.get("repo_access", {}).get('store_dir')
         if not self.storedir:
             raise ConfigurationException("Missing required config parameter: repo_access.store_dir")
+        if not os.path.isabs(self.storedir) and self.cfg['repo_access'].get('working_dir'):
+            self.storedir = os.path.join(self.cfg['repo_access']['working_dir'], self.storedir)
         self.storedir = Path(self.storedir)
         if not self.storedir.is_dir() or not os.access(self.storedir, os.W_OK):
             raise ConfigurationException("store_dir is not an existing directory with write permission: "+
                                          str(self.storedir))
         self.restricted = self.cfg.get("repo_access", {}).get('restricted_store_dir')
         if self.restricted:
+            if not os.path.isabs(self.restricted) and self.cfg['repo_access'].get('working_dir'):
+                self.restricted = os.path.join(self.cfg['repo_access']['working_dir'], self.restricted)
             self.restricted = Path(self.restricted)
+            if not self.restricted.is_dir() or not os.access(self.restricted, os.W_OK):
+                raise ConfigurationException("restricted_store_dir is not an existing directory with " +
+                                             "write permission: "+ str(self.restricted))
         
 #        self.finalbucket = self.cfg.get("public_bucket")
 #        if not self.finalbucket:
@@ -801,6 +808,10 @@ class RepositoryAccess:
 
     This class looks for the following configuration parameters:
 
+    ``workng_dir``
+         an umbrella directory for the other directories set in this configuration: any
+         of those directories specified as a relative path will be taken has relative to 
+         this working directory.
     ``distrib_service`` 
          a description of the repository's distribution service, used for interrogating
          previously published datasets via their AIP bags.  The dictionary value
@@ -815,20 +826,31 @@ class RepositoryAccess:
          service's base URL.
     ``headbag_cache`` 
          a local directory that is use for caching head bags that have gone through the
-         preservation service.
+         preservation service.  A relative path is taken to be relative to the 
+         working directory.
     ``store_dir``
          a local directory providing the gateway to long-term storage of public AIP bags. 
+         A relative path is taken to be relative to the working directory.
     ``restricted_store_dir``
          a local directory providing the gateway to long-term storage of restricted-
-         access AIP bags.
+         access AIP bags.  A relative path is taken to be relative to the working directory.
+
     """
 
-    def __init__(self, config, log=None):
-        self.cfg = config
+    def __init__(self, config: Mapping, log: logging.Logger=None, workdir: str=None):
+        self.cfg = deepcopy(config)
         self.log = log
         if not self.log:
             self.log = logging.getLogger("quiet")
             self.log.setLevel(logging.CRITICAL+10)  # silent
+
+        if not workdir:
+            workdir = self.cfg.get('working_dir')
+        if workdir:
+            # resolve relative paths
+            for prop in "headbag_cache store_dir restricted_dir".split():
+                if self.cfg.get(prop) and not os.path.isabs(self.cfg[prop]):
+                    self.cfg[prop] = os.path.join(workdir, self.cfg[prop])
 
         self.distrib = None
         ep = self.cfg.get("distrib_service",{}).get("service_endpoint")

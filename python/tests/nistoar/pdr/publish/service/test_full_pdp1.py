@@ -198,15 +198,15 @@ class TestFullPDP1Process(test.TestCase):
                 }
             },
             'repo_access': {
-                'headbag_cache': self.hbagdir,
+                'headbag_cache': "headbags",   # relative to working dir
                 'distrib_service': {
                     'service_endpoint': "http://localhost:9991/"
                 },
                 'metadata_service': {
                     'service_endpoint': "http://localhost:9994"
                 },
-                'store_dir': self.storedir,
-                'restricted_store_dir': self.restricted,
+                'store_dir': "store",
+                'restricted_store_dir': "restricted"
             },
             "preservation": {
                 "wait_to_start": 0.1,

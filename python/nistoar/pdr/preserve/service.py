@@ -359,8 +359,6 @@ class AIP1PreservationService(PreservationService):
          preservation is requested.  This dictionary configures all the steps in the task.  This 
          may not be required if an alternate job execution module is provided at construction time.
          See :py:class:`nistoar.pdr.preserve.task.nist.pdr.PreservationTaskFactory` for details.
-    ``headbag_cache``
-         (str) _recommended_.  a directory where head bags are cached for easier future access.  
     """
 
     _state_file = "_state.json"
