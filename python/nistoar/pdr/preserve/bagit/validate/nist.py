@@ -264,15 +264,17 @@ class NISTBagValidator(ValidatorBase):
         out = results
         if not out:
             out = ValidationResults(bag.name, want)
-        if cmp_versions(self.profile[1], "0.5") >= 0:
-            # starting with profile version 0.5, pod.json is no longer required
-            return out
 
         podfile = os.path.join(bag.metadata_dir, "pod.json")
+        podisfile = os.path.isfile(podfile)
         
-        t = self._err("4.1-2-0", "Metadata tag directory must contain the file, pod.json")
-        t = out._add_applied(t, os.path.isfile(podfile))
-        if t.failed():
+        if cmp_versions(self.profile[1], "0.5") < 0:
+            # starting with profile version 0.5, pod.json is no longer required
+            t = self._err("4.1-2-0", "Metadata tag directory must contain the file, pod.json")
+            t = out._add_applied(t, podisfile)
+            if t.failed():
+                return out
+        elif not podisfile:
             return out
 
         t = self._err("4.1-2-1", "pod.json must contain a legal POD Dataset record") 
