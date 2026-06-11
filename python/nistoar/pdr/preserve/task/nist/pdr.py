@@ -307,11 +307,11 @@ class PDR1AIPArchiving(fw.AIPArchiving):
         super(PDR1AIPArchiving, self).__init__(config)
         self.storedir = self.cfg.get("repo_access", {}).get('store_dir')
         if not self.storedir:
-            raise ConfiguationException("Missing required config parameter: repo_access.store_dir")
+            raise ConfigurationException("Missing required config parameter: repo_access.store_dir")
         self.storedir = Path(self.storedir)
         if not self.storedir.is_dir() or not os.access(self.storedir, os.W_OK):
-            raise ConfiguationException("store_dir is not an existing directory with write permission: "+
-                                        str(self.storedir))
+            raise ConfigurationException("store_dir is not an existing directory with write permission: "+
+                                         str(self.storedir))
         self.restricted = self.cfg.get("repo_access", {}).get('restricted_store_dir')
         if self.restricted:
             self.restricted = Path(self.restricted)
