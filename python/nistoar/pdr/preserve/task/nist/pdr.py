@@ -1118,7 +1118,10 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
             self.cfg.setdefault('cleanup', {})
             if self.cfg['repo_access'].get('headbag_cache') and \
                not self.cfg['cleanup'].get('headbag_cache'):
-                self.cfg['cleanup']['headbag_cache'] = self.cfg['repo_access']['headbag_cache']
+                hbdir = self.cfg['repo_access']['headbag_cache']
+                if not os.path.isabs(hbdir) and self.cfg['repo_access'].get('working_dir'):
+                    hbdir = os.path.join(self.cfg['repo_access']['working_dir'], hbdir)
+                self.cfg['cleanup']['headbag_cache'] = hbdir
 
         if self.cfg.get('ingest'):
             # share the top level ingest with steps that need it

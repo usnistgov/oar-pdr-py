@@ -193,7 +193,7 @@ class UpdatePrepService(object):
             self.sercache = os.path.join(workdir, self.sercache)
         self.storedir = self.cfg.get('store_dir')
         if workdir and not os.path.isabs(self.storedir):
-            self.sercache = os.path.join(workdir, self.storedir)
+            self.storedir = os.path.join(workdir, self.storedir)
         scfg = self.cfg.get('distrib_service', {})
         self.distsvc = distrib.RESTServiceClient(scfg.get('service_endpoint'))
         self.cacher = HeadBagCacher(self.distsvc, self.sercache)
