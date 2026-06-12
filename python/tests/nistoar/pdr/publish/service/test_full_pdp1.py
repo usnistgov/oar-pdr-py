@@ -321,14 +321,22 @@ class TestFullPDP1Process(test.TestCase):
         state = self.pubsvc.state_of(sipid)
         self.assertTrue(state == status.SUBMITTED or state == status.PUBLISHED)
 
-        if state != status.PUBLISHED:
-            time.sleep(1.5)
+        for i in range(10):
             pstat = self.pubsvc.pressvc.status_of(aipid)
-            self.assertGreater(pstat.steps, 0)
+            if pstat.successful or pstat.failed:
+                break
+            time.sleep(0.5)
+        self.assertGreater(pstat.steps, 0)
 
         self.assertEqual(self.pubsvc.state_of(sipid), status.PUBLISHED)
 
+        archbag = f"{aipid}.1_0_0.mbag0_4-0.zip"
+        self.assertTrue(os.path.isfile(os.path.join(self.storedir, archbag)))
+        self.assertTrue(os.path.isfile(os.path.join(self.storedir, archbag+".sha256")))
+        self.assertTrue(os.path.isfile(os.path.join(self.hbagdir, archbag)))
         self.assertFalse(os.path.exists(sipdir))
+        inprogdir = os.path.join(self.workdir,"preserve",aipid)
+        self.assertFalse(os.path.exists(inprogdir))
 
 
 if __name__ == '__main__':

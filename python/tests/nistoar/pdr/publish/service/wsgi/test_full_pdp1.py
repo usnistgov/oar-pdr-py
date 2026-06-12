@@ -394,18 +394,25 @@ class TestPDPApp(test.TestCase):
         state = saved['pdr:state']
         self.assertIn(state, ['submitted', 'published'])
 
-        if state != 'published':
-            time.sleep(1.5)
+        for i in range(10):
+            if state == 'published' or state == 'failed' or state == 'on-hold':
+                break
+            time.sleep(0.5)
             req = Req.get(basep+sipid, self.token)
             body = self.app(req.env, req.start)
             resp = req.response(body)
             self.assertEqual(resp.status_code, 200)
             saved = resp.json()
-            self.assertEqual(saved['@id'], pdrid)
-            self.assertEqual(saved['pdr:sipid'], sipid)
-            
+            state = saved['pdr:state']
+
         self.assertEqual(saved['pdr:state'], 'published')
 
+        archbag = f"{aipid}.1_0_0.mbag0_4-0.zip"
+        self.assertTrue(os.path.isfile(os.path.join(self.storedir, archbag)))
+        self.assertTrue(os.path.isfile(os.path.join(self.storedir, archbag+".sha256")))
+        self.assertTrue(os.path.isfile(os.path.join(self.hbagdir, archbag)))
+        self.assertFalse(os.path.exists(sipdir))
+        inprogdir = os.path.join(self.workdir,"preserve",aipid)
 
             
 
