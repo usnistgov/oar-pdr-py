@@ -733,11 +733,13 @@ class DBGroups(object):
         :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
                                how the identifier is formed.
         """
-        # determine shoulder if not provided
         mintcfg = self._cli._cfg.get("group_id_minting", {})
         if not shoulder:
-            shoulder = self._cli._get_default_shoulder(mintcfg, self._cli._who)    # may raise NotAuthorized
-        elif not self._cli._authorized_for_shoulder(mintcfg, shoulder, self._cli._who):
+            if mintcfg:
+                shoulder = self._cli._get_default_shoulder(mintcfg, self._cli._who)
+            else:
+                shoulder = DEF_GROUPS_SHOULDER
+        elif mintcfg and not self._cli._authorized_for_shoulder(mintcfg, shoulder, self._cli._who):
             raise NotAuthorized(str(self._cli._who), f"create a group under the {shoulder}")
 
         return "{}:{}:{}".format(shoulder, owner, name)
