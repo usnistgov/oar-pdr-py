@@ -110,7 +110,11 @@ def main(progname, args):
             raise Failure("problem reading config file, {0}: {1}"
                           .format(opts.cfgfile, ex.strerror)) from ex
     elif config.service:
-        to = os.environ.get("OAR_CONFIG_TIMEOUT", 60)
+        try:
+            to = float(os.environ.get("OAR_CONFIG_TIMEOUT", 60))
+        except ValueError as ex:
+            raise Failure("OAR_CONFIG_TIMEOUT: not a number " + 
+                          os.environ.get("OAR_CONFIG_TIMEOUT"))
         config.service.wait_until_up(to)
         cfg = config.service.get("midas-nsdsync")
     else:
