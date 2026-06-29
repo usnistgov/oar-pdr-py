@@ -147,7 +147,7 @@ class FMWebDAVClient:
         certificate given via ``client_cert_path``.  
     ``pass``
         _str_ (optional).  the password to authenticate with.  If provided, ``client_cert_path`` is 
-        ignored.
+        ignored.  Note that this is usually a Nextcloud application password.
 
     :param dict config:  the configuration dictionary
     :param Logger  log:  the Logger to use for log messages
@@ -231,32 +231,41 @@ class FMWebDAVClient:
 
     def authenticate(self):
         """
-        present X.509 credentials to the remote file manager service to get back temporary 
-        credentials for using the WebDAV API.  This creates a new client session with the service.
+        Create a new authenticated client session with the service. 
+
+        If this client is so configured, it will present X.509 credentials to the remote file manager 
+        service to get back temporary credentials for using the WebDAV API.  If this client is 
+        configured with an application password, it will be (re-)used to create a new session.
         """
         authcfg = self.cfg.get('authentication', {})
-        auth_url = authcfg.get('client_auth_url')
-        if not auth_url:
-            auth_url = self.cfg.get('service_endpoint').split("remote.php/dav/file")[0] + \
-                       "api/genapi.php/auth"
+        if authcfg.get('pass'):
+            self._wdcopts['webdav_password'] = authcfg['pass']
 
-        certpath = authcfg.get('client_cert_path')
-        keypath = authcfg.get('client_key_path')
-        if not authcfg.get('site_cert_verify', True):
-            # do not attempt to verify site certificate
-            capath = False
         else:
-            capath = self.cfg.get('ca_bundle')
-        if not certpath or not keypath:
-            raise ConfigurationException("FMWebDAVClient.authenticate() requires config params: "+
-                                         "client_cert_path, client_key_path")
+            # retrieve a temporary password from the authentication endpoint
+            auth_url = authcfg.get('client_auth_url')
+            if not auth_url:
+                auth_url = self.cfg.get('service_endpoint').split("remote.php/dav/file")[0] + \
+                           "api/genapi.php/auth"
 
-        try:
-            self._wdcopts['webdav_password'] = get_webdav_password(auth_url, certpath, keypath,
-                                                                   capath, self.log)
-        except OSError as ex:
-            raise FileManagerClientError("Unable to get temp password: "+str(ex)) from ex
+            certpath = authcfg.get('client_cert_path')
+            keypath = authcfg.get('client_key_path')
+            if not authcfg.get('site_cert_verify', True):
+                # do not attempt to verify site certificate
+                capath = False
+            else:
+                capath = self.cfg.get('ca_bundle')
+            if not certpath or not keypath:
+                raise ConfigurationException("FMWebDAVClient.authenticate() requires config params: "+
+                                             "client_cert_path, client_key_path")
 
+            try:
+                self._wdcopts['webdav_password'] = get_webdav_password(auth_url, certpath, keypath,
+                                                                       capath, self.log)
+            except OSError as ex:
+                raise FileManagerClientError("Unable to get temp password: "+str(ex)) from ex
+
+        # create a new client
         self.wdcli = wd3c.Client(self._wdcopts)
         if self.cfg.get('ca_bundle'):
             self.wdcli.verify = self.cfg['ca_bundle']
