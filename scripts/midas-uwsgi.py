@@ -148,6 +148,7 @@ if dbtype == "fsbased":
 
 elif dbtype == "mongo":
     factory = MongoDBClientFactory(cfg.get("dbio", {}), dburl)
+    factory.wait_until_ready()  # timeout defaults to 10s (TODO: get from config?)
 
 elif dbtype == "inmem":
     factory = InMemoryDBClientFactory(cfg.get("dbio", {}))
