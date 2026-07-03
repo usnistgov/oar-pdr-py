@@ -654,9 +654,9 @@ class AuthenticatedWSGIApp(WSGIApp):
             this list or the authentication will be considered invalid. 
 
         ``raise_on_invalid``
-            set to True if an exception should be raised if the credentials presented are found to 
-            be invalid (this includes if client ID is not in the ``allowed_clients`` parameter).
-            The default False will cause an Agent to be returned whose ``agent_class`` is set to 
+            set to True (default) if an exception should be raised if the credentials presented are 
+            found to be invalid (this includes if client ID is not in the ``allowed_clients`` 
+            parameter).  False will cause an Agent to be returned whose ``agent_class`` is set to 
             "invalid".
 
         ``raise_on_anonymous``
@@ -675,21 +675,27 @@ class AuthenticatedWSGIApp(WSGIApp):
         """
         authcfg = self.cfg.get('authentication', {})
 
-        # get client id, if present
-        client_id = env.get('HTTP_OAR_CLIENT_ID','(unknown)')
+        # get client id, if present; the client ID is not the user but the client application
+        # operating on behalf of a user; this may be used to determine the agent vehicle
+        client_id = env.get('HTTP_OAR_CLIENT_ID')
         agents = env.get('HTTP_OAR_CLIENT_AGENTS', '').split()
         if not agents:
-            agents = authcfg.get('client_agents', {}).get(client_id, [client_id])
+            agents = authcfg.get('client_agents', {}).get(client_id, [])
+
+        # this encapsulates the configured user authentication mechanisms
+        out = self.authenticate_user(env, agents, client_id)
+        # the authentication mechanism may identify the client
+        client_id = out.get_prop('client_id', client_id or "(unknown)")
+
         allowed = authcfg.get('allowed_clients')
         if allowed is not None and client_id not in allowed:
             log.warning("Client %s is not recongized among %s", client_id, str(allowed))
-            if authcfg.get('raise_on_invalid'):
-                raise Unauthenticated("Unrecognized Client ID")
-            return Agent(client_id, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents,
-                         invalid_reason=f"Unrecognized client ID: {client_id}")
+            if authcfg.get('raise_on_invalid', True):
+                raise Unauthenticated("Unallowed Client ID")
+            return Agent(out.vehicle, out.actor_type, out.actor, Agent.INVALID, agents,
+                         invalid_reason=f"Unallowed client ID: {client_id}")
 
-        # this encapsulates the configured user authentication mechanisms
-        return self.authenticate_user(env, agents, client_id)
+        return out
 
     def authenticate_user(self, env: Mapping, agents: List[str]=None, client_id: str=None) -> Agent:
         """
@@ -714,9 +720,7 @@ class AuthenticatedWSGIApp(WSGIApp):
         """
         if self.cfg.get('authentication', {}).get('raise_on_anonymous'):
             raise Unauthenticated("Unauthenticated by default")
-        if not client_id:
-            client_id = "(unknown)"
-        vehicle = self.name or client_id
+        vehicle = client_id or self.name or "(unknown)"
         return Agent(vehicle, Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, agents)
 
 
@@ -889,19 +893,21 @@ def authenticate_via_jwt(svcname: str, env: Mapping, jwtcfg: Mapping, log: Logge
         return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents,
                      invalid_reason="Invalid token can not be decoded")
 
+    if not claim_to_agent_func:
+        claim_to_agent_func = make_agent_from_nistoar_claimset
+    out = claim_to_agent_func(svcname, userinfo, log, agents)
+
     # make sure the token has an expiration date
     if jwtcfg.get('require_expiration', True) and \
        userinfo.get("agent_type", "user") != "auto" and not userinfo.get('exp'):
         # Note expiration was checked implicitly by the above jwt.decode() call
         log.warning("Rejecting non-expiring token for user %s", userinfo.get('sub', "(unknown)"))
-        if jwtcfg.get('raise_on_invalid'):
+        if jwtcfg.get('raise_on_invalid', True):
             raise Unauthenticated("Non-expiring JWT token")
-        return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents,
+        return Agent(out.vehicle, out.actor_type, out.actor, Agent.INVALID, agents,
                      invalid_reason=f"non-expiring token rejected")
 
-    if not claim_to_agent_func:
-        claim_to_agent_func = make_agent_from_nistoar_claimset
-    return claim_to_agent_func(svcname, userinfo, log, agents)
+    return out
 
 def make_agent_from_nistoar_claimset(svcname: str, userinfo: Mapping, log: Logger, agents=None,
                                      client_id: str=None) -> Agent:
@@ -929,11 +935,24 @@ def make_agent_from_nistoar_claimset(svcname: str, userinfo: Mapping, log: Logge
         group = "nist"
 
     umd = dict((k,v) for k,v in userinfo.items()
-                         if k not in ["userEmail", "sub"])
+                         if k not in ["userEmail", "sub", "agclass"])
 
+    # token may contain the client_id; if so, use it.
+    client_id = umd.get('client_id', client_id)
+    agclass = group
+    if client_id and client_id != "(unknown)":
+        agclass = client_id.split(':')[0]
+
+    # we allow the token to provide agent information 
+    umd.setdefault('vehicle', svcname)
+    umd.setdefault('actortype', Agent.USER)
+    umd.setdefault('agents', [])
+    if agents:
+        umd['agents'].extend(agents)
+    
     if not client_id:
         client_id = group
-    return Agent(svcname, Agent.USER, subj, client_id, agents, email=email, **umd)
+    return Agent(actorid=subj, agclass=agclass, email=email, groups=[group], **umd)
 
 
 class WSGIAppSuite(AuthenticatedWSGIApp):
