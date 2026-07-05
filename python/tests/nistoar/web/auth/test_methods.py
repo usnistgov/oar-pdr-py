@@ -4,17 +4,17 @@ from copy import deepcopy
 import jwt
 
 from nistoar.testing import *
-from nistoar.web import rest
+from nistoar.web.auth import methods as auth
 from nistoar.web.rest.base import make_agent_from_nistoar_claimset, Unauthenticated
 
-tmpdir = tempfile.TemporaryDirectory(prefix="_test_rest.")
+tmpdir = tempfile.TemporaryDirectory(prefix="_test_auth.")
 loghdlr = None
 rootlog = None
 def setUpModule():
     global loghdlr
     global rootlog
     rootlog = logging.getLogger()
-    loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_rest.log"))
+    loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_auth.log"))
     loghdlr.setLevel(logging.DEBUG)
     rootlog.addHandler(loghdlr)
 
@@ -32,7 +32,7 @@ class TestAuthFuncs(test.TestCase):
 
     def test_make_nistoar_agent_from_claimset(self):
         info = {"sub": "fed@nist.gov"}
-        who = make_agent_from_nistoar_claimset("midas", info, rootlog, [], "dmptool")
+        who = auth.make_agent_from_nistoar_claimset("midas", info, rootlog, [], "dmptool")
         self.assertEqual(who.vehicle, "midas")
         self.assertEqual(who.agent_class, "nist")
         self.assertEqual(who.actor, "fed")
@@ -40,7 +40,7 @@ class TestAuthFuncs(test.TestCase):
         self.assertIsNone(who.get_prop("email"))
 
         info = {"subject": "fed@nist.gov"}
-        who = make_agent_from_nistoar_claimset("midas", info, rootlog, ["dmptool"])
+        who = auth.make_agent_from_nistoar_claimset("midas", info, rootlog, ["dmptool"])
         self.assertEqual(who.actor, "anonymous")
         self.assertEqual(who.vehicle, "midas")
         self.assertEqual(who.agent_class, "public")
@@ -48,7 +48,7 @@ class TestAuthFuncs(test.TestCase):
         self.assertIsNone(who.get_prop("email"))
 
         info = {"sub": "fed", "userEmail": "fed@nist.gov", "OU": "61"}
-        who = make_agent_from_nistoar_claimset("midas", info, rootlog, ["dmptool"])
+        who = auth.make_agent_from_nistoar_claimset("midas", info, rootlog, ["dmptool"])
         self.assertEqual(who.vehicle, "midas")
         self.assertEqual(who.agent_class, "nist")
         self.assertEqual(who.actor, "fed")
@@ -56,7 +56,7 @@ class TestAuthFuncs(test.TestCase):
         self.assertEqual(who.get_prop("email"), "fed@nist.gov")
         self.assertEqual(who.get_prop("OU"), "61")
 
-        who = make_agent_from_nistoar_claimset("midas", info, rootlog, ["dmptool"], "dmp")
+        who = auth.make_agent_from_nistoar_claimset("midas", info, rootlog, ["dmptool"], "dmp")
         self.assertEqual(who.vehicle, "midas")
         self.assertEqual(who.agent_class, "nist")
         self.assertEqual(who.actor, "fed")
@@ -73,29 +73,29 @@ class TestAuthFuncs(test.TestCase):
             'PATH_INFO': '/midas/dmp'
         }
 
-        with self.assertRaises(Unauthenticated):
-            rest.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        with self.assertRaises(auth.Unauthenticated):
+            auth.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
 
         del config['raise_on_anonymous']
-        who = rest.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        who = auth.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
         self.assertEqual(who.agent_class, "public")
         self.assertEqual(who.actor, "anonymous")
         self.assertEqual(who.delegated, ('goob', 'gomer',))
 
         req['HTTP_AUTHORIZATION'] = "Bearer goober"  # bad token
         req['HTTP_OAR_CLIENT_ID'] = 'ark:/88434/tl0-0001'
-        with self.assertRaises(Unauthenticated):
-            rest.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        with self.assertRaises(auth.Unauthenticated):
+            auth.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
 
         config['raise_on_invalid'] = False
-        who = rest.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        who = auth.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
         self.assertEqual(who.agent_class, "invalid")
         self.assertEqual(who.actor, "anonymous")
         self.assertEqual(who.delegated, ("goob", "gomer",))
 
         token = jwt.encode({"sub": "fed@nist.gov"}, config['key'], algorithm="HS256")
         req['HTTP_AUTHORIZATION'] = "Bearer "+token
-        who = rest.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        who = auth.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
         self.assertEqual(who.agent_class, "nist")
         self.assertEqual(who.actor, "fed")
         self.assertEqual(who.delegated, ("goob", "gomer", "dmptool",))
@@ -104,7 +104,7 @@ class TestAuthFuncs(test.TestCase):
         token = jwt.encode({"sub": "fed", "userEmail": "fed@nist.gov", "OU": "61"},
                            config['key'], algorithm="HS256")
         req['HTTP_AUTHORIZATION'] = "Bearer "+token
-        who = rest.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        who = auth.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
         self.assertEqual(who.agent_class, "nist")
         self.assertEqual(who.actor, "fed")
         self.assertEqual(who.delegated, ("goob", "gomer", "dmptool",))
@@ -115,7 +115,7 @@ class TestAuthFuncs(test.TestCase):
                             "client_id": "ncnr:832-1/repo"},
                            config['key'], algorithm="HS256")
         req['HTTP_AUTHORIZATION'] = "Bearer "+token
-        who = rest.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        who = auth.authenticate_via_jwt("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
         self.assertEqual(who.agent_class, "ncnr")
         self.assertEqual(who.actor, "fed")
         self.assertEqual(who.delegated, ("goob", "gomer", "ncnr:832-1/repo",))
@@ -130,35 +130,35 @@ class TestAuthFuncs(test.TestCase):
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': '/midas/dmp'
         }
-        with self.assertRaises(Unauthenticated):
-            rest.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        with self.assertRaises(auth.Unauthenticated):
+            auth.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
 
         config['raise_on_anonymous'] = False
-        who = rest.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        who = auth.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
         self.assertEqual(who.agent_class, "public")
         self.assertEqual(who.actor, "anonymous")
         self.assertEqual(who.delegated, ('goob', 'gomer', 'dmptool',))
         self.assertIsNone(who.get_prop("email"))
 
         req['HTTP_AUTHORIZATION'] = "Bearer goober"   # bad key
-        with self.assertRaises(Unauthenticated):
-            rest.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        with self.assertRaises(auth.Unauthenticated):
+            auth.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
 
         del config['raise_on_invalid']
-        who = rest.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        who = auth.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
         self.assertEqual(who.agent_class, "invalid")
         self.assertEqual(who.actor, "anonymous")
         self.assertEqual(who.delegated, ('goob', 'gomer', 'dmptool',))
 
         req['HTTP_AUTHORIZATION'] = "XXXXX"
-        who = rest.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        who = auth.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
         self.assertEqual(who.agent_class, "public")
         self.assertEqual(who.actor, "anonymous")
         self.assertEqual(who.delegated, ('goob', 'gomer', 'dmptool',))
         self.assertIsNone(who.get_prop("email"))
 
         req['HTTP_AUTHORIZATION'] = "Bearer XXXXX"
-        who = rest.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
+        who = auth.authenticate_via_authkey("midas", req, config, rootlog, ['goob', 'gomer'], "dmptool")
         self.assertEqual(who.agent_class, "dmptool")
         self.assertEqual(who.actor, "oarop")
         self.assertEqual(who.delegated, ("goob", "gomer", "dmptool",))
