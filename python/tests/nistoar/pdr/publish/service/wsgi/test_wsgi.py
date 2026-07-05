@@ -146,7 +146,7 @@ class TestPDPWSGI(test.TestCase):
         self.assertEqual(who.id, "pdp/anonymous")
         self.assertEqual(who.agent_class, "public")
         self.assertEqual(who.actor_type, "")
-        self.assertEqual(who.delegated, ("(unknown)",))
+        self.assertEqual(who.delegated, ())
 
         del req['HTTP_AUTHORIZATION']
         who = self.app.authenticate(req)
@@ -154,7 +154,7 @@ class TestPDPWSGI(test.TestCase):
         self.assertEqual(who.id, "pdp/anonymous")
         self.assertEqual(who.agent_class, "public")
         self.assertEqual(who.actor_type, "")
-        self.assertEqual(who.delegated, ("(unknown)",))
+        self.assertEqual(who.delegated, ())
 
     def test_ready(self):
         req = {

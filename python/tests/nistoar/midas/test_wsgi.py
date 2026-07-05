@@ -575,8 +575,8 @@ class TestMIDASApp(test.TestCase):
             'PATH_INFO': '/midas/dmp/mdm1'
         }
         body = self.app(req, self.start)
-        data = self.body2dict(body)
         self.assertIn("200 ", self.resp[0])
+        data = self.body2dict(body)
         self.assertEqual(data, [])
 
         self.resp = []
@@ -790,7 +790,7 @@ class TestMIDASServer(test.TestCase):
         who = self.app.authenticate(req)
         self.assertEqual(who.agent_class, "public")
         self.assertEqual(who.actor, prov.Agent.ANONYMOUS)
-        self.assertEqual(who.delegated, ('(unknown)',))
+        self.assertEqual(who.delegated, ())
 
         req['HTTP_AUTHORIZATION'] = "Bearer goober"  # bad token
         req['HTTP_OAR_CLIENT_ID'] = 'ark:/88434/tl0-0001'
@@ -804,7 +804,7 @@ class TestMIDASServer(test.TestCase):
         who = self.app.authenticate(req)
         self.assertEqual(who.agent_class, "nist")
         self.assertEqual(who.actor, "fed")
-        self.assertEqual(who.delegated, ("Unit testing agent",))
+        self.assertEqual(who.delegated, ("Unit testing agent", 'ark:/88434/tl0-0001',))
         self.assertIsNone(who.get_prop("email"))
 
         token = jwt.encode({"sub": "fed", "userEmail": "fed@nist.gov", "OU": "61"},
@@ -813,7 +813,7 @@ class TestMIDASServer(test.TestCase):
         who = self.app.authenticate(req)
         self.assertEqual(who.agent_class, "nist")
         self.assertEqual(who.actor, "fed")
-        self.assertEqual(who.delegated, ("Unit testing agent",))
+        self.assertEqual(who.delegated, ("Unit testing agent", 'ark:/88434/tl0-0001',))
         self.assertEqual(who.get_prop("email"), "fed@nist.gov")
         self.assertEqual(who.get_prop("OU"), "61")
 
@@ -823,7 +823,7 @@ class TestMIDASServer(test.TestCase):
         who = self.app.authenticate(req)
         self.assertEqual(who.agent_class, "nist")
         self.assertEqual(who.actor, "dbio:admin")
-        self.assertEqual(who.delegated, ("Unit testing agent",))
+        self.assertEqual(who.delegated, ("Unit testing agent", 'ark:/88434/tl0-0001',))
         self.assertEqual(who.get_prop("email"), "fed@nist.gov")
         self.assertEqual(who.get_prop("OU"), "61")
 

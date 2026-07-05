@@ -246,7 +246,7 @@ class PDP0App(ServiceApp):
                 compid = parts[1]
 
             stat = self._app.svc.status_of(sipid)
-            if stat.state != status.NOT_FOUND and not stat.any_authorized(self.who.agent_vehicles()):
+            if stat.state != status.NOT_FOUND and not stat.any_authorized(self.who.groups):
                 self.log.info("%s is not authorized to update SIP, %s", self.who.actor, sipid)
                 return self.send_unauthorized()
 
@@ -361,7 +361,7 @@ class PDP0App(ServiceApp):
                 return self.send_error_resp(404, "SIP not found",
                                             "Unable to DELETE: SIP submission not found", sipid)
 
-            if not stat.any_authorized(self.who.agent_vehicles()):
+            if not stat.any_authorized(self.who.groups):
                 self.info("%s is not authorized to update SIP, %s", self.who.actor, sipid)
                 return self.send_unauthorized()
 

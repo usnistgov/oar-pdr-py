@@ -90,8 +90,8 @@ class Handler(object):
         self._format_qp = qpname
 
     def _default_agent(self):
-        name = "nistoar" if not self.app else self.app.name
-        return Agent(name, Agent.UNKN, Agent.ANONYMOUS, groups=["public"])
+        name = self.app.name if self.app else "nistoar"
+        return Agent(name, Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC)
 
     def send_error(self, code, message, content=None, contenttype=None, ashead=None, encoding='utf-8'):
         """
@@ -649,9 +649,13 @@ class AuthenticatedWSGIApp(WSGIApp):
 
         ``allowed_clients``
             a list of client identifiers that should be considered allowed to use this service.  If 
-            this parameter is not set, the ``OAR-client-id`` HTTP header is not required to be set, 
-            and all clients will be allowed.  Otherwise, the ``OAR-client-id`` value must be in the 
-            this list or the authentication will be considered invalid. 
+            this parameter is not set, a client ID is not required to be set, 
+            and all clients will be allowed.  Otherwise, a client ID must be determinable--either via
+            the ``OAR-client-id`` HTTP header or (better yet) determined via authentication process or 
+            the authentication will be considered invalid.  Note that since an unauthenticated client 
+            can set the client ID via the ``OAR-client-id`` HTTP header, the client ID value should 
+            be trusted on its own.  This provided as catch to prevent an otherwise trusted client from 
+            mistakenly doing something it shouldn't.  
 
         ``raise_on_invalid``
             set to True (default) if an exception should be raised if the credentials presented are 
@@ -678,13 +682,18 @@ class AuthenticatedWSGIApp(WSGIApp):
         # get client id, if present; the client ID is not the user but the client application
         # operating on behalf of a user; this may be used to determine the agent vehicle
         client_id = env.get('HTTP_OAR_CLIENT_ID')
+        if not client_id:
+            # If the client isn't telling us the name of its client use product part of the
+            # the HTTP User-Agent header.
+            client_id = re.sub(r'\s', '-', env.get('HTTP_USER_AGENT', '').split('/')[0])
         agents = env.get('HTTP_OAR_CLIENT_AGENTS', '').split()
         if not agents:
             agents = authcfg.get('client_agents', {}).get(client_id, [])
 
         # this encapsulates the configured user authentication mechanisms
         out = self.authenticate_user(env, agents, client_id)
-        # the authentication mechanism may identify the client
+        # the authentication mechanism may identify the client in a more trustworthy way than the
+        # HTTP header provided by the client.
         client_id = out.get_prop('client_id', client_id or "(unknown)")
 
         allowed = authcfg.get('allowed_clients')
@@ -692,7 +701,7 @@ class AuthenticatedWSGIApp(WSGIApp):
             log.warning("Client %s is not recongized among %s", client_id, str(allowed))
             if authcfg.get('raise_on_invalid', True):
                 raise Unauthenticated("Unallowed Client ID")
-            return Agent(out.vehicle, out.actor_type, out.actor, Agent.INVALID, agents,
+            return Agent(out.vehicle, out.actor_type, out.actor, Agent.INVALID, out.delegated,
                          invalid_reason=f"Unallowed client ID: {client_id}")
 
         return out
@@ -717,11 +726,21 @@ class AuthenticatedWSGIApp(WSGIApp):
                   is not required to raise this exception for an unauthenticated user; instead, the 
                   implementation may choose to return an identity that specifically represents an 
                   unauthenticated user.
+        :return: the authenticated user identity.  If authentication fails the implementation 
+                 must return an anonymous or invalid identity, or it must raise an Unauthenticated
+                 exception.
+                 :rtype Agent:
         """
         if self.cfg.get('authentication', {}).get('raise_on_anonymous'):
             raise Unauthenticated("Unauthenticated by default")
-        vehicle = client_id or self.name or "(unknown)"
-        return Agent(vehicle, Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, agents)
+        vehicle = self.name or "nistoar"
+
+        if not agents:
+            agents = []
+        ags = list(agents)
+        if client_id:
+            ags.append(client_id)
+        return Agent(vehicle, Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, ags)
 
 
 def authenticate_via_authkey(svcname: str, env: Mapping, authcfg: Mapping, log: Logger,
@@ -731,7 +750,7 @@ def authenticate_via_authkey(svcname: str, env: Mapping, authcfg: Mapping, log: 
 
     This authorization method simply requires the client to present an opaque key set as a
     Bearer token to the Authorization HTTP header.  The key must be provided in the given 
-    configuration with in the ``authorized`` object which contains a list of client authentication 
+    configuration within the ``authorized`` object which contains a list of client authentication 
     objects; each object contains the following parameters:
 
     ``auth_key``
@@ -739,11 +758,22 @@ def authenticate_via_authkey(svcname: str, env: Mapping, authcfg: Mapping, log: 
 
     ``user``
        _str_ (required).  an identifier to set the returned Agent ``actor`` id to when the client 
-       presents the associated ``auth_key``.
+       presents the associated ``auth_key``.  
+
+    ``type``
+       _str_ (optional).  the name of the type classification for the Agent identity.  The value
+       should either be "user" or "auto", where the former indicates that a real human interaction
+       initiated the current request and the latter indicates an automated process.  The default 
+       will be "auto" (since auth keys are not typically secure enough for human-initiated requests).
+
+    ``class``
+       _str_ (optional).  the label to set the Agent's class to which defines the permissions the 
+       agent has.  If not provided, it will default to the value of the ``client`` parameter.  
 
     ``client``
-       _str_ (required).  a name for the client; this will be set as both the Agent ``vehicle`` and 
-       ``agent_class``.  
+       _str_ (recommended).  a name for the client; this will be set as the Agent's client_id (and,
+       thus, the most recent delegated agent).  It is also used as a default Agent class if ``class``
+       is not provided.
 
 
     :param str   svcname: a name to provide as the agent software vehicle
@@ -753,29 +783,41 @@ def authenticate_via_authkey(svcname: str, env: Mapping, authcfg: Mapping, log: 
     :param [str]  agents: an optional list of agent strings to attach to output agent
     :param str client_id: an ID representing the OAR client being used to connect.  If None,
                           either an ID was not provided or is otherwise not supported by the 
-                          app.  
+                          app.  This will be over-ridden by a configured value in the returned
+                          Agent if provided in the configuration.  
     :returns:  an :py:class:`Agent` instance representing the user
     """
     if not client_id:
         client_id = "(unknown)"
     if not svcname:
-        svnname = client_id
+        svnname = "nistoar"
+    agents = list(agents) if agents else []
 
     auth = env.get('HTTP_AUTHORIZATION', "x").split()
     if len(auth) < 2 or auth[0] != "Bearer" or not auth[1]:
         log.warning("Client %s did not provide a Bearer authentication token", str(client_id))
         if authcfg.get('raise_on_anonymous'):
-            raise Unauthenticated("No auth token provided")
+            raise Unauthenticated("No bearer token provided")
+        if client_id:
+            agents.append(str(client_id))
         return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, agents)
 
     for client in authcfg.get('authorized'):
         if client.get("auth_key") == auth[1]:
-            return Agent(svcname, Agent.AUTO, client.get('user','authorized'),
-                         client.get('client', client_id), agents)
+            clid = client.get('client')
+            agcls = client.get('class', clid or Agent.PUBLIC)
+            agents.append(clid or client_id)
+            tp = client.get('type', Agent.AUTO)
+            out = Agent(svcname, tp, client.get('user','authorized'), agcls, agents)
+            if clid:
+                out.set_prop('client_id', clid)
+            return out
 
     log.warning("Unrecognized token from client %s", str(client_id))
     if authcfg.get('raise_on_invalid'):
         raise Unauthenticated("Unrecognized auth token")
+    if client_id:
+        agents.append(str(client_id))
     return Agent(svcname, Agent.UNKN, Agent.ANONYMOUS, Agent.INVALID, agents,
                  invalid_reason="Unrecognized auth token")
 
@@ -797,6 +839,8 @@ def authenticate_via_proxy_x509(svcname: str, env: Mapping, authcfg: Mapping, lo
         in order for subject data to be considered valid.  If the keys do not match or is not 
         provided in the input request to this function, an invalid anonymous identity is returned.
 
+    Note that this implementation does not provide a means for determining the "true" client ID.  
+
     :param str   svcname: a name to provide as the agent software vehicle
     :param dict      env: the WSGI environment containing the request data
     :param dict   jwtcfg: the JWT decoding configuration (see above)
@@ -810,7 +854,9 @@ def authenticate_via_proxy_x509(svcname: str, env: Mapping, authcfg: Mapping, lo
     if not client_id:
         client_id = "(unknown)"
     if not svcname:
-        svnname = client_id
+        svnname = "nistoar"
+    agents = list(agents) if agents else []
+    agents.append(client_id)
 
     subj = env.get('HTTP_OAR_SSL_S_DN')
     if not subj:
@@ -874,7 +920,8 @@ def authenticate_via_jwt(svcname: str, env: Mapping, jwtcfg: Mapping, log: Logge
     if not client_id:
         client_id = "(unknown)"
     if not svcname:
-        svnname = client_id
+        svnname = "nistoar"
+    agents = list(agents) if agents else []
 
     auth = env.get('HTTP_AUTHORIZATION', "x").split()
     if len(auth) < 2 or auth[0] != "Bearer":
@@ -895,7 +942,7 @@ def authenticate_via_jwt(svcname: str, env: Mapping, jwtcfg: Mapping, log: Logge
 
     if not claim_to_agent_func:
         claim_to_agent_func = make_agent_from_nistoar_claimset
-    out = claim_to_agent_func(svcname, userinfo, log, agents)
+    out = claim_to_agent_func(svcname, userinfo, log, agents, client_id)
 
     # make sure the token has an expiration date
     if jwtcfg.get('require_expiration', True) and \
@@ -914,6 +961,12 @@ def make_agent_from_nistoar_claimset(svcname: str, userinfo: Mapping, log: Logge
     """
     Create an Agent instance representing the end user given a JWT claim set assuming 
     it originated from a NIST-OAR JWT service.
+
+    This implementation will use information encoded in the token for key properties of the output
+    agent.  In addition to the actor ID (taken from the token's subject), the token may contain a 
+    client_id, the agent type, the agent class.  Other non-standard properties may be transfered 
+    over as well.
+
     :param str   svcname:  a name to provide as the agent software vehicle
     :param dict userinfo:  a dictionary containing the JST claimset data
     :param Logger    log:  a Logger object that should be used to record warning messages
@@ -935,24 +988,21 @@ def make_agent_from_nistoar_claimset(svcname: str, userinfo: Mapping, log: Logge
         group = "nist"
 
     umd = dict((k,v) for k,v in userinfo.items()
-                         if k not in ["userEmail", "sub", "agclass"])
+                         if k not in ["userEmail", "sub", "agclass", "vehicle"])
 
     # token may contain the client_id; if so, use it.
     client_id = umd.get('client_id', client_id)
+    if client_id:
+        agents.append(client_id)
     agclass = group
-    if client_id and client_id != "(unknown)":
-        agclass = client_id.split(':')[0]
+    if umd.get('client_id'):
+        agclass = umd['client_id'].split(':')[0]  # a unique ID may follow :
 
     # we allow the token to provide agent information 
-    umd.setdefault('vehicle', svcname)
     umd.setdefault('actortype', Agent.USER)
-    umd.setdefault('agents', [])
-    if agents:
-        umd['agents'].extend(agents)
+    umd.setdefault('agents', agents)
     
-    if not client_id:
-        client_id = group
-    return Agent(actorid=subj, agclass=agclass, email=email, groups=[group], **umd)
+    return Agent(vehicle=svcname, actorid=subj, agclass=agclass, groups=[group], email=email, **umd)
 
 
 class WSGIAppSuite(AuthenticatedWSGIApp):

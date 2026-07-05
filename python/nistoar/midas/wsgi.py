@@ -645,7 +645,9 @@ class MIDASApp(AuthenticatedWSGIApp):
         authcfg = self.cfg.get('authentication')
         if authcfg:
             return authenticate_via_jwt("midas", env, authcfg, self.log, agents, client_id)
-        return None
+
+        vehicle = client_id.split(':')[0] if client_id else "(unknown)"
+        return Agent(vehicle, Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, agents)
 
     def handle_path_request(self, path: str, env: Mapping, start_resp: Callable, who = None):
         path = path.split('/')
