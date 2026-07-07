@@ -14,6 +14,7 @@ from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils import cli
 from nistoar.pdr import def_etc_dir
 from . import get_agent
+from . import jwt
 
 description = \
 """execute MIDAS administrative operations
@@ -79,6 +80,7 @@ def main(cmdname, args):
 
     midas.load_subcommand(dap)
     # midas.load_subcommand(dmp)
+    midas.load_subcommand(jwt)
 
     # execute the command
     # args = midas.parse_args(args)
