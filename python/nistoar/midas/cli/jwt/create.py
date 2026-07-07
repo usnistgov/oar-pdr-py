@@ -8,8 +8,11 @@ import logging, argparse, sys
 from typing import Mapping
 from logging import Logger
 
+import jwt
+
 from nistoar.web.auth.token import JWTGenerator
 from nistoar.pdr.utils.cli import CommandFailure
+from .show import write_claimset
 
 default_name = "create"
 help = "create an authentication token"
@@ -111,6 +114,12 @@ def execute(args, config: Mapping=None, log: Logger=None):
     except Exception as ex:
         raise CommandFailure(args.cmd, "Token generation failed unexpectedly: "+str(ex), 1) from ex
 
+    # confirm that we can decode it:
+    try:
+        data = jwt.decode(token, secret, "HS256")
+    except Exception as ex:
+        raise CommandFailure(args.cmd, "Failed to create decodable token: "+str(ex), 1) from ex
+
     if args.outfile:
         try:
             with open(args.outfile, 'w') as fd:
@@ -120,7 +129,10 @@ def execute(args, config: Mapping=None, log: Logger=None):
     else:
         print(token)
 
-    # if verbose, print token contents to standard out.  
+    # if verbose, print newly created token's claimset to standard out.
+    if args.verbose:
+        print()
+        write_claimset(data, sys.stdout)
 
 def _make_data(args):
     data = { "actortype": args.acttype, "client_id": args.agclass }
