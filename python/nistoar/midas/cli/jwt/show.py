@@ -107,8 +107,14 @@ def execute(args, config: Mapping=None, log: Logger=None):
         else:
             outfd = open(args.outfile, 'w')
 
-        if args.fmt == "json":
+        if args.select:
+            if args.fmt == "json":
+                json.dump({ args.select: info.get(args.select) }, outfd, indent=2)
+            else:
+                print(str(info.get(args.select)), file=outfd)
+        elif args.fmt == "json":
             json.dump(info, outfd, indent=2)
+            outfd.write("\n")
         else:
             write_claimset(info, outfd)
 

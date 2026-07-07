@@ -117,6 +117,30 @@ class TestJWTCreateCmd(test.TestCase):
         self.assertTrue(isinstance(data['exp'], (float, int)))
         self.assertGreater(data['exp'], 100000)
         self.assertEqual(len(data), 6)
+
+    def test_execute_select_json(self):
+        args = self.cmd.parse_args(f"-q show -j -p actortype -o {self.outf} {self.tok}".split())
+        self.assertTrue(not os.path.exists(self.outf))
+        show.execute(args, self.cfg)
+        self.assertTrue(os.path.isfile(self.outf))
+
+        with open(self.outf) as fd:
+            data = json.load(fd)
+
+        self.assertEqual(data['actortype'], "auto")
+        self.assertEqual(len(data), 1)
+
+    def test_execute_select_none(self):
+        args = self.cmd.parse_args(f"-q show -j -p purpose -o {self.outf} {self.tok}".split())
+        self.assertTrue(not os.path.exists(self.outf))
+        show.execute(args, self.cfg)
+        self.assertTrue(os.path.isfile(self.outf))
+
+        with open(self.outf) as fd:
+            data = json.load(fd)
+
+        self.assertIsNone(data['purpose'])
+        self.assertEqual(len(data), 1)
         
         
 
