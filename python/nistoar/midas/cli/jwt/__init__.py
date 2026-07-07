@@ -33,7 +33,7 @@ def load_into(subparser, current_dests=None, as_cmd=None):
                                can indicate if a parent command has defined required options already
     :param str as_cmd:  the command name that this command is being loaded as (ignored)
     """
-    from . import create
+    from . import create, show
 
     subparser.description = description
     p = subparser
@@ -43,6 +43,6 @@ def load_into(subparser, current_dests=None, as_cmd=None):
         as_cmd = default_name
     out = cli.CommandSuite(as_cmd, p, current_dests)
     out.load_subcommand(create)
-#    out.load_subcommand(show)
+    out.load_subcommand(show)
 
     return out

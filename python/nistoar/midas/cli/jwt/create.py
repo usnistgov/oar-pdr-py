@@ -4,7 +4,7 @@ CLI command for creating a JWT token.
 This command is used to create long-lived tokens for a functional identity representing an
 automated client that will access a MIDAS API.  
 """
-import logging, argparse
+import logging, argparse, sys
 from typing import Mapping
 from logging import Logger
 
@@ -47,8 +47,9 @@ def load_into(subparser, current_dests, as_cmd=None):
                    help="include an arbitrary property PROP with the value VAL into the token claimset.")
     p.add_argument("-L", "--lifetime", metavar="TIMEINTV", type=str, dest="lifetime", default="2y",
                    help="the lifetime of the token consisting of an integer followed immediately with "
-                        "an optional interval unit (one of 's', 'm', 'h', 'd', or 'y', defaulting to "
-                        "'s' if not provided")
+                        "an optional interval unit (one of 's', 'm', 'h', 'd', or 'y', for seconds, "
+                        "minutes, hours, days, and years, respectively, defaulting to 's' "
+                        "if not provided)")
     p.add_argument("-o", "--output-file", metavar="FILE", type=str, dest="outfile",
                    help="write the token to FILE (instead of to standard output)")
     
