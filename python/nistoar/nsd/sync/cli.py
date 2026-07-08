@@ -139,7 +139,7 @@ def main(progname, args):
         if opts.trigrurl is None and cfg.get("trigger", {}).get("service_endpoint"):
             opts.trigrurl = cfg.get("trigger", {}).get("service_endpoint")
         if opts.trigrurl:
-            request_reload(opts.trigrurl, cfg.get("trigger", {}).get("auth_token"), args.agents)
+            request_reload(opts.trigrurl, cfg.get("trigger", {}).get("auth_token"), opts.agents)
 
     except ConfigurationException as ex:
         raise Failure(str(ex)) from ex
