@@ -42,6 +42,11 @@ def define_options(progname):
     parser.add_argument('-T', '--no-trigger', action='store_false', dest='trigrurl',
                         help="After fetch the NSD data, do not trigger a reload of the DBIO database "+
                              "(over-rides -t).")
+    parser.add_argument('-A', '--delegated-agents', type=str, dest='agents', metavar="AGENT-NAMES",
+                        help="when triggering reload, provide AGENT-NAMES as the list of delegated "
+                             "agents that the request is occuring on behalf of.  This list is given "
+                             "as an ordered, comma-delimited list of tool or component names "
+                             "with the component originating the request appearing first.")
     parser.add_argument('-l', '--logfile', action='store', dest='logfile', type=str, metavar='FILE',
                         help="write messages that normally go to standard error to FILE as well.  "+
                              "If -q is also specified, the messages will only go to the logfile")
@@ -54,11 +59,13 @@ def define_options(progname):
                              "all OUs will be included")
     return parser
 
-def request_reload(dbionsdep, authtoken=None):
+def request_reload(dbionsdep, authtoken=None, agents: str=None):
     """
     trigger a reload
     """
     hdrs = {}
+    if agents:
+        hdrs['OAR-Client-agents'] = " ".join(agents.split(','))
     if authtoken:
         hdrs['Authorization'] = f"Bearer {authtoken}"
     try: 
@@ -132,7 +139,7 @@ def main(progname, args):
         if opts.trigrurl is None and cfg.get("trigger", {}).get("service_endpoint"):
             opts.trigrurl = cfg.get("trigger", {}).get("service_endpoint")
         if opts.trigrurl:
-            request_reload(opts.trigrurl, cfg.get("trigger", {}).get("auth_token"))
+            request_reload(opts.trigrurl, cfg.get("trigger", {}).get("auth_token"), opts.agents)
 
     except ConfigurationException as ex:
         raise Failure(str(ex)) from ex

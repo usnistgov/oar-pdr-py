@@ -76,6 +76,26 @@ class FMWebDAVClientTest(test.TestCase):
 
         self.assertEqual(fmwd.get_webdav_password("http://mockservice/auth", certpath, keypath), "goober")
 
+    def test_authenticate_with_pw(self):
+        config = {
+            'service_endpoint': 'http://mockservice/api',
+            'authentication': {
+                'client_cert_path': certpath,
+                'client_key_path':  keypath,
+                'user': 'oar_api',
+                'pass': 'goober'
+            }
+        }
+        self.cli = fmwd.FMWebDAVClient(config)
+        self.assertIsNotNone(self.cli.wdcli)
+        self.cli.authenticate()
+        self.assertIsNotNone(self.cli.wdcli)
+        self.assertEqual(self.cli._wdcopts.get('webdav_login'), 'oar_api')
+        self.assertEqual(self.cli._wdcopts.get('webdav_password'), 'goober')
+
+        self.cli.disconnect()
+        self.assertIsNone(self.cli.wdcli)
+
     @patch('requests.post')
     def test_authenticate(self, mock_request):
         mock_resp = Mock()

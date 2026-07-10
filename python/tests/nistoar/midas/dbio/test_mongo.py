@@ -50,7 +50,7 @@ with open(asc_orkeywords, 'r') as file:
     constraint_orkeywords = json.load(file)
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
-class TestInMemoryDBClientFactory(test.TestCase):
+class TestMongoDBClientFactory(test.TestCase):
 
     def setUp(self):
         self.cfg = {"goob": "gurn"}
@@ -82,6 +82,19 @@ class TestInMemoryDBClientFactory(test.TestCase):
 
         with self.assertRaises(ConfigurationException):
             mongo.MongoDBClientFactory(self.cfg)
+
+    def test_check_ready(self):
+        cli = MongoClient(self.fact._dburl)
+        try:
+            self.fact._check_ready(cli)  # returning either True or False is fine
+        finally:
+            cli.close()
+
+    def test_db_is_ready(self):
+        self.assertTrue(self.fact.db_is_ready())
+
+    def test_wait_until_ready(self):
+        self.assertTrue(self.fact.wait_until_ready(timeout=4, rais=False))
 
     def test_create_client(self):
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, "bob")
