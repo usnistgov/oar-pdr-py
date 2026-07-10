@@ -1092,7 +1092,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
             # remove the identity from the ACL
             try:
                 prec.acls.revoke_perm_from(parts[0], parts[1])
-                prec.save()
+                prec.save(dbio.ACLs.ADMIN)
                 return self.send_ok(message="ID removed")
             except dbio.NotAuthorized as ex:
                 return self.send_unauthorized()
