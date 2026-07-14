@@ -319,7 +319,17 @@ class MongoDBClient(base.DBClient):
         except base.DBIOException as ex:
             raise
         except Exception as ex:
-            raise DBIOEception(histrec.get('recid', "id=?")+": Failed to save history entry: "+str(ex)) \
+            raise DBIOEception(histrec.get('id', "id=?")+": Failed to save history entry: "+str(ex)) \
+                from ex
+
+    def _iter_history_for(self, id) -> Iterator[Mapping]:
+        try:
+            coll = self.native[self.HISTORY_COLL]
+            return coll.find({"id": id})
+        except base.DBIOException as ex:
+            raise
+        except Exception as ex:
+            raise DBIOEception(histrec.get('id', "id=?")+": Failed to save history entry: "+str(ex)) \
                 from ex
 
     def client_for(self, projcoll: str, foruser: str = None):

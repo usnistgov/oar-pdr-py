@@ -1,4 +1,4 @@
-import os, json, pdb, logging, tempfile
+import os, json, logging, tempfile
 from pathlib import Path
 import unittest as test
 
@@ -361,17 +361,33 @@ class TestFSBasedDBClient(test.TestCase):
         with self.assertRaises(ValueError):
             self.cli._save_history({'goob': 'gurn'})
 
-        recpath = self.cli._root / "history" / "goob:gurn.json"
+        recpath = self.cli._history_file_for("goob:gurn")
         self.assertFalse(recpath.exists())
-        self.cli._save_history({'recid': 'goob:gurn', 'foo': 'bar'})
-        self.cli._save_history({'recid': 'goob:gurn', 'alice': 'bob'})
+        self.cli._save_history({'id': 'goob:gurn', 'foo': 'bar'})
+        self.cli._save_history({'id': 'goob:gurn', 'alice': 'bob'})
 
         self.assertTrue(recpath.is_file(), "history not saved to file")
         with open(recpath) as fd:
             data = json.load(fd)
         self.assertEqual(len(data), 2)
-        self.assertEqual(data[0], {'recid': 'goob:gurn', 'foo': 'bar'})
-        self.assertEqual(data[1], {'recid': 'goob:gurn', 'alice': 'bob'})
+        self.assertEqual(data[0], {'id': 'goob:gurn', 'foo': 'bar'})
+        self.assertEqual(data[1], {'id': 'goob:gurn', 'alice': 'bob'})
+
+    def test_iter_history_for(self):
+        with self.assertRaises(StopIteration):
+            next(self.cli._iter_history_for('goob:gurn'))
+
+        self.cli._save_history({'id': 'goob:gurn', 'foo': 'bar'})
+        self.cli._save_history({'id': 'goob:gurn', 'alice': 'bob'})
+        it = self.cli._iter_history_for('goob:gurn')
+        hist = next(it)
+        self.assertEqual(hist.get('id'), 'goob:gurn')
+        self.assertEqual(hist.get('foo'), 'bar')
+        hist = next(it)
+        self.assertEqual(hist.get('id'), 'goob:gurn')
+        self.assertEqual(hist.get('alice'), 'bob')
+        with self.assertRaises(StopIteration):
+            next(it)
 
     def test_client_for(self):
         self.assertTrue(isinstance(self.cli, fsbased.FSBasedDBClient))

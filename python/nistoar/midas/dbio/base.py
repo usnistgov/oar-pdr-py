@@ -1464,7 +1464,9 @@ class DBClient(ABC):
     @abstractmethod
     def _select_actions_for(self, id: str) -> List[Mapping]:
         """
-        retrieve all actions currently recorded for the record with the given identifier
+        retrieve all actions currently recorded for the record with the given identifier.  
+        This action list goes back only since the last publication of the record (i.e.,
+        since last call to _close_actionlog_for(id)).  
         """
         raise NotImplementedError()
 
@@ -1505,14 +1507,14 @@ class DBClient(ABC):
         ])
 
         extra = deepcopy(extra) if extra else {}
-        if 'recid' in extra or 'close_action' in extra:
-            if 'recid' in extra:
-                del extra['recid']
+        if 'id' in extra or 'close_action' in extra:
+            if 'id' in extra:
+                del extra['id']
             if 'close_action' in extra:
                 del extra['close_action']
 
         archive = OrderedDict([
-            ("recid", rec.id),
+            ("id", rec.id),
             ("close_action", close_action.type)
         ])
         if close_action.type == Action.PROCESS:
@@ -1530,6 +1532,62 @@ class DBClient(ABC):
         save the given history record to the history collection
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def _iter_history_for(self, id) -> Iterator[Mapping]:
+        """
+        return an iterator the provenance history for each completed iteration of the identified record 
+        (i.e. excluding the current open iteration).  This includes both records that went successfully 
+        to publication and those that were abandoned via deletion.  Each returned element is a dictionary 
+        containing the provenance actions (under the ``history`` property) for one iteration.  The 
+        ``close_action`` property indicates the type of action that closed out its iteration; deleted 
+        iterations will have the type "delete".  If the record has never been published, the iterator 
+        ends immediately.
+        """
+        raise NotImplementedError()
+
+    def get_history_for(self, id, exclude_deleted: bool=False) -> List[Mapping]:
+        """
+        return a list of the provenance histories for all previous iterations of the identified record.
+        Each element is a dictionary containing the provenance actions (under the ``history`` property) 
+        for one iteration.  This method will only return those iterations that the user has permission 
+        to read.  An empty list is returned if no history exists or the current user is not authorized
+        to read any of the histories.
+
+        :param str id:   the record identifier that the history is desired for
+        :param bool exclude_deleted:  if True, only return the successfully published iterations of the 
+                         record.  If False, all iterations, including aborted ones, will be returned.
+        :raises NotAuthorized:   if the user does not have access to any of the history records.  
+        :raises ObjectNotFound:  if the ID does not currently exist _and_ these exists no history for it.
+        """
+        # idents = [self._user_id] + list(self.all_groups_for(self.user_id))
+        whynorec = None
+        try:
+            rec = self.get_record_for(id)   # may raise ObjectNotFound, NotAuthorized
+        except (NotAuthorized, ObjectNotFound) as ex:
+            whynorec = ex
+
+        exists = 0
+        out = []
+        for hist in self._iter_history_for(id):
+            exists += 1
+            if hist.get('close_action', '').startswith('delete'):
+                continue
+            if hist.get('acls'):
+                if not hist.get('id') and hist.get('recid'):
+                    hist['id'] = hist['recid']
+                provrec = ProtectedRecord("__prov", hist, self)
+                if not provrec.authorized(ACLs.READ):
+                    continue
+            out.append(hist)
+
+        if not out and whynorec and (isinstance(whynorec, ObjectNotFound)) is (exists == 0):
+            # either a current iteration is not found and there is no history, or
+            # there is history but user lacks permission to any of them
+            raise whynorec
+
+        return out
+            
 
     @abstractmethod
     def client_for(self, projcoll: str, foruser: str = None):

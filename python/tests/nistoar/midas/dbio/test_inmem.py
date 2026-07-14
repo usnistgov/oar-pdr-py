@@ -1,4 +1,4 @@
-import os, json, pdb, logging,asyncio 
+import os, json, logging, asyncio 
 from pathlib import Path
 import unittest as test
 import websockets
@@ -605,16 +605,44 @@ class TestInMemoryDBClient(test.TestCase):
         with self.assertRaises(ValueError):
             self.cli._save_history({'goob': 'gurn'})
 
-        self.cli._save_history({'recid': 'goob:gurn', 'foo': 'bar'})
-        self.cli._save_history({'recid': 'goob:gurn', 'alice': 'bob'})
+        self.cli._save_history({'id': 'goob:gurn', 'foo': 'bar'})
+        self.cli._save_history({'id': 'goob:gurn', 'alice': 'bob'})
 
         self.assertTrue('history' in self.cli._db)
         self.assertTrue('goob:gurn' in self.cli._db['history'])
         self.assertEqual(len(self.cli._db['history']['goob:gurn']), 2)
         self.assertEqual(self.cli._db['history']['goob:gurn'][0],
-                         {'recid': 'goob:gurn', 'foo': 'bar'})
+                         {'id': 'goob:gurn', 'foo': 'bar'})
         self.assertEqual(self.cli._db['history']['goob:gurn'][1],
-                         {'recid': 'goob:gurn', 'alice': 'bob'})
+                         {'id': 'goob:gurn', 'alice': 'bob'})
+
+    def test_iter_history_for(self):
+        with self.assertRaises(StopIteration):
+            next(self.cli._iter_history_for('goob:gurn'))
+
+        self.cli._save_history({'id': 'goob:gurn', 'foo': 'bar'})
+        self.cli._save_history({'id': 'goob:gurn', 'alice': 'bob'})
+        it = self.cli._iter_history_for('goob:gurn')
+        hist = next(it)
+        self.assertEqual(hist.get('id'), 'goob:gurn')
+        self.assertEqual(hist.get('foo'), 'bar')
+        hist = next(it)
+        self.assertEqual(hist.get('id'), 'goob:gurn')
+        self.assertEqual(hist.get('alice'), 'bob')
+        with self.assertRaises(StopIteration):
+            next(it)
+
+    def test_get_history_for(self):
+        with self.assertRaises(base.ObjectNotFound):
+            self.cli.get_history_for("goob:gurn"), []
+
+        self.cli._save_history({'id': 'goob:gurn', 'foo': 'bar'})
+        self.cli._save_history({'id': 'goob:gurn', 'alice': 'bob'})
+        history = self.cli.get_history_for("goob:gurn")
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0].get('id'), 'goob:gurn')
+        self.assertEqual(history[0].get('foo'), 'bar')
+        self.assertEqual(history[1].get('alice'), 'bob')
 
     def test_record_action(self):
         rec = self.cli.create_record("mine1")

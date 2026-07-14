@@ -193,13 +193,18 @@ class InMemoryDBClient(base.DBClient):
         del self._db[base.PROV_ACT_LOG][id]
 
     def _save_history(self, histrec):
-        if 'recid' not in histrec:
-            raise ValueError("_save_history(): Missing recid property in history data")
+        if 'id' not in histrec:
+            raise ValueError("_save_history(): Missing id property in history data")
         if 'history' not in self._db:
             self._db['history'] = {}
-        if histrec['recid'] not in self._db['history']:
-            self._db['history'][histrec['recid']] = []
-        self._db['history'][histrec['recid']].append(histrec)
+        if histrec['id'] not in self._db['history']:
+            self._db['history'][histrec['id']] = []
+        self._db['history'][histrec['id']].append(histrec)
+
+    def _iter_history_for(self, id) -> List[Mapping]:
+        if id not in self._db.get('history', {}):
+            return iter([])
+        return iter(self._db['history'][id])
 
     def client_for(self, projcoll: str, foruser: str = None):
         """
