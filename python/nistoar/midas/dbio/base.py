@@ -1504,8 +1504,8 @@ class DBClient(ABC):
             ("read", rec.acls._perms.get('read', []))
         ])
 
+        extra = deepcopy(extra) if extra else {}
         if 'recid' in extra or 'close_action' in extra:
-            extra = deepcopy(extra)
             if 'recid' in extra:
                 del extra['recid']
             if 'close_action' in extra:
