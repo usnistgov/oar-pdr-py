@@ -53,7 +53,7 @@ class ExfiltCommand:
         p.description = self.description
 
         p.add_argument("outfile", metavar="OUTFILE", type=str, 
-                       help="write exfiltrated records to OUTFILE; use - to send to standard output")
+                       help="write exfiltrated records to OUTFILE; use '-- -' to send to standard output")
         p.add_argument("dbid", metavar="DBID", type=str, nargs="+",
                        help="the DBIO identifier of a record to export in transfer format")
         p.add_argument("-p", "--pretty", action="store_true", dest="pretty",
@@ -79,7 +79,7 @@ class ExfiltCommand:
         :raise CommandFailure:  if a problem is found in the arguments
         """
         if not args.outfile:
-            raise CommandFailure(args.cmd, "No output file given (use --- - for standard output)", 2)
+            raise CommandFailure(args.cmd, "No output file given (use '-- -' for standard output)", 2)
         if not args.dbid:
             raise CommandFailure(args.cmd, "No identifiers specified", 2)
         
@@ -186,7 +186,7 @@ class ImportCommand:
     an extendable implementation of the import command 
     """
     default_name = "import"
-    help = "exfiltrate one or more records into a transfer format"
+    help = "import one or more records from a transfer-formated file"
 
     def __init__(self, colltype: str, desc: str):
         """
@@ -210,10 +210,14 @@ class ImportCommand:
         p.description = self.description
 
         p.add_argument("infile", metavar="FILE", type=str, 
-                       help="read in the exfiltrated records from FILE; use - to send to read from "
+                       help="read in the exfiltrated records from FILE; use '-- -' to read from "
                             "standard input")
         p.add_argument("dbid", metavar="DBID", type=str, nargs="*",
                        help="limit in the import to the records with an identifier amoung those listed")
+        p.add_argument("--into-shoulder", metavar="PREFIX", type=str, dest="shoulder",
+                       help="reassign new identifiers to all imported records to start with the given "
+                            "shoulder, PREFIX.  The local-portion of each new identifier will be drawn "
+                            "from the normal sequence for that shoulder (not yet implemented).")
 
     def checkConfig(self, args, config):
         """
@@ -230,6 +234,8 @@ class ImportCommand:
 
         :raise CommandFailure:  if a problem is found in the arguments
         """
+        if args.shoulder:
+            raise CommandFailure(args.cmd, "Sorry! --into-shoulder not yet implemented", 2)
         if not args.infile:
             raise CommandFailure(args.cmd, "No input file given (use --- - for standard input)", 2)
         if args.infile != '-' and not os.path.isfile(args.infile):
