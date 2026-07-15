@@ -15,14 +15,13 @@ from collections import OrderedDict
 
 import yaml
 
-
 from nistoar.base.config import ConfigurationException
 from nistoar.midas import MIDASException
 from nistoar.pdr.utils.cli import CommandFailure, explain
 from nistoar.pdr.utils.prov import Agent, Action
 from nistoar.midas.dbio import (FSBasedDBClientFactory, MongoDBClientFactory, InMemoryDBClientFactory,
                                 NotEditable, NotAuthorized, AlreadyExists, ObjectNotFound, ACLs,
-                                status, PUBLIC_GROUP)
+                                status, PUBLIC_GROUP, ProjectRecord)
 from nistoar.midas.cli import get_agent
 
 class ExfiltCommand:
@@ -57,10 +56,10 @@ class ExfiltCommand:
                        help="write exfiltrated records to OUTFILE; use - to send to standard output")
         p.add_argument("dbid", metavar="DBID", type=str, nargs="+",
                        help="the DBIO identifier of a record to export in transfer format")
-        p.add_argument("--exclude-provenance", action="store_true", dest="noprov",
-                       help="exclude the recorded provenance entries for the specified records")
         p.add_argument("-p", "--pretty", action="store_true", dest="pretty",
                        help="make the output 'pretty' by using line-feeds and indentation.")
+        p.add_argument("--exclude-provenance", action="store_true", dest="noprov",
+                       help="exclude the recorded provenance entries for the specified records")
 
         return None
 
@@ -80,7 +79,7 @@ class ExfiltCommand:
         :raise CommandFailure:  if a problem is found in the arguments
         """
         if not args.outfile:
-            raise CommandFailure(args.cmd, "No output file given (use - for standard output)", 2)
+            raise CommandFailure(args.cmd, "No output file given (use --- - for standard output)", 2)
         if not args.dbid:
             raise CommandFailure(args.cmd, "No identifiers specified", 2)
         
@@ -136,6 +135,7 @@ class ExfiltCommand:
         finally:
             if outfd and args.outfile != '-':
                 outfd.close()
+            recsrc['dbclient'].free()
 
     def create_record_source(self, args, config, who, _dbfact=None):
         out = {}
@@ -180,6 +180,144 @@ class ExfiltCommand:
 from yaml.resolver import BaseResolver
 def yaml_represent_OrderedDict(dumper, data):
     return dumper.represent_mapping(BaseResolver.DEFAULT_MAPPING_TAG, data.items())
+
+class ImportCommand:
+    """
+    an extendable implementation of the import command 
+    """
+    default_name = "import"
+    help = "exfiltrate one or more records into a transfer format"
+
+    def __init__(self, colltype: str, desc: str):
+        """
+        create the command for a particular database collection (e.g. dmp, dap)
+        """
+        self.coll = colltype
+        self.description = desc
+
+    def load_into(self, subparser: argparse.ArgumentParser, current_dests: list=None, as_cmd: str=None):
+        """
+        load this command into a CLI by defining the command's arguments and options.
+        :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 
+                                                    interface into it 
+        :param list current_dests:  a list of destination names for parameters that have already been 
+                                    defined
+        :param str as_cmd:  the subcommand name assigned to the action provided by this module
+        :rtype: None
+        """
+        p = subparser
+        p.cmd = as_cmd
+        p.description = self.description
+
+        p.add_argument("infile", metavar="FILE", type=str, 
+                       help="read in the exfiltrated records from FILE; use - to send to read from "
+                            "standard input")
+        p.add_argument("dbid", metavar="DBID", type=str, nargs="*",
+                       help="limit in the import to the records with an identifier amoung those listed")
+
+    def checkConfig(self, args, config):
+        """
+        ensure that the given configuration is sufficient for carrying out this command
+
+        :raise CommandFailure:  if the configuration is insufficient
+        """
+        if not config.get("dbio"):
+            raise CommandFailure(args.cmd, "Missing required configuration parameter: dbio", 8)
+
+    def checkArgs(self, args, config):
+        """
+        ensure that the given command-line arguments are sufficient and correct
+
+        :raise CommandFailure:  if a problem is found in the arguments
+        """
+        if not args.infile:
+            raise CommandFailure(args.cmd, "No input file given (use --- - for standard input)", 2)
+        if args.infile != '-' and not os.path.isfile(args.infile):
+            raise CommandFailure(args.cmd, f"{args.infile}: does not exist as a file", 3)
+
+    def execute(self, args, config: Mapping=None, log: Logger=None, _dbfact=None):
+        """
+        execute this command: load one or more raw DBIO records
+        """
+        if not log:
+            log = logging.getLogger(self.default_name)
+        if not config:
+            config = {}
+
+        if isinstance(args, list):
+            # cmd-line arguments not parsed yet
+            p = argparse.ArgumentParser()
+            load_command(p)
+            args = p.parse_args(args)
+
+        self.checkConfig(args, config)
+        self.checkArgs(args, config)
+
+        # create database connection
+        who = get_agent(args, config)
+        rectgt = self.create_record_target(args, config, who, _dbfact)
+
+        try:
+            if args.infile == "-":
+                infd = sys.stdin
+            else:
+                infd = open(args.infile)
+
+            e = 0
+            m = 0
+            dbcli = rectgt['dbclient']
+            for rec in yaml.safe_load_all(infd):
+                if not rec.get('dbio') or not rec['dbio'].get('id'):
+                    e += 1
+                    if e > 4:
+                        log.error("exfiltrate data appears corrupted/non-compliant; aborting")
+                        raise CommandFailure(args.cmd, "Non-compliant input data", 3)
+                    log.warning("skipping record misisng DBIO record data")
+                    continue
+                if args.dbid and rec['dbio'].get('id') not in args.dbid:
+                    log.debug("skipping %s: id not requested", rec['dbio']['id'])
+                    continue
+                    
+                prec = ProjectRecord(self.coll, rec['dbio'], dbcli)
+                if not prec.authorized(ACLs.WRITE):
+                    log.debug("skipping %s: %s is unauthorized", rec['dbio']['id'], dbcli.user_id)
+                    continue
+                
+                if rec.get('history'):
+                    for hist in rec['history']:
+                        dbcli._save_history(hist)
+
+                if rec.get('prov'):
+                    for action in rec['prov']:
+                        dbcli._save_action_data(action)
+
+                # now save the DBIO record
+                prec.save()
+                m += 1
+
+            if not m:
+                raise CommandFailure(args.cmd, "No matching/permitted records found in input", 1)
+
+        except CommandFailure:
+            raise
+        except Exception as ex:
+            src = args.infile if args.outfile != '-' else "standard input"
+            raise CommandFailure(args.cmd, f"Failed to load records from {src}: {str(ex)}", 1)
+        finally:
+            if args.infile and args.infile != '-':
+                infd.close()
+            rectgt['dbclient'].free()
+
+
+    def create_record_target(self, args, config, who, _dbfact=None):
+        out = {}
+        if not _dbfact:
+            _dbfact = create_DBClientFactory(args, config)
+        out['dbfact'] = _dbfact
+        out['dbclient'] = _dbfact.create_client(self.coll, {}, who)
+        return out
+
+        
         
 def create_DBClientFactory(args, config: Mapping):
     """
