@@ -49,7 +49,7 @@ class InMemoryDBClient(base.DBClient):
 
     def _next_recnum(self, shoulder):
         if shoulder not in self._db['nextnum']:
-            self._db['nextnum'][shoulder] = 0
+            self._db['nextnum'][shoulder] = self._init_nextnum_for(shoulder)
         self._db['nextnum'][shoulder] += 1
         return self._db['nextnum'][shoulder]
 

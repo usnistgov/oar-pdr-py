@@ -34,8 +34,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
             "goob": "gurn",
             "client_notifier": { "service_endpoint": "ws://localhost/" }
         }
-        self.fact = inmem.InMemoryDBClientFactory(
-            self.cfg, {"nextnum": {"hank": 2}})
+        self.fact = inmem.InMemoryDBClientFactory(self.cfg, {"nextnum": {"hank": 2}})
 
     def test_ctor(self):
         self.assertEqual(self.fact._cfg, self.cfg)
@@ -73,6 +72,9 @@ class TestInMemoryDBClient(test.TestCase):
                 "default_shoulder": {
                     "public": "pdr0"
                 }
+            },
+            "id_mint_start": {
+                "pdr0": 6
             }
         }
         self.user = "nist0:ava1"
@@ -646,9 +648,9 @@ class TestInMemoryDBClient(test.TestCase):
 
     def test_record_action(self):
         rec = self.cli.create_record("mine1")
-        self.cli.record_action(Action(Action.CREATE, "pdr0:0001", testuser, "created"))
-        self.cli.record_action(Action(Action.COMMENT, "pdr0:0001", testuser, "i'm hungry"))
-        acts = self.cli._select_actions_for("pdr0:0001")
+        self.cli.record_action(Action(Action.CREATE, "pdr0:0006", testuser, "created"))
+        self.cli.record_action(Action(Action.COMMENT, "pdr0:0006", testuser, "i'm hungry"))
+        acts = self.cli._select_actions_for("pdr0:0006")
         self.assertEqual(len(acts), 2)
         self.assertEqual(acts[0]['type'], Action.CREATE)
         self.assertEqual(acts[1]['type'], Action.COMMENT)

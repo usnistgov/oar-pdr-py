@@ -32,7 +32,7 @@ class TestFSBasedDBClient(test.TestCase):
 
     def setUp(self):
         self.outdir = tempfile.TemporaryDirectory(prefix="_test_dbclient.", dir=".")
-        self.cfg = {}
+        self.cfg = { "id_mint_start": { "fred": 3 } }
         self.user = "nist0:ava1"
         self.cli = fsbased.FSBasedDBClient(self.outdir.name, self.cfg, base.DMP_PROJECTS, self.user)
     
@@ -73,6 +73,7 @@ class TestFSBasedDBClient(test.TestCase):
         self.assertEqual(self.cli._read_rec(base.DMP_PROJECTS, rec["id"]), rec)
 
     def test_next_recnum(self):
+        self.assertEqual(self.cli._next_recnum("fred"), 3)
         self.assertEqual(self.cli._next_recnum("goob"), 1)
         self.assertEqual(self.cli._next_recnum("goob"), 2)
         self.assertEqual(self.cli._next_recnum("goob"), 3)

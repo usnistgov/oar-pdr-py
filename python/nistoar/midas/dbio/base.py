@@ -1131,8 +1131,14 @@ class DBClient(ABC):
             raise NotAuthorized(str(self._who), f"create a record under the {shoulder}")
 
         locid = localid
-        if not locid:
-            locid = "{0:04}".format(self._next_recnum(shoulder))
+        i = 0
+        while not locid:
+            i += 1
+            if i > 2000:
+                raise DBIOException("Possible system error: unable to mint new localid after 2000 tries")
+            _locid = "{0:04}".format(self._next_recnum(shoulder))
+            if not self.exists(f"{shoulder}:{locid}"):
+                locid = _locid
         out = f"{shoulder}:{locid}"
 
         if localid:
@@ -1194,6 +1200,20 @@ class DBClient(ABC):
         :param str shoulder:  the shoulder that the record number will be combined with
         """
         raise NotImplementedError()
+
+    def _init_nextnum_for(self, shoulder):
+        """
+        return a number representing the last reserved record number.  This can be called by 
+        _next_recnum when such a number has not yet been recorded for the given shoulder.  This 
+        number can be set via the ``id_mint_start`` parameter (which provides the first available
+        number--i.e., one more than what this function returns).  If not so configured, 0 is returned.
+        """
+        seqcfg = self._cfg.get("id_mint_start")
+        if isinstance(seqcfg, int):
+            return seqcfg - 1
+        if isinstance(seqcfg, Mapping) and isinstance(seqcfg.get(shoulder), int):
+            return seqcfg[shoulder] - 1
+        return 0
 
     def _new_record_data(self, id):
         """

@@ -58,7 +58,7 @@ class FSBasedDBClient(base.DBClient):
     def _next_recnum(self, shoulder):
         num = self._read_rec("nextnum", shoulder)
         if num is None:
-            num = 0
+            num = self._init_nextnum_for(shoulder)
         num += 1
         self._write_rec("nextnum", shoulder, num)
         return num

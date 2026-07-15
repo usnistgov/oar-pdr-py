@@ -116,7 +116,7 @@ class MongoDBClient(base.DBClient):
             if coll.count_documents(key) == 0:
                 coll.insert_one({
                     "slot": shoulder,
-                    "next": 1
+                    "next": self._init_nextnum_for(shoulder) + 1
                 })
 
             result = coll.find_one_and_update(key, {"$inc": {"next": 1}})
