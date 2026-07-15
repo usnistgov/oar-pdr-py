@@ -251,7 +251,7 @@ class MongoPeopleService(PeopleService):
 
         if not os.path.exists(pfile) and not os.path.exists(ofile):
             if log:
-                log.warndng("input people data files not found: aborting load.")
+                log.warning("input people data files not found: aborting load.")
             return
         if log:
             log.info("Updating the People database")
