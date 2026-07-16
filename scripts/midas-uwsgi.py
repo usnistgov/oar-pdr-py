@@ -148,6 +148,7 @@ if dbtype == "fsbased":
 
 elif dbtype == "mongo":
     factory = MongoDBClientFactory(cfg.get("dbio", {}), dburl)
+    factory.wait_until_ready()  # timeout defaults to 10s (TODO: get from config?)
 
 elif dbtype == "inmem":
     factory = InMemoryDBClientFactory(cfg.get("dbio", {}))
@@ -163,7 +164,7 @@ application = wsgi.app(cfg, factory)
 if nsdcfg:
     try:
         application.load_people_from()
-    except ConfigurationException as ex:
+    except config.ConfigurationException as ex:
         logging.warning("Unable to initialize NSD database: %s", str(ex))
 
 msg = f"MIDAS service (v{nistoar.midas.__version__}) ready with {dbtype} backend"

@@ -31,8 +31,8 @@ from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, No
                      InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable, DBIORecordException,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
 from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
-                                  ProjectSelectionHandler, ServiceApp)
-from ...dbio import status, ANONYMOUS, restore
+                                  ProjectSelectionHandler, ProjectStatusHandler, ServiceApp)
+from ...dbio import status, ANONYMOUS, PUBLIC_GROUP, restore
 from ..review import DAPReviewer, DAPNERDmReviewValidator
 from ..extrev import ExternalReviewException, create_external_review_client
 from nistoar.base.config import ConfigurationException, merge_config
@@ -313,6 +313,9 @@ class DAPService(ProjectService):
         self._mediatypes = None
         self._formatbyext = None
         self._extrevcli = extrevcli
+        if self._extrevcli and not getattr(self._extrevcli, 'people_service', None) and \
+           self.dbcli.people_service:
+            self._extrevcli.people_service = self.dbcli.people_service
 
         self._minnerdmver = minnerdmver
 
@@ -2706,26 +2709,40 @@ class DAPService(ProjectService):
         statusdata = super().submit(id, message, options, _prec)
 
         # We save actually sumbitting to the external review framework until after all our "paperwork"
-        # that is is part of submission is completed.  This avoids a run condition if the framework
+        # that is is part of submission is completed.  This avoids a race condition if the framework
         # responds quickly.
         if options.get('do_review') and not self._extrevcli:
+            # Sorry, we can't start an external review if we don't have a client to its service
+            # We just can't.  We won't.
             options['do_review'] = False
         if self._extrevcli and options.get('do_review'):
             # refresh the record
             _prec = self.dbcli.get_record_for(id, ACLs.ADMIN)
             version = _prec.data.get('version') or _prec.data.get('@version') or '1.0.0'
             try:
-                options["title"] = _prec.data.get("title")
-                options["description"] = "\n\n".join(_prec.data.get("description", []))
+                revopts = dict((k,v) for k,v in options.items()
+                                     if k in ["instructions", "changes", "reviewers", "security_review"])
+                revopts["title"] = _prec.data.get("title")
+                revopts["description"] = "\n\n".join(_prec.data.get("description", []))
                 if _prec.meta.get("software_included"):
-                    options["security_review"] = True
-                self._extrevcli.submit(_prec.id, self.who.actor, version, **options)
+                    revopts["security_review"] = True
+                if ':' in _prec.id:
+                    revopts["pubid"] = "ark:/" + const.ARK_NAAN + '/' + re.sub(r':', '-', _prec.id)
+
+                # determine if we need to resubmit for a review already in progress
+                rev = _prec.status.get_review_from(self._extrevcli.system_name)
+                if not rev or rev.get('phase') not in ['requested', 'canceled']:
+                    # review not started
+                    self._extrevcli.submit(_prec.id, self.who.actor, version, **revopts)
+                elif rev.get('phase') == 'paused':
+                    # reviewer requested changes
+                    self._extrevcli.resubmit(_prec.id, **revopts)
 
                 # refresh, in case the record has changed
                 _prec = self.dbcli.get_record_for(id, ACLs.READ)
 
             except ExternalReviewException as ex:
-                message = "Failed to submit to external review system: %s", str(ex)
+                message = "Failed to submit to external review system: " + str(ex)
                 self.log.error(message)
                 # possibly notify
                 _prec.status.set_state(status.UNWELL)
@@ -2733,7 +2750,7 @@ class DAPService(ProjectService):
                 self._try_save(_prec)
 
             except Exception as ex:
-                message = "Unexpected trouble submitting for review: %s", str(ex)
+                message = "Unexpected trouble submitting for review: " + str(ex)
                 self.log.exception(message)
                 # possibly notify
                 _prec.status.set_state(status.UNWELL)
@@ -2771,6 +2788,8 @@ class DAPService(ProjectService):
         """
         if not self._extrevcli:
             self.log.warning("No External Review system configured to handle DAP records!")
+        if options is None:
+            options = {}
 
         version = prec.data.get('version') or prec.data.get('@version') or '1.0.0'
         needreview = version == '1.0.0'
@@ -2793,9 +2812,17 @@ class DAPService(ProjectService):
             options['do_review'] = False
             return status.ACCEPTED
 
+        if self._extrevcli and options['do_review'] and self._extrevcli.system_name in [ "nps1" ]:
+            # is the author responding to feedback from reviewers?
+            rev = prec.status.get_review_from(self._extrevcli.system_name)
+            if not rev:
+                # mark review as requested as the legacy NPS will not respond immediately
+                # need to do this before changing permissions
+                self.apply_external_review(prec.id, self._extrevcli.system_name, "requested", _prec=prec)
+
         try:
             # reset permissions
-            self._set_review_permissions(prec)
+            self._set_review_permissions(prec, PUBLIC_GROUP)  # TODO: confine to assigned reviewers
             # don't save until submission process is complete
 
         except FileManagerException as ex:
@@ -2818,17 +2845,22 @@ class DAPService(ProjectService):
         to shepherd the record through the review process.  Write access is revoked for users 
         that currently have it (saving who that is to an "_write" permission).  Curators and 
         reviewers will be given read access.
+
+        :param list[str] readers:  a list of user ids that should be given read access (can be 
+                                   None or an empty list)
         """
         if readers is None:
             readers = []
+        elif isinstance(readers, str):
+            readers = [readers]
 
         # record away who has write access
-        for perm in [ ACLs.WRITE, ACLs.DELETE, ACLs.ADMIN, ACLs.READ ]:
-            if prec.status.state == status.EDIT or prec.status.state == status.READY or \
-               len(list(prec.acls.iter_perm_granted("_"+perm))) == 0:
-                who = list(prec.acls.iter_perm_granted(perm))
-                prec.acls.revoke_perm_from_all("_"+perm)
-                prec.acls.grant_perm_to("_"+perm, *who)
+        if len(list(prec.acls.iter_perm_granted(ACLs.PUBLISH))) == 0:
+            # a publishing/reviewing process is not currently engaged
+            for perm in [ ACLs.WRITE, ACLs.DELETE, ACLs.ADMIN, ACLs.READ ]:
+                if len(list(prec.acls.iter_perm_granted("_"+perm))) == 0:
+                    who = list(prec.acls.iter_perm_granted(perm))
+                    prec.acls.grant_perm_to("_"+perm, *who)
 
         # revoke update permissions in the file manager
         if self._fmcli:
@@ -2841,7 +2873,7 @@ class DAPService(ProjectService):
         # revoke permissions that can change the record
         prec.acls.revoke_perm_from_all(ACLs.WRITE)
         prec.acls.revoke_perm_from_all(ACLs.DELETE)
-        prec.acls.revoke_perm_from_all(ACLs.ADMIN)
+        prec.acls.revoke_perm_from_all(ACLs.ADMIN, False)
 
         # give PUBLISH permission to reviewer IDs
         if self.cfg.get("reviewer_ids"):
@@ -2863,12 +2895,17 @@ class DAPService(ProjectService):
                                  fully reset to the permissions as if going either to a published 
                                  state or a complete edit state (because publishing was canceled).
         """
-        for perm in [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]:
-            who = list(prec.acls.iter_perm_granted("_"+perm))
-            prec.acls.revoke_perm_from_all(perm)               # take out the reviewers
-            prec.acls.grant_perm_to(perm, *who)                # restore the original editors
-            if not for_review:
-                prec.acls.revoke_perm_from_all("_"+perm)
+        if for_review:
+            # just give original writers their write permission
+            who = list(prec.acls.iter_perm_granted("_"+ACLs.WRITE))
+            prec.acls.grant_perm_to(ACLs.WRITE, *who, _need_perm=ACLs.PUBLISH)
+
+        else:
+            for perm in [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]:
+                who = list(prec.acls.iter_perm_granted("_"+perm))
+                prec.acls.revoke_perm_from_all(perm, _need_perm=ACLs.PUBLISH)  # take out the reviewers
+                prec.acls.grant_perm_to(perm, *who, _need_perm=ACLs.PUBLISH)   # restore the original editors
+                prec.acls.revoke_perm_from_all("_"+perm, _need_perm=ACLs.PUBLISH)
 
         # revoke update permissions in the file manager
         if self._fmcli:
@@ -2888,6 +2925,7 @@ class DAPService(ProjectService):
         canceling all reviews are either canceled or completed but is still in a SUBMITTED state, the 
         record will be returned to the EDIT state.  
         """
+        self.log.debug("%s: Canceling %s review", id, revsys)
         prec = super().cancel_external_review(id, revsys, revid, infourl) # m.r ObjectNotFound/NotAuthorized
         if prec.status.state == status.SUBMITTED:
             # change a SUBMITTED record back to full edit status (as if never submitted)
@@ -3288,3 +3326,20 @@ class DAPProjectSelectionHandler(ProjectSelectionHandler):
         for rec in self._dbcli.select_constraint_records(filter, perms):
             yield to_DAPRec(rec, self._fmcli)
 
+class DAPProjectStatusHandler(ProjectStatusHandler):
+    """
+    handle status requests and actions.  This provides some special handling of external review 
+    status access
+    """
+
+    def external_review_status(self, prjstatus, revname=None):
+
+        # If nps1, ask NPS to refresh the status 
+        if revname == "nps1" and self.svc.extrevcli and \
+           self.svc.extrevcli.system_name == "nps1" and self.svc.extrevcli.refresh_status():
+            prjstatus = self.svc.get_status(self._id)
+            
+        return super().external_review_status(prjstatus, revname)
+
+                
+            

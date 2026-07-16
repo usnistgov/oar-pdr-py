@@ -34,11 +34,7 @@ from nistoar.midas.dbio import ACLs, DBClientFactory, ANONYMOUS
 from nistoar.midas.dbio.base import Group, DBGroups, DEF_GROUPS_SHOULDER
 
 import logging
-
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
-
 
 class GroupService:
     """

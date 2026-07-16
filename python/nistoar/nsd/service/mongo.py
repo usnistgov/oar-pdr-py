@@ -245,23 +245,45 @@ class MongoPeopleService(PeopleService):
     def _load_notrans(self, datadir, personfile, orgfile, log, clear):
         people = self._db.People
         orgs = self._db.Orgs
-        
-        if clear:
-            people.delete_many({})
-            orgs.delete_many({})
 
-        self._load_file(people, personfile, datadir, log)
-        self._load_file(orgs, orgfile, datadir, log)
+        pfile = os.path.join(datadir, personfile)
+        ofile = os.path.join(datadir, orgfile)
+
+        if not os.path.exists(pfile) and not os.path.exists(ofile):
+            if log:
+                log.warnding("input people data files not found: aborting load.")
+            return
+        if log:
+            log.info("Updating the People database")
+        
+        if os.path.exists(pfile):
+            if clear:
+                people.delete_many({})
+            self._load_file(people, personfile, datadir, log)
+        if os.path.exists(ofile):
+            if clear:
+                orgs.delete_many({})
+            self._load_file(orgs, orgfile, datadir, log)
 
     def _load_withtrans(self, datadir, personfile, orgfile, log, clear):
 
+        pfile = os.path.join(datadir, personfile)
+        ofile = os.path.join(datadir, orgfile)
+
+        if not os.path.exists(pfile) and not os.path.exists(ofile):
+            if log:
+                log.warnding("input people data files not found: aborting load.")
+            return
+        
         def _loadit(session):
             people = session.client[self._db.name].People
             orgs   = session.client[self._db.name].Orgs
 
             if clear:
-                people.delete_many({}, session=session)
-                orgs.delete_many({}, session=session)
+                if os.path.exists(pfile):
+                    people.delete_many({}, session=session)
+                if os.path.exists(ofile):
+                    orgs.delete_many({}, session=session)
 
             self._load_file(people, personfile, datadir, log, session)
             self._load_file(orgs, orgfile, datadir, log, session)
@@ -272,6 +294,8 @@ class MongoPeopleService(PeopleService):
     def _load_file(self, mongocoll, file, dir='.', log=None, session=None):
         try:
             datafile = os.path.join(dir, file)
+            if log:
+                log.debug("Loading data from %s", datafile)
             with open(datafile) as fd:
                 data = json.load(fd)
             mongocoll.insert_many(data, session=session)

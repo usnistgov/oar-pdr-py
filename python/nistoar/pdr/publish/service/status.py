@@ -410,7 +410,10 @@ class SIPStatus(object):
         Set the starting time to now and change the state to PROCESSING.  
 
         :param str siptype:  the label for the SIP convention being applied
-        :param str agroup:   the name of the agent group that is starting the SIP
+        :param str agroup:   the name of the agent group that is starting the SIP.  This group
+                             (if provided) will be passed to :py:meth:`add_authorized_group`
+                             to restrict which agents can follow up on the SIP (see also 
+                             :py:meth:`any_authorized`).
         :param message str:  an optional message for display to the end user
                              explaining this state.  If not provided, a default
                              explanation is set. 

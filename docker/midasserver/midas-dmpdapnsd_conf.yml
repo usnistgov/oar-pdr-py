@@ -52,6 +52,8 @@ services:
             nerdstorage:
               type: fsbased
               store_dir: /data/midas/nerdm
+            external_review:
+              name: sim
 
    dmp: 
       about: 

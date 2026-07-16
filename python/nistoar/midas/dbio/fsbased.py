@@ -283,7 +283,7 @@ class FSBasedDBClientFactory(base.DBClientFactory):
         """
         super(FSBasedDBClientFactory, self).__init__(config)
         if not dbroot:
-            dbroot = self.cfg.get("db_root_dir")
+            dbroot = self._cfg.get("db_root_dir")
             if not dbroot:
                 raise ConfigurationException("Missing required configuration parameter: db_root_dir")
         if not os.path.isdir(dbroot):

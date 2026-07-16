@@ -22,7 +22,7 @@ class PDRWarning(OARWarning):
             msg = "Unspecified Warning"
         super(PDRWarning, self).__init__(msg, cause, pdrsys)
 
-class PDRException(Exception):
+class PDRException(OARException):
     """
     a base class for exceptions occuring in the PDR system
     """
