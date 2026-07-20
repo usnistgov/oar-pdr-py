@@ -1070,12 +1070,15 @@ class DBClient(ABC):
         if not person:
             return []
         out = []
-        if 'nistou' in person and person['nistou']:
-            out.append(f"nistou:{person['nistou']}")
-        if 'nistdiv' in person and person['nistdiv']:
-            out.append(f"nistdiv:{person['nistdiv']}")
-        if 'nistgrp' in person and person['nistgrp']:
-            out.append(f"nistgrp:{person['nistgrp']}")
+        ou_number = person.get('ouNumber')
+        if ou_number:
+            out.append(f"nistou:{ou_number}")
+        division_number = person.get('divisionNumber')
+        if division_number:
+            out.append(f"nistdiv:{division_number}")
+        group_number = person.get('groupNumber')
+        if group_number:
+            out.append(f"nistgrp:{group_number}")
         return out
 
     def create_record(self, name: str, shoulder: str = None,
