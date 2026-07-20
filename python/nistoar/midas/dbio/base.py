@@ -1262,7 +1262,7 @@ class DBClient(ABC):
 
     @classmethod
     def check_query_structure(cls, query):
-        if not isinstance(query, dict):
+        if not isinstance(query, dict) or not query:
             return False
 
         valid_operators = ['$and', '$or', '$not', '$nor', '$eq', '$ne', '$gt', '$gte', '$lt',
@@ -1274,10 +1274,10 @@ class DBClient(ABC):
                 return False
 
             if isinstance(query[key], dict):
-                if not check_query_structure(query[key]):
+                if not cls.check_query_structure(query[key]):
                     return False
 
-            return True
+        return True
 
     @abstractmethod
     def select_records(self, perm: Permissions = ACLs.OWN, **constraints) -> Iterator[ProjectRecord]:
