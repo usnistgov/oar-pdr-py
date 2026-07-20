@@ -20,6 +20,21 @@ paths:
     summary: the collection of all groups for this version shoulder (e.g. grp0)
     parameters:
       - $ref: "#/components/parameters/version"
+    get:
+      summary: list all groups the caller owns or belongs to
+      responses:
+        "200":
+          description: list of groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GroupRecord"
+        "401":
+          description: unauthenticated
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } }
     post:
       summary: create a new group
       requestBody:
