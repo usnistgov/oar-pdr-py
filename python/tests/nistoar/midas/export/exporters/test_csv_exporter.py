@@ -131,6 +131,40 @@ class TestCSVExporter(unittest.TestCase):
         unknown_data = [{'id': 'unknown-test'}]
         self.assertEqual(self.exporter._detect_record_type(unknown_data), 'dmp')
 
+    def test_dmp_csv_new_fields(self):
+        record = {
+            'id': 'mdm1-test-fields',
+            'name': 'Test DMP',
+            'owner': 'testuser',
+            'status': {},
+            'meta': {},
+            'data': {
+                'dataSizeDescription': 'Annual',
+                'pathsURLs': [' /data/project ', ' https://example.com/data '],
+            }
+        }
+        result = self.exporter.render_json(record, 'test')
+        text = result['text']
+        self.assertIn('DataSizeFrequency', text)
+        self.assertIn('Annual', text)
+        self.assertIn('DataFilePaths', text)
+        self.assertIn('/data/project; https://example.com/data', text)
+
+    def test_dmp_csv_empty_size_description_shows_not_provided(self):
+        record = {
+            'id': 'mdm1-test-empty',
+            'name': 'Test DMP',
+            'owner': 'testuser',
+            'status': {},
+            'meta': {},
+            'data': {'dataSizeDescription': ''}
+        }
+        result = self.exporter.render_json(record, 'test')
+        # empty string must not silently pass through as a blank cell
+        rows = list(result['text'].splitlines())
+        data_row = rows[1]
+        self.assertIn('Not Provided', data_row)
+
 
 if __name__ == '__main__':
     unittest.main()
