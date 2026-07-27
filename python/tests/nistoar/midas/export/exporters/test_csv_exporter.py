@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch, MagicMock
-import tempfile
-import os
+import csv
+import io
+from pathlib import Path
 from nistoar.midas.export.exporters.csv_exporter import CSVExporter
 
 
@@ -30,106 +31,90 @@ class TestCSVExporter(unittest.TestCase):
         ]
         self.exporter = CSVExporter()
 
-    @patch('nistoar.midas.export.exporters.csv_exporter.preppy')
-    def test_render_csv_with_template(self, mock_preppy):
-        # Mock preppy module
-        mock_template = MagicMock()
-        mock_template.getOutput.return_value = "Name,ID,Type\nTest DMP 1,mdm1-test1,dmp\n"
-        mock_preppy.getModule.return_value = mock_template
+    def csv_rows(self, text):
+        return list(csv.reader(io.StringIO(text)))
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.prep', delete=False) as tmp_file:
-            tmp_file.write("test template")
-            template_path = tmp_file.name
-
-        try:
-            result = self.exporter.render(self.test_data, template_path)
-
-            self.assertIsInstance(result, dict)
-            self.assertEqual(result['format'], 'csv')
-            self.assertIn('text', result)
-            self.assertEqual(result['mimetype'], 'text/csv')
-            self.assertEqual(result['file_extension'], '.csv')
-            self.assertIn('Name,ID,Type', result['text'])
-
-            # Verify preppy was called correctly
-            mock_preppy.getModule.assert_called_once_with(template_path)
-            mock_template.getOutput.assert_called_once()
-
-        finally:
-            os.unlink(template_path)
-
-    @patch('nistoar.midas.export.exporters.csv_exporter.preppy')
-    def test_render_csv_without_template_dmp(self, mock_preppy):
-        # Mock preppy for default DMP template
-        mock_template = MagicMock()
-        mock_template.getOutput.return_value = "Name,ID,Type\nTest DMP 1,mdm1-test1,dmp\n"
-        mock_preppy.getModule.return_value = mock_template
-
-        result = self.exporter.render(self.test_data)
-
+    def test_render_csv_without_template_dmp(self):
+        result = self.exporter.render("json", self.test_data, "test-dmp")
         self.assertIsInstance(result, dict)
         self.assertEqual(result['format'], 'csv')
+        self.assertEqual(result['filename'], 'test-dmp.csv')
         self.assertIn('text', result)
         self.assertEqual(result['mimetype'], 'text/csv')
-        
-        # Should use default DMP template
-        mock_preppy.getModule.assert_called_once()
-        call_args = mock_preppy.getModule.call_args[0][0]
-        self.assertIn('dmp_csv_template.prep', call_args)
 
-    @patch('nistoar.midas.export.exporters.csv_exporter.preppy')
-    def test_render_csv_without_template_dap(self, mock_preppy):
-        # Modify test data for DAP type
-        dap_data = self.test_data.copy()
-        dap_data[0]['id'] = 'mds3-test1'
-        dap_data[0]['type'] = 'dap'
+        rows = self.csv_rows(result['text'])
+        self.assertEqual(rows[0][:3], ['Name', 'ID', 'Type'])
+        self.assertEqual(rows[1][0], 'Test DMP 1')
+        self.assertEqual(rows[1][1], 'mdm1-test1')
+        self.assertEqual(rows[1][2], 'DMP')
 
+    def test_render_csv_with_report_template(self):
         mock_template = MagicMock()
-        mock_template.getOutput.return_value = "Name,ID,Type\nTest DAP 1,mds3-test1,dap\n"
-        mock_preppy.getModule.return_value = mock_template
+        mock_template.get.return_value = "Name,ID,Type\nTest DMP 1,mdm1-test1,dmp\n"
+        template_path = Path("/tmp/export_report_csv_template.prep")
 
-        result = self.exporter.render(dap_data)
+        with patch.object(self.exporter, 'resolve_template_path', return_value=template_path), \
+             patch('nistoar.midas.export.exporters.csv_exporter.preppy.getModule',
+                   return_value=mock_template) as mock_get_module:
+            result = self.exporter.render(
+                "json", self.test_data[0], "test-report", "export_report_csv_template.prep")
 
         self.assertIsInstance(result, dict)
         self.assertEqual(result['format'], 'csv')
-        
-        # Should use DAP template
-        mock_preppy.getModule.assert_called_once()
-        call_args = mock_preppy.getModule.call_args[0][0]
-        self.assertIn('dap_csv_template.prep', call_args)
+        self.assertEqual(result['filename'], 'test-report.csv')
+        self.assertEqual(result['text'], "Name,ID,Type\nTest DMP 1,mdm1-test1,dmp\n")
+        mock_get_module.assert_called_once_with(str(template_path))
+        mock_template.get.assert_called_once_with(self.test_data[0]['data'])
 
-    @patch('nistoar.midas.export.exporters.csv_exporter.preppy')
-    def test_render_csv_with_error(self, mock_preppy):
-        # Mock preppy to raise an exception
-        mock_preppy.getModule.side_effect = Exception("Template not found")
+    def test_render_csv_without_template_dap(self):
+        dap_data = [dict(self.test_data[0])]
+        dap_data[0]['id'] = 'mds3-test1'
+        dap_data[0]['type'] = 'dap'
+        dap_data[0]['data'] = {
+            'title': 'Test DAP 1',
+            'doi': 'doi:10.18434/mds3-test1',
+            'contactPoint': {'fn': 'Jane Smith', 'hasEmail': 'jane.smith@nist.gov'},
+            'keywords': ['test', 'data']
+        }
 
-        with self.assertRaises(Exception) as context:
-            self.exporter.render(self.test_data)
+        result = self.exporter.render("json", dap_data, "test-dap")
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['format'], 'csv')
+
+        rows = self.csv_rows(result['text'])
+        self.assertEqual(rows[0][:3], ['Name', 'ID', 'Type'])
+        self.assertEqual(rows[0][10], 'DOI')
+        self.assertEqual(rows[1][1], 'mds3-test1')
+        self.assertEqual(rows[1][2], 'DAP')
+
+    def test_render_csv_with_error(self):
+        with patch.object(self.exporter, 'resolve_template_path',
+                          return_value=Path("/tmp/export_report_csv_template.prep")), \
+             patch('nistoar.midas.export.exporters.csv_exporter.preppy.getModule',
+                   side_effect=Exception("Template not found")):
+            with self.assertRaises(Exception) as context:
+                self.exporter.render(
+                    "json", self.test_data[0], "test-report", "export_report_csv_template.prep")
 
         self.assertIn("Template not found", str(context.exception))
 
+    def test_render_rejects_unsupported_input_type(self):
+        with self.assertRaises(TypeError) as context:
+            self.exporter.render("xml", self.test_data, "test")
+        self.assertIn("unsupported payload type", str(context.exception))
+
     def test_render_empty_data(self):
-        with patch('nistoar.midas.export.exporters.csv_exporter.preppy') as mock_preppy:
-            mock_template = MagicMock()
-            mock_template.getOutput.return_value = "Name,ID,Type\n"
-            mock_preppy.getModule.return_value = mock_template
+        with self.assertRaises(TypeError) as context:
+            self.exporter.render("json", [], "empty")
+        self.assertIn("CSVExporter expects", str(context.exception))
 
-            result = self.exporter.render([])
+    def test_render_unknown_record_id_defaults_to_dmp(self):
+        unknown_data = [dict(self.test_data[0])]
+        unknown_data[0]['id'] = 'unknown-test'
 
-            self.assertIsInstance(result, dict)
-            self.assertEqual(result['format'], 'csv')
-            self.assertEqual(result['text'], "Name,ID,Type\n")
-
-    def test_detect_record_type_dmp(self):
-        self.assertEqual(self.exporter._detect_record_type(self.test_data), 'dmp')
-
-    def test_detect_record_type_dap(self):
-        dap_data = [{'id': 'mds3-test', 'type': 'dap'}]
-        self.assertEqual(self.exporter._detect_record_type(dap_data), 'dap')
-
-    def test_detect_record_type_default(self):
-        unknown_data = [{'id': 'unknown-test'}]
-        self.assertEqual(self.exporter._detect_record_type(unknown_data), 'dmp')
+        result = self.exporter.render("json", unknown_data, "test-default")
+        rows = self.csv_rows(result['text'])
+        self.assertEqual(rows[1][2], 'DMP')
 
     def test_dmp_csv_new_fields(self):
         record = {
