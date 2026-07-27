@@ -688,7 +688,7 @@ class DBGroups(object):
     def native(self):
         return self._cli._native
 
-    def create_group(self, name: str, foruser: str = None):
+    def create_group(self, name: str, foruser: str = None, shoulder: str = None):
         """
         create a new group for the given user.
         :param str name:     the name of the group to create
@@ -697,6 +697,8 @@ class DBGroups(object):
                              underlying :py:class:`DBClient` will be used.  Only a superuser (an identity
                              listed in the `superuser` config parameter) can create a group for another
                              user.
+        :param str shoulder: the shoulder to use for the new group identifier.  If not provided, the
+                             DBGroups default shoulder will be used.
         :raises AlreadyExists:  if the user has already defined a group with this name
         :raises NotAuthorized:  if the user is not authorized to create this group
         """
@@ -712,7 +714,7 @@ class DBGroups(object):
             foruser = self._cli.user_id
 
         out = Group({
-            "id": self._mint_id(self._shldr, name, foruser),   # may raise NotAuthorized
+            "id": self._mint_id(shoulder or self._shldr, name, foruser),   # may raise NotAuthorized
             "name": name,
             "owner": foruser,
             "members": [foruser],
@@ -821,16 +823,24 @@ class DBGroups(object):
 
         return out
 
-    def select_for_user(self, user_id: str) -> Iterator[Group]:
+    def _matches_shoulder(self, rec: Mapping, shoulder: str = None) -> bool:
+        if not shoulder:
+            return True
+        return rec.get('id', '').split(':', 1)[0] == shoulder
+
+    def select_for_user(self, user_id: str, shoulder: str = None) -> Iterator[Group]:
         """
         return all groups the user owns or is a direct member of.
+        :param str shoulder: if provided, only return groups with this identifier shoulder.
         """
         seen = set()
         for rec in self._cli._select_from_coll(GROUPS_COLL, owner=user_id):
+            if not self._matches_shoulder(rec, shoulder):
+                continue
             seen.add(rec['id'])
             yield Group(rec, self._cli)
         for rec in self._cli._select_prop_contains(GROUPS_COLL, 'members', user_id):
-            if rec['id'] not in seen:
+            if rec['id'] not in seen and self._matches_shoulder(rec, shoulder):
                 seen.add(rec['id'])
                 yield Group(rec, self._cli)
 
