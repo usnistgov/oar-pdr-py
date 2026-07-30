@@ -25,6 +25,7 @@ from webdav3.exceptions import WebDavException
 
 from .clients import NextcloudApi, FMWebDAVClient
 from .exceptions import *
+from .windows_permissions import WindowsPermissionsIntegration
 from nistoar.base.config import merge_config, ConfigurationException
 from nistoar.pdr.utils import read_json, write_json
 from nistoar.pdr import def_etc_dir
@@ -75,6 +76,11 @@ class MIDASFileManagerService:
         (str) _optional_.  the path to a X.509 CA certificate bundle used to verify the nextcloud 
         server's site certificate.  This is needed only if the required CA certs are not installed 
         into the OS.  If provided, this parameter will be passed is as a default for the API clients.
+    ``windows_permissions``
+        (dict) _required_.  configuration for the Windows Permissions Manager batch-file integration.
+        ``batch_file_path`` and ``windows_target_root`` are required.  The recommended batch path is
+        ``/oar/data/nextcloud/winperm/permissions_batch.txt``; this Linux/container append path is
+        distinct from the Windows-visible target root used in emitted commands.
     """
 
     def __init__(self, config: Mapping, log: Logger=None,
@@ -126,6 +132,11 @@ class MIDASFileManagerService:
         self.wdcli = wdcli
 
         self.spaceid_pats = [re.compile(p) for p in self.cfg.get('space_id_patterns', [':'])]
+        self.winperms = WindowsPermissionsIntegration.from_config(
+            self.cfg.get('windows_permissions'),
+            self.log.getChild('windows_permissions'),
+            self._root_dir,
+        )
 
     def make_webdav_client(self, generic_url: str=None, _override=None):
         """
@@ -305,9 +316,16 @@ class MIDASFileManagerService:
         if foruser != self._adminuser:
             # self.nccli.set_user_permissions(foruser, PERM_READ, space.root_davpath)
             # space.set_permissions_for(space.system_folder, userid, PERM_READ)
-            space.set_permissions_for(space.uploads_folder, foruser, PERM_ALL)
+            space.set_permissions_for(space.uploads_folder, foruser, PERM_ALL, sync_windows=False)
 
         space._set_creator(foruser)  # side-effect: sets the uploads directory file id
+        space.sync_windows_permissions_for(
+            space.uploads_folder,
+            foruser,
+            PERM_ALL,
+            event_type="record_creation",
+            is_owner=True,
+        )
 
         # preload the space with files
         self._preload(space, foruser)
@@ -716,7 +734,10 @@ class FMSpace:
         return out
         
 
-    def set_permissions_for(self, resource: str, userid: str, perm: int):
+    def set_permissions_for(self, resource: str, userid: str, perm: int,
+                            sync_windows: bool = True,
+                            event_type: str = "permission_update",
+                            is_owner: bool = False):
         """
         assign the permission level on the specified resource to the given user
 
@@ -730,6 +751,39 @@ class FMSpace:
         self.svc.ensure_user(userid)
         self._add_user(userid)
         self.svc.nccli.set_user_permissions(userid, perm, self.root_davpath+'/'+resource)
+        if sync_windows:
+            self.sync_windows_permissions_for(resource, userid, perm, event_type, is_owner)
+
+    def sync_windows_permissions_for(self, resource: str, userid: str, perm: int,
+                                     event_type: str = "permission_update",
+                                     is_owner: bool = False):
+        """
+        Append the Windows permissions command for the resulting permission on a resource.
+        """
+        if perm not in perm_name:
+            raise ValueError(f"perm: code not recognized/supported: {perm}")
+
+        relpath = self._storage_relative_path_for(resource)
+        return self.svc.winperms.set_record_permission(
+            self.id,
+            relpath,
+            userid,
+            perm_name[perm],
+            is_owner,
+            event_type,
+        )
+
+    def _storage_relative_path_for(self, resource: str):
+        """
+        Return a storage-relative path for a resource within this FM space.
+        """
+        if not resource:
+            return self.root_davpath
+
+        resource = str(resource).strip('/')
+        if resource.startswith(self.root_davpath+'/'):
+            return resource
+        return "/".join([self.root_davpath, resource])
 
     def _add_user(self, userid):
         """
@@ -913,4 +967,3 @@ class FMSpace:
             pass
         except Exception as ex:
             raise FileManagerScanException("Apparently failed to delete report from space: "+str(ex))
-
