@@ -15,9 +15,6 @@ from .validation import is_under
 from .writer import append_line, check_append_access
 
 
-DEFAULT_BATCH_FILE_PATH = "/oar/data/nextcloud/winperm/permissions_batch.txt"
-
-
 class WindowsPermissionsIntegration:
 
     def __init__(self, batch_file_path, windows_target_root, log=None):
