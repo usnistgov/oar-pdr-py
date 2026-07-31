@@ -44,6 +44,10 @@ class TestFlaskApp(test.TestCase):
             os.mkdir(rootdir)
         if not os.path.exists(jobdir):
             os.mkdir(jobdir)
+        winpermdir = Path(os.path.join(tmpdir.name, "winperm"))
+        if winpermdir.exists():
+            shutil.rmtree(winpermdir)
+        os.mkdir(winpermdir)
         self.config = {
             'flask': {
                 'SECRET_KEY': 'XXXXXXX'
@@ -68,6 +72,10 @@ class TestFlaskApp(test.TestCase):
                 },
                 'scan_queue': {
                     'jobdir': str(jobdir)
+                },
+                'windows_permissions': {
+                    'batch_file_path': str(winpermdir / "permissions_batch.txt"),
+                    'windows_target_root': r'C:\MIDAS\Uploads'
                 }
             }
         }
@@ -285,4 +293,3 @@ class TestFlaskApp(test.TestCase):
 
 if __name__ == "__main__":
     test.main()
-

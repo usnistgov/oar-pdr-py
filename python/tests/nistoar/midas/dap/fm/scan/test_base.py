@@ -63,6 +63,10 @@ class BasicScannerTest(test.TestCase):
             os.mkdir(rootdir)
         if not os.path.exists(jobdir):
             os.mkdir(jobdir)
+        winpermdir = Path(os.path.join(tmpdir.name, "winperm"))
+        if winpermdir.exists():
+            shutil.rmtree(winpermdir)
+        os.mkdir(winpermdir)
         self.config = {
             'nextcloud_base_url': 'http://mocknextcloud/nc',
             'webdav': {
@@ -80,6 +84,10 @@ class BasicScannerTest(test.TestCase):
             'authentication': {
                 'user': 'admin',
                 'pass': 'pw'
+            },
+            'windows_permissions': {
+                'batch_file_path': str(winpermdir / "permissions_batch.txt"),
+                'windows_target_root': r'C:\MIDAS\Uploads'
             }
         }
 

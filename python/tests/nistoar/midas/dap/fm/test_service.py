@@ -3,13 +3,13 @@ import unittest as test
 from unittest.mock import patch, Mock
 from pathlib import Path
 from logging import Logger
-from copy import deepcopy
 from collections.abc import Mapping
 import requests
 
 from nistoar.midas.dap.fm import service as fm
 from nistoar.midas.dap.fm.clients.nextcloud import NextcloudApi
 from nistoar.midas.dap.fm.exceptions import *
+from nistoar.midas.dap.fm.windows_permissions import WindowsPermissionsAppendError
 from nistoar.base.config import ConfigurationException
 from nistoar.midas.dap.fm import sim
 from nistoar.midas.dap.fm.scan import base as scan, simjobexec
@@ -34,6 +34,11 @@ class MIDASFileManagerServiceTest(test.TestCase):
             os.mkdir(rootdir)
         if not os.path.exists(jobdir):
             os.mkdir(jobdir)
+        self.winpermdir = Path(os.path.join(tmpdir.name, "winperm"))
+        if self.winpermdir.exists():
+            shutil.rmtree(self.winpermdir)
+        os.mkdir(self.winpermdir)
+        self.batch_file = self.winpermdir / "permissions_batch.txt"
         self.config = {
             'nextcloud_base_url': 'http://mocknextcloud/nc',
             'webdav': {
@@ -54,6 +59,10 @@ class MIDASFileManagerServiceTest(test.TestCase):
             },
             'scan_queue': {
                 'jobdir': str(jobdir)
+            },
+            'windows_permissions': {
+                'batch_file_path': str(self.batch_file),
+                'windows_target_root': r'C:\MIDAS\Uploads'
             }
         }
 
@@ -156,6 +165,46 @@ class MIDASFileManagerServiceTest(test.TestCase):
         with self.assertRaises(FileManagerResourceNotFound):
             self.cli.get_space(id)
         self.assertTrue(not (rootdir/id).exists())
+
+    def test_create_space_appends_owner_windows_permission(self):
+        sp = self.cli.create_space_for("rec0001", "ava1")
+
+        self.assertTrue(isinstance(sp, fm.FMSpace))
+        with open(self.batch_file, "rb") as fd:
+            self.assertEqual(
+                fd.read(),
+                b"setpermissions C:\\MIDAS\\Uploads\\rec0001\\rec0001 ava1 FullControl Allow\r\n",
+            )
+
+    def test_create_space_preserves_colon_record_id_in_windows_path(self):
+        sp = self.cli.create_space_for("mds3:0000", "ava1")
+
+        self.assertTrue(isinstance(sp, fm.FMSpace))
+        with open(self.batch_file, "rb") as fd:
+            self.assertEqual(
+                fd.read(),
+                b"setpermissions C:\\MIDAS\\Uploads\\mds3:0000\\mds3:0000 ava1 FullControl Allow\r\n",
+            )
+
+    def test_permission_update_appends_resulting_windows_permission(self):
+        sp = self.cli.create_space_for("rec0002", "ava1")
+        sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_WRITE)
+
+        with open(self.batch_file, "rb") as fd:
+            self.assertEqual(
+                fd.read(),
+                b"setpermissions C:\\MIDAS\\Uploads\\rec0002\\rec0002 ava1 FullControl Allow\r\n"
+                b"setpermissions C:\\MIDAS\\Uploads\\rec0002\\rec0002 gurn Read,Write Allow\r\n",
+            )
+
+    def test_windows_permission_append_failure_is_propagated(self):
+        if self.batch_file.exists():
+            os.remove(self.batch_file)
+        os.mkdir(self.batch_file)
+
+        with self.assertLogs("file-manager.windows_permissions", level="ERROR"):
+            with self.assertRaises(WindowsPermissionsAppendError):
+                self.cli.create_space_for("rec0003", "ava1")
 
     def test_fmspace(self):
         id = "mdst:XXX1"

@@ -30,10 +30,13 @@ if isinstance(wrkdir, bytes):
     wrkdir = wrkdir.decode('utf-8')
 rootdir = Path(wrkdir) / "fmdata"
 jobdir = Path(wrkdir) / "jobqueue"
+winpermdir = Path(wrkdir) / "winperm"
 if not rootdir.exists():
     rootdir.mkdir()
 if not jobdir.exists():
     jobdir.mkdir()
+if not winpermdir.exists():
+    winpermdir.mkdir()
 
 config = {
     "flask": {
@@ -60,6 +63,10 @@ config = {
         },
         'scan_queue': {
             'jobdir': str(jobdir)
+        },
+        'windows_permissions': {
+            'batch_file_path': str(winpermdir / "permissions_batch.txt"),
+            'windows_target_root': r'C:\MIDAS\Uploads'
         }
     },
     "admin_user": "admin",
