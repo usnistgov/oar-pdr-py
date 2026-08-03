@@ -66,7 +66,7 @@ config = {
         },
         'windows_permissions': {
             'batch_file_path': str(winpermdir / "permissions_batch.txt"),
-            'windows_target_root': r'C:\MIDAS\Uploads'
+            'path_prefix': 'midastest_uploads/mdsdev/nextcloud/data/oar_api/files'
         }
     },
     "admin_user": "admin",

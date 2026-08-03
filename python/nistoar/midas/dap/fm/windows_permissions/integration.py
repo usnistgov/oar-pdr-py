@@ -10,16 +10,16 @@ from nistoar.base.config import ConfigurationException
 
 from .commands import format_setpermissions, rights_for
 from .errors import WindowsPermissionsAppendError
-from .paths import windows_path, windows_root
+from .paths import join_windows_paths, windows_path
 from .validation import is_under
 from .writer import append_line, check_append_access
 
 
 class WindowsPermissionsIntegration:
 
-    def __init__(self, batch_file_path, windows_target_root, log=None):
+    def __init__(self, batch_file_path, path_prefix, log=None):
         self.batch_file_path = Path(batch_file_path)
-        self.windows_target_root = windows_root(windows_target_root)
+        self.path_prefix = windows_path(path_prefix)
         self.log = log or logging.getLogger("windows-permissions")
 
     @classmethod
@@ -29,7 +29,7 @@ class WindowsPermissionsIntegration:
         if not isinstance(config, Mapping):
             raise ConfigurationException("windows_permissions: configuration must be an object")
 
-        missing = [name for name in ("batch_file_path", "windows_target_root") if not config.get(name)]
+        missing = [name for name in ("batch_file_path", "path_prefix") if not config.get(name)]
         if missing:
             raise ConfigurationException(
                 "windows_permissions: missing required config parameter(s): " + ", ".join(missing)
@@ -39,12 +39,12 @@ class WindowsPermissionsIntegration:
         validate_batch_file_path(batch_file_path, config, local_storage_root_dir)
         check_append_access(batch_file_path)
 
-        return cls(batch_file_path, config["windows_target_root"], log)
+        return cls(batch_file_path, config["path_prefix"], log)
 
     def set_record_permission(self, record_id, storage_relative_path, principal,
                               permission_name, is_owner=False, event_type="permission_update"):
         rights = rights_for(permission_name, is_owner)
-        target_path = windows_path(self.windows_target_root, storage_relative_path)
+        target_path = join_windows_paths(self.path_prefix, storage_relative_path)
         command = format_setpermissions(target_path, principal, rights)
 
         self.log.info(

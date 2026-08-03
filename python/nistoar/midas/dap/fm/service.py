@@ -78,9 +78,9 @@ class MIDASFileManagerService:
         into the OS.  If provided, this parameter will be passed is as a default for the API clients.
     ``windows_permissions``
         (dict) _required_.  configuration for the Windows Permissions Manager batch-file integration.
-        ``batch_file_path`` and ``windows_target_root`` are required.  The recommended batch path is
-        ``/oar/data/nextcloud/winperm/permissions_batch.txt``; this Linux/container append path is
-        distinct from the Windows-visible target root used in emitted commands.
+        ``batch_file_path`` and ``path_prefix`` are required.  Commands write ``path_prefix`` plus
+        the path relative to ``local_storage_root_dir``, using Windows path separators.  The Windows
+        Permissions Manager owns the base root that ``path_prefix`` is resolved under.
     """
 
     def __init__(self, config: Mapping, log: Logger=None,
@@ -775,7 +775,11 @@ class FMSpace:
 
     def _storage_relative_path_for(self, resource: str):
         """
-        Return a storage-relative path for a resource within this FM space.
+        Return a path relative to this service's local storage root.
+
+        For example, if local_storage_root_dir is /data/nc/oar_api/files, this returns a value like
+        mds3:0001/mds3:0001.  The Windows permissions integration prefixes this with its configured
+        shared-drive-relative path_prefix before writing the batch command.
         """
         if not resource:
             return self.root_davpath

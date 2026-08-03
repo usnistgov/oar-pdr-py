@@ -23,6 +23,8 @@ capath = datadir / 'serverCa.crt'
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_fm_service.")
 rootdir = Path(os.path.join(tmpdir.name, "fmdata"))
 jobdir = Path(os.path.join(tmpdir.name, "jobqueue"))
+win_path_prefix = b"midastest_uploads\\mdsdev\\nextcloud\\data\\oar_api\\files"
+path_prefix = 'midastest_uploads/mdsdev/nextcloud/data/oar_api/files'
 
 def tearDownModule():
     tmpdir.cleanup()
@@ -62,7 +64,7 @@ class MIDASFileManagerServiceTest(test.TestCase):
             },
             'windows_permissions': {
                 'batch_file_path': str(self.batch_file),
-                'windows_target_root': r'C:\MIDAS\Uploads'
+                'path_prefix': path_prefix
             }
         }
 
@@ -173,17 +175,17 @@ class MIDASFileManagerServiceTest(test.TestCase):
         with open(self.batch_file, "rb") as fd:
             self.assertEqual(
                 fd.read(),
-                b"setpermissions C:\\MIDAS\\Uploads\\rec0001\\rec0001 ava1 FullControl Allow\r\n",
+                b"setpermissions " + win_path_prefix + b"\\rec0001\\rec0001 ava1 FullControl Allow\r\n",
             )
 
-    def test_create_space_preserves_colon_record_id_in_windows_path(self):
+    def test_create_space_writes_shared_drive_relative_windows_path(self):
         sp = self.cli.create_space_for("mds3:0000", "ava1")
 
         self.assertTrue(isinstance(sp, fm.FMSpace))
         with open(self.batch_file, "rb") as fd:
             self.assertEqual(
                 fd.read(),
-                b"setpermissions C:\\MIDAS\\Uploads\\mds3:0000\\mds3:0000 ava1 FullControl Allow\r\n",
+                b"setpermissions " + win_path_prefix + b"\\mds3:0000\\mds3:0000 ava1 FullControl Allow\r\n",
             )
 
     def test_permission_update_appends_resulting_windows_permission(self):
@@ -193,8 +195,8 @@ class MIDASFileManagerServiceTest(test.TestCase):
         with open(self.batch_file, "rb") as fd:
             self.assertEqual(
                 fd.read(),
-                b"setpermissions C:\\MIDAS\\Uploads\\rec0002\\rec0002 ava1 FullControl Allow\r\n"
-                b"setpermissions C:\\MIDAS\\Uploads\\rec0002\\rec0002 gurn Read,Write Allow\r\n",
+                b"setpermissions " + win_path_prefix + b"\\rec0002\\rec0002 ava1 FullControl Allow\r\n"
+                b"setpermissions " + win_path_prefix + b"\\rec0002\\rec0002 gurn Read,Write Allow\r\n",
             )
 
     def test_windows_permission_append_failure_is_propagated(self):
