@@ -15,6 +15,9 @@ class TestGroup(test.TestCase):
             "group_id_minting": {
                 "default_shoulder": {
                     "public": "grp0"
+                },
+                "allowed_shoulders": {
+                    "public": ["grp0", "grp1"]
                 }
             }
         }
@@ -110,6 +113,9 @@ class TestDBGroups(test.TestCase):
             "group_id_minting": {
                 "default_shoulder": {
                     "public": "grp0"
+                },
+                "allowed_shoulders": {
+                    "public": ["grp0", "grp1"]
                 }
             }
         }
@@ -160,6 +166,14 @@ class TestDBGroups(test.TestCase):
         self.assertEqual(grp.id, "grp0:alice:friends")
         self.assertTrue(grp.is_member("alice"))
         self.assertTrue(not grp.is_member(self.user))
+
+    def test_create_group_requested_shoulder(self):
+        grp = self.dbg.create_group("collaborators", shoulder="grp1")
+
+        self.assertEqual(grp.name, "collaborators")
+        self.assertEqual(grp.owner, self.user)
+        self.assertEqual(grp.id, "grp1:nist0:ava1:collaborators")
+        self.assertIn(grp.id, self.fact._db[base.GROUPS_COLL])
 
     def test_get(self):
         self.assertIsNone(self.dbg.get("grp0:nist0:ava1:friends"))
@@ -311,6 +325,43 @@ class TestDBGroups(test.TestCase):
         self.assertIn(base.PUBLIC_GROUP, matches)
         self.assertEqual(len(matches), 4)
 
+    def test_select_for_user(self):
+        # two groups owned by self.user
+        g1 = self.dbg.create_group("team-a")
+        g2 = self.dbg.create_group("team-b")
+
+        # one group created by another user, with self.user added as member
+        other_cli = self.fact.create_client(base.DMP_PROJECTS, self.cfg, "other-user")
+        g3 = other_cli.groups.create_group("other-team")
+        g3.add_member(self.user)
+        g3.save()
+
+        results = list(self.dbg.select_for_user(self.user))
+        ids = [g.id for g in results]
+        self.assertIn(g1.id, ids)
+        self.assertIn(g2.id, ids)
+        self.assertIn(g3.id, ids)   # member but not owner
+        self.assertEqual(len(ids), 3)  # no duplicates
+
+        # filtering by shoulder should keep only matching group IDs
+        g4 = self.dbg.create_group("team-c", shoulder="grp1")
+        results = list(self.dbg.select_for_user(self.user, "grp0"))
+        ids = [g.id for g in results]
+        self.assertIn(g1.id, ids)
+        self.assertIn(g2.id, ids)
+        self.assertIn(g3.id, ids)
+        self.assertNotIn(g4.id, ids)
+        self.assertEqual(len(ids), 3)
+
+        results = list(self.dbg.select_for_user(self.user, "grp1"))
+        ids = [g.id for g in results]
+        self.assertEqual(ids, [g4.id])
+
+        # user with no groups sees nothing
+        stranger_cli = self.fact.create_client(base.DMP_PROJECTS, self.cfg, "stranger")
+        results = list(stranger_cli.groups.select_for_user("stranger"))
+        self.assertEqual(len(results), 0)
+
 
 class MockPeopleService(base.PeopleService):
     def __init__(self, staffdata):
@@ -390,8 +441,8 @@ class TestVirtualGroups(test.TestCase):
 
     def test_all_groups_for_withMockPeopleService(self):
         staffdata = {
-            "nist0:ava1": { "nistou": "728", "nistdiv": "730" },
-            "nist0:alice": { "nistgrp": "999" }
+            "nist0:ava1": { "ouNumber": "728", "divisionNumber": "730" },
+            "nist0:alice": { "groupNumber": "999" }
         }
         pplsvc = MockPeopleService(staffdata)
         newcli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, self.user)
@@ -414,8 +465,8 @@ class TestVirtualGroups(test.TestCase):
 
     def test_recache_user_groups_withMockPeopleService(self):
         staffdata = {
-            "nist0:ava1": { "nistou": "728", "nistdiv": "730" },
-            "nist0:alice": { "nistgrp": "999" }
+            "nist0:ava1": { "ouNumber": "728", "divisionNumber": "730" },
+            "nist0:alice": { "groupNumber": "999" }
         }
         pplsvc = MockPeopleService(staffdata)
         newcli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, self.user)
@@ -446,11 +497,11 @@ class TestVirtualGroups(test.TestCase):
 
     def test_authorized_via_virtual_group(self):
         # Grant read access to a virtual group ID (nistou:728).
-        # A user whose NSD entry maps to nistou:728 should pass authorized(),
+        # A user whose NSD entry maps to ouNumber 728 should pass authorized(),
         # while a user in a different OU and a user absent from NSD should not.
         staffdata = {
-            "nist0:ava1": {"nistou": "728", "nistdiv": "730"},
-            "nist0:bob":  {"nistgrp": "999"},
+            "nist0:ava1": {"ouNumber": "728", "divisionNumber": "730"},
+            "nist0:bob":  {"groupNumber": "999"},
         }
         pplsvc = MockPeopleService(staffdata)
         cli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, "alice")

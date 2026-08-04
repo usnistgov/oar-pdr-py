@@ -68,9 +68,10 @@ class TestMIDASGroupApp(test.TestCase):
         self.cfg = {
             "dbio": {
                 "superusers": ["adminuser"],
-            },
-            "group_id_minting": {
-                "default_shoulder": { "public": "grp0" }
+                "group_id_minting": {
+                    "default_shoulder": { "public": "grp0" },
+                    "allowed_shoulders": { "midas": ["grp0", "grp1"] }
+                }
             }
         }
         self.dbfact = InMemoryDBClientFactory({}, {})
@@ -84,18 +85,18 @@ class TestMIDASGroupApp(test.TestCase):
 
     def test_no_shoulder_provided(self):
         """
-        If we call /midas/group/ with no <shoulder>, we expect a 500 or 400
-        because group.py expects a shoulder.
+        GET /midas/group/ with no shoulder uses the default shoulder and returns 200.
         """
         path = ""
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path
         }
-        # This should fail because group.py checks for a shoulder
         hdlr = self.app.create_handler(req, self.start, path, test_agent)
         body = hdlr.handle()
-        self.assertIn("405 ", self.resp[0])
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIsInstance(resp, list)
 
     def test_create_group(self):
         """
@@ -119,6 +120,104 @@ class TestMIDASGroupApp(test.TestCase):
         # The ID can be "grp0:tester1:my-test-group" or similar
         self.assertIn("grp0:tester1:", resp['id'])
         self.assertEqual(resp['members'], ["tester1"])  # By default, the group is owned by user
+
+    def test_create_group_uses_requested_shoulder(self):
+        """
+        POST /midas/group/grp1 creates a grp1 group when the caller is authorized for that shoulder.
+        """
+        path = "grp1"
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path,
+            'wsgi.input': StringIO(json.dumps({"name": "alternate-shoulder-group"}))
+        }
+
+        hdlr = self.app.create_handler(req, self.start, path, test_agent)
+        body = hdlr.handle()
+
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "alternate-shoulder-group")
+        self.assertIn("grp1:tester1:", resp['id'])
+
+    def test_create_group_rejects_unauthorized_shoulder(self):
+        """
+        POST /midas/group/grp2 is rejected when the caller is not authorized for that shoulder.
+        """
+        path = "grp2"
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path,
+            'wsgi.input': StringIO(json.dumps({"name": "unauthorized-shoulder-group"}))
+        }
+
+        hdlr = self.app.create_handler(req, self.start, path, test_agent)
+        hdlr.handle()
+
+        self.assertIn("401 ", self.resp[0])
+
+    def test_list_groups(self):
+        """
+        GET /midas/group/grp0 returns all groups the caller owns or belongs to.
+        """
+        path = "grp0"
+
+        # create two groups as test_agent (tester1)
+        for name in ["alpha", "beta"]:
+            req = {
+                'REQUEST_METHOD': 'POST',
+                'PATH_INFO': self.rootpath + path,
+                'wsgi.input': StringIO(json.dumps({"name": name}))
+            }
+            self.app.create_handler(req, self.start, path, test_agent).handle()
+            self.resp = []
+
+        # list groups
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, test_agent)
+        body = hdlr.handle()
+
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertIsInstance(resp, list)
+        self.assertEqual(len(resp), 2)
+        names = {g['name'] for g in resp}
+        self.assertEqual(names, {"alpha", "beta"})
+
+    def test_list_groups_filters_requested_shoulder(self):
+        """
+        GET /midas/group/{shoulder} returns only groups from that shoulder.
+        """
+        for path, name in [("grp0", "alpha"), ("grp1", "beta")]:
+            req = {
+                'REQUEST_METHOD': 'POST',
+                'PATH_INFO': self.rootpath + path,
+                'wsgi.input': StringIO(json.dumps({"name": name}))
+            }
+            self.app.create_handler(req, self.start, path, test_agent).handle()
+            self.resp = []
+
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + "grp0"
+        }
+        body = self.app.create_handler(req, self.start, "grp0", test_agent).handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual([g['name'] for g in resp], ["alpha"])
+
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + "grp1"
+        }
+        body = self.app.create_handler(req, self.start, "grp1", test_agent).handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual([g['name'] for g in resp], ["beta"])
 
     def test_create_group_missing_name(self):
         """
@@ -411,9 +510,9 @@ class TestMIDASGroupAppMongo(test.TestCase):
         self.cfg = {
             "dbio": {
                 "superusers": ["adminuser"],
-            },
-            "group_id_minting": {
-                "default_shoulder": { "public": "grp0" }
+                "group_id_minting": {
+                    "default_shoulder": { "public": "grp0" }
+                }
             }
         }
         self.dburl = os.environ['MONGO_TESTDB_URL']
