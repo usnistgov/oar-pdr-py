@@ -450,7 +450,7 @@ class MongoDBClientFactory(base.DBClientFactory):
                     if self._check_ready(cli):
                         return True
                 except Exception as ex:
-                    if self._is_authenticaiton_error(ex):
+                    if self._is_authenticaiton_failure(ex):
                         raise
                     prob = ex
 
