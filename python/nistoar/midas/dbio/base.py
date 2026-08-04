@@ -688,7 +688,7 @@ class DBGroups(object):
     def native(self):
         return self._cli._native
 
-    def create_group(self, name: str, foruser: str = None):
+    def create_group(self, name: str, foruser: str = None, shoulder: str = None):
         """
         create a new group for the given user.
         :param str name:     the name of the group to create
@@ -697,6 +697,8 @@ class DBGroups(object):
                              underlying :py:class:`DBClient` will be used.  Only a superuser (an identity
                              listed in the `superuser` config parameter) can create a group for another
                              user.
+        :param str shoulder: the shoulder to use for the new group identifier.  If not provided, the
+                             DBGroups default shoulder will be used.
         :raises AlreadyExists:  if the user has already defined a group with this name
         :raises NotAuthorized:  if the user is not authorized to create this group
         """
@@ -712,7 +714,7 @@ class DBGroups(object):
             foruser = self._cli.user_id
 
         out = Group({
-            "id": self._mint_id(self._shldr, name, foruser),   # may raise NotAuthorized
+            "id": self._mint_id(shoulder or self._shldr, name, foruser),   # may raise NotAuthorized
             "name": name,
             "owner": foruser,
             "members": [foruser],
@@ -733,11 +735,13 @@ class DBGroups(object):
         :param str shoulder:   the shoulder to prefix to the identifier.  The value usually controls
                                how the identifier is formed.
         """
-        # determine shoulder if not provided
         mintcfg = self._cli._cfg.get("group_id_minting", {})
         if not shoulder:
-            shoulder = self._cli._get_default_shoulder(mintcfg, self._cli._who)    # may raise NotAuthorized
-        elif not self._cli._authorized_for_shoulder(mintcfg, shoulder, self._cli._who):
+            if mintcfg:
+                shoulder = self._cli._get_default_shoulder(mintcfg, self._cli._who)
+            else:
+                shoulder = DEF_GROUPS_SHOULDER
+        elif mintcfg and not self._cli._authorized_for_shoulder(mintcfg, shoulder, self._cli._who):
             raise NotAuthorized(str(self._cli._who), f"create a group under the {shoulder}")
 
         return "{}:{}:{}".format(shoulder, owner, name)
@@ -818,6 +822,27 @@ class DBGroups(object):
         out.add(PUBLIC_GROUP)
 
         return out
+
+    def _matches_shoulder(self, rec: Mapping, shoulder: str = None) -> bool:
+        if not shoulder:
+            return True
+        return rec.get('id', '').split(':', 1)[0] == shoulder
+
+    def select_for_user(self, user_id: str, shoulder: str = None) -> Iterator[Group]:
+        """
+        return all groups the user owns or is a direct member of.
+        :param str shoulder: if provided, only return groups with this identifier shoulder.
+        """
+        seen = set()
+        for rec in self._cli._select_from_coll(GROUPS_COLL, owner=user_id):
+            if not self._matches_shoulder(rec, shoulder):
+                continue
+            seen.add(rec['id'])
+            yield Group(rec, self._cli)
+        for rec in self._cli._select_prop_contains(GROUPS_COLL, 'members', user_id):
+            if rec['id'] not in seen and self._matches_shoulder(rec, shoulder):
+                seen.add(rec['id'])
+                yield Group(rec, self._cli)
 
     def delete_group(self, gid: str) -> bool:
         """
@@ -1055,12 +1080,15 @@ class DBClient(ABC):
         if not person:
             return []
         out = []
-        if 'nistou' in person and person['nistou']:
-            out.append(f"nistou:{person['nistou']}")
-        if 'nistdiv' in person and person['nistdiv']:
-            out.append(f"nistdiv:{person['nistdiv']}")
-        if 'nistgrp' in person and person['nistgrp']:
-            out.append(f"nistgrp:{person['nistgrp']}")
+        ou_number = person.get('ouNumber')
+        if ou_number:
+            out.append(f"nistou:{ou_number}")
+        division_number = person.get('divisionNumber')
+        if division_number:
+            out.append(f"nistdiv:{division_number}")
+        group_number = person.get('groupNumber')
+        if group_number:
+            out.append(f"nistgrp:{group_number}")
         return out
 
     def create_record(self, name: str, shoulder: str = None,
