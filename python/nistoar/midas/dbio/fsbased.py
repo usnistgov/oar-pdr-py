@@ -58,7 +58,7 @@ class FSBasedDBClient(base.DBClient):
     def _next_recnum(self, shoulder):
         num = self._read_rec("nextnum", shoulder)
         if num is None:
-            num = 0
+            num = self._init_nextnum_for(shoulder)
         num += 1
         self._write_rec("nextnum", shoulder, num)
         return num
@@ -223,25 +223,41 @@ class FSBasedDBClient(base.DBClient):
             recpath.unlink()
 
     def _save_history(self, histrec):
-        if not histrec.get('recid'):
-            raise ValueError("_save_history(): History is missing record id")
+        if not histrec.get('id'):
+            if histrec.get('recid'):
+                # backward compatibility (should not be necessary)
+                histrec['id'] = histrec['recid']  
+            else:
+                raise ValueError("_save_history(): History is missing record id")
         self._ensure_collection("history")
 
-        history = []
-        recpath = self._root / 'history' / (histrec['recid']+".json")
-        if recpath.is_file():
-            try:
-                history = read_json(str(recpath))
-            except Exception as ex:
-                raise base.DBIOException(histrec['recid']+": Failed to read old history entries: "+str(ex))
-        elif recpath.exists():
-            raise base.DBIOException(str(recpath)+": not a file")
-        
+        recpath = self._history_file_for(histrec['id'])
+        history = self._load_history_from(recpath)
         history.append(histrec)
         try:
             write_json(history, str(recpath))
         except Exception as ex:
-            raise base.DBIOException(histrec['recid']+": Failed to write history entries: "+str(ex))
+            raise base.DBIOException(histrec['id']+": Failed to write history entries: "+str(ex))
+
+    def _history_file_for(self, id):
+        return self._root / 'history' / (id+".json")
+
+    def _load_history_from(self, recpath):
+        history = []
+        if recpath.is_file():
+            try:
+                history = read_json(str(recpath))
+            except Exception as ex:
+                raise base.DBIOException(histrec['id']+": Failed to read old history entries: "+str(ex))
+        elif recpath.exists():
+            raise base.DBIOException(str(recpath)+": not a file")
+        return history
+
+    def _iter_history_for(self, id) -> List[Mapping]:
+        recpath = self._history_file_for(id)
+        if not os.path.exists(recpath):
+            return iter([])
+        return iter(self._load_history_from(recpath))
 
     def client_for(self, projcoll: str, foruser: str = None):
         """
