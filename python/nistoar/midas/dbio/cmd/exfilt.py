@@ -307,7 +307,7 @@ class ImportCommand:
         except CommandFailure:
             raise
         except Exception as ex:
-            src = args.infile if args.outfile != '-' else "standard input"
+            src = args.infile if args.infile != '-' else "standard input"
             raise CommandFailure(args.cmd, f"Failed to load records from {src}: {str(ex)}", 1)
         finally:
             if args.infile and args.infile != '-':
