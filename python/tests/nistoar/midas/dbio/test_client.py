@@ -185,6 +185,26 @@ class TestDBClient(test.TestCase):
         self.assertEqual(rec.name, "goob")
         self.assertEqual(rec.id, "pdr0:0003")
 
+    def test_check_query_structure(self):
+        check = base.DBClient.check_query_structure
+
+        self.assertTrue(check({"$and": [{"name": "test1"}]}))
+        self.assertTrue(check({"$or": [{"name": "test1"}, {"name": "test2"}]}))
+
+        # every key gets checked, not just the first one
+        self.assertFalse(check({"$or": [], "evil": 1}))
+        self.assertFalse(check({"$and": [], "$or": [], "drop": "me"}))
+
+        # nested operators recurse instead of raising NameError
+        self.assertTrue(check({"$not": {"$eq": 1}}))
+        self.assertTrue(check({"$not": {"$not": {"$gt": 3}}}))
+        self.assertFalse(check({"$not": {"evil": 1}}))
+
+        self.assertFalse(check({"bogus": 1}))
+        self.assertFalse(check({}))
+        self.assertFalse(check([]))
+        self.assertFalse(check("not a dict"))
+
     def test_select_records(self):
         rec = self.cli.create_record("mine1")
         rec = self.cli.create_record("mine2")
