@@ -500,7 +500,10 @@ class PDPApp(ServiceApp):
                         self._app.svc.publish(sipid, self.who)
 
                 elif action == self.ACTION_IMPORTDATA:
-                    imported = self._app.svc.import_files(sipid, self.who)
+                    if not hasattr(self._app.svc, 'import_files'):
+                        return self.send_error_res(403, "Data import not supported",
+                                                   "Importing data is not allowed on this SIP: "+parts[0])
+                    imported = self._app.svc.import_files(sipid, self.who)  # may raise SIPConflictError
                     out = self._app.svc.describe(sipid)
                     out['pdr:message'] = f"Imported {len(imported)} file" + \
                         "s" if len(imported) > 0 else ""
