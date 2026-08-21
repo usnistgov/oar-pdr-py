@@ -34,7 +34,7 @@ class DOIMintingClient(object):
         """
         self._cfg = config
         if not log:
-            log = logging.getLogger("OOIClient")
+            log = logging.getLogger("DOIClient")
         self.log = log
 
         self.naan = self._cfg.get('minting_naan')
