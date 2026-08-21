@@ -636,6 +636,7 @@ class JobRunner:
     async def _launch_job(self, job: Job):
         # mark its state as running
         if job.source:
+            job.info['queue'] = self.qname
             job.mark_running(-1)  # pid will be replaced after the process actually starts
             job.save_to(job.source)
 
