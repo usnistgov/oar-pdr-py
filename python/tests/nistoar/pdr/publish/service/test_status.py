@@ -29,45 +29,23 @@ class TestSIPStatusFile(test.TestCase):
 
     def test_ctor(self):
         sf = status.SIPStatusFile(self.cachefile)
-        self.assertEqual(sf._file, self.cachefile)
-        self.assertIsNone(sf._fd)
+        self.assertEqual(str(sf._file), self.cachefile)
+        self.assertIsNone(sf._lock)
         self.assertIsNone(sf._type)
         del sf
 
         sf = status.SIPStatusFile(self.cachefile, status.LOCK_READ)
-        self.assertEqual(sf._file, self.cachefile)
-        self.assertIsNotNone(sf._fd)
+        self.assertEqual(str(sf._file), self.cachefile)
+        self.assertIsNotNone(sf._lock)
         self.assertEqual(sf._type, status.LOCK_READ)
         self.assertEqual(sf.lock_type, status.LOCK_READ)
         del sf
 
         sf = status.SIPStatusFile(self.cachefile, status.LOCK_WRITE)
-        self.assertEqual(sf._file, self.cachefile)
-        self.assertIsNotNone(sf._fd)
+        self.assertEqual(str(sf._file), self.cachefile)
+        self.assertIsNotNone(sf._lock)
         self.assertEqual(sf._type, status.LOCK_WRITE)
         self.assertEqual(sf.lock_type, status.LOCK_WRITE)
-
-    def test_aquirerelease(self):
-        sf = status.SIPStatusFile(self.cachefile)
-        sf.acquire(status.LOCK_READ)
-        self.assertEqual(sf.lock_type, status.LOCK_READ)
-        sf.acquire(status.LOCK_READ)
-        self.assertEqual(sf.lock_type, status.LOCK_READ)
-        with self.assertRaises(RuntimeError):
-            sf.acquire(status.LOCK_WRITE)
-        sf.release()
-        self.assertIsNone(sf.lock_type)
-
-        sf.acquire(status.LOCK_WRITE)
-        self.assertEqual(sf.lock_type, status.LOCK_WRITE)
-        sf.acquire(status.LOCK_WRITE)
-        self.assertEqual(sf.lock_type, status.LOCK_WRITE)
-        sf.release()
-        self.assertIsNone(sf.lock_type)
-
-        with status.SIPStatusFile(self.cachefile, status.LOCK_READ) as sf:
-            self.assertEqual(sf.lock_type, status.LOCK_READ)
-        self.assertIsNone(sf.lock_type)
 
     def test_read(self):
         sf = status.SIPStatusFile(self.cachefile)

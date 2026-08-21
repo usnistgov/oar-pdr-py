@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import Iterable, Union, List
 from copy import deepcopy
 
+from ...utils import AtomicAccessFile
 from ...exceptions import StateException
 from .. import system as pubsys
 NOT_FOUND  = "not found"     # SIP has not been created
@@ -41,105 +42,16 @@ user_message = {
 LOCK_WRITE = fcntl.LOCK_EX
 LOCK_READ  = fcntl.LOCK_SH
 
-class SIPStatusFile(object):
+class SIPStatusFile(AtomicAccessFile):
     """
     a class used to manage locked access to the status data file
     """
-    LOCK_WRITE = fcntl.LOCK_EX
-    LOCK_READ  = fcntl.LOCK_SH
+    def _parse_data(self, fd):
+        return json.load(fd, object_pairs_hook=OrderedDict)
     
-    def __init__(self, filepath, locktype=None):
-        """
-        create the file wrapper
-        :param filepath  str: the path to the file
-        :param locktype:      the type of lock to acquire.  The value should 
-                              be either LOCK_READ or LOCK_WRITE.
-                              If None, no lock is acquired.  
-        """
-        self._file = filepath
-        self._fd = None
-        self._type = None
+    def _format_data(self, data, fd):
+        json.dump(data, fd, indent=2, separators=(',', ': '))
 
-        if locktype is not None:
-            self.acquire(locktype)
-
-    def __del__(self):
-        self.release()
-
-    @property
-    def lock_type(self):
-        """
-        the current type of lock held, or None if no lock is held.
-        """
-        return self._type
-
-    def acquire(self, locktype):
-        """
-        set a lock on the file
-        """
-        if self._fd:
-            if self._type == locktype:
-                return False
-            elif locktype == self.LOCK_WRITE:
-                raise RuntimeError("Release the read lock before "+
-                                   "requesting write lock")
-
-        if locktype == LOCK_READ:
-            self._fd = open(self._file)
-            fcntl.flock(self._fd, fcntl.LOCK_SH)
-            self._type = LOCK_READ
-        elif locktype == LOCK_WRITE:
-            self._fd = open(self._file, 'w')
-            fcntl.flock(self._fd, fcntl.LOCK_EX)
-            self._type = LOCK_WRITE
-        else:
-            raise ValueError("Not a recognized lock type: "+ str(locktype))
-        return True
-
-    def release(self):
-        if self._fd:
-            self._fd.seek(0, os.SEEK_END)
-            fcntl.flock(self._fd, fcntl.LOCK_UN)
-            self._fd.close()
-            self._fd = None
-            self._type = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, ex_type, ex_val, ex_tb):
-        self.release()
-
-    def read_data(self):
-        """
-        read the status data from the configured file.  If a lock is not 
-        currently set, one is acquired and immediately released.  
-        """
-        release = self.acquire(LOCK_READ)
-        self._fd.seek(0)
-        out = json.load(self._fd, object_pairs_hook=OrderedDict)
-        if release:
-            self.release()
-        return out
-        
-    def write_data(self, data):
-        """
-        write the status data to the configured file.  If a lock is not 
-        currently set, one is acquired and immediately released.  
-        """
-        release = self.acquire(LOCK_WRITE)
-        self._fd.seek(0)
-        json.dump(data, self._fd, indent=2, separators=(',', ': '))
-        if release:
-            self.release()
-
-    @classmethod
-    def read(cls, filepath):
-        return cls(filepath).read_data()
-
-    @classmethod
-    def write(cls, filepath, data):
-        cls(filepath).write_data(data)
 
 def _read_status(filepath):
     try:
@@ -153,7 +65,6 @@ def _read_status(filepath):
         raise StateException("Can't open preservation status file: "
                              +filepath+": "+str(ex), cause=ex,
                              sys=preservsys)
-
 
 def _write_status(filepath, data):
     try:
