@@ -47,7 +47,8 @@ ANONYMOUS = ANONYMOUS_USER
 AUTOADMIN = "dbio:admin"     # a superuser identity that should only be used by internal dbio code
 
 __all__ = ["DBClient", "DBClientFactory", "ProjectRecord", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP",
-           "ANONYMOUS", "DAP_PROJECTS", "DMP_PROJECTS", "ObjectNotFound", "NotAuthorized", "AlreadyExists",
+           "ANONYMOUS", "AUTOADMIN", "DAP_PROJECTS", "DMP_PROJECTS",
+           "ObjectNotFound", "NotAuthorized", "AlreadyExists",
            "InvalidRecord", "InvalidUpdate", "DBIOException", "DBIORecordException" ]
 
 Permissions = Union[str, Sequence[str], AbstractSet[str]]
