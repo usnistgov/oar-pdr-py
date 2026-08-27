@@ -88,7 +88,7 @@ class PDPApp(WSGIAppSuite, PublishSystem):
 
         svcapps = self.make_svc_apps(config, pressvc, log, workdir)
         
-        WSGIAppSuite.__init__(self, config, svcapps, log)
+        WSGIAppSuite.__init__(self, config, svcapps, log, base_ep)
 
         self._id_map = self._make_id_map(config.get('authorized', {}))
         if not self._id_map:
