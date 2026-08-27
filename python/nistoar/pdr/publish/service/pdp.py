@@ -1256,6 +1256,11 @@ class PDP1Service(PDPublishingService):
                 uploadsroot = self.cfg['uploads_dir']
                 if not os.path.isabs(uploadsroot):
                     uploadsroot = os.path.join(self.workdir, uploadsroot)
+                    if not os.path.isdir(self.workdir):
+                        raise ConfigurationException("PDP1Service: %s: working_dir does not exists as directory",
+                                                     self.workdir)
+                    if not os.path.isdir(uploadsroot):
+                        os.mkdir(uploadsroot)
         if isinstance(uploadsroot, str):
             uploadsroot = Path(uploadsroot)
 
