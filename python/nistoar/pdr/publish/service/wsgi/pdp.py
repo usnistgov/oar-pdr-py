@@ -38,7 +38,7 @@ class PDPApp(WSGIAppSuite, PublishSystem):
                              can also contain a 'override_config_for' parameter which can be used to 
                              combine the configuration with those of other conventions (see below).
 
-    If a service configuration can contains the 'override_config_for' parameter, its value must be a 
+    If a service configuration contains the 'override_config_for' parameter, its value must be a 
     string giving the name of another convention.  This indicates that the configuration for the 
     convention it names provides default values that should be overridden by the configuration that 
     refers to it.  The named configuration can also contain a 'override_config_for' parameter to chain 
@@ -54,8 +54,7 @@ class PDPApp(WSGIAppSuite, PublishSystem):
                           Note that is value is used to determine which identifier shoulders the client
                           is allowed to publish under (see 
                           :py:class:`~nistoar.pdr.publish.service.pdp.PDPublishingService`).
-    :param str user:      (optional) a default name to assume as the identity of client when the client
-                          does not provide one via the "X_OAR_USER" HTTP header item.  
+    :param str user:      (optional) a default name to assume as the identity of client.  
     :param str type:      (optional) one of ('user', 'auto') indicating the type of agent the client should 
                           be classified as.  'auto' indicates that the client is a user-less system; 'user'
                           indicates the client action was initiated ultimately by an interactive user.
@@ -223,11 +222,11 @@ class PDPApp(WSGIAppSuite, PublishSystem):
             return Agent("pdp", Agent.UNKN, Agent.ANONYMOUS, Agent.PUBLIC, agents)
         
         client = deepcopy(self._id_map.get(authkey))
-        client.setdefault('user', 'authorized')
-        client.setdefault('client', client_id)
-        if not agents or agents == ["(unknown)"]:
-            agents = [f"{client['client']}/{client['user']}"]
         if client:
+            client.setdefault('user', 'authorized')
+            client.setdefault('client', client_id)
+            if not agents or agents == ["(unknown)"]:
+                agents = [f"{client['client']}/{client['user']}"]
             return Agent("pdp", Agent.AUTO, client['user'], client['client'], agents)
 
         self.log.warning("Unrecognized token from client %s", str(client_id))
