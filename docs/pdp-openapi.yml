@@ -663,7 +663,7 @@ components:
             location:
               type: string
               description:
-                a path relative to an aggreed base directory on the client's local
+                a path relative to an agreed base directory on the client's local
                 filesystem where files can be copied to.
         - "$ref": "#/components/schemas/StatusInfo"
 
