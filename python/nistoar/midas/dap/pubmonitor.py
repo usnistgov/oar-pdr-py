@@ -11,6 +11,7 @@ from typing import Mapping
 
 from .. import dbio
 from ..dbio import status as mstatus
+from ..dbio.project import ProjectService
 from nistoar.pdr.publish.service import status as pstatus
 from nistoar.pdr.publish.service.monitor import LocalPublishingMonitor
 from nistoar.base import config
@@ -23,7 +24,7 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
     that will update an SIP's corresponding MIDAS DAP record.  
     """
     def __init__(self, dbclient_factory: dbio.DBClientFactory, statusdir: str, qfile: str,
-                 dapconfig: Mapping={}, who: Agent=None, log: Logger=None):
+                 cyclesecs: int=600, dapconfig: Mapping={}, who: Agent=None, log: Logger=None):
         """
         initialize the monitor with an internal :py:class:`~nistoar.midas.dbio.project.ProjectService`
         that will be used to update the status of MIDAS records going through the publishing service
@@ -47,7 +48,7 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
         :param Logger         log:  the logger to use for log messages
         """
         if not log:
-            log = Logger.getLogger("MIDASPublishingMonitor")
+            log = logging.getLogger("MIDASPublishingMonitor")
         self.log = log
 
         if not who:
@@ -56,8 +57,7 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
         self.projsvc = ProjectService(dbio.DAP_PROJECTS, dbclient_factory, dapconfig, who,
                                       self.log.getChild(dbio.DAP_PROJECTS))
 
-        super(MIDASPublishingMonitor, self).init(statusdir, queue_file, self.update_status,
-                                                 cyclesecs, log)
+        super(MIDASPublishingMonitor, self).__init__(statusdir, qfile, self.update_status, cyclesecs, log)
 
     def update_status(self, sipid: str, state:str , message: str):
         """
