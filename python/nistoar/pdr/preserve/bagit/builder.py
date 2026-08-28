@@ -13,7 +13,7 @@ from pathlib import Path
 from .. import PreservationSystem
 from .. import ConfigurationException, StateException, PODError
 from .exceptions import (BagProfileError, BagWriteError, BadBagRequest,
-                         ComponentNotFound)
+                         ComponentNotFound, InvalidBagID)
 from ....nerdm.exceptions import (NERDError, NERDTypeError)
 from ....nerdm.convert import PODds2Res
 from ....nerdm.constants import core_schema_base, schema_versions
@@ -510,7 +510,7 @@ class BagBuilder(PreservationSystem):
                         parameter has no effect; default: False).
         """
         if not id:
-            raise ValueError("BagBuilder.assign_id(): id is empty or None")
+            raise InvalidBagID("BagBuilder.assign_id(): id is empty or None")
         self._id = self._fix_id(id)  # may raise validity concerns
 
         self.ensure_bag_structure()
@@ -545,7 +545,7 @@ class BagBuilder(PreservationSystem):
 
         if id.startswith("ark:"):
             if not re.match(r"^ark:/\d+/\w", id):
-                raise ValueError("Invalid ARK identifier provided: "+id)
+                raise InvalidBagID("Invalid ARK identifier provided: "+id)
 
             validate = self.cfg.get('validate_id', False)
             if validate:
@@ -566,8 +566,8 @@ class BagBuilder(PreservationSystem):
                 
                 try:
                     if not re.match(pat, id):
-                        raise ValueError("Invalid ARK local-id provided: "+id+
-                                         "; does not match required pattern")
+                        raise InvalidBagID("Invalid ARK local-id provided: "+id+
+                                           "; does not match required pattern: "+pat)
                 except re.error as ex:
                     raise ConfigurationException("validate_id: Contains bad regular expression "+
                                                  "value: "+validate) from ex
@@ -575,7 +575,7 @@ class BagBuilder(PreservationSystem):
                     try:
                         noid.validate(id)
                     except noid.ValidationError as ex:
-                        raise ValueError("Invalid ARK identifier provided: "+str(ex))
+                        raise InvalidBagID("Invalid ARK identifier provided: "+str(ex))
 
         return id
 

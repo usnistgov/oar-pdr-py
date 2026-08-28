@@ -61,3 +61,10 @@ class BagSerializationError(BagItException):
     """
     pass
 
+class InvalidBagID(BagProfileError):
+    """
+    indicates that a bag identifier is invalid in some way.  This often because the ID does not 
+    meet minimum requirements, such as following a prescribed pattern.
+    """
+    pass
+

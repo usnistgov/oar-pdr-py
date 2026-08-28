@@ -181,25 +181,25 @@ class TestBuilder2(test.TestCase):
                          "ark:/88434/edi00hw91d")
         self.assertEqual(self.bag._fix_id("ark:/88434/mds2-4193"),
                          "ark:/88434/mds2-4193")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(bldr.InvalidBagID):
             self.bag._fix_id("ark:/goober/foo")
 
         self.cfg['validate_id'] = r'(edi\d)|(mds[01])'
         self.bag.disconnect_logfile()
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
                          
-        with self.assertRaises(ValueError):
+        with self.assertRaises(bldr.InvalidBagID):
             self.bag._fix_id("ark:/88434/pdr00hw91c")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(bldr.InvalidBagID):
             self.bag._fix_id("ark:/88434/mds2-4193")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(bldr.InvalidBagID):
             self.bag._fix_id("ark:/goober/foo")
 
         # test for check digit
         self.bag.cfg['validate_id'] = r'(mds2|mds3)\-\d{3}\d+\N{OAR_NOID_CD}$'   
-        with self.assertRaises(ValueError):
+        with self.assertRaises(bldr.InvalidBagID):
             self.bag._fix_id("ark:/88434/mds2-4193")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(bldr.InvalidBagID):
             self.bag._fix_id("mds2-4193pd")
         self.assertEqual(self.bag._fix_id("mds2-4193pv"), "ark:/88434/mds2-4193pv")
         
@@ -210,15 +210,15 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(self.bag._fix_id("edi00hw91c"), "edi00hw91c")
         self.assertEqual(self.bag._fix_id("ark:/88434/edi00hw91c"),
                          "ark:/88434/edi00hw91c")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(bldr.InvalidBagID):
             self.bag._fix_id("ark:/goober/foo")
         
 
     def test_assign_id(self):
         self.assertIsNone(self.bag.id)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(bldr.InvalidBagID):
             self.bag.assign_id(None)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(bldr.InvalidBagID):
             self.bag.assign_id("")
 
         self.bag.assign_id("edi00hw91c")
