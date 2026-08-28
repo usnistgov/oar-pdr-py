@@ -336,6 +336,10 @@ class SimpleNerdmPublishingService(PublishingService):
                 raise NERDError("Specified NERDm schema version, " + m.group(1) +
                                 " does not meet minimum requirement of " + ".".join(self._minnerdmver))
 
+        # special tweak for accepting v0.6
+        if ver >= [0, 6] and ver < [0, 7]:
+            schema = f"{NERDM_SCHEMA_BASE}v0.7"
+
         if '#' not in schema:
             schema += schematype
         elif not schema.endswith(schematype):
