@@ -165,14 +165,12 @@ class TestBuilder2(test.TestCase):
                          "ark:/88434/edi00hw91c")
         self.assertEqual(self.bag._fix_id("88434/edi00hw91c"),
                          "ark:/88434/edi00hw91c")
-        self.assertEqual(self.bag._fix_id("edi00hw91c"),
+        self.assertEqual(self.bag._fix_id("edi00hw91c"),       # check digit validation is *not* done
                          "ark:/88434/edi00hw91c")
-        with self.assertRaises(ValueError):
-            self.bag._fix_id("ark:/goober/foo")
-        with self.assertRaises(ValueError):
-            self.bag._fix_id("ark:/88434/edi00hw91d")
-        with self.assertRaises(ValueError):
-            self.bag._fix_id("ark:/88434/mds2-4193")
+        self.assertEqual(self.bag._fix_id("88434/edi00hw91d"), # check digit validation is *not* done
+                         "ark:/88434/edi00hw91d")
+        self.assertEqual(self.bag._fix_id("ark:/88434/mds2-4193"),  # same
+                         "ark:/88434/mds2-4193")
 
         self.cfg['validate_id'] = False
         self.bag.disconnect_logfile()
@@ -189,18 +187,21 @@ class TestBuilder2(test.TestCase):
         self.cfg['validate_id'] = r'(edi\d)|(mds[01])'
         self.bag.disconnect_logfile()
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
+                         
         with self.assertRaises(ValueError):
-            # validate this one
-            self.bag._fix_id("ark:/88434/edi00hw91d")
-
-        # don't validate this these
-        self.assertEqual(self.bag._fix_id("ark:/88434/pdr00hw91c"),
-                         "ark:/88434/pdr00hw91c")
-        self.assertEqual(self.bag._fix_id("ark:/88434/mds2-4193"),
-                         "ark:/88434/mds2-4193")
-
+            self.bag._fix_id("ark:/88434/pdr00hw91c")
+        with self.assertRaises(ValueError):
+            self.bag._fix_id("ark:/88434/mds2-4193")
         with self.assertRaises(ValueError):
             self.bag._fix_id("ark:/goober/foo")
+
+        # test for check digit
+        self.bag.cfg['validate_id'] = r'(mds2|mds3)\-\d{3}\d+\N{OAR_NOID_CD}$'   
+        with self.assertRaises(ValueError):
+            self.bag._fix_id("ark:/88434/mds2-4193")
+        with self.assertRaises(ValueError):
+            self.bag._fix_id("mds2-4193pd")
+        self.assertEqual(self.bag._fix_id("mds2-4193pv"), "ark:/88434/mds2-4193pv")
         
         self.cfg['validate_id'] = r'(edi\d)|(mds[01])'
         self.cfg['require_ark_id'] = False

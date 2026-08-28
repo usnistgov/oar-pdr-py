@@ -72,6 +72,9 @@ DISTSERV = "https://"+PDR_PUBLIC_SERVER+"/od/ds/"
 DEF_MERGE_CONV = "pdp0"
 FILECMP_ID_START = FILECMP_EXTENSION.strip('/') + '/'
 
+NOID_CD_CTL_PAT = r'(\\N\{OAR_NOID_CD}|\\k)'
+NOID_CD_PAT = r'\\w[' + ''.join(noid.XDIGIT) + ']'
+
 class BagBuilder(PreservationSystem):
     """
     A class for building up and populating a BagIt bag compliant with the 
@@ -545,20 +548,35 @@ class BagBuilder(PreservationSystem):
                 raise ValueError("Invalid ARK identifier provided: "+id)
 
             validate = self.cfg.get('validate_id', False)
-            if isinstance(validate, str):
-                # assume that this is a RE of matching shoulders to validate
-                try:
-                    validate = bool( re.match(r'ark:/\d+/('+validate+')', id) )
-                except re.error as ex:
-                    raise ConfigurationException("validate_id: Contains bad "
-                                                 "regular expression value: " +
-                                                 validate, ex)
             if validate:
+                validate_check_digit = False
+                pat = r'ark:/\d+/'
+                if isinstance(validate, str):
+                    validate = validate.lstrip('^')
+
+                    # assume that this is a RE pattern of local-id (starting with the shoulder)
+                    # Note the support for a CUSTOM control sequences, \k and \N{OAR_NOID_CD},
+                    #   synonyms that match a NOID "check digit".  If it appears, we
+                    #   apply an extra check to make sure that the check character digit is correct.
+                    cdre = re.compile(NOID_CD_CTL_PAT)
+                    if cdre.search(validate):
+                        validate_check_digit = True
+                        validate = cdre.sub(NOID_CD_PAT, validate)
+                    pat += f"({validate})"
+                
                 try:
-                    noid.validate(id)
-                except noid.ValidationError as ex:
-                    raise ValueError("Invalid ARK identifier provided: "+
-                                     str(ex))
+                    if not re.match(pat, id):
+                        raise ValueError("Invalid ARK local-id provided: "+id+
+                                         "; does not match required pattern")
+                except re.error as ex:
+                    raise ConfigurationException("validate_id: Contains bad regular expression "+
+                                                 "value: "+validate) from ex
+                if validate_check_digit:
+                    try:
+                        noid.validate(id)
+                    except noid.ValidationError as ex:
+                        raise ValueError("Invalid ARK identifier provided: "+str(ex))
+
         return id
 
     def _has_resmd(self):
