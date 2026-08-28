@@ -258,7 +258,7 @@ class TestPDPApp(test.TestCase):
             }
         }
         self.cfg = self.load_config(cfg)
-        self.app = pdp.PDPApp(self.cfg, workdir=self.workdir)
+        self.app = pdp.PDPApp(self.cfg, workdir=self.workdir, base_ep="/pdp/")
         self.token = self.cfg['authorized'][1]['auth_key']
 
     def tearDown(self):
