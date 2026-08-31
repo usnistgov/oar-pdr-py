@@ -59,7 +59,10 @@ class TestBuilder2(test.TestCase):
                                          "Gaithersburg, MD 20899"]
             },
             "ensure_nerdm_type_on_add": False,
-            "merge_convention": "midas0"
+            "merge_convention": "midas0",
+            "repo_access": {
+                "base_url": "https://pdr.net/od"
+            }
         }
 
         self.bag = bldr.BagBuilder(self.tf.root, "testbag", self.cfg)
@@ -1071,13 +1074,14 @@ class TestBuilder2(test.TestCase):
         md = self.bag.describe_data_file(srcfile, "foo/trial1.json")
         self.assertEqual(md['filepath'], "foo/trial1.json")
         self.assertIn('downloadURL', md)
-        self.assertTrue(md['downloadURL'].endswith("/od/ds/goober/foo/trial1.json"))
+        self.assertEqual(md['downloadURL'], "pdr:dl:foo/trial1.json")
 
+        # note: downloadURL is no longer affected by ediid until finalize_bag()/finalize_URLs()
         self.bag.ediid = "ark:/88434/goober"
         md = self.bag.describe_data_file(srcfile)
         self.assertEqual(md['filepath'], "trial1.json")
         self.assertIn('downloadURL', md)
-        self.assertTrue(md['downloadURL'].endswith("/od/ds/goober/trial1.json"))
+        self.assertEqual(md['downloadURL'], "pdr:dl:trial1.json")
 
         # don't override existing metadata
         exturl = "https://example.com/goober/trial1.json"
@@ -1096,7 +1100,7 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(md['filepath'], "foo/trial1.json")
         self.assertIn('downloadURL', md)
         self.assertNotIn('title', md)
-        self.assertTrue(md['downloadURL'].endswith("/od/ds/goober/foo/trial1.json"))
+        self.assertEqual(md['downloadURL'], "pdr:dl:foo/trial1.json")
 
     def test_register_data_file(self):
         srcfile = os.path.join(datadir, "trial1.json")
@@ -1164,6 +1168,7 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(md['@id'], "cmps/gurn")
 
     def test_update_ediid(self):
+        # NOTE: ediid no longer affects downloadURLs until finalize_bag()/finalizeURLs()
         self.assertIsNone(self.bag.ediid)
         self.bag.ediid = "9999"
         self.assertIsNone(self.bag.bag)
@@ -1187,10 +1192,9 @@ class TestBuilder2(test.TestCase):
         with open(self.bag.bag.nerd_file_for("")) as fd:
             mdata = json.load(fd)
         self.assertEqual(mdata['ediid'], 'gurn')
-        dlurl = "https://data.nist.gov/od/ds/gurn/"+destpath
         with open(self.bag.bag.nerd_file_for(destpath)) as fd:
             mdata = json.load(fd)
-        self.assertEqual(mdata['downloadURL'], dlurl)
+        self.assertEqual(mdata['downloadURL'], "pdr:dl:"+destpath)
 
     def test_add_res_nerd(self):
         self.cfg['ensure_nerdm_type_on_add'] = bldr.NERDM_SCH_ID_BASE + "v0.4"
@@ -1762,7 +1766,7 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(len(oxum), 1)
         oxum = [int(n) for n in oxum[0].split(': ')[1].split('.')]
         self.assertEqual(oxum[1], 14)
-        self.assertEqual(oxum[0], 12212)  # this will change if logging changes
+        self.assertEqual(oxum[0], 12313)  # this will change if logging changes
 
         bagsz = [l for l in lines if "Bag-Size: " in l]
         self.assertEqual(len(bagsz), 1)
@@ -1854,6 +1858,52 @@ class TestBuilder2(test.TestCase):
         for member in members:
             self.assertIn(member+'\t'+self.bag.bagname, lines)
 
+    def test_getbaseurl(self):
+        cfg = self.cfg.get('repo_access', {})
+        self.assertEqual(self.bag._getbaseurl(cfg, "landing_page_service"), "https://pdr.net/od/id/")
+        self.assertEqual(self.bag._getbaseurl(cfg, "lp"), "https://pdr.net/od/id/")
+        self.assertEqual(self.bag._getbaseurl(cfg, "distrib_service"), "https://pdr.net/od/ds/")
+        self.assertEqual(self.bag._getbaseurl(cfg, "dl"), "https://pdr.net/od/ds/")
+
+        cfg['distrib_service'] = {
+            'service_endpoint':  "https://pdrdist.net/ds/"
+        }
+        self.assertEqual(self.bag._getbaseurl(cfg, "landing_page_service"), "https://pdr.net/od/id/")
+        self.assertEqual(self.bag._getbaseurl(cfg, "lp"), "https://pdr.net/od/id/")
+        self.assertEqual(self.bag._getbaseurl(cfg, "distrib_service"), "https://pdrdist.net/ds/")
+        self.assertEqual(self.bag._getbaseurl(cfg, "dl"), "https://pdrdist.net/ds/")
+
+    def test_realize_url(self):
+        self.bag.assign_id("mds00kkd13")
+        url = "https://example.com/goober"
+        self.assertEqual(self.bag._realize_url(url), url)
+
+        self.assertEqual(self.bag._realize_url("pdr:md"), "https://pdr.net/od/id/mds00kkd13")
+        self.assertEqual(self.bag._realize_url("pdr:ds:goob", "https://pdrdist.net/ds/"),
+                         "https://pdrdist.net/ds/mds00kkd13/goob")
+
+    def test_finalize_URLs(self):
+        self.bag.assign_id("mds00kkd13")
+        path = os.path.join("trial1","gold","trial1.json")
+        datafile = os.path.join(datadir,"trial1.json")
+        datafilesz = os.stat(datafile).st_size
+        podfile = os.path.join(datadir, "_pod.json")
+
+        self.bag.add_data_file(path, datafile)
+        path = os.path.join("trial1","trial2.json")
+        self.bag.add_data_file(path, datafile)
+
+        mdata = self.bag.bag.nerd_metadata_for('trial1/gold/trial1.json')
+        self.assertEqual(mdata.get('downloadURL'), 'pdr:dl:trial1/gold/trial1.json')
+        
+        with open(podfile) as fd:
+            pod = json.load(fd)
+        del pod['landingPage']
+        self.bag.add_ds_pod(pod, convert=True, savefilemd=False)
+
+        mdata = self.bag.bag.nerd_metadata_for('')
+        self.assertEqual(mdata.get('landingPage'), 'pdr:lp')
+        self.bag.finalize_URLs(self.bag.cfg.get('repo_access', {}))
             
     def test_finalize_validate(self):
         path = os.path.join("trial1","gold","trial1.json")
