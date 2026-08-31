@@ -244,8 +244,11 @@ class JSONPreservationStateManager(PreservationStateManager):
         else:
             self._cache()
 
-        if self._pubstat and step & self.PUBLISHED:
-            self._pubstat.update(status.PUBLISHED)   # this will update its message
+        if self._pubstat:
+            if step & self.PUBLISHED:
+                self._pubstat.update(status.PUBLISHED)   # this will update its message
+            elif step & self.STARTED:
+                self._pubstat.update(status.SUBMITTED, message)
 
     def unmark_completed(self, step: int):
         """
