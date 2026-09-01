@@ -20,7 +20,7 @@ from nistoar.pdr.utils.webrecord import WebRecorder
 from nistoar.web.utils import order_accepts
 from nistoar.web.rest import Handler
 from nistoar.nerdm.validate import ValidationError
-from nistoar.pdr.preserve.service import PreservationService
+from nistoar.pdr.preserve.service import PreservationService, PreservationStateError
 
 class PDPApp(ServiceApp):
     """
@@ -254,6 +254,12 @@ class PDPApp(ServiceApp):
                 self.log.error(msg)
                 return self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
 
+            except PreservationStateError as ex:
+                # usually because preservation is already going on this SIP (via PreservationInProgress)
+                msg = "Record accepted but unable to publish: %s" % str(ex)
+                self.log.warning("Preservation submission denied: %s", str(ex))
+                return self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
+
             except Exception as ex:
                 if sipid:
                     self.log.exception("Failed to accept SIP: %s: %s", sipid, str(ex))
@@ -390,6 +396,12 @@ class PDPApp(ServiceApp):
             except PublishingStateException as ex:
                 msg = "Attempt to update SIP in un-update-able state: %s" % str(ex)
                 self.log.error(msg)
+                return self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
+
+            except PreservationStateError as ex:
+                # usually because preservation is already going on this SIP (via PreservationInProgress)
+                msg = "Record accepted but unable to publish: %s" % str(ex)
+                self.log.warning("Preservation submission denied: %s", str(ex))
                 return self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
 
             except Exception as ex:
@@ -532,6 +544,12 @@ class PDPApp(ServiceApp):
                 msg = "Bad Input: "+str(ex)
                 self.log.error(msg)
                 return self.send_error_resp(400, "Bad Input", msg, sipid)
+
+            except PreservationStateError as ex:
+                # usually because preservation is already going on this SIP (via PreservationInProgress)
+                msg = "Unable to publish: %s" % str(ex)
+                self.log.warning("Preservation submission denied: %s", str(ex))
+                return self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
 
             except Exception as ex:
                 self.log.exception("Failed to take %s action on %s: %s", action, path, str(ex))
