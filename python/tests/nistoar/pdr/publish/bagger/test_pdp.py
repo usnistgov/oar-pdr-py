@@ -225,6 +225,7 @@ class TestPDPBagger(test.TestCase):
         nerd['accessLevel'] = "private"
         nerd['pdr:status'] = "hungry"
         nerd['pdr:siptype'] = "innocent"
+        self.assertIsNone(nerd.get('landingPage'))
         # pubshr = nerd['publisher']
         self.bgr.set_res_nerdm(nerd, None, False)
 
@@ -236,6 +237,7 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(saved.get('bureauCode'), ["006:55"])
         self.assertEqual(saved.get('programCode'), ["006:045"])
         self.assertEqual(saved.get('accessLevel'), "private")
+        self.assertEqual(saved.get('landingPage'), 'pdr:lp')
         self.assertIn('publisher', saved)
         self.assertIn("Neutron", saved['title'])
         self.assertEqual(len(saved['authors']), 2)

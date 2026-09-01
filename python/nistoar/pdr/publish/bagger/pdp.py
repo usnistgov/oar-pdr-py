@@ -511,6 +511,9 @@ class NERDmBasedBagger(SIPBagger):
         return nerdm
 
     def _set_standard_res_modifications(self, resmd):
+        if not resmd.get('landingPage'):
+            resmd['landingPage'] = "pdr:lp"
+
         # update the types
         types = resmd.setdefault('@type', [])
 #        while 'nrds:PDRSubmission' in types:
