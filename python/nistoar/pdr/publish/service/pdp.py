@@ -21,6 +21,7 @@ from pathlib import Path
 from ... import constants as const
 from ....nerdm import constants as nrdconst
 from ....pdr import config as cfgmod, utils
+from ....pdr.preserve import PreservationInProgress
 from .base import SimpleNerdmPublishingService
 from .. import (PublishingStateException, SIPConflictError, SIPNotFoundError, BadSIPInputError,
                 ConfigurationException, UnauthorizedPublishingRequest)
@@ -67,6 +68,9 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
     :param str sip_status_dir:   The path to the directory where SIP status state is persisted.  
                                  If the path is relative, it will be taken to be relative to the 
                                  working directory.
+    :param str sip_submitted_dir:   The path to the directory where SIP bags are moved to when 
+                                 submitted for preservation.  If the path is relative, it will be 
+                                 taken to be relative to the working directory.
     :param bool validate_nerdm:  If True (default), input NERDm metadata will be validated before 
                                  being accepted, raising a ValidationError exception if the 
                                  metadata is not valid.  
@@ -76,7 +80,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
     """
 
     def __init__(self, config: Mapping, convention: str, baselog: Logger=None, workdir: str=None, 
-                 bagdir: str=None, statusdir: str=None, pressvc=None):
+                 bagdir: str=None, statusdir: str=None, submitdir: str=None, pressvc=None):
         """
         initialize the service.
 
@@ -93,6 +97,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                                 (over-riding what's specified in config)
         :param str  statusdir:  the directory for recording SIP status 
                                 (over-riding what's specified in config)
+        :param str  submitdir:  the directory to move SIPs submitted for preservation
+                                (over-riding what's specified in config)
         :param PreservationService pressvc: the preservation service to use to publish the resulting AIP
         """
         super(BagBasedPublishingService, self).__init__(convention, config, baselog)
@@ -103,6 +109,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
 
         self.bagparent = self._resolve_dir('sip_bags_dir', bagdir, self.workdir, 'sipbags')
         self.statusdir = self._resolve_dir('sip_status_dir', statusdir, self.workdir, 'status')
+        self.submitdir = self._resolve_dir('sip_submit_dir', submitdir, self.workdir, 'submitted')
 
         self.pressvc = pressvc
         if not self.pressvc:
@@ -542,6 +549,8 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         :raises SIPNotFoundError:   if the SIP is in the NOT_FOUND state
         :raises SIPConflictError:   if the SIP is not in the PENDING state or was prepared via 
                                        a different SIP convention 
+        :raises PreservationInProgress:  if it apears that preservation of the SIP (usually, a previous 
+                                       version) is already in progress
         """
         sts = self.status_of(sipid)
         if sts.state == status.NOT_FOUND:
@@ -556,9 +565,18 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         try:
             bagger = self.finalize(sipid, who)
             sts.update(status.PROCESSING)
+
+            # move the bag to the submitted dir
+            submittedbag = bagger.bagdir
+            if os.path.isdir(self.submitdir):
+                submittedbag = os.path.join(self.submitdir, os.path.basename(bagger.bagdir))
+                if os.path.exists(submittedbag):
+                    raise PreservationInProgress(sipid)
+                shutil.move(bagger.bagdir, submittedbag)
+
             if self.pressvc:
                 # generally, preservation is asynchronous
-                self.pressvc.preserve_from(bagger.bagdir, sts, startover=True)
+                self.pressvc.preserve_from(submittedbag, sts, startover=True)
                 sts.update(status.SUBMITTED)
             else:
                 self.log.warning("No preservation service configured; holding SIP in PROCESSING state")

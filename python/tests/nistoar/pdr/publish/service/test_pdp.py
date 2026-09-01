@@ -698,8 +698,10 @@ class TestPDPublishingService(test.TestCase):
         self.assertTrue(len(bnerd.get('components',[])) > 0)
         self.assertEqual(bnerd['version'], "1.0.0+ (in edit)")
 
+        self.assertTrue(not os.path.isdir(os.path.join(self.pubsvc.submitdir, bagdir.name)))
         self.pubsvc.publish(sipid, ncnrag)
         self.assertEqual(self.pubsvc.status_of(sipid).state, status.PROCESSING)
+        self.assertTrue(os.path.isdir(os.path.join(self.pubsvc.submitdir, bagdir.name)))
 
                          
 if __name__ == '__main__':

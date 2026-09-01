@@ -222,6 +222,19 @@ class TestPDR1AIPArchiving(test.TestCase):
         self.assertEqual(self.mgr.steps_completed, self.mgr.ARCHIVED | self.mgr.SUBMITTED)
         self.assertIn("submitted", self.mgr.message)
         
+    def test_apply_skip_wait(self):
+        self.mgr.record_progress("Goob!")
+        self.assertFalse(any(f for f in os.listdir(self.storedir) if not f.startswith('.')))
+
+        self.mgr.set_state_property("finalizing:has_data", False)
+        self.arch.apply(self.mgr)
+        
+        copied = [f for f in os.listdir(self.storedir) if not f.startswith('.')]
+        copied.sort()
+        self.assertEqual(len(copied), len(self.archfiles)+2)  # tmp dirs still exist
+        self.assertEqual(self.mgr.steps_completed, self.mgr.ARCHIVED | self.mgr.SUBMITTED)
+        self.assertIn("submitted", self.mgr.message)
+        
     def test_run(self):
         self.mgr.record_progress("Goob!")
         self.assertFalse(any(f for f in os.listdir(self.storedir) if not f.startswith('.')))

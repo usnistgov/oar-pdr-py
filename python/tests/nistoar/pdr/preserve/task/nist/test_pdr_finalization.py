@@ -172,7 +172,6 @@ class TestPDRBagFinalization(test.TestCase):
                                                             "persist_in": str(self.workdir)  },
                                                            "mds2-7223", str(self.testbag))
 
-
     def tearDown(self):
         self.tmpdir.cleanup()
 
@@ -187,6 +186,7 @@ class TestPDRBagFinalization(test.TestCase):
         self.fin.revert(self.mgr)
 
     def test_apply(self):
+        self.assertIsNone(self.mgr.get_state_property("finalizing:has_data"))
         self.assertIsNone(self.mgr.get_finalized_aip())
         aipid = "mds2-7223"
         for dir in self.ingestdir.iterdir():
@@ -204,6 +204,25 @@ class TestPDRBagFinalization(test.TestCase):
         self.assertTrue(self.dcdir/"staging"/"mds2-7223.json")
         self.assertEqual(self.mgr.steps_completed, self.mgr.FINALIZED)
         self.assertEqual(self.mgr.get_state_property("nerdm:version"), "1.1.0")
+        self.assertIs(self.mgr.get_state_property("finalizing:has_data"), True)
+
+    def test_has_no_data(self):
+        """
+        ensure 'pdr:has_data' is set to False if bag contains no actual data files
+        """
+        self.assertIsNone(self.mgr.get_state_property("finalizing:has_data"))
+        for atdir, dirs, files in os.walk(self.testbag/'data'):
+            for f in files:
+                os.remove(os.path.join(atdir, f))
+
+        self.fin.cfg['allow_replace'] = True
+        self.fin.apply(self.mgr)
+
+        self.assertEqual(self.mgr.get_finalized_aip(), str(self.workdir/("mds2-7223.1_1_0.mbag0_4-2")))
+        self.assertTrue(self.ingestdir/"staging"/"mds2-7223.json")
+        self.assertTrue(self.dcdir/"staging"/"mds2-7223.json")
+        self.assertEqual(self.mgr.steps_completed, self.mgr.FINALIZED)
+        self.assertIs(self.mgr.get_state_property("finalizing:has_data"), False)
         
     def test_run(self):
         bgb = BagBuilder.forBag(self.mgr.get_sip())

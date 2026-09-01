@@ -176,6 +176,9 @@ class PDRBagFinalization(fw.AIPFinalization):
         except BagItException as ex:
             raise AIPFinalizationException("Failed to finalize AIP bag: "+str(ex), aipid) from ex
 
+        # does this finalized bag contain any data files?
+        statemgr.set_state_property("finalizing:has_data", self.has_data_files(bldr.bag))
+
         # stage NERDm record for publishing
         nerdm = bldr.bag.nerdm_record()
         statemgr.set_state_property("nerdm:version", nerdm.get("version", "0"))
@@ -203,6 +206,14 @@ class PDRBagFinalization(fw.AIPFinalization):
 
         statemgr.mark_completed(statemgr.FINALIZED, "AIP bag finalization completed")
 
+    def has_data_files(self, bag):
+        """
+        return True if the finalized bag includes data files under the data directory
+        """
+        for atdir, dirs, files in os.walk(bag.data_dir):
+            if files:
+                return True
+        return False
 
     def revert(self, statemgr: fw.PreservationStateManager):
         log = statemgr.log.getChild("finalization").getChild("revert")
@@ -291,6 +302,10 @@ class PDR1AIPArchiving(fw.AIPArchiving):
          any being transfered from that staging area to be replaced; if any such files are 
          found in the transfer directory, the preservation step will fail.  If True, such files
          will be replaced.  
+    ``always_wait``
+         (bool) Always wait until the transfer of bags to long-term storage is complete.  If 
+         False (default), this will only wait if the bags include data files to be made 
+         available (determined during the finalization step).
     ``polling``
          (dict) a configuration dictionary that describes how the sleep-polling cycle evolves
          over time.
@@ -337,8 +352,9 @@ class PDR1AIPArchiving(fw.AIPArchiving):
             statemgr.record_progress("Archiving files to long-term storage")
             self.launch_migration(statemgr, log)
             statemgr.mark_completed(statemgr.SUBMITTED, "Files submitted to long-term storage")
-        
-        self.monitor_destination(statemgr, log)
+
+        if self.cfg.get('always_wait') or statemgr.get_state_property("finalizing:has_data", True):
+            self.monitor_destination(statemgr, log)
         statemgr.mark_completed(statemgr.ARCHIVED)
 
     def launch_migration(self, statemgr: fw.PreservationStateManager, log: Logger):
