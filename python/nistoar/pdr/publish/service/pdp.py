@@ -917,7 +917,7 @@ class PDPublishingService(BagBasedPublishingService):
     """
     
     def __init__(self, config: Mapping, convention: str="pdp0", baselog: Logger=None, workdir: str=None, 
-                 bagdir: str=None, status_dir: str=None, idregdir: str=None, pressvc=None):
+                 bagdir: str=None, status_dir: str=None, submitdir: str=None, idregdir: str=None, pressvc=None):
         """
         initialize the service.
 
@@ -935,6 +935,8 @@ class PDPublishingService(BagBasedPublishingService):
                                 (over-riding what's specified in config)
         :param str  statusdir:  the directory for recording SIP status 
                                 (over-riding what's specified in config)
+        :param str  submitdir:  the directory to move SIPs submitted for preservation
+                                (over-riding what's specified in config)
         :param str   idregdir:  the default directory for persisting ID registries
                                 (over-riding what's specified in config)
 
@@ -943,7 +945,7 @@ class PDPublishingService(BagBasedPublishingService):
         if not convention:
             convention = "pdp0"
         super(PDPublishingService, self).__init__(config, convention, baselog, workdir, bagdir,
-                                                  status_dir, pressvc)
+                                                  status_dir, submitdir, pressvc)
         self.idregdir = self._resolve_dir('id_registry_dir', idregdir, self.workdir, 'idregs')
         self._minters = {}
 
@@ -1237,7 +1239,7 @@ class PDP1Service(PDPublishingService):
     """
 
     def __init__(self, config: Mapping, baselog: Logger=None, working_dir: str=None, bagdir: str=None, 
-                 status_dir: str=None, idregdir: str=None, pressvc=None,
+                 statusdir: str=None, submitdir: str=None, idregdir: str=None, pressvc=None,
                  uploadsroot: Union[str,Path]=None, convention: str="pdp1"):
         """
         initialize the service.
@@ -1253,6 +1255,8 @@ class PDP1Service(PDPublishingService):
                                 (over-riding what's specified in config)
         :param str  statusdir:  the directory for recording SIP status 
                                 (over-riding what's specified in config)
+        :param str  submitdir:  the directory to move SIPs submitted for preservation
+                                (over-riding what's specified in config)
         :param str   idregdir:  the default directory for persisting ID registries
                                 (over-riding what's specified in config)
         :param PreservationService pressvc: the service to use to publish the resulting AIP
@@ -1264,8 +1268,8 @@ class PDP1Service(PDPublishingService):
         """
         if not convention:
             convention = "pdp1"
-        super(PDP1Service, self).__init__(config, convention, baselog, working_dir, bagdir, status_dir,
-                                          idregdir, pressvc)
+        super(PDP1Service, self).__init__(config, convention, baselog, working_dir, bagdir, statusdir,
+                                          submitdir, idregdir, pressvc)
         if not uploadsroot:
             if not self.cfg.get('uploads_dir'):
                 self.log.warning("PDP1Service: uploads_dir config param not set; "

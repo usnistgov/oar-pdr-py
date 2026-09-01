@@ -49,6 +49,7 @@ class TestPDPWSGI(test.TestCase):
     def setUp(self):
         self.tf = Tempfiles()
         self.workdir = self.tf.mkdir("pdp0")
+        self.submitted = Path(self.workdir) / 'submitted'
         self.bagparent = Path(self.workdir) / 'sipbags'
         bgrcfg = {
             "bag_builder": {
@@ -278,8 +279,11 @@ class TestPDPWSGI(test.TestCase):
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
+        # moved to submitted directory
+        self.assertTrue(not (self.bagparent / "pdp0:0017").exists())
+
         # being processed by preservation service; not cleaned up yet
-        self.assertTrue((self.bagparent / "pdp0:0017").is_dir())
+        self.assertTrue((self.submitted / "pdp0:0017").is_dir())
 
 
 

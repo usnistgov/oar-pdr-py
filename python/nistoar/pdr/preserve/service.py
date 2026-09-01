@@ -20,7 +20,7 @@ from nistoar.pdr.publish.service.status import SIPStatus
 from nistoar import jobmgt
 from .task.framework import PreservationStepsAware
 from .task.state import JSONPreservationStateManager
-from . import PreservationException, PreservationInProgress, PreservationSystem
+from . import PreservationException, PreservationInProgress, PreservationStateError, PreservationSystem
 from .bagit import NISTBag
 
 _pdridre = re.compile(r"^ark:/\d+/")
