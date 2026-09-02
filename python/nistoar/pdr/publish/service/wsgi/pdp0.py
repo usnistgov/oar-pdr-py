@@ -545,6 +545,11 @@ class PDPApp(ServiceApp):
                 self.log.error(msg)
                 return self.send_error_resp(400, "Bad Input", msg, sipid)
 
+            except PublishingStateException as ex:
+                msg = "Attempt to update SIP in un-update-able state: %s" % str(ex)
+                self.log.error(msg)
+                return self.send_error_resp(409, "Conflicting SIP state", msg, sipid)
+
             except PreservationStateError as ex:
                 # usually because preservation is already going on this SIP (via PreservationInProgress)
                 msg = "Unable to publish: %s" % str(ex)
