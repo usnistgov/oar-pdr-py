@@ -1278,9 +1278,9 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(poddata['theme'][0], "Optical physics")
         self.assertEqual(len(poddata['theme']), 1)
         self.assertEqual(len(data['topic']), 1)
-        self.assertEqual(data['topic'][0]['tag'], "Physics: Optical physics")
+        self.assertEqual(data['topic'][0]['tag'], "Physics: Optical physics and communications")
         self.assertEqual(len(data['theme']), 1)
-        self.assertEqual(data['theme'][0], "Physics: Optical physics")
+        self.assertEqual(data['theme'][0], "Physics: Optical physics and communications")
 
     def test_add_ds_pod_filemd(self):
         podfile = os.path.join(datadir, "_pod.json")
@@ -1766,7 +1766,7 @@ class TestBuilder2(test.TestCase):
         self.assertEqual(len(oxum), 1)
         oxum = [int(n) for n in oxum[0].split(': ')[1].split('.')]
         self.assertEqual(oxum[1], 14)
-        self.assertEqual(oxum[0], 12313)  # this will change if logging changes
+        self.assertEqual(oxum[0], 12351)  # this will change if logging changes
 
         bagsz = [l for l in lines if "Bag-Size: " in l]
         self.assertEqual(len(bagsz), 1)
@@ -1902,8 +1902,14 @@ class TestBuilder2(test.TestCase):
         self.bag.add_ds_pod(pod, convert=True, savefilemd=False)
 
         mdata = self.bag.bag.nerd_metadata_for('')
-        self.assertEqual(mdata.get('landingPage'), 'pdr:lp')
+        self.assertIsNone(mdata.get('landingPage'))
         self.bag.finalize_URLs(self.bag.cfg.get('repo_access', {}))
+        mdata = self.bag.bag.nerd_metadata_for('')
+        self.assertEqual(mdata.get('landingPage'),
+                         'https://pdr.net/od/id/3A1EE2F169DD3B8CE0531A570681DB5D1491')
+        mdata = self.bag.bag.nerd_metadata_for('trial1/gold/trial1.json')
+        self.assertEqual(mdata.get('downloadURL'),
+                         'https://pdr.net/od/ds/3A1EE2F169DD3B8CE0531A570681DB5D1491/trial1/gold/trial1.json')
             
     def test_finalize_validate(self):
         path = os.path.join("trial1","gold","trial1.json")

@@ -1967,6 +1967,9 @@ class BagBuilder(PreservationSystem):
         if trim:
             self.trim_metadata_folders()
 
+        # inject server base-url into symbolic URLs in metadata
+        self.finalize_URLs(finalcfg.get('repo_access', {}))
+
         # Clean out non-standard files
         topfiles = [ f for f in os.listdir(self.bagdir) if f.startswith('__') ]
         for f in topfiles:
@@ -1975,9 +1978,6 @@ class BagBuilder(PreservationSystem):
                 shutil.rmtree(f)
             else:
                 os.remove(f)
-
-        # inject server base-url into symbolic URLs in metadata
-        self.finalize_URLs(finalcfg.get('repo_access', {}))
 
         self.ensure_bagit_ver()
         self.write_data_manifest(finalcfg.get('confirm_checksums', False))
@@ -2053,7 +2053,7 @@ class BagBuilder(PreservationSystem):
                                                       message="Removing downloadURL for restricted access file")
                         elif mdata['downloadURL'].startswith("pdr:"):
                             dl = self._realize_url(mdata['downloadURL'], baseurl)
-                            self.update_metadata_for(mdata['filepath'], {'downloadURL': lp},
+                            self.update_metadata_for(mdata['filepath'], {'downloadURL': dl},
                                                      message="realizing download URL for "+
                                                              mdata.get('filepath'))
 
@@ -2553,15 +2553,17 @@ class BagBuilder(PreservationSystem):
                                             auth.get('middleName', ''),
                                             auth.get('familyName', '') ]).strip()
                         if aus and auth.get('affiliation'):
-                            try:
-                                whichaffil = affils.index(auth['affiliation'])+1
-                            except ValueError:
-                                affils.append(auth['affiliation'])
-                                whichaffil = len(affils)
+                            whichaffil = []
+                            for affil in auth['affiliation']:
+                                try:
+                                    whichaffil.append(str(affils.index(affil['title'])+1))
+                                except ValueError:
+                                    affils.append(affil['title'])
+                                    whichaffil.append(str(len(affils)))
 
                             # using = as a non-breakable space here, see sub()
                             # below.
-                            aus += "=[{0}]".format(whichaffil)
+                            aus += "=[{0}]".format(",".join(whichaffil))
 
                         auths.append(aus)
 
