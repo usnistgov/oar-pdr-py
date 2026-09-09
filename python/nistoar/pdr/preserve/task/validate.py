@@ -9,7 +9,7 @@ from collections import OrderedDict
 from . import framework as fw
 from nistoar.pdr.preserve.bagit import NISTBag
 from nistoar.pdr.preserve.bagit.validate import NISTAIPValidator
-from nistoar.pdr.preserve.bagit.validate.base import ValidationIssue, ValidationResults
+from nistoar.pdr.preserve.bagit.validate.base import ValidationTest, ValidationResults
 from nistoar.pdr.preserve import AIPValidationError
 from nistoar.pdr.preserve.datachecker import DataChecker
 from nistoar.pdr.utils import LockedFile
@@ -113,10 +113,10 @@ class NISTBagValidation(fw.AIPValidation):
 
         if self.cfg.get('trivial'):
             # Just make sure we have something to serialize
-            issue = ValidationIssue("PDR", "0", "1", res.WARN,
-                                    "AIP should look like a BagIt bag (and multibag-ready)")
-            res._warn(issue, os.path.is_file(os.path.join(bag.dir, "bag-info.txt")),
-                      "Doesn't look like a real bag (missing bag-info.txt)")
+            test = ValidationTest("PDR", "0", "1", res.WARN,
+                                  "AIP should look like a BagIt bag (and multibag-ready)")
+            res._add_applied(test, os.path.is_file(os.path.join(bag.dir, "bag-info.txt")),
+                             "Doesn't look like a real bag (missing bag-info.txt)")
             info['trivial'] = True
             info['bag_validate_duration'] = time.time() - start
 
@@ -151,26 +151,26 @@ class NISTBagValidation(fw.AIPValidation):
                                    statemgr.log.getChild('data_checker'))
 
                 missing = chkr.unindexed_files()
-                issue = ValidationIssue("PDR", "0", "2.1", res.ERROR,
-                                        "All data files listed in the NERDm metadata must appear in "
-                                        "the multibag file index")
+                test = ValidationTest("PDR", "0", "2.1", res.ERROR,
+                                       "All data files listed in the NERDm metadata must appear in "
+                                       "the multibag file index")
                 if len(missing) > 0:
+                    res._add_applied(test, False,
+                                     f'{len(missing)} file{(len(missing)>1 and "s are") or " is"} missing:')
                     log.error("master bag for id=%s is missing the following "+
                               "files from the multibag file index:\n  %s",
-                              self.name, "\n  ".join(missing))
-                    issue.add_comment(f'{len(missing)} file{(len(missing)>0 and "s are") or " is"} missing:')
-                res._err( issue, len(missing) == 0, missing)
+                              statemgr.aipid, "\n  ".join(missing))
                 
-                missing = chkr.unavailable_files(viadistrib=viadistrib)
-                issue = ValidationIssue("PDR", "0", "2.2", res.ERROR,
-                                        "All data files listed in the the multibag file index must be "
-                                        "found in this or an available bag.")
+                missing = chkr.unavailable_files(viadistrib=self.cfg.get('check_ext_dlurls', True))
+                issue = ValidationTest("PDR", "0", "2.2", res.ERROR,
+                                       "All data files listed in the the multibag file index must be "
+                                       "found in this or an available bag.")
                 if len(missing) > 0:
+                    res._add_applied(test, False,
+                                     f'{len(missing)} file{(len(missing)>0 and "s are") or " is"} missing:')
                     log.error("unable to locate the following files described " +
                               "in master bag for id=%s:\n  %s",
-                              self.name, "\n  ".join(missing))
-                    issue.add_comment(f'{len(missing)} file{(len(missing)>0 and "s are") or " is"} missing:')
-                res._err( issue, len(missing) == 0, missing)
+                              statemgr.aipid, "\n  ".join(missing))
 
                 info['data_check_duration'] = time.time() - mark
 
