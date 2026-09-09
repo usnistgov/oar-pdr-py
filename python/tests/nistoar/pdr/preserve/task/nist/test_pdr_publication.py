@@ -29,28 +29,28 @@ def startServices(authmeth=None):
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
     wpy = "python/tests/nistoar/pdr/distrib/sim_distrib_srv.py"
-    cmd = "uwsgi --daemonize {0} --http-socket :{1} " \
-          "--wsgi-file {2} --pidfile {3} {4}"
-    cmd = cmd.format(os.path.join(tdir,"simdistsrv.log"), srvport,
-                     os.path.join(basedir, wpy), pidfile, uwsgi_opts)
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --pidfile {4}"
+    cmd = cmd.format(os.path.join(tdir,"simdistsrv.log"), uwsgi_opts, srvport,
+                     os.path.join(basedir, wpy), pidfile)
     os.system(cmd)
 
     srvport += 1
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     wpy = "python/tests/nistoar/pdr/ingest/rmm/sim_ingest_srv.py"
-    cmd = "uwsgi --daemonize {0} --http-socket :{1} " \
-          "--wsgi-file {2} --set-ph auth_key=critic --set-ph auth_meth=header --pidfile {3}"
-    cmd = cmd.format(os.path.join(tdir,"simingsrv.log"), srvport,
-                     os.path.join(basedir, wpy), pidfile, uwsgi_opts)
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --set-ph auth_key=critic --set-ph auth_meth=header --pidfile {4}"
+    cmd = cmd.format(os.path.join(tdir,"simingsrv.log"), uwsgi_opts, srvport,
+                     os.path.join(basedir, wpy), pidfile)
     os.system(cmd)
 
     srvport += 1
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     mocksvr = ormdir / "python" / "tests" / "nistoar" / "doi" / "sim_datacite_srv.py"
-    cmd = "uwsgi --daemonize {0} --http-socket :{1} " \
-          "--wsgi-file {2} --pidfile {3} --set-ph prefixes={4}"
-    cmd = cmd.format(os.path.join(tdir,"simsdcrv.log"), srvport, mocksvr,
-                     pidfile, ",".join(prefixes), uwsgi_opts)
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --pidfile {4} --set-ph prefixes={5}"
+    cmd = cmd.format(os.path.join(tdir,"simsdcrv.log"), uwsgi_opts, srvport, 
+                     mocksvr, pidfile, ",".join(prefixes))
     os.system(cmd)
 
     time.sleep(0.5)
