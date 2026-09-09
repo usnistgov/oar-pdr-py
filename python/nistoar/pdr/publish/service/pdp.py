@@ -18,13 +18,15 @@ from abc import abstractmethod, abstractproperty
 from logging import Logger
 from pathlib import Path
 
+import ejsonschema as ejs
+
 from ... import constants as const
 from ....nerdm import constants as nrdconst
-from ....pdr import config as cfgmod, utils
+from ....pdr import config as cfgmod, utils, def_schema_dir
 from ....pdr.preserve import PreservationInProgress
 from .base import SimpleNerdmPublishingService
 from .. import (PublishingStateException, SIPConflictError, SIPNotFoundError, BadSIPInputError,
-                ConfigurationException, UnauthorizedPublishingRequest)
+                SIPValidationFailure, ConfigurationException, UnauthorizedPublishingRequest)
 from ..bagger import SIPBagger, SIPBaggerFactory, PDPBagger
 from ..bagger.prepupd import UpdatePrepService
 from ...utils.prov import Agent, Action
@@ -525,15 +527,44 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             if md.get('doi'):
                 userdata = {'doi': md.get('doi')}
 
+            self._validate(sipid, bagger)  # may raise SIPValidationFailure
+
             sts.update(status.FINALIZED, userdata=userdata)
+
+        except SIPValidationFailure as ex:
+            errs = [e.message if hasattr(e, 'message') else str(e) for e in ex.errors]
+            self.log.error("Finalizing failed to produce a valid SIP bag ready for publication:\n  "+
+                           "\n  ".join(errs))
+            sts.update(status.AWAITING, sysdata={'errors': errs})
+            raise
             
         except Exception as ex:
-            self.log.error("Failed to publish SIP {0}: {1}".format(sipid, str(ex)))
+            self.log.error("Failed to finalize SIP {0}: {1}".format(sipid, str(ex)))
             sts.update(status.FAILED, sysdata={'errors': [str(ex)]})
-            raise ex
+            raise 
 
         return bagger
 
+    def _validate(self, sipid, bagger):
+        # run a post-finalize validation check.  This is not full bag validation; its just meant to
+        # catch missteps by the client.
+        
+        schemadir = self.cfg.get('nerdm_schema_dir', def_schema_dir)
+        if not schemadir:
+            raise ConfigurationException("PublishingService: nerdm_schema_dir config parameter needed")
+
+        nerdm = bagger.bag.nerdm_record(True)
+        pfx = "$"
+        if "_schema" in nerdm:
+            pfx = "_"
+        if not nerdm.get(f"{pfx}schema"):
+            raise SIPValidationFailure(f"NERDm Resource record is missing _schema property")
+
+        valid8r = ejs.ExtValidator.with_schema_dir(schemadir, ejsprefix=pfx)
+        verrs = valid8r.validate(nerdm, strict=True, raiseex=False)
+
+        if verrs:
+            raise SIPValidationFailure(sipid, errors=verrs)
 
     def publish(self, sipid: str, who: Agent=None):
         """
@@ -562,8 +593,9 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             raise SIPConflictError(sipid, "SIP {0} is being handled by a different convention: {1}"
                                           .format(sipid, sts.message))
 
+        bagger = self.finalize(sipid, who)   # may raise exception
+        sts = self.status_of(sipid)
         try:
-            bagger = self.finalize(sipid, who)
             sts.update(status.PROCESSING)
 
             # move the bag to the submitted dir
@@ -574,6 +606,13 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                     raise PreservationInProgress(sipid)
                 shutil.move(bagger.bagdir, submittedbag)
 
+        except Exception as ex:
+            msg = "Unable to submit SIP %s for publishing: %s" % (sipid, str(ex))
+            self.log.error(msg)
+            sts.update(status.FINALIZED, sysdata={'errors': [msg]})
+            raise
+
+        try:
             if self.pressvc:
                 # generally, preservation is asynchronous
                 self.pressvc.preserve_from(submittedbag, sts, startover=True)
@@ -584,7 +623,7 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
         except Exception as ex:
             self.log.error("Failed to publish SIP {0}: {1}".format(sipid, str(ex)))
             sts.update(status.FAILED, sysdata={'errors': [str(ex)]})
-            raise ex
+            raise
 
     def describe(self, id: str, withcomps=True):
         """

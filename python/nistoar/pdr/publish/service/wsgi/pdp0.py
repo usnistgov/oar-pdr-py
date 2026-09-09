@@ -12,7 +12,7 @@ from urllib.parse import parse_qs
 
 from .. import PDPublishingService, PDP0Service, PDP1Service, status, UploadMethodNotSupported
 from ... import (PublishingStateException, SIPNotFoundError, BadSIPInputError, NERDError,
-                 SIPStateException, SIPConflictError, UnauthorizedPublishingRequest)
+                 SIPStateException, SIPValidationFailure, SIPConflictError, UnauthorizedPublishingRequest)
 from .base import PDPHandler
 from nistoar.web.rest import ServiceApp
 from nistoar.pdr.utils.prov import Agent, Action
@@ -60,7 +60,7 @@ class PDPApp(ServiceApp):
             if self._app._recorder:
                 self._reqrec = self._app._recorder.from_wsgi(self._env)
 
-        def send_error_resp(self, code, reason, explain, sipid=None, pdrid=None, ashead=False):
+        def send_error_resp(self, code, reason, explain, sipid=None, pdrid=None, extra=None, ashead=False):
             """
             respond to client with a JSON-formated error response.
             :param int code:    the HTTP code to respond with 
@@ -69,13 +69,16 @@ class PDPApp(ServiceApp):
                                 this is returned only in the body of the message
             :param str sipid:   the SIP ID for the requested SIP; if None, it is not applicable or known
             :param str pdrid:   the PDR ID for the requested SIP; if None, it is not applicable or known
+            :param dict extra:  extra data to include in the response.  The dictionary keys must be strings
+                                and the values, JSON-encodable.  
             :param bool ashead: if true, do not send the body as this is a HEAD request
             """
-            resp = {
+            resp = extra or {}
+            resp.update({
                 'http:code': code,
                 'http:reason': reason,
                 'pdr:message': explain,
-            }
+            })
             if sipid:
                 resp['pdr:sipid'] = sipid
             if pdrid:
@@ -544,6 +547,14 @@ class PDPApp(ServiceApp):
                 msg = "Bad Input: "+str(ex)
                 self.log.error(msg)
                 return self.send_error_resp(400, "Bad Input", msg, sipid)
+
+            except SIPValidationFailure as ex:
+                msg = "Unable to finalize SIP for publication: "+str(ex)
+                errs = "\n  " + "\n  ".join(ex.errors) if len(ex.errors) > 1 else ""
+                self.log.error(msg+errs)
+                return self.send_error_resp(409, "SIP Not Ready for Publishing", msg, sipid,
+                                            extra={'pdr:errors': ex.errors})
+                
 
             except PublishingStateException as ex:
                 msg = "Attempt to update SIP in un-update-able state: %s" % str(ex)

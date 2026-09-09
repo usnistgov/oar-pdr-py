@@ -88,9 +88,11 @@ class TestPDPBagger(test.TestCase):
                 },
                 "ensure_nerdm_type_on_add": bldr.NERDM_SCH_ID_BASE + "v0.7"
             },
+            "repo_access": {
+                "base_url": "https://test.data.gov/od/"
+            },
             "finalize": {},
-            "doi_naan": "10.22222",
-            "repo_base_url": "https://test.data.gov/"
+            "doi_naan": "10.22222"
         }
         self.mntrcfg = {
             "id_shoulder": 'pdp1',
@@ -294,13 +296,13 @@ class TestPDPBagger(test.TestCase):
 
         self.bgr.set_comp_nerdm({
             '_schema': saved["_schema"] + "/definitions/Component",
-            'downloadURL': "https://s3.amazonaws.com/nist-midas/1491_README.txt",
+            'downloadURL': "pdr:dl:1491_README.txt",
         }, None)
         saved = self.bgr.bag.nerdm_record(True)
         self.assertEqual(len(saved['components']), 7)
         saved = self.bgr.bag.nerd_metadata_for('1491_README.txt', True)
         self.assertEqual(saved['filepath'], '1491_README.txt')
-        self.assertEqual(saved['downloadURL'], "https://s3.amazonaws.com/nist-midas/1491_README.txt")
+        self.assertEqual(saved['downloadURL'], "pdr:dl:1491_README.txt")
         self.assertEqual(saved['mediaType'], "text/plain")
 #        self.assertEqual(saved['format'], "text data")
 
@@ -311,6 +313,10 @@ class TestPDPBagger(test.TestCase):
         bagdir = self.bagparent / 'pdp1:goob'
         self.assertTrue(not bagdir.exists())
         self.set_bagger_for("pdp1:goob")
+
+        # _schema is required
+        with self.assertRaises(BadSIPInputError):
+            self.bgr.set_comp_nerdm({'downloadURL': "https://s3.amazonaws.com/nist-midas/1491_README.txt"})
 
         self.bgr.set_comp_nerdm({
             '_schema': consts.CORE_SCHEMA_URI + "#/definitions/Component",
@@ -555,6 +561,113 @@ class TestPDPBagger(test.TestCase):
 
         self.bgr.delete()
         self.assertTrue(not bagdir.exists())
+
+    def test_assign_dates(self):
+        bagdir = self.bagparent / 'pdp1:goob'
+        self.assertTrue(not bagdir.exists())
+        self.set_bagger_for("pdp1:goob")
+        self.bgr.prepare(who=tstag)
+        self.assertTrue(bagdir.exists())
+
+        nerd = utils.read_json(str(datadir2 / 'ncnrexp0.json'))
+        self.assertIn('nrds:PDRSubmission', nerd['@type'])
+        if 'modified' in nerd:
+            del nerd['modified']
+        self.bgr.set_res_nerdm(nerd, tstag, True)  # saves components, too
+        self.bgr.set_comp_nerdm({
+            '_schema': nerd["_schema"] + "/definitions/Component",
+            'downloadURL': "pdr:dl:1491_README.txt",
+        }, None)
+        with open(os.path.join(self.bgr.bag.data_dir, "1491_README.txt"), 'w') as fd:
+            print("Made ya look!", file=fd)
+        
+        saved = self.bgr.bag.nerdm_record('', True)
+        for prop in "issued modified firstIssued revised annotated releaseHistory".split():
+            self.assertNotIn(prop, saved)
+
+        self.bgr.assign_dates(tstag, saved.get('version', '1.0.0'), True)
+        saved = self.bgr.bag.nerdm_record('', True)
+        issued = saved.get('issued')
+        self.assertIsNotNone(issued)
+        self.assertNotIn('T', issued)   # it's a date only; no time of day
+        self.assertEqual(saved.get('firstIssued'), issued)
+        self.assertEqual(saved.get('annotated'), issued)
+        self.assertNotIn("revised", saved)
+        self.assertNotIn("modified", saved)
+        self.assertNotIn("releaseHistory", saved)
+
+        fcmp = -1
+        for i, cmp in enumerate(saved['components']):
+            if cmp.get('filepath') == "1491_README.txt":
+                fcmp = i
+                self.assertEqual(cmp.get('issued'), issued)
+                break
+        if fcmp < 0:
+            self.fail("Failed to find added data file")
+        
+        rh = self.bgr._updated_release_history(saved, saved.get('version', '1.0.0'))
+        self.assertEqual(rh['hasRelease'][0]['version'], '1.0.0')
+        self.bgr.bagbldr.update_metadata_for('', {'releaseHistory': rh})
+
+        # can run again with new date
+        self.bgr.assign_dates(tstag, saved.get('version', '1.0.0'), True, withtime=True)
+        saved = self.bgr.bag.nerdm_record('', True)
+        self.assertNotEqual(saved.get('issued'), issued)
+        issued = saved.get('issued')
+        self.assertIsNotNone(issued)
+        self.assertEqual(saved.get('firstIssued'), issued)
+        self.assertEqual(saved.get('annotated'), issued)
+        self.assertNotIn("revised", saved)
+        self.assertNotIn("modified", saved)
+        self.assertEqual(saved['components'][fcmp].get('issued'), issued)
+        self.assertNotIn("modified", saved['components'][fcmp])
+        rh = saved.get('releaseHistory')
+        self.assertIsNotNone(rh)
+        self.assertEqual(rh['hasRelease'][0].get('version'), saved.get('version', '1.0.0'))
+        self.assertEqual(rh['hasRelease'][0].get('issued'), issued)
+
+        rh = self.bgr._updated_release_history(saved, '1.0.1')
+        self.bgr.bagbldr.update_metadata_for('', {"version": '1.0.1', 'releaseHistory': rh})
+        self.bgr.assign_dates(tstag, '1.0.1', True, withtime=True)
+        saved = self.bgr.bag.nerdm_record('', True)
+        annot = saved.get('annotated')
+        self.assertIsNotNone(annot)
+        self.assertEqual(saved.get('issued'), issued)
+        self.assertEqual(saved.get('firstIssued'), issued)
+        self.assertEqual(saved.get('annotated'), annot)
+        self.assertNotIn("revised", saved)
+        self.assertNotIn("modified", saved)
+        self.assertEqual(saved['components'][fcmp].get('issued'), issued)
+        self.assertEqual(saved['components'][fcmp].get('modified'), annot) # because the file is in the data dir
+        rh = saved.get('releaseHistory')
+        self.assertIsNotNone(rh)
+        self.assertEqual(rh['hasRelease'][0].get('version'), '1.0.0')
+        self.assertEqual(rh['hasRelease'][0].get('issued'), issued)
+        self.assertEqual(rh['hasRelease'][1].get('version'), '1.0.1')
+        self.assertEqual(rh['hasRelease'][1].get('issued'), annot)
+
+        rh = self.bgr._updated_release_history(saved, '1.1.0')
+        self.bgr.bagbldr.update_metadata_for('', {"version": '1.1.0', 'releaseHistory': rh})
+        self.bgr.assign_dates(tstag, dodists=True, withtime=True)
+        saved = self.bgr.bag.nerdm_record('', True)
+        revised = saved.get('annotated')
+        self.assertIsNotNone(revised)
+        self.assertEqual(saved.get('issued'), issued)
+        self.assertEqual(saved.get('firstIssued'), issued)
+        self.assertEqual(saved.get('revised'), revised)
+        self.assertEqual(saved.get('modified'), revised)
+        self.assertEqual(saved.get('annotated'), revised)
+        self.assertEqual(saved['components'][fcmp].get('issued'), issued)
+        self.assertEqual(saved['components'][fcmp].get('modified'), revised)
+        rh = saved.get('releaseHistory')
+        self.assertIsNotNone(rh)
+        self.assertEqual(rh['hasRelease'][0].get('version'), '1.0.0')
+        self.assertEqual(rh['hasRelease'][0].get('issued'), issued)
+        self.assertEqual(rh['hasRelease'][1].get('version'), '1.0.1')
+        self.assertEqual(rh['hasRelease'][1].get('issued'), annot)
+        self.assertEqual(rh['hasRelease'][2].get('version'), '1.1.0')
+        self.assertEqual(rh['hasRelease'][2].get('issued'), revised)
+        
         
     def test_finalize(self):
         bagdir = self.bagparent / 'pdp1:goob'
@@ -566,8 +679,17 @@ class TestPDPBagger(test.TestCase):
         nerd = utils.read_json(str(datadir2 / 'ncnrexp0.json'))
         self.assertIn('nrds:PDRSubmission', nerd['@type'])
         self.bgr.set_res_nerdm(nerd, tstag, True)  # saves components, too
+        self.bgr.set_comp_nerdm({
+            '_schema': nerd["_schema"] + "/definitions/Component",
+            'downloadURL': "pdr:dl:1491_README.txt",
+        }, None)
+        
         saved = self.bgr.bag.nerdm_record('', True)
         self.assertNotIn('doi', saved)
+        self.assertEqual(saved.get('landingPage'), "pdr:lp")
+        cmps = saved.get('components', [])
+        self.assertEqual(len(cmps), 3)
+        self.assertEqual(cmps[-1].get('downloadURL'), 'pdr:dl:1491_README.txt')
 
         # set a data source file and add some other files to confirm they get cleaned up
         self.bgr.add_data_source("fs:/goober/gurn")
@@ -600,10 +722,15 @@ class TestPDPBagger(test.TestCase):
             history = prov.load_from_history(fd)
         self.assertTrue(all([a.agent for a in history]))
 
-        saved = utils.read_json(self.bgr.bag.nerd_file_for(''))
+        saved = self.bgr.bag.nerdm_record(True)
         self.assertNotIn('nrds:PDRSubmission', saved['@type'])
         self.assertEqual(saved.get('doi'), "doi:10.22222/pdp1-0017sm")
         self.assertFalse(any([s for s in saved['_extensionSchemas'] if 'Submission' in s]))
+        self.assertEqual(saved.get('landingPage'), "https://test.data.gov/od/id/pdp1-0017sm")
+        cmps = saved.get('components', [])
+        self.assertEqual(len(cmps), 3)
+        self.assertEqual(cmps[-1].get('downloadURL'),
+                         'https://test.data.gov/od/ds/pdp1-0017sm/1491_README.txt')
 
     def test_determine_version(self):
         bagdir = self.bagparent / 'pdp1:goob'

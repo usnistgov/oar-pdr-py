@@ -10,10 +10,12 @@ from copy import deepcopy
 from urllib.parse import urlparse
 from pathlib import Path
 from logging import Logger
+from datetime import datetime, timezone
+
+import yaml, jsonpatch, multibag
+
 from nistoar.id.minter import IDMinter
-
-import yaml, jsonpatch
-
+from nistoar.id.versions import OARVersion
 from .. import (BadSIPInputError, SIPStateException, PublishingStateException,
                 ConfigurationException, PublishException)
 from ... import constants as const
@@ -29,7 +31,7 @@ from .base import SIPBagger, UNKNOWN_AGENT
 from .prepupd import UpdatePrepService, PENDING_VERSION_SFX
 from ..idmint import PDPMinter
 from ...utils.prov import Action, Agent, dump_to_history
-from nistoar.base.config import merge_config as merge_md_into
+from nistoar.base.config import merge_config
 from nistoar.id.versions import cmp_versions
 
 SIPEXT_RE = re.compile(core_schema_base + r'sip/(v[^/]+)#/definitions/\w+Submission')
@@ -133,16 +135,17 @@ class NERDmBasedBagger(SIPBagger):
     An abstract SIPBagger that accepts NERDm metadata as its primarily inputs.
 
     This base class will look for the following parameters in the configuration:
-    :param Mapping repo_access:         the configuration describing the PDR's APIs 
+    :param Mapping repo_access:         the configuration describing the PDR's APIs.  This configuration
+                                        will be merged into the ``bag_builder`` configuration.
     :param Mapping bag_builder:         the configuration for the BagBuilder instance that will be
                                         used by this bagger (see BagBuilder)
     :param str assign_doi:              One of three values that controls the assignment of a DOI:
-                                         * `always` -- always assign a DOI; the NERDm DOI is set 
+                                         * ``always`` -- always assign a DOI; the NERDm DOI is set 
                                            according to convention as soon as possible and at least 
                                            by bag finalization time.
-                                         * `never` -- automatic assignment should never be applied
+                                         * ``never`` -- automatic assignment should never be applied
                                            (calling :py:meth:`ensure_doi()` does not override this).
-                                         * `request` -- (default) a DOI is only assigned by calling
+                                         * ``request`` -- (default) a DOI is only assigned by calling
                                            :py:meth:`ensure_doi`.
     :param bool hidden_comp_allowed:    if False (default), Hidden type components are not
                                         permitted to be included in the input NERDm metadata.
@@ -200,8 +203,14 @@ class NERDmBasedBagger(SIPBagger):
             self._nerdmcore_re = re.compile(core_schema_base + r'(' + 
                                             self.cfg['required_core_nerdm_version'] + r')#')
 
-        if not self.cfg.get('resolver_base_url') and self.cfg.get('repo_base_url'):
-            self.cfg['resolver_base_url'] = self.cfg['repo_base_url'].rstrip('/') + "/od/id/"
+        if not self.cfg.get('resolver_base_url') and self.cfg.get('repo_access'):
+            resurl = self.cfg['repo_access'].get('landing_page_service', '/id/')
+            if isinstance(resurl, Mapping):
+                resurl = resurl.get('service_endpoint', '/id/')
+            if not resurl.startswith("http"):
+                resurl = '/'.join([self.cfg['repo_access'].get('base_url', 'https://data.nist.gov/').rstrip('/'),
+                                   resurl.lstrip('/')])
+            self.cfg['resolver_base_url'] = resurl
 
         self._histfile = None
 
@@ -496,7 +505,7 @@ class NERDmBasedBagger(SIPBagger):
 
     def _check_res_schema_id(self, nerdm):
         if self._nerdmcore_re:
-            if '_schema' in nerdm:
+            if '_schema' not in nerdm:
                 raise BadSIPInputError("Required schema identifier property missing from input metadata: "+
                                        "_schema")
             if not self._nerdmcore_re.match(nerdm['_schema']):
@@ -564,6 +573,14 @@ class NERDmBasedBagger(SIPBagger):
             resmd['ediid'] = self.id
         if not resmd.get('accessLevel'):
             resmd['accessLevel'] = "public"
+
+        if resmd.get('authors'):
+            for auth in resmd['authors']:
+                if not auth.get('fn') and any(auth.get(p) for p in "familyName givenName middleName".split()):
+                    auth['fn'] = \
+                        ' '.join([auth.get(p,'') for p in "familyName givenName middleName".split()]).strip()
+                    auth['fn'] = re.sub(r' +', ' ', auth['fn'])
+                    
 
     def _set_provider_res_modifications(self, resmd: Mapping):
         """
@@ -636,9 +653,13 @@ class NERDmBasedBagger(SIPBagger):
         u.port
         if not u.scheme:
             raise ValueError("Missing scheme")
-        if u.scheme not in ["http", "https", "ftp"]:
+        if u.scheme not in ["http", "https", "ftp", "pdr"]:
             raise ValueError("Unsupported scheme: " + u.scheme)
-        if not u.netloc:
+        if u.scheme == "pdr":
+            direct = u.path.split(':')[0]
+            if direct not in ["lp", "md", "dl"]:
+                raise ValueError("Unrecognized 'pdr:' path prefix: "+direct)
+        elif not u.netloc:
             raise ValueError("Missing server address")
 
 
@@ -667,15 +688,14 @@ class NERDmBasedBagger(SIPBagger):
                                        (str(ex), str(compmd['downloadURL'])))
 
         if tolatest:
+            if '_schema' not in compmd:
+                raise BadSIPInputError("Required schema identifier property missing from input metadata: "+
+                                       "_schema")
             if self._nerdmcore_re:
-                if '_schema' in compmd:
-                    raise BadSIPInputError("Required schema identifier property missing from input metadata: "+
-                                           "_schema")
                 if not self._nerdmcore_re.match(compmd['_schema']):
                     raise ValueError("Input metadata is not a NERDm record; schema: "+ compmd['_schema'])
-            elif '_schema' in compmd:
-                if not compmd['_schema'].startswith(core_schema_base):
-                    raise BadSIPInputError("Input metadata is not a NERDm record; schema: "+ compmd['_schema'])
+            elif not compmd['_schema'].startswith(core_schema_base):
+                raise BadSIPInputError("Input metadata is not a NERDm record; schema: "+ compmd['_schema'])
 
             compmd = latest.update_to_latest_schema(compmd, False)
         else:
@@ -729,7 +749,7 @@ class NERDmBasedBagger(SIPBagger):
                 extschs.add(CORE_SCHEMA_URI + "#/definitions/IncludedResource")
         if nerdutils.is_type(cmpmd, 'AcquisitionActivity'):
             if not any([s for s in extschs if s.endswith('/definitions/AcquisitionActivity')]):
-                extschs.add(EXP_SCHEMA_URI + "#/definitions/ExperimentalData")
+                extschs.add(EXP_SCHEMA_URI + "#/definitions/AcquisitionActivity")
         if extschs:
             cmpmd['_extensionSchemas'] = list(extschs)
 
@@ -759,7 +779,9 @@ class NERDmBasedBagger(SIPBagger):
             raise BadSIPInputError(msg)
 
         if 'filepath' not in cmpmd:
-            m = re.search(r'/od/ds/', cmpmd['downloadURL'])
+            m = re.search(r'^pdr:(\w+):?', cmpmd['downloadURL'])
+            if not m:
+                m = re.search(r'/od/ds/', cmpmd['downloadURL'])
             if m:
                 cmpmd['filepath'] = cmpmd['downloadURL'][m.end():]
             else:
@@ -1219,7 +1241,7 @@ class NERDmBasedBagger(SIPBagger):
         If updated, the version is updated by incrementing one of version fields.  Which field should 
         be incremented is determined by _determine_update_level().  
 
-        This method is intended to be called by :py:meth:`ensure_finalize`.
+        This method is intended to be called by :py:meth:`_ensure_finalize`.
 
         :param Agent     who:  the agent requesting the finalization
         :param int incrfield:  the position of the version field that should be incremented; if None, 
@@ -1239,6 +1261,8 @@ class NERDmBasedBagger(SIPBagger):
         oldnerdfile = os.path.join(self.bagdir, "#old_nerdm.json")
         oldnerd = None
         ver = None
+        if not vermsg:
+            vermsg =  nerd.get("versionNotes")
 
         if not oldver:
             # this shouldn't happen (unless, possibly, it's never been published before)
@@ -1437,8 +1461,9 @@ class PDPBagger(NERDmBasedBagger):
                                         convention.  Values in this file are overridden by metadata 
                                         specified in "*_metadata".  
     :param Mapping finalize:            the configuration specific to the finalize() function.  See 
-                                        BagBuilder.finalize for supported config subparameters; however,
-                                        subclasses of this Bagger may support additional parameters.
+                                        :py:method:`BagBuilder.finalize()<nistoar.pdr.preserve.bagit.builder>` 
+                                        for supported config subparameters; however, subclasses of this 
+                                        Bagger may support additional parameters.
     """
 
     _file_importers = { 'fs': import_fs_files }
@@ -1592,7 +1617,7 @@ class PDPBagger(NERDmBasedBagger):
         pubmd.update(self.cfg.get(mdk, {}))
         resmd.update(pubmd)
 
-    def ensure_finalize(self, who=None, lock=True, _action: Action=None):
+    def ensure_finalize(self, who=None, validate=False, lock=True, _action: Action=None):
         """
         Based on the current state of the bag, finalize its contents to a complete state according to 
         the conventions of this bagger implementation.  After a successful call, the bag should be in 
@@ -1612,7 +1637,10 @@ class PDPBagger(NERDmBasedBagger):
             if os.path.isfile(dsrcf):
                 os.remove(dsrcf)
 
-            self.finalize_version(who, _action=hist)
+            vers = self.finalize_version(who, _action=hist)
+
+            # set all dates in metadata
+            self.assign_dates(who, vers, True, _action=hist)
 
             # remove use of Submission types
             nerd = self.bagbldr.bag.nerd_metadata_for('', True)
@@ -1638,7 +1666,14 @@ class PDPBagger(NERDmBasedBagger):
                 if f.startswith('#') or f.startswith('_'):
                     os.remove(os.path.join(self.bagbldr.bagdir, f))
 
-            self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
+            fincfg = deepcopy(self.cfg.get('finalize', {}))
+            fincfg['repo_access'] = merge_config(fincfg.get('repo_access', {}),
+                                                 self.cfg.get('repo_access', {}))
+            self.bagbldr.finalize_bag(fincfg, True)
+
+            if validate:
+                self.validate(act)   # may raise exception
+                
             hist.add_subaction(act)
 
         except Exception as ex:
@@ -1699,3 +1734,87 @@ class PDPBagger(NERDmBasedBagger):
         # metadata change only
         return (2, "metadata updates only")
     
+    def assign_dates(self, who: Agent, version: str=None, dodists: bool=False,
+                     withtime: bool=False, _action=None):
+        """
+        inject updated publication-related dates into the metadata.
+
+        This updates the dates assuming a publication time of right now.  This implementation 
+        will analyze the current state of the bag (e.g. like the currently set version) to determine
+        which dates need updating.  
+
+        :param Agent    who:  the agent requesting the finalization
+        :param str  version:  The version string to assume for this publication.  If not provided, the 
+                              version currently stored in the bag resource metadata will be assumed.
+        :param bool dodists:  if True, update the distribution-level dates as well.  If there are 
+                              many distributions, this may take a long time.  (Default: False)
+        :param bool withtime: if True, include a time of day in the dates; if False (default), the 
+                              dates will only indicate the day with no time.  
+        """
+        hist = _action
+        if not hist:
+            hist = Action(Action.PATCH, self.id, who, "finalizing publishing dates")
+            
+        nerd = self.bagbldr.bag.nerd_metadata_for('', True)
+        if not version:
+            version = nerd.get('version', '1.0.0')
+        vers = OARVersion(version)
+        if vers.is_draft():
+            raise SIPConflictError("Draft version string insufficient for updating dates: "+str(vers))
+
+        now = datetime.utcnow()
+        if not withtime:
+            now = now.date()
+        now = now.isoformat()
+
+        # update the resrouce-level dates.  Note: in this convention, issued & firstIssued are equivalent,
+        # and modified and revised are equivalent. 
+        upd = {}
+        if vers == "1.0.0":
+            upd['issued'] = upd['firstIssued'] = now
+        elif vers.fields[-1] == 0:
+            upd['modified'] = upd['revised'] = now
+        upd['annotated'] = now
+
+        # update the release history entry for this version
+        thisrel = None
+        rh = nerd.get('releaseHistory')
+        if rh:
+            for rel in rh.get('hasRelease', []):
+                if vers == rel.get('version'):
+                    rel['issued'] = now
+                    upd['releaseHistory'] = rh
+                    break
+
+        self.bagbldr.update_metadata_for('', upd, message="finalize: updating publication dates")
+
+        if dodists:
+            try:
+                mbag = multibag.open_headbag(self.bagbldr.bagdir, True)
+                if not mbag.is_head_multibag():
+                    mbag = None
+            except multibag.BagError as ex:
+                mbag = None
+
+            datadir = self.bagbldr.bag.data_dir
+            for basedir, dirs, files in os.walk(datadir):
+                fpbase = basedir[len(datadir)+1:] if basedir != datadir else ''
+                for df in files:
+                    upd = {}
+                    fp = f"{fpbase}/{df}" if fpbase else df
+                    md = self.bagbldr.bag.nerd_metadata_for(fp)
+                    if vers == "1.0.0":
+                        upd['issued'] = now
+                        msg = ''
+                    elif mbag and mbag.lookup_file(f"data/{fp}"):
+                        upd['issued'] = now
+                        msg = f"Setting issued data on newly added {fp}"
+                    else:
+                        upd['modified'] = now
+                        msg = f"Setting modified date on {fp}"
+                    if upd:
+                        self.bagbldr.update_metadata_for(fp, upd, message=msg)
+                        
+        hist.add_subaction(Action(Action.PATCH, "#m", who, "Updating dates for publication on "+now))
+        if not _action:
+            self.record_history(hist)

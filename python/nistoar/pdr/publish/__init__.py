@@ -6,6 +6,8 @@ storage (after conversion to an AIP) and ingested into the PDR.  Typically, the 
 of an unserialized BagIt bag that conforms to the NIST Preservation Bag Profile; however, this 
 publishing model does not require this.  
 """
+from typing import List
+
 from ..exceptions import *
 from ..preserve import CorruptedBagError
 from ... import pdr as _pdr
@@ -105,7 +107,7 @@ class SIPStateException(PublishingStateException):
     """
     An exception indicating that an SIP is in an illegal or unexpected state, preventing an operation.
     """
-    def __init__(self, sipid, msg=None, cause=None):
+    def __init__(self, sipid: str, msg: str=None, cause=None):
         """
         create the exception.
 
@@ -121,6 +123,33 @@ class SIPStateException(PublishingStateException):
             else:
                 msg = "Unknown " + msg
         super(SIPStateException, self).__init__(msg, cause)
+
+class SIPValidationFailure(SIPStateException):
+    """
+    An exception indicating that the SIP is not ready for a particular operation (namely, publication)
+    because a validationg check shows it is invalid and/or incomplete in one or more ways.
+    """
+    def __init__(self, sipid: str, msg: str=None, errors: List=None):
+        """
+        instantiate the exception
+
+        :param str   sipid:  The ID for the SIP in the bad state
+        :param str     msg:  A message to override the default.
+        :param list errors:  the validation errors detected given as a list.  An element can 
+                             be either a simple explanatory string, or a 
+                             jsonschema.ValidationError which can contain more details about 
+                             a JSON Schema-specific error.  
+        """
+        if not msg:
+            msg = f"SIP {sipid} is not fully valid"
+            if errors:
+                if len(errors) > 0:
+                    msg += f": {len(errors)} validation errors detected"
+                elif hasattr(errors[0], 'message'):
+                    msg += f": {errors[0].message}"
+        super(SIPValidationFailure, self).__init__(sipid, msg)
+        self.errors = errors or []
+        
 
 class SIPConflictError(SIPStateException):
     """

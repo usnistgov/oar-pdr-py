@@ -72,6 +72,10 @@ class PDRBagFinalization(fw.AIPFinalization):
         if not self.cfg.get("repo_access", {}).get("distrib_service", {}).get("service_endpoint"):
             raise ConfigurationException("Missing required configuration: "+
                                          "repo_access.distrib_service.service_endpoint")
+        bldcfg = self.cfg.setdefault('bag_builder', {})
+        bldcfg.setdefault('finalize', {})
+        bldcfg['finalize']['repo_access'] = merge_config(bldcfg['finalize'].get('repo_access', {}),
+                                                         self.cfg.get('repo_access', {}))
 
         icfg = self.cfg.get('ingest', {})
         self._ingester = None
