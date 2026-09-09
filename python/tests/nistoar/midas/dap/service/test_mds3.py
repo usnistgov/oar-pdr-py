@@ -70,6 +70,7 @@ class TestMDS3DAPService(test.TestCase):
                 "title": "NIST"
             },
             "taxonomy_dir": modeldir,
+            "taxonomy_file_pattern": "taxonomy.*\.json",
 #            "taxonomy_dir": os.environ.get('OAR_ETC_DIR', def_etc_dir),
             "available_collections": {
                 "peanuts": { "@id": "ark:/88888/pdr0-goober", "title": "Peanuts!" },

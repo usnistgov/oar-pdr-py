@@ -66,6 +66,12 @@ class TestMIDASProjectApp(test.TestCase):
                     "allowed_shoulders": {
                         "midas": ["mdm1"]
                     }
+                },
+                "group_id_minting": {
+                    "default_shoulder": {
+                        "midas": "grp0",
+                        "public": "grp0"
+                    }
                 }
             },
             "include_headers": {
@@ -583,11 +589,171 @@ class TestMIDASProjectApp(test.TestCase):
                     self.assertIsNotNone(content_type_header)
                     self.assertIn('application/pdf', content_type_header)
                     
-                    self.assertEqual(mock_template.get.call_count, len(record_ids))
+                    self.assertEqual(mock_template.get.call_count, len(record_ids) + 1)
                     
                     pdf_content = b''.join(body) if isinstance(body, list) else body
                     self.assertTrue(pdf_content.startswith(b'%PDF'))
                     self.assertEqual(pdf_content, b"%PDF-1.4\ncombined pdf content")
+
+    def test_export_post_multiple_pdf(self):
+        """POST /:export with multiple IDs returns combined PDF"""
+        record_ids = []
+        for name in ["Post One", "Post Two"]:
+            path = ""
+            req = {
+                'REQUEST_METHOD': 'POST',
+                'PATH_INFO': self.rootpath + path
+            }
+            req['wsgi.input'] = StringIO(json.dumps({
+                "name": f"Export {name}",
+                "data": {"title": name}
+            }))
+            hdlr = self.app.create_handler(req, self.start, path, nistr)
+            body = hdlr.handle()
+            self.assertIn("201 ", self.resp[0])
+            record_ids.append(self.body2dict(body)['id'])
+            self.resp = []
+
+        with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString",
+                   return_value=b"%PDF-1.4\npost export content"):
+            with patch("nistoar.midas.export.exporters.pdf_exporter.preppy.getModule") as mock_preppy:
+                mock_template = Mock()
+                mock_template.get.return_value = "<document>Post Export</document>"
+                mock_preppy.return_value = mock_template
+
+                def fake_pdf_concat(results, output_filename):
+                    return {
+                        "format": "pdf",
+                        "filename": "export.pdf",
+                        "mimetype": "application/pdf",
+                        "file_extension": ".pdf",
+                        "bytes": b"%PDF-1.4\npost export content",
+                    }
+
+                with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
+                    path = ":export"
+                    req = {
+                        'REQUEST_METHOD': 'POST',
+                        'PATH_INFO': self.rootpath + path
+                    }
+                    req['wsgi.input'] = StringIO(json.dumps({
+                        "ids": record_ids,
+                        "format": "pdf"
+                    }))
+
+                    hdlr = self.app.create_handler(req, self.start, path, nistr)
+                    body = hdlr.handle()
+
+                    self.assertIn("200 ", self.resp[0])
+                    content_type = next((h for h in self.resp if h.startswith('Content-Type:')), None)
+                    self.assertIsNotNone(content_type)
+                    self.assertIn('application/pdf', content_type)
+
+                    pdf_content = b''.join(body) if isinstance(body, list) else body
+                    self.assertTrue(pdf_content.startswith(b'%PDF'))
+
+    def test_export_post_single_pdf(self):
+        """POST /:export with a single ID returns a valid PDF"""
+        path = ""
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"name": "Single Post", "data": {"title": "Single"}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("201 ", self.resp[0])
+        record_id = self.body2dict(body)['id']
+        self.resp = []
+
+        with patch("nistoar.midas.export.exporters.pdf_exporter.trml2pdf.parseString",
+                   return_value=b"%PDF-1.4\nsingle post content"):
+            with patch("nistoar.midas.export.exporters.pdf_exporter.preppy.getModule") as mock_preppy:
+                mock_template = Mock()
+                mock_template.get.return_value = "<document>Single</document>"
+                mock_preppy.return_value = mock_template
+
+                def fake_pdf_concat(results, output_filename):
+                    return {
+                        "format": "pdf",
+                        "filename": "export.pdf",
+                        "mimetype": "application/pdf",
+                        "file_extension": ".pdf",
+                        "bytes": b"%PDF-1.4\nsingle post content",
+                    }
+
+                with patch.dict('nistoar.midas.export.export.CONCAT_REGISTRY', {"pdf": fake_pdf_concat}):
+                    path = ":export"
+                    req = {
+                        'REQUEST_METHOD': 'POST',
+                        'PATH_INFO': self.rootpath + path
+                    }
+                    req['wsgi.input'] = StringIO(json.dumps({"ids": [record_id], "format": "pdf"}))
+                    hdlr = self.app.create_handler(req, self.start, path, nistr)
+                    body = hdlr.handle()
+
+                    self.assertIn("200 ", self.resp[0])
+                    content_type = next((h for h in self.resp if h.startswith('Content-Type:')), None)
+                    self.assertIn('application/pdf', content_type)
+                    pdf_content = b''.join(body) if isinstance(body, list) else body
+                    self.assertTrue(pdf_content.startswith(b'%PDF'))
+
+    def test_export_post_empty_ids(self):
+        """POST /:export with empty ids returns 400"""
+        path = ":export"
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"ids": [], "format": "pdf"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
+
+    def test_export_post_json_format(self):
+        """POST /:export with format=json returns 200 with a JSON array"""
+        prec = self.create_record("json_export")
+        path = ":export"
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"ids": [prec.id], "format": "json"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        result = self.body2dict(body)
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['id'], prec.id)
+
+    def test_export_post_missing_format(self):
+        """POST /:export with no format field defaults to JSON and returns 200"""
+        prec = self.create_record("default_fmt")
+        path = ":export"
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"ids": [prec.id]}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        result = self.body2dict(body)
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+
+    def test_export_post_invalid_format(self):
+        """POST /:export with unsupported format returns 400"""
+        path = ":export"
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path
+        }
+        req['wsgi.input'] = StringIO(json.dumps({"ids": ["mdm1:0001"], "format": "docx"}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("400 ", self.resp[0])
 
     def test_get_name(self):
         path = "mdm1:0003/name"
@@ -1450,6 +1616,38 @@ class TestMIDASProjectApp(test.TestCase):
         body = hdlr.handle()
         self.assertIn("200 ", self.resp[0])
         self.assertEqual(self.body2dict(body), True)
+
+    def test_acls_check_via_group_membership(self):
+        # The ACL endpoint's GET /{id}/acls/{perm}/{user} must resolve group membership,
+        # not just do a literal string check against the ACL list.
+        prec = self.create_record()
+
+        # create a group owned by the record owner, add hank to it
+        owner_cli = self.dbfact.create_client(base.DMP_PROJECTS, self.cfg["dbio"], nistr.actor)
+        grp = owner_cli.groups.create_group("myteam")
+        grp.add_member("hank")
+        grp.save()
+
+        # grant the group read access
+        prec.acls.grant_perm_to("read", grp.id)
+        prec.save()
+
+        # hank is a member of the group — should return True
+        path = "mdm1:0003/acls/read/hank"
+        req = {'REQUEST_METHOD': 'GET', 'PATH_INFO': self.rootpath + path}
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), True)
+
+        # gary is not in any group with access — should return False
+        self.resp = []
+        path = "mdm1:0003/acls/read/gary"
+        req = {'REQUEST_METHOD': 'GET', 'PATH_INFO': self.rootpath + path}
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), False)
 
     def test_get_info(self):
         path = "mdm1:0003/id"

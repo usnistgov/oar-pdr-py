@@ -1,4 +1,4 @@
-import os, json, pdb, logging, tempfile
+import os, json, logging, tempfile
 from pathlib import Path
 import unittest as test
 
@@ -50,7 +50,7 @@ with open(asc_orkeywords, 'r') as file:
     constraint_orkeywords = json.load(file)
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")
-class TestInMemoryDBClientFactory(test.TestCase):
+class TestMongoDBClientFactory(test.TestCase):
 
     def setUp(self):
         self.cfg = {"goob": "gurn"}
@@ -83,6 +83,19 @@ class TestInMemoryDBClientFactory(test.TestCase):
         with self.assertRaises(ConfigurationException):
             mongo.MongoDBClientFactory(self.cfg)
 
+    def test_check_ready(self):
+        cli = MongoClient(self.fact._dburl)
+        try:
+            self.fact._check_ready(cli)  # returning either True or False is fine
+        finally:
+            cli.close()
+
+    def test_db_is_ready(self):
+        self.assertTrue(self.fact.db_is_ready())
+
+    def test_wait_until_ready(self):
+        self.assertTrue(self.fact.wait_until_ready(timeout=4, rais=False))
+
     def test_create_client(self):
         self.cli = self.fact.create_client(base.DMP_PROJECTS, {}, "bob")
         self.assertEqual(self.cli._cfg, self.fact._cfg)
@@ -108,7 +121,7 @@ class TestInMemoryDBClientFactory(test.TestCase):
 class TestMongoDBClient(test.TestCase):
 
     def setUp(self):
-        self.cfg = {}
+        self.cfg = { "id_mint_start": { "fred": 3 } }
         self.user = "nist0:ava1"
         self.cli = mongo.MongoDBClient(dburl, self.cfg, base.DMP_PROJECTS, self.user)
 
@@ -152,6 +165,7 @@ class TestMongoDBClient(test.TestCase):
         self.assertIsNone(self.cli._native)
 
     def test_next_recnum(self):
+        self.assertEqual(self.cli._next_recnum("fred"), 3)
         self.assertEqual(self.cli._next_recnum("goob"), 1)
         self.assertEqual(self.cli._next_recnum("goob"), 2)
         self.assertEqual(self.cli._next_recnum("goob"), 3)
@@ -625,6 +639,23 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(len(data), 2)
         self.assertEqual(data[0], {'recid': 'goob:gurn', 'foo': 'bar'})
         self.assertEqual(data[1], {'recid': 'pdr0:0001', 'alice': 'bob'})
+
+    def test_iter_history_for(self):
+        with self.assertRaises(StopIteration):
+            next(self.cli._iter_history_for('goob:gurn'))
+
+        self.cli._save_history({'id': 'goob:gurn', 'foo': 'bar'})
+        self.cli._save_history({'id': 'goob:gurn', 'alice': 'bob'})
+        it = self.cli._iter_history_for('goob:gurn')
+        hist = next(it)
+        self.assertEqual(hist.get('id'), 'goob:gurn')
+        self.assertEqual(hist.get('foo'), 'bar')
+        hist = next(it)
+        self.assertEqual(hist.get('id'), 'goob:gurn')
+        self.assertEqual(hist.get('alice'), 'bob')
+        with self.assertRaises(StopIteration):
+            next(it)
+        self.cli.free()
 
 
 @test.skipIf(not os.environ.get('MONGO_TESTDB_URL'), "test mongodb not available")

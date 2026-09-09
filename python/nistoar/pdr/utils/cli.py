@@ -4,6 +4,8 @@ a module providing utility code for creating command-line interfaces to OAR syst
 import os, sys, logging
 from copy import deepcopy
 from argparse import ArgumentParser, HelpFormatter, SUPPRESS
+from typing import Mapping, Union
+from types import ModuleType
 
 from nistoar.pdr.exceptions import StateException
 from nistoar.base.config import ConfigurationException
@@ -11,7 +13,7 @@ from nistoar.base import config as cfgmod
 
 EXPLAIN=cfgmod.NORMAL
 
-def explain(log, message, *params):
+def explain(log: logging.Logger, message: str, *params):
     """
     log a message that is quieter than INFO but louder than DEBUG.  This is intended for messages 
     that should go into the log, but not necessarily to the terminal (unless --verbose was specified).
@@ -28,7 +30,7 @@ class _MyHelpFormatter(HelpFormatter):
             paras.append(super(_MyHelpFormatter, self)._fill_text(para, width, indent))
         return "\n\n".join(paras)
 
-def define_prog_opts(progname, description=None, epilog=None, parser=None):
+def define_prog_opts(progname: str, description: str=None, epilog: str=None, parser: ArgumentParser=None):
     """
     define the top level arguments for a script that will provide a suite of subcommands
 
@@ -90,7 +92,7 @@ class CommandFailure(Exception):
     Other exit codes greater than 10 may be used for more specified errors.  
     """
     
-    def __init__(self, cmdname, message, exstat=1, cause=None):
+    def __init__(self, cmdname: str, message: str, exstat: int=1, cause=None):
         """
         Create the exception
         :param str cmdname:   the name of the command that failed to execute
@@ -114,7 +116,7 @@ class CommandSuite(object):
     """
     an interface for running the sub-commands of a parent command
     """
-    def __init__(self, suitename, parent_parser, current_dests=None):
+    def __init__(self, suitename: str, parent_parser: ArgumentParser, current_dests=None):
         """
         create a command interface
         :param str suitename:  the command name used to access this suites' subcommands
@@ -135,7 +137,7 @@ class CommandSuite(object):
     def _register_parser_dests(self, parser):
         self._dests.update([a.dest for a in parser._actions])
 
-    def load_subcommand(self, cmdmod, cmdname=None):
+    def load_subcommand(self, cmdmod, cmdname: str=None):
         """
         load a subcommand into this suite of subcommands.  
 
@@ -174,7 +176,7 @@ class CommandSuite(object):
             else:
                 subparser.epilog = morehelp
 
-    def extract_config_for_cmd(self, config, cmdname, cmd=None):
+    def extract_config_for_cmd(self, config: Mapping, cmdname: str, cmd=None):
         """
         merge command-specific configuration with the top-level configuration.  The input config
         can contain a property ``cmd`` that holds configuration data that is specific to particular 
@@ -201,7 +203,7 @@ class CommandSuite(object):
 
         return out
 
-    def execute(self, args, config=None, log=None):
+    def execute(self, args, config: Mapping=None, log: logging.Logger=None):
         """
         execute a subcommand from this command suite
         :param argparse.Namespace args:  the parsed arguments
@@ -257,7 +259,7 @@ class CLISuite(CommandSuite):
         """
         return self.parser.parse_args(args)
 
-    def load_subcommand(self, cmdmod, cmdname=None, exit_offset=None):
+    def load_subcommand(self, cmdmod, cmdname: str=None, exit_offset: int=None):
         if not hasattr(cmdmod, "load_into"):
             raise StateException("command module/object has no load_into() function: " + repr(cmdmod))
         if not cmdname:
@@ -279,7 +281,7 @@ class CLISuite(CommandSuite):
                 subparser.epilog = morehelp
 
 
-    def configure_log(self, args, config):
+    def configure_log(self, args, config: Mapping):
         """
         set-up logging according to the command-line arguments and the given configuration.
         """
@@ -338,7 +340,7 @@ class CLISuite(CommandSuite):
             config = {}
         return config
                 
-    def execute(self, args, config=None):
+    def execute(self, args, config: Mapping=None):
         """
         execute the command given in the arguments
         :param list|object args:   the program arguments (including the command name).  Typically, 

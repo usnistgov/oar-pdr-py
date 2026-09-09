@@ -1,9 +1,13 @@
 #! /bin/bash
 #
 port=9091
+npsport=9092
 script=/dev/oar-pdr-py/scripts/midas-uwsgi.py
 [ -f "$script" ] || script=/app/dist/pdr/bin/midas-uwsgi.py
+npsfbscript=/dev/oar-pdr-py/scripts/npsfeedback-uwsgi.py
+[ -f "$npsfbscript" ] || npsfbscript=/app/dist/pdr/bin/npsfeedback-uwsgi.py
 midas_config=/app/midas-config.yml
+npsfb_config=/app/npsfb-config.yml
 clinotif_config=/app/midas-clinotif.yml
 clinotif_key=123456_secret_key
 clinotif_server="python3 /app/dist/pdr/bin/websocket_server.py"
@@ -15,6 +19,12 @@ clinotif_server="python3 /app/dist/pdr/bin/websocket_server.py"
 }
 [ -n "$OAR_LOG_DIR" ] || export OAR_LOG_DIR=$OAR_WORKING_DIR
 [ -n "$OAR_MIDASSERVER_CONFIG" ] || OAR_MIDASSERVER_CONFIG=$midas_config
+[ -n "$OAR_NPSFBSERVICE_CONFIG" -o \! -f "$npsfb_config" ] || \
+    OAR_NPSFBSERVICE_CONFIG=$npsfb_config
+echo npsfb_config=$npsfb_config
+ls $npsfb_config
+echo OAR_NPSFBSERVICE_CONFIG=$OAR_NPSFBSERVICE_CONFIG
+ls $OAR_NPSFBSERVICE_CONFIG
 
 echo
 echo Working Dir: $OAR_WORKING_DIR
@@ -51,6 +61,20 @@ use_clinotif_config=
 }
 [ -z "$use_clinotif_config" ] || \
     opts="$opts --set-ph dbio_clinotif_config_file=$use_clinotif_config"
+
+# launch an NPS feedback service?
+[ -z "$OAR_NPSFBSERVICE_CONFIG" ] || {
+    echo '++' uwsgi --plugin python3 --http-socket :$npsport --wsgi-file $npsfbscript \
+                    --set-ph oar_config_file=$OAR_NPSFBSERVICE_CONFIG \
+                    --set-ph oar_midas_config_file=$OAR_MIDASSERVER_CONFIG \
+                    --set-ph oar_working_dir=$OAR_WORKING_DIR \
+                    --daemonize=$OAR_LOG_DIR/npsfb-uwsgi.log
+    uwsgi --plugin python3 --http-socket :$npsport --wsgi-file $npsfbscript \
+          --set-ph oar_config_file=$OAR_NPSFBSERVICE_CONFIG \
+          --set-ph oar_midas_config_file=$OAR_MIDASSERVER_CONFIG \
+          --set-ph oar_working_dir=$OAR_WORKING_DIR \
+          --daemonize=$OAR_LOG_DIR/npsfb-uwsgi.log >> $OAR_LOG_DIR/nohup.log 
+}
 
 
 echo '++' uwsgi --plugin python3 --http-socket :$port --wsgi-file $script --static-map /docs=/docs \

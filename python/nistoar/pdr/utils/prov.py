@@ -47,6 +47,23 @@ class Agent(object):
     An Agent can also provide other information about the agent such as its origins and properties
     that can be used to assess authorization rights or record provenance.
 
+    The vehicle and delegated agents (see :py:attr:`delegated` and :py:meth:`agent_vehicles`) provide
+    the chain of agents, each delegating to the next, behind the current request.  The vehicle 
+    typically is set to the name of the name of the entry point into OAR software 
+    system--e.g., the name of the web service or command-line command receiving the current request. 
+    The list of delegated agents name the software vehicles that are responsible for initiating the 
+    current request at the current vehicle.  The first agent is the first vehicle that originated 
+    the request; the last in the list represents the client software the made the request to the 
+    current vehicle.  For example, in the case of a web service request, the vehicle is set to the 
+    name of the web service, and the last client in the delegated agent list is the name of the web
+    client that made the request.  Often (as with web service requests), the chain of delegated agents 
+    is unknown, incomplete, inaccurate, or unspecific.  It is possible that somewhare in its process 
+    handling a request, the OAR software may change the vehicle to represent an internal "handing off"
+    from one system to another; this is recommended particularly when the actor or class (which may 
+    have changes different permissions) changes.  An element in the delegated agent list may contains 
+    a slash (``/``); if so, the name before it is the original vehicle name for the agent and the 
+    name after provides the actor id at that part of the agent chain.  
+
     Two properties in particular are provided for assessing authorization.  First is the 
     :py:attr:`groups` property, a list of named collections of users that can be assigned permissions 
     on particular data entities.  A group can be a static or persisted set of users stored in a 
@@ -57,13 +74,16 @@ class Agent(object):
     The second property intended for supporting authorization is the :py:attr:`agent_class`.  The 
     class represents a dynamic group that is typically assigned to the agent based on the origins of 
     the agent.  Like a group, it represents an identity enhancement that can alter the privileges afforded 
-    to the agent.  For example, an ordinary user with the class set to ``ADMIN_ACTOR_CLASS`` can gain 
+    to the agent.  For example, an ordinary user with the class set to ``Agent.ADMIN`` can gain 
     administrative privileges.  This allows actions to be logged to show that an administrative 
-    action was taken by a particular user.  Similarly, the ``INVALID_ACTOR_CLASS`` may restrict 
-    the actor's privileges.  The :py:attr:`agent_class` name will always appear as 
-    the first group in the :py:attr:`groups` property.  The PDR publishing service, whose clients 
-    are typically other software agents, uses :py:attr:`agent_class` to control which clients can 
-    publish which SIPs.
+    action was taken by a particular user.  Similarly, the ``Agent.INVALID`` (which is set when an 
+    attempt to validate the user fails) may restrict the actor's privileges.  The ``Agent.PUBLIC``
+    can be assigned to an ``Agent``--whether the actor ID is authenticated or not (that is, it 
+    could be set to ``Agent.ANONYMOUS``)--to indicate that the user has no special privileges
+    beyond a normal unknown user.  Other service-specific classes are permitted.  The 
+    :py:attr:`agent_class` name will always appear as the first group in the :py:attr:`groups` 
+    property.  The PDR publishing service, whose clients are typically other software agents, 
+    uses :py:attr:`agent_class` to control which clients can publish which SIPs.
 
     This class is intended to represent an Agent from the 
     `W3C PROV model <https://www.w3.org/TR/2013/NOTE-prov-primer-20130430/>`_.
@@ -81,7 +101,9 @@ class Agent(object):
                  agents: Iterable[str] = None, groups: Iterable[str] = None, **kwargs):
         """
         create an agent
-        :param str   vehicle:  a name for the software component that this agent originates from.
+        :param str   vehicle:  a name for the software component that this agent originates from.  This
+                               is normally set to the name of the entry point into the software (e.g.
+                               the name of the web service or command-line command).
         :param str actortype:  one of USER, AUTO, or UNKN, indicating the type of actor the identifier
                                represents
         :param str   actorid:  the unique identifier for the actor driving the software vehicle.  (This 
@@ -90,7 +112,10 @@ class Agent(object):
                                assigned based on the actor identity and/or the identity of the service
                                client.  
         :param list[str] agents:  the list of upstream agents that this agent is acting on behalf of
-                               (optional).
+                               (optional).  The first element should be the name of the software 
+                               vehicle that originated the current request, and the last is usually 
+                               the client used to make a request at the current vehicle (given in the 
+                               ``vehicle`` parameter).  
         :param list[str] groups:  a list of names of permission groups that the actor should be 
                                considered part of (optional).
         :param kwargs:  arbitrary key-value pairs that will be saved as custom properties of the agent

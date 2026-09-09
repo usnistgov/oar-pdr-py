@@ -6,22 +6,22 @@
 ## Basic Information
 
 **Title:**
-{{record['title']}}
+{{record.get('title', 'Not Provided')}}
 
 **Project Description:**
-{{record['projectDescription']}}
+{{record.get('projectDescription', 'Not Provided')}}
 
 **Start Date:**
-{{record['startDate']}}
+{{record.get('startDate', 'Not Provided')}}
 
 **Make DMP Searchable:**
-{{record['dmpSearchable']}}
+{{record.get('dmpSearchable', 'Not Provided')}}
 
 **Funding:**
 
 | Grant Source | Grant ID |
 | --- | --- |
-| {{record['funding']['grant_source']}} | {{record['funding']['grant_id']}} |
+| {{record.get('funding', {}).get('grant_source', 'Not Provided')}} | {{record.get('funding', {}).get('grant_id', 'Not Provided')}} |
 
 ---
 
@@ -79,7 +79,7 @@ orgs_table = "\n".join(lines)
 
 ## Keywords / Phrases
 
-{{for kw in record['keywords']}}
+{{for kw in record.get('keywords', [])}}
 - {{kw}}
 {{endfor}}
 
@@ -104,19 +104,19 @@ if 'dataSizeDescription' in record and type(record['dataSizeDescription']) is st
 {{data_size}}
 
 **Software Development:**
-{{record['softwareDevelopment']['development']}}
+{{record.get('softwareDevelopment', {}).get('development', 'Not Provided')}}
 
 **Software Use:**
-{{record['softwareDevelopment']['softwareUse']}} use
+{{record.get('softwareDevelopment', {}).get('softwareUse', 'Not Provided')}} use
 
 **Requires Database?**
-{{record['softwareDevelopment']['softwareDatabase']}}
+{{record.get('softwareDevelopment', {}).get('softwareDatabase', 'Not Provided')}}
 
 **Website Interface?**
-{{record['softwareDevelopment']['softwareWebsite']}}
+{{record.get('softwareDevelopment', {}).get('softwareWebsite', 'Not Provided')}}
 
 **Technical resources equipment needed/used:**
-{{for resource in record['technicalResources']}}
+{{for resource in record.get('technicalResources', [])}}
 - {{resource}}
 {{endfor}}
 
@@ -143,28 +143,28 @@ instruments_table = "\n".join(lines)
 ## Ethical Concerns
 
 **IRB number:**
-{{record['ethical_issues']['irb_number']}}
+{{record.get('ethical_issues', {}).get('irb_number', 'Not Provided')}}
 
 **Any ethical issues?**
-{{record['ethical_issues']['ethical_issues_exist']}}
+{{record.get('ethical_issues', {}).get('ethical_issues_exist', 'Not Provided')}}
 
 **Describe any ethical issues (human subjects, etc.):**
-{{record['ethical_issues']['ethical_issues_description']}}
+{{record.get('ethical_issues', {}).get('ethical_issues_description', 'Not Provided')}}
 
 **Ethical issues report:**
-{{record['ethical_issues']['ethical_issues_report']}}
+{{record.get('ethical_issues', {}).get('ethical_issues_report', 'Not Provided')}}
 
 ---
 
 ## Security and Privacy
 
 **Data Sensitivity Level(s):**
-{{for item in record['security_and_privacy']['data_sensitivity']}}
+{{for item in record.get('security_and_privacy', {}).get('data_sensitivity', [])}}
 - {{item}}
 {{endfor}}
 
 **Controlled Unclassified Information (CUI):**
-{{for item in record['security_and_privacy']['cui']}}
+{{for item in record.get('security_and_privacy', {}).get('cui', [])}}
 - {{item}}
 {{endfor}}
 
@@ -172,10 +172,10 @@ instruments_table = "\n".join(lines)
 
 ## Data Preservation and Accessibility
 
-{{record['dataDescription']}}
+{{record.get('dataDescription', 'Not Provided')}}
 
 **Categories of the data that will be generated:**
-{{for item in record['dataCategories']}}
+{{for item in record.get('dataCategories', [])}}
 - {{item}}
 {{endfor}}
 
@@ -184,12 +184,12 @@ instruments_table = "\n".join(lines)
 ## Data Description
 
 **Preservation Description:**
-{{record['preservationDescription']}}
+{{record.get('preservationDescription', 'Not Provided')}}
 
 **Data discoverability and accessibility plan:**
-{{record['dataAccess']}}
+{{record.get('dataAccess', 'Not Provided')}}
 
 **File path(s) / URL(s) for where data will be saved:**
-{{for item in record['pathsURLs']}}
+{{for item in record.get('pathsURLs', [])}}
 - {{item}}
 {{endfor}}

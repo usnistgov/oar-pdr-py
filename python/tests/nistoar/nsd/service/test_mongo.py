@@ -17,8 +17,9 @@ def setUpModule():
     rootlog.setLevel(logging.DEBUG)
     loghdlr = logging.FileHandler(os.path.join(tmpdir.name,"test_nsd.log"))
     loghdlr.setLevel(logging.DEBUG)
-    loghdlr.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    loghdlr.setFormatter(logging.Formatter("%(levelname)s: %(name)s: %(message)s"))
     rootlog.addHandler(loghdlr)
+    logging.getLogger("pymongo").setLevel(logging.ERROR)
 
 def tearDownModule():
     global loghdlr

@@ -291,6 +291,7 @@ class ExportFlowProjectRecordTest(test.TestCase):
             "keywords": ["materials science", "data management", "testing", "metadata"],
             "dataSize": 500.5,
             "sizeUnit": "GB",
+            "dataSizeDescription": "Annual",
             "softwareDevelopment": {
                 "development": "yes",
                 "softwareUse": "Python scripts for data analysis",
@@ -364,6 +365,10 @@ class ExportFlowProjectRecordTest(test.TestCase):
         self.assertIn("NSF", csv_content)
         self.assertIn("500.5", csv_content)
         self.assertIn("materials science", csv_content)
+        self.assertIn("DataSizeFrequency", csv_content)
+        self.assertIn("Annual", csv_content)
+        self.assertIn("DataFilePaths", csv_content)
+        self.assertIn("https://data.nist.gov/test-project", csv_content)
 
     @patch("nistoar.midas.export.exporters.csv_exporter.preppy.getModule")
     def test_export_csv_single_dap(self, mock_get_module):
@@ -645,7 +650,7 @@ class ExportFlowProjectRecordTest(test.TestCase):
         
         # Verify combined PDF bytes
         pdf_bytes = result["bytes"]
-        self.assertEqual(pdf_bytes, b"COMBINED-PDF-3-RECORDS")  # From our fake concat
+        self.assertEqual(pdf_bytes, b"COMBINED-PDF-4-RECORDS")  # 3 records + 1 report page
         self.assertIsInstance(pdf_bytes, (bytes, bytearray))
         
 
@@ -890,10 +895,10 @@ class ExportFlowProjectRecordTest(test.TestCase):
         self.assertEqual(result["mimetype"], "text/markdown")
         self.assertIn("text", result)
         
-        # Should have 4 markdown sections (2 DMP + 2 DAP)
+        # Should have 5 markdown sections (2 DMP + 2 DAP + 1 report)
         markdown_content = result["text"]
         markdown_sections = markdown_content.split("\n\n")
-        self.assertEqual(len(markdown_sections), 4)
+        self.assertEqual(len(markdown_sections), 5)
         
         # Each section should be our test markdown content
         for section in markdown_sections:

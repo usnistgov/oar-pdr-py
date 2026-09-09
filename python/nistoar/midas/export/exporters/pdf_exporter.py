@@ -4,8 +4,21 @@ from collections.abc import Mapping as MappingABC
 from .base import Exporter
 import preppy
 import trml2pdf
+import xml.sax.saxutils as saxutils
+import re
 
 DEFAULT_PDF_TEMPLATE = "dmp_pdf_template.prep"  # Fallback to DMP template for compatibility
+_XML_ILLEGAL = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
+
+
+def _escape_xml(obj):
+    if isinstance(obj, str):
+        return saxutils.escape(_XML_ILLEGAL.sub('', obj))
+    if isinstance(obj, dict):
+        return {k: _escape_xml(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_escape_xml(v) for v in obj]
+    return obj
 
 
 class PDFExporter(Exporter):
@@ -48,6 +61,7 @@ class PDFExporter(Exporter):
 
         # Load template and parse
         data_for_template = json_payload.get("data", json_payload)
+        data_for_template = _escape_xml(data_for_template)
         rml_xml_text = preppy_template.get(data_for_template)
         pdf_bytes = trml2pdf.parseString(rml_xml_text)
 

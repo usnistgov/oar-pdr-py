@@ -10,6 +10,9 @@ doi_naan: '10.88434'
 cmd:
 
   dap:
+    convention: mds3
+    nerdstorage:
+      type: mongo
     cmd:
 
       regpub:

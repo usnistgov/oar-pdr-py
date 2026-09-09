@@ -1,4 +1,4 @@
-import json, tempfile, shutil, os, sys, time, pdb
+import json, tempfile, shutil, os, sys, time, pdb, logging
 import unittest as test
 from unittest.mock import patch, Mock
 from pathlib import Path
@@ -92,6 +92,7 @@ class MIDASFileManagerServiceTest(test.TestCase):
         # no longer raises exception; writes warning to log instead
         # with self.assertRaises(ConfigurationException):
         #     self.cli = fm.MIDASFileManagerService(self.config)
+        logging.getLogger().setLevel(logging.ERROR)
         self.cli = fm.MIDASFileManagerService(self.config)
 
 #    @patch('requests.request')

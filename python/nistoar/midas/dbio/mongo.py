@@ -1,7 +1,7 @@
 """
 An implementation of the dbio interface that uses a MongoDB database as it backend store
 """
-import re
+import re, time
 from copy import deepcopy
 from collections.abc import Mapping, MutableMapping, Set
 from typing import Iterator, List
@@ -9,6 +9,7 @@ from . import base
 from .notifier import DBIOClientNotifier
 
 from pymongo import MongoClient, ASCENDING
+from pymongo.errors import OperationFailure
 
 from nistoar.base.config import ConfigurationException, merge_config
 from nistoar.nsd.service import PeopleService, MongoPeopleService, create_people_service
@@ -115,7 +116,7 @@ class MongoDBClient(base.DBClient):
             if coll.count_documents(key) == 0:
                 coll.insert_one({
                     "slot": shoulder,
-                    "next": 1
+                    "next": self._init_nextnum_for(shoulder) + 1
                 })
 
             result = coll.find_one_and_update(key, {"$inc": {"next": 1}})
@@ -318,7 +319,17 @@ class MongoDBClient(base.DBClient):
         except base.DBIOException as ex:
             raise
         except Exception as ex:
-            raise DBIOEception(histrec.get('recid', "id=?")+": Failed to save history entry: "+str(ex)) \
+            raise DBIOEception(histrec.get('id', "id=?")+": Failed to save history entry: "+str(ex)) \
+                from ex
+
+    def _iter_history_for(self, id) -> Iterator[Mapping]:
+        try:
+            coll = self.native[self.HISTORY_COLL]
+            return coll.find({"id": id})
+        except base.DBIOException as ex:
+            raise
+        except Exception as ex:
+            raise DBIOEception(histrec.get('id', "id=?")+": Failed to save history entry: "+str(ex)) \
                 from ex
 
     def client_for(self, projcoll: str, foruser: str = None):
@@ -384,6 +395,75 @@ class MongoDBClientFactory(base.DBClientFactory):
         if pscfg.get("factory") == "mongo" and not pscfg.get("db_url"):
             # default people service db url is same as DBIO's.
             pscfg["db_url"] = self._dburl
+
+    def db_is_ready(self, _client=None) -> bool:
+        """
+        return True if the database successfully returns a response indicating that it is 
+        ready for use.
+
+        An exception is raised if the there is an authentication failure (in which case the 
+        database will never appear to be ready).  
+        """
+        cli = _client
+        if not cli:
+            cli = MongoClient(self._dburl)
+        try:
+            return self._check_ready(cli)
+        except Exception as ex:
+            if self._is_authentication_failure(ex):
+                raise
+            return False
+        finally:
+            if not _client:
+                cli.close()
+
+    def _check_ready(self, client):
+        client.get_default_database().list_collection_names()  # usually raises exception if not ready
+        return True
+
+    def _is_authentication_failure(self, ex):
+        return isinstance(ex, OperationFailure) and "Authentication failed" in str(ex)
+
+    def wait_until_ready(self, timeout: int=10, rais: bool=True, _client=None) -> bool:
+        """
+        wait until the database is up and operating.
+
+        :param int timeout:  a maximum number of seconds to wait
+        :param bool   rais:  if True, raise an exception if the ``timeout`` is exceeded before the
+                             database appears ready.
+        :return: True if the database is ready or False (if ``rais`` is False) if the ``timeout``
+                 period was exceeded.
+        """
+        cli = _client
+        if not cli:
+            cli = MongoClient(self._dburl)
+        try:
+            if self.db_is_ready(cli):
+                return True
+
+            prob = None
+            start = time.time()
+            while time.time()-start < timeout:
+                time.sleep(2)
+
+                try:
+                    if self._check_ready(cli):
+                        return True
+                except Exception as ex:
+                    if self._is_authenticaiton_failure(ex):
+                        raise
+                    prob = ex
+
+        finally:
+            if not _client:
+                cli.close()
+
+        if rais:
+            if prob:
+                raise ConfigurationException("Waiting for MongoDB database timed out") from prob
+            else:
+                raise ConfigurationException("Waiting for MongoDB database timed out: database appears empty")
+        return False
 
     def create_client(self, servicetype: str, config: Mapping = {}, foruser: str = base.ANONYMOUS):
         cfg = merge_config(config, deepcopy(self._cfg))

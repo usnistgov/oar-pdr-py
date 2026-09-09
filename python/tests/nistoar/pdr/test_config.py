@@ -75,10 +75,7 @@ class TestConfig(test.TestCase):
 class TestLogConfig(test.TestCase):
 
     def resetLogfile(self):
-        if config._log_handler:
-            self.rootlog.removeHandler(config._log_handler)
-        if self.logfile and os.path.exists(self.logfile):
-            os.remove(self.logfile)
+        config.configure_logging({'logfile': self.logfile})
         self.logfile = None
 
     def setUp(self):
