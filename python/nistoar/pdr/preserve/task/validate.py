@@ -155,22 +155,22 @@ class NISTBagValidation(fw.AIPValidation):
                                        "All data files listed in the NERDm metadata must appear in "
                                        "the multibag file index")
                 if len(missing) > 0:
-                    res._add_applied(test, False,
-                                     f'{len(missing)} file{(len(missing)>1 and "s are") or " is"} missing:')
                     log.error("master bag for id=%s is missing the following "+
                               "files from the multibag file index:\n  %s",
                               statemgr.aipid, "\n  ".join(missing))
+                    test.add_comment(f'{len(missing)} file{(len(missing)>1 and "s are") or " is"} missing:')
+                res._add_applied(test, len(missing) == 0, missing)
                 
                 missing = chkr.unavailable_files(viadistrib=self.cfg.get('check_ext_dlurls', True))
-                issue = ValidationTest("PDR", "0", "2.2", res.ERROR,
-                                       "All data files listed in the the multibag file index must be "
-                                       "found in this or an available bag.")
+                test = ValidationTest("PDR", "0", "2.2", res.ERROR,
+                                      "All data files listed in the the multibag file index must be "
+                                      "found in this or an available bag.")
                 if len(missing) > 0:
-                    res._add_applied(test, False,
-                                     f'{len(missing)} file{(len(missing)>0 and "s are") or " is"} missing:')
                     log.error("unable to locate the following files described " +
                               "in master bag for id=%s:\n  %s",
                               statemgr.aipid, "\n  ".join(missing))
+                    test.add_comment(f'{len(missing)} file{(len(missing)>0 and "s are") or " is"} missing:')
+                res._add_applied(test, len(missing) == 0, missing)
 
                 info['data_check_duration'] = time.time() - mark
 

@@ -42,6 +42,9 @@ class TestNISTBagValidation(test.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory(prefix="work.", dir=tmpdir.name)
         self.cfg = {
             "check_data_files": False,
+            "nist": {
+                "profile_version": "0.4"
+            }
         }
         self.smcfg = {
             "working_dir": self.tmpdir.name,
@@ -50,8 +53,11 @@ class TestNISTBagValidation(test.TestCase):
         self.val = val.NISTBagValidation(self.cfg)
         self.mgr = st.JSONPreservationStateManager.for_aip(self.smcfg, "mds2-7223", str(testbag))
         self.mgr.set_finalized_aip(str(testbag))
+        self.oldlev = self.mgr.log.getChild('validate').getEffectiveLevel()
+        self.mgr.log.getChild('validate').setLevel(logging.INFO)
 
     def tearDown(self):
+        self.mgr.log.getChild('validate').setLevel(self.oldlev)
         self.tmpdir.cleanup()
 
     def test_ctor(self):
@@ -87,7 +93,10 @@ class TestNISTBagValidation(test.TestCase):
 
     def test_record_passed(self):
         self.val.cfg['record_passed'] = True
-        self.val.apply(self.mgr)
+        try:
+            self.val.apply(self.mgr)
+        except Exception as ex:
+            raise
         
         resfile = Path(self.tmpdir.name)/"validation_results.json"
         self.assertTrue(resfile.is_file())
