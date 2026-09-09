@@ -143,7 +143,7 @@ class TestPDRBagFinalization(test.TestCase):
 
         self.fin = pdr.PDRBagFinalization(self.cfg)
         self.pub = pdr.PDRPublication(self.cfg)
-        self.mgr = st.JSONPreservationStateManager(self.smcfg, "mds2-7223", str(self.testbag))
+        self.mgr = st.JSONPreservationStateManager.for_aip(self.smcfg, "mds2-7223", str(self.testbag))
 
     def tearDown(self):
         self.tmpdir.cleanup()

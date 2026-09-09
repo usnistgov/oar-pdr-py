@@ -653,18 +653,23 @@ class PDRPublication(fw.AIPPublication):
 
         icfg = self.cfg.get('ingest', {})
         self._ingester = None
-        self._ingcfg = icfg.get('rmm')
-        if self._ingcfg and self._ingcfg.get('service_endpoint'):
+        self._ingcfg = icfg.get('rmm', {})
+        if not self._ingcfg.get('disable', False):
+            if not self._ingcfg or not self._ingcfg.get('service_endpoint'):
+                raise ConfigurationException("ingest.rmm not configured")
             self._ingester = RMMIngestClient(self._ingcfg)
         if not self._ingester:
-            raise ConfigurationException("ingest.rmm not configured")
+            setuplog.warning("RMM Ingester disabled: won't send record to public repository")
 
         self._doiminter = None
         self._dmcfg = icfg.get('doi')
-        if self._dmcfg and self._dmcfg.get('datacite_api'):
-            self._doiminter = DOIMintingClient(self._dmcfg)
+        if self._dmcfg and not self._dmcfg.get('disable', False):
+            if self._dmcfg.get('datacite_api'):
+                self._doiminter = DOIMintingClient(self._dmcfg)
+            else:
+                setuplog.warning("DOI Minter not configured (missing doi parameter): disabling")
         if not self._doiminter:
-            setuplog.warning("DOI Minter not configured (missing doi parameter): won't create DOI")
+            setuplog.warning("DOI Minter disabled: won't create DOI")
 
         self._cachecli = None
         dccfg = self.cfg.get('data_cache')
@@ -1146,9 +1151,8 @@ class PDRPreservationTaskFactory(fw.PreservationTaskFactory):
         if self.cfg.get('ingest'):
             # share the top level ingest with steps that need it
             for step in ['publish', 'finalize']:
-                if not self.cfg.get(step, {}).get('ingest'):
-                    self.cfg.setdefault(step, {})
-                    self.cfg[step]['ingest'] = self.cfg['ingest']
+                incfg = self.cfg.setdefault(step, {}).setdefault('ingest', {})
+                self.cfg[step]['ingest'] = merge_config(incfg, deepcopy(self.cfg['ingest']))
 
         # for prop in ['store_dir', 'restricted_store_dir']:
         #     if self.cfg.get(prop):
