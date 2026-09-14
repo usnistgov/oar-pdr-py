@@ -354,11 +354,15 @@ class PDR1AIPArchiving(fw.AIPArchiving):
 
         if not statemgr.steps_completed & statemgr.SUBMITTED:
             statemgr.record_progress("Archiving files to long-term storage")
+            log.info("Archiving files to long-term storage")
             self.launch_migration(statemgr, log)
             statemgr.mark_completed(statemgr.SUBMITTED, "Files submitted to long-term storage")
 
         if self.cfg.get('always_wait') or statemgr.get_state_property("finalizing:has_data", True):
+            log.info("Waiting for AIP files to arrive in long-term storage")
             self.monitor_destination(statemgr, log)
+        else:
+            log.info("No need to wait for AIP files to transfer")
         statemgr.mark_completed(statemgr.ARCHIVED)
 
     def launch_migration(self, statemgr: fw.PreservationStateManager, log: Logger):
@@ -733,7 +737,8 @@ class PDRPublication(fw.AIPPublication):
                     self._note_reverted(statemgr, "rmm_ingest")
 
                 raise fw.IngestError(aipid, msg) from ex
-                                  
+        else:
+            log.warning("PDR record ingestion disabled")
 
         if self._doiminter:
             # submit the DOI metadata to DataCite
@@ -756,6 +761,8 @@ class PDRPublication(fw.AIPPublication):
                     self._note_reverted(statemgr, "mint_doi")
 
                 raise fw.DOISubmissionError(aipid, msg) from ex
+        else:
+            log.warning("DOI record submission disabled")
 
         statemgr.mark_completed(statemgr.PUBLISHED, "AIP is released")
 

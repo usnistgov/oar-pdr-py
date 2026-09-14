@@ -492,6 +492,8 @@ class AIP1PreservationService(PreservationService):
                               'exitcode': job.info.get('exitcode') })
                 if job.info.get('pid'):
                     info['jobpid'] = job.info['pid']
+                if job.info.get('version'):
+                    info['version'] = job.info['version']
                 if isinstance(job.info.get('result', {}), Mapping):
                     info['headbag'] = job.info.get('result', {}).get('headbag')
 
@@ -658,6 +660,12 @@ class AIP1PreservationService(PreservationService):
 
         workdir = self.inprogdir/aipid
         preslog = workdir/"preservation.log"
+        statefile = self._state_file_for(aipid)
+        pstat = None
+        vers = "?"
+        if statefile.exists():
+            pstat = self._status_from_current_job(statefile, job)
+            vers = pstat.get("version", "??")
 
         if preslog.exists():
             # save the preservation log
@@ -665,17 +673,18 @@ class AIP1PreservationService(PreservationService):
             if not preslog.is_file():
                 self.log.error("%s: does not exist as a file", preslog)
             else:
+                outcome = "UNDETERMINED OUTCOME"
+                if pstat:
+                    outcome = "SUCCEEDED" if pstat.successful else "FAILED"
                 with open(fulllog, 'a') as dest:
                     reqdate = datetime.fromtimestamp(job.request_time or time.time())
-                    dest.write(f"---------- {aipid}: {reqdate} --------------\n")
+                    dest.write(f"---------- {aipid} v{vers}: {outcome} --------------\n")
                     with open(preslog) as src:
                         for line in src:
                             dest.write(line)
 
-        statefile = self._state_file_for(aipid)
-        if statefile.exists():
+        if pstat:
             # append pres status to history
-            pstat = self._status_from_current_job(statefile, job)
             pstat.append_to_history(self._history_file_for(aipid))
 
             if pstat.successful:
@@ -690,18 +699,18 @@ class AIP1PreservationService(PreservationService):
                     if d.is_dir():
                         shutil.rmtree(d)
 
-            else:
-                self.log.warning("Preservation job, %s, appears to have exited before completing; "+
-                                 "keeping state available for restart", job.data_id)
+        if preslog.exists() and (not pstat or not pstat.successful):
+            self.log.warning("Preservation job, %s, appears to have exited before completing; "+
+                             "keeping state available for restart", job.data_id)
 
-                bkupre = re.compile(r"^preservation.log.(\d+)$")
-                bkups = [f for f in os.listdir(workdir) if bkupre.match(f)]
-                seq = [int(bkupre.match(f).group(1)) for f in bkups]
-                seq.sort()
-                if len(seq) > 0:
-                    seq = seq[-1]
-                else:
-                    seq = 1
-                preslog.rename(workdir/f"preservation.log.{str(seq)}")
+            bkupre = re.compile(r"^preservation.log.(\d+)$")
+            bkups = [f for f in os.listdir(workdir) if bkupre.match(f)]
+            seq = [int(bkupre.match(f).group(1)) for f in bkups]
+            seq.sort()
+            if len(seq) > 0:
+                seq = seq[-1]
+            else:
+                seq = 1
+            preslog.rename(workdir/f"preservation.log.{str(seq)}")
 
         

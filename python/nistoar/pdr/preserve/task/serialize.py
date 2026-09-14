@@ -89,7 +89,7 @@ class NISTBagSerialization(fw.AIPSerialization):
         info = []
         format = self.cfg.get('format', 'zip')
         for bagd in srcbags:
-            bagfile = self._ser.serialize(bagd, stagedir, format)
+            bagfile = self._ser.serialize(bagd, stagedir, format, log)
             outfiles.append(bagfile)
             statemgr.set_serialized_files(outfiles)
 
