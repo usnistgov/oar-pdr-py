@@ -360,6 +360,11 @@ class TestJobQueue(test.TestCase):
         self.assertEqual(job.state, jobmgt.PENDING)
         self.assertEqual(job.info.get('execmodule'), "nistoar.jobmgt.testproc")
 
+        ids = list(self.jobq.data_ids())
+        self.assertIn('pdr0:XX01', ids)
+        self.assertIn('pdr0:XX02', ids)
+        self.assertEqual(len(ids), 2)
+
         # test not-relaunchability
         self.jobq.submit("pdr0:XX02", priority=1, trigger=False)
         self.assertEqual(self.jobq.processed, 0)

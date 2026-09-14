@@ -29,6 +29,7 @@ class PDPHandler(Handler):
     ACTION_UPDATE   = ''
     ACTION_FINALIZE = "finalize"
     ACTION_PUBLISH  = "publish"
+    ACTION_IMPORTDATA = "import"
 
     def get_action(self):
         """
@@ -40,7 +41,8 @@ class PDPHandler(Handler):
 
         params = parse_qs(qstr)
         action = params.get('action')
-        if len(action) > 0 and action[0] in [self.ACTION_FINALIZE, self.ACTION_PUBLISH]:
+        if len(action) > 0 and action[0] in [ self.ACTION_FINALIZE, self.ACTION_PUBLISH,
+                                              self.ACTION_IMPORTDATA ]:
             return action[0]
         return self.ACTION_UPDATE
 
@@ -61,37 +63,4 @@ class PDPHandler(Handler):
         """
         accepts = self.get_accepts()
         return not accepts or "*/*" in accepts or "application/json" in accepts
-
-class Ready(ServiceApp):
-    """
-    a WSGI sub-app that handles unsupported path or proof-of-life requests
-    """
-
-    def __init(self, log, config=None):
-        super(SubApp, self).__inti__(log, config)
-
-    class _Handler(Handler):
-
-        def __init__(self, path: str, wsgienv: dict, start_resp: Callable, who=None,
-                     config: dict={}, log: Logger=None):
-            Handler.__init__(self, path, wsgienv, start_resp, who, config, log)
-
-        def do_GET(self, path, ashead=False):
-            path = path.lstrip('/')
-            if path:
-                # only the root path is supported
-                return self.send_error(404, "Not found")
-
-            return self.send_ok("Publishing service is up.\n", ashead=ashead)
-
-    def create_handler(self, env: dict, start_resp: Callable, path: str, who: Agent) -> Handler:
-        """
-        return a handler instance to handle a particular request to a path
-        :param Mapping env:  the WSGI environment containing the request
-        :param Callable start_resp:  the start_resp function to use initiate the response
-        :param str path:     the path to the resource being requested.  This is usually 
-                             relative to a parent path that this SubApp is configured to 
-                             handle.  
-        """
-        return self._Handler(path, env, start_resp, who, log=self.log)
 

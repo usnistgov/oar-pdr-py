@@ -15,12 +15,12 @@ from collections.abc import Sequence, Mapping
 from urllib.parse import urlparse
 from copy import deepcopy
 
-from ...preserve.bagit.builder import (NERDM_SCH_ID_BASE, NERDM_SCH_VER, NERDMPUB_SCH_VER,
-                                       NERDMBIB_SCH_ID_BASE, NERDMBIB_SCH_VER)
+from .builder import (NERDM_SCH_ID_BASE, NERDM_SCH_VER, NERDMPUB_SCH_VER,
+                      NERDMBIB_SCH_ID_BASE, NERDMBIB_SCH_VER)
 from nistoar.id.versions import Version, cmp_versions
 
 DEF_MBAG_VERSION = "0.4"
-DEF_NIST_PROF_VERSION = "0.4"
+DEF_NIST_PROF_VERSION = "0.5"
 
 def form_bag_name(aipid, bagseq=0, dsver="1.0", mbver=DEF_MBAG_VERSION,
                   namefmt=None):
@@ -120,7 +120,7 @@ def parse_bag_name_02(name, nistprof="0.2"):
     parse a bag name into its parts according to convention specified in the 
     NIST BagIt Profile, versions 0.2-0.3.
     """
-    m = BAGNAME02_RE.match(name)
+    m = BAGNAME02_RE.match(os.path.basename(name))
     if m is None:
         if nistprof is None:  nistprof = "0.2"
         raise ValueError("Not recognized as a bag name according to profile "+
@@ -134,7 +134,7 @@ def parse_bag_name_02(name, nistprof="0.2"):
     return out
 
 def parse_bag_name_04(name, nistprof="0.4"):
-    m = BAGNAME04_RE.match(name)
+    m = BAGNAME04_RE.match(os.path.basename(name))
     if m is None:
         if nistprof is None:  nistprof = "0.4"
         raise ValueError("Not recognized as a bag name according to profile "+

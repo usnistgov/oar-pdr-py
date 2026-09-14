@@ -5,14 +5,15 @@ import os, errno, logging, re, pkg_resources, textwrap, datetime, shutil
 import pynoid as noid
 from shutil import copy as filecopy, rmtree
 from copy import deepcopy
-from collections import OrderedDict
+from collections import OrderedDict, ChainMap
 from collections.abc import Mapping, Sequence
-from urllib.parse import quote as urlencode
+from urllib.parse import urljoin, quote as urlencode
+from pathlib import Path
 
 from .. import PreservationSystem
 from .. import ConfigurationException, StateException, PODError
 from .exceptions import (BagProfileError, BagWriteError, BadBagRequest,
-                         ComponentNotFound)
+                         ComponentNotFound, InvalidBagID)
 from ....nerdm.exceptions import (NERDError, NERDTypeError)
 from ....nerdm.convert import PODds2Res
 from ....nerdm.constants import core_schema_base, schema_versions
@@ -70,6 +71,9 @@ NERDM_CONTEXT = "https://data.nist.gov/od/dm/nerdm-pub-context.jsonld"
 DISTSERV = "https://"+PDR_PUBLIC_SERVER+"/od/ds/"
 DEF_MERGE_CONV = "pdp0"
 FILECMP_ID_START = FILECMP_EXTENSION.strip('/') + '/'
+
+NOID_CD_CTL_PAT = r'(\\N\{OAR_NOID_CD}|\\k)'
+NOID_CD_PAT = r'\\w[' + ''.join(noid.XDIGIT) + ']'
 
 class BagBuilder(PreservationSystem):
     """
@@ -138,8 +142,6 @@ class BagBuilder(PreservationSystem):
                               data
     :prop ensure_nerdm_type_on_add bool (True):  if True, make sure that the 
                          resource metadata has a recognized value for "_schema".
-    :prop distrib_service_baseurl str (https://data.nist.gov/od/ds):  the base
-                         URL to use for creating downloadURL property values.
     :prop require_ark_id bool (True):  if True, builder will ensure the resource
                          identifier is set with an ARK identifier (in assign_id())
     :prop extra_tag_dirs list of str (None): a list of other bag tag directories 
@@ -202,9 +204,7 @@ class BagBuilder(PreservationSystem):
         self._logname = self.cfg.get('log_filename', 'publish.log')
         self._log_handlers = {}
         self._mimetypes = None
-        self._distbase = self.cfg.get('distrib_service_baseurl', DISTSERV)
-        if not self._distbase.endswith('/'):
-            self._distbase += '/'
+        self._distbase = "pdr:dl:"
 
         jqlib = self.cfg.get('jq_lib', def_jq_libdir)
         self.pod2nrd = PODds2Res(jqlib)
@@ -242,6 +242,18 @@ class BagBuilder(PreservationSystem):
             self._nerdm_schema_id = self.cfg.get('ensure_nerdm_type_on_add', NERDM_SCH_ID);
             if not self._nerdm_schema_id.endswith('#'):
                 self._nerdm_schema_id += '#'
+
+    @classmethod
+    def forBag(cls, bagdir, config=None, logger=None):
+        """
+        create a BagBuilder for an existing bag
+        :param str|Path bagdir:  the root directory for the existing bag
+        """
+        if isinstance(bagdir, str):
+            bagdir = Path(bagdir).resolve()
+        if not bagdir.is_dir():
+            raise ValueError("BagBuilder.forBag(): bagdir does not exist: "+bagdir)
+        return cls(bagdir.parent, bagdir.name, config, logger=logger)
 
     def __del__(self):
         self.disconnect_logfile(quiet=True)
@@ -321,6 +333,13 @@ class BagBuilder(PreservationSystem):
         hdlr.setLevel(loglevel)
         
         self.plog.addHandler(hdlr)
+
+    def done(self):
+        """
+        indicate that no further changes are expected to the underlying bag and release resources
+        accordingly.  This implementation disconnects the internal log file. 
+        """
+        self.disconnect_logfile()
 
     def disconnect_logfile(self, logfile=None, quiet=False):
         """
@@ -413,19 +432,28 @@ class BagBuilder(PreservationSystem):
 
     @property
     def ediid(self):
+        """
+        the identifier for this resource when described as part of the Enterprise Data Inventory.  
+
+        The purpose of this identifier and its distinction from the primary :py:prop:`id` is tied 
+        historically to the implementation of the Enterprise Data Inventory (EDI) at NIST.  The EDI
+        is a federally mandated reporting of an agency's data assets as a DCAT-formatted Catalog.  
+        For most modern repository resources, the EDI identifier is (ARK-based) identical to the 
+        repository ID; however, early in the NIST EDI history, the took a different form.  As this 
+        earlier form was used as the :py:prop:`aipid`, it is necessary to track it separately.
+        """
         return self._ediid
 
     @ediid.setter
     def ediid(self, val):
+        self._ediid = val
         if os.path.exists(self.bagdir):
             if val:
                 self.record("Setting ediid: " + val)
             elif self._ediid:
                 self.record("Unsetting ediid")
         self._ediid = val
-        old = self._upd_ediid(val)
-        if self._ediid and self._ediid != old:
-            self._upd_downloadurl(self._ediid)
+        self._upd_ediid(val)
 
     def _upd_ediid(self, ediid):
         # this updates the ediid metadatum in the resource nerdm.json
@@ -443,33 +471,21 @@ class BagBuilder(PreservationSystem):
                     self._write_json(mdata, mdfile)
         return old
 
-    def _upd_downloadurl(self, ediid):
-        mdtree = os.path.join(self.bagdir, 'metadata')
-        if os.path.exists(mdtree):
-            for dir, subdirs, files in os.walk(mdtree):
-                if FILEMD_FILENAME in files:
-                    mdfile = os.path.join(dir, FILEMD_FILENAME)
-                    mdata = read_nerd(mdfile)
-                    if (DATAFILE_TYPE in mdata.get("@type", []) or \
-                        DOWNLOADABLEFILE_TYPE in mdata.get("@type", [])) and \
-                       mdata.get('filepath') and             \
-                       mdata.get("downloadURL", self._distbase)    \
-                            .startswith(self._distbase):
-                        if ediid:
-                            mdata["downloadURL"] = \
-                               self._download_url(ediid, mdata['filepath'])
-                                    
-                        else:
-                            del mdata["downloadURL"]
-                        self._write_json(mdata, mdfile)
+    @property
+    def aipid(self):
+        """
+        the identifier of the Archive Information Package (AIP) that this resource is part of.
 
-    def _download_url(self, ediid, destpath):
-        path = "/".join(destpath.split(os.sep))
-        arkpfx= "ark:/{0}/".format(ARK_NAAN)
-        if ediid.startswith(arkpfx):
-            # our convention is to omit the "ark:/88434/" prefix
-            ediid = ediid[len(arkpfx):]
-        return self._distbase + ediid + '/' + urlencode(path)
+        The AIP is used to form the file download URLs and typically the local-id part of the 
+        PDR :py:prop:`id`.  
+        """
+        if self.ediid and not self.ediid.startswith("ark:/"):
+            # Old convention for EDI-ID; used as the AIP-ID
+            return self.ediid
+        out = self.id or self.ediid
+        if not out:
+            return None
+        return re.sub(r'ark:/\d+/', '', out)
 
     def assign_id(self, id, keep_conv=False):
         """
@@ -487,12 +503,15 @@ class BagBuilder(PreservationSystem):
                         parameter has no effect; default: False).
         """
         if not id:
-            raise ValueError("BagBuilder.assign_id(): id is empty or None")
+            raise InvalidBagID("BagBuilder.assign_id(): id is empty or None")
         self._id = self._fix_id(id)  # may raise validity concerns
+        newmd = {"@id": self._id}
+        if not self._ediid:
+            self._ediid = self._id
+            newmd['ediid'] = self._ediid
 
         self.ensure_bag_structure()
-        md = self.update_metadata_for("", {"@id": self._id},
-                                      message="setting resource ID: "+self._id)
+        md = self.update_metadata_for("", newmd, message="setting resource ID: "+self._id)
         if '@context' in md:
             if not isinstance(md['@context'], list):
                 md['@context'] = [ md['@context'], { "@base": self._id } ]
@@ -522,23 +541,38 @@ class BagBuilder(PreservationSystem):
 
         if id.startswith("ark:"):
             if not re.match(r"^ark:/\d+/\w", id):
-                raise ValueError("Invalid ARK identifier provided: "+id)
+                raise InvalidBagID("Invalid ARK identifier provided: "+id)
 
             validate = self.cfg.get('validate_id', False)
-            if isinstance(validate, str):
-                # assume that this is a RE of matching shoulders to validate
-                try:
-                    validate = bool( re.match(r'ark:/\d+/('+validate+')', id) )
-                except re.error as ex:
-                    raise ConfigurationException("validate_id: Contains bad "
-                                                 "regular expression value: " +
-                                                 validate, ex)
             if validate:
+                validate_check_digit = False
+                pat = r'ark:/\d+/'
+                if isinstance(validate, str):
+                    validate = validate.lstrip('^')
+
+                    # assume that this is a RE pattern of local-id (starting with the shoulder)
+                    # Note the support for a CUSTOM control sequences, \k and \N{OAR_NOID_CD},
+                    #   synonyms that match a NOID "check digit".  If it appears, we
+                    #   apply an extra check to make sure that the check character digit is correct.
+                    cdre = re.compile(NOID_CD_CTL_PAT)
+                    if cdre.search(validate):
+                        validate_check_digit = True
+                        validate = cdre.sub(NOID_CD_PAT, validate)
+                    pat += f"({validate})"
+                
                 try:
-                    noid.validate(id)
-                except noid.ValidationError as ex:
-                    raise ValueError("Invalid ARK identifier provided: "+
-                                     str(ex))
+                    if not re.match(pat, id):
+                        raise InvalidBagID("Invalid ARK local-id provided: "+id+
+                                           "; does not match required pattern: "+pat)
+                except re.error as ex:
+                    raise ConfigurationException("validate_id: Contains bad regular expression "+
+                                                 "value: "+validate) from ex
+                if validate_check_digit:
+                    try:
+                        noid.validate(id)
+                    except noid.ValidationError as ex:
+                        raise InvalidBagID("Invalid ARK identifier provided: "+str(ex))
+
         return id
 
     def _has_resmd(self):
@@ -1071,7 +1105,7 @@ class BagBuilder(PreservationSystem):
         replaced with corresponding arrays from the input metadata; the 
         arrays are not combined in any way.
 
-        :param str filepath:   the filepath to the component to update.  An
+        :param str destpath:   the filepath to the component to update.  An
                                empty string ("") updates the resource-level
                                metadata.  If the filepath begins with a '@id:',
                                it will be treated as the relative identifier
@@ -1705,6 +1739,11 @@ class BagBuilder(PreservationSystem):
             if not useid and '@id' in nerd:
                 self.log.warning("ARK identifier not set for resource")
                 del nerd['@id']
+
+            # this is a temporary fix until conversion routine is updated
+            if not pdata.get('landingPage') and nerd.get('landingPage'):
+                nerd['landingPage'] = "pdr:lp"
+
             self.add_res_nerd(nerd, savefilemd)
         return nerd
 
@@ -1883,13 +1922,23 @@ class BagBuilder(PreservationSystem):
         behavior of the bag finalization.  If not provided, the configuration 
         property 'finalize' provided at construction will control finalization.
         The following finalize sub-properties will be recognized:
-          :prop 'ensure_component_metadata' bool (True):   if True, this will ensure 
-                    that all data files and subcollections have been examined 
-                    and had metadata extracted.  
-          :prop 'trim_folders' bool (False):  if True, remove all empty data 
-                    directories
-          :prop 'confirm_checksums' bool (False):  if True, double check that 
-                    recorded checksums are correct (by checksumming the data files)
+
+        ``ensure_component_metadata``
+              bool (True).   if True, this will ensure that all data files and subcollections have 
+              been examined and had metadata extracted.  
+                    
+        ``trim_folders``
+              bool (False).  if True, remove all empty data directories
+                    
+        ``confirm_checksums``
+              bool (False).  if True, double check that recorded checksums are correct (by 
+              checksumming the data files)
+
+        ``repo_access``
+             dict.  URLs for the target repository.  This is used to update URLs within the 
+             metadata that begin with "pdr:" with values appropriate the target repository.  
+             The supported sub-parameters are those described as the input to 
+             :py:meth:`finalize_URLs`.  
 
         :param dict finalcfg:      the 'finalize' configuration properties
         :param bool stop_logging:  turn off logging to the bag-internal log file; 
@@ -1918,6 +1967,18 @@ class BagBuilder(PreservationSystem):
         if trim:
             self.trim_metadata_folders()
 
+        # inject server base-url into symbolic URLs in metadata
+        self.finalize_URLs(finalcfg.get('repo_access', {}))
+
+        # Clean out non-standard files
+        topfiles = [ f for f in os.listdir(self.bagdir) if f.startswith('__') ]
+        for f in topfiles:
+            f = os.path.join(self.bagdir, f)
+            if os.path.isdir(f):
+                shutil.rmtree(f)
+            else:
+                os.remove(f)
+
         self.ensure_bagit_ver()
         self.write_data_manifest(finalcfg.get('confirm_checksums', False))
         self.write_mbag_files()
@@ -1933,6 +1994,109 @@ class BagBuilder(PreservationSystem):
         if stop_logging:
             self.disconnect_logfile()
 
+    def finalize_URLs(self, repocfg):
+        """
+        scan through the metadata and replace URLs that start with "pdr:" with URLs 
+        appropriate for the target repository.  
+
+        The URLs for the target repository is provided in the given configuration 
+        dictionary.  If there are any URLs not provided but are needed, a default value 
+        will be used if ``base_url`` is specified; otherwise, no substitution is made, 
+        and a warning is written to the log.  
+
+        The replacement URLs are provided in the given configuration dictionary via the 
+        following parameters:
+        ``base_url``
+            (str) _optional_.  A base URL to assume for other URLs in this configuration
+            when they are given as a relative URL.  
+        ``landing_page_service``
+            (str|dict) _optional_.  the URL that returns the HTML landing page.  If the 
+            value is a str, it represents the URL; if it is a dictionary, the URL is 
+            contained the ``service_endpoint`` subparameter (making it compatible with 
+            uses of the ``repo_access`` configuration elsewhere in the system).  Default: 
+            "/id".
+        ``distrib_service``
+            (str|dict) _optional_.  the URL for downloading a file.  The format is same
+            as ``landing_page_service``.  Default: "/ds"
+        ``metadata_service``
+            (str|dict) _optional_.  the URL for downloading a file.  The format is same
+            as ``landing_page_service``.  Default: "/id"  (Note: not used in this 
+            implementation.)
+        """
+        if not repocfg:
+            return
+
+        # start with realizing the landing page
+        lp = self.bag.nerd_metadata_for('').get('landingPage')
+        if not lp:
+            lp = f"pdr:lp"
+        if lp.startswith("pdr:"):
+            baseurl = self._getbaseurl(repocfg, "landing_page_service")
+            lp = self._realize_url(lp, baseurl)
+            self.update_metadata_for('', {'landingPage': lp},
+                                     message="realizing landing page URL with "+baseurl)
+
+        # now find component downloadURLs that need realizing
+        baseurl = self._getbaseurl(repocfg, "distrib_service")
+        mdtree = os.path.join(self.bagdir, 'metadata')
+        if baseurl and os.path.exists(mdtree):
+            for dir, subdirs, files in os.walk(mdtree):
+                if dir == mdtree:
+                    continue
+                if FILEMD_FILENAME in files:
+                    mdfile = os.path.join(dir, FILEMD_FILENAME)
+                    mdata = read_nerd(mdfile)
+                    if mdata.get('downloadURL') and mdata.get('filepath'):
+                        if self._is_restricted(mdata):
+                            del mdata['downloadURL']
+                            self.replace_metadata_for(mdata['filepath'], mdata,
+                                                      message="Removing downloadURL for restricted access file")
+                        elif mdata['downloadURL'].startswith("pdr:"):
+                            dl = self._realize_url(mdata['downloadURL'], baseurl)
+                            self.update_metadata_for(mdata['filepath'], {'downloadURL': dl},
+                                                     message="realizing download URL for "+
+                                                             mdata.get('filepath'))
+
+    def _is_restricted(self, mdata):
+        return 'restricted ' in mdata.get('accessLevel', '')
+
+    def _getbaseurl(self, repocfg, which):
+        if len(which) < 4:
+            # shortname correspond to symbolic url prefixes: pdr:lp, pdr:dl, pdr.md
+            lengthen = { "lp": "landing_page_service", "dl": "distrib_service", "md": "metadata_service" }
+            which = lengthen.get(which)
+
+        srvrbase = repocfg.get('base_url')
+        if srvrbase:
+            if not srvrbase.endswith('/'):
+                srvrbase += '/'
+            defs = { "landing_page_service": urljoin(srvrbase, "id/"),
+                     "distrib_service": urljoin(srvrbase, "ds/"),
+                     "metadata_service": urljoin(srvrbase, "id/") }
+            cfg = ChainMap(repocfg, defs)
+        else:
+            cfg = repocfg
+        svccfg = cfg.get(which)
+        if isinstance(svccfg, str) or svccfg is None:
+            return svccfg
+        elif isinstance(svccfg, Mapping):
+            return svccfg.get('service_endpoint')
+        else:
+            raise ConfigurationException("finalize_URLs(): wrong type for URL parameter, " + which +
+                                         f": {type(cfg)}: {str(cfg)}")
+
+    _symburlre = re.compile(r'pdr:(\w+)(:|\b)')
+    def _realize_url(self, url, realbaseurl=None):
+        m = self._symburlre.match(url)
+        if m:
+            path = self._symburlre.sub('', url).lstrip('/')
+            if not realbaseurl:
+                realbaseurl = self._getbaseurl(self.cfg.get('repo_access',{}), m.group(1))
+            realbaseurl = realbaseurl.rstrip('/')
+            url = '/'.join([realbaseurl, self.aipid])
+            if path:
+                url += f"/{path}"
+        return url
 
     def trim_data_folders(self, rmmeta=False):
         """
@@ -2389,15 +2553,17 @@ class BagBuilder(PreservationSystem):
                                             auth.get('middleName', ''),
                                             auth.get('familyName', '') ]).strip()
                         if aus and auth.get('affiliation'):
-                            try:
-                                whichaffil = affils.index(auth['affiliation'])+1
-                            except ValueError:
-                                affils.append(auth['affiliation'])
-                                whichaffil = len(affils)
+                            whichaffil = []
+                            for affil in auth['affiliation']:
+                                try:
+                                    whichaffil.append(str(affils.index(affil['title'])+1))
+                                except ValueError:
+                                    affils.append(affil['title'])
+                                    whichaffil.append(str(len(affils)))
 
                             # using = as a non-breakable space here, see sub()
                             # below.
-                            aus += "=[{0}]".format(whichaffil)
+                            aus += "=[{0}]".format(",".join(whichaffil))
 
                         auths.append(aus)
 
@@ -2530,7 +2696,7 @@ class BagBuilder(PreservationSystem):
         out["_extensionSchemas"] = deepcopy(self._comp_types["DataFile"][1])
         out["filepath"] = destpath
         if self.ediid:
-            out['downloadURL'] = self._download_url(self.ediid, destpath)
+            out['downloadURL'] = self._distbase + destpath
         return out
 
     def _create_def_chksum_md(self, destpath):
@@ -2548,7 +2714,7 @@ class BagBuilder(PreservationSystem):
             ("filepath", destpath)
         ])
         if self.ediid:
-            out['downloadURL'] = self._download_url(self.ediid, destpath)
+            out['downloadURL'] = self._distbase + destpath
 
         fname = os.path.splitext(destpath)
         if fname[1] and fname[1][1:] in self._checksum_alg_names:

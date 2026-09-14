@@ -210,6 +210,7 @@ class TestMultibagValidator(test.TestCase):
         
 
     def test_test_profile_version(self):
+        self.valid8.profile = ("NIST", "0.4")  # Note: current default is 0.5
         errs = self.valid8.test_profile_version(self.bag)
         self.assertEqual(errs.failed(), [],
                       "False Positives: "+ str([str(e) for e in errs.failed()]))
@@ -264,6 +265,7 @@ class TestMultibagValidator(test.TestCase):
         self.assertTrue(has_error(errs, "4.1-1"))
                 
     def test_test_pod(self):
+        # Note: POD files no longer required (as of NIST Profile v0.5)
         errs = self.valid8.test_pod(self.bag)
         self.assertEqual(errs.failed(), [],
                       "False Positives: "+ str([str(e) for e in errs.failed()]))
@@ -271,9 +273,11 @@ class TestMultibagValidator(test.TestCase):
         podfile = os.path.join(self.bag.metadata_dir, "pod.json")
         os.remove(podfile)
         errs = self.valid8.test_pod(self.bag)
-        self.assertEqual(len(errs.failed()), 1, "Unexpected # of errors: [\n  " +
+        # self.assertEqual(len(errs.failed()), 1, "Unexpected # of errors: [\n  " +
+        #                  "\n  ".join([str(e) for e in errs.failed()]) + "\n]")
+        # self.assertTrue(has_error(errs, "4.1-2-0"))
+        self.assertEqual(len(errs.failed()), 0, "Unexpected # of errors: [\n  " +
                          "\n  ".join([str(e) for e in errs.failed()]) + "\n]")
-        self.assertTrue(has_error(errs, "4.1-2-0"))
 
         with open(podfile, 'w') as fd:
             print("Goober!", file=fd)

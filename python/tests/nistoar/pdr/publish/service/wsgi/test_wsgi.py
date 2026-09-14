@@ -4,7 +4,7 @@ from io import StringIO
 import unittest as test
 
 from nistoar.testing import *
-from nistoar.pdr.publish.service import wsgi
+import nistoar.pdr.publish.service.wsgi.deprecated as wsgi
 import nistoar.pdr.preserve.bagit.builder as bldr
 from nistoar.pdr.utils import prov
 from nistoar.pdr import utils
@@ -49,7 +49,7 @@ class TestPDPWSGI(test.TestCase):
     def setUp(self):
         self.tf = Tempfiles()
         self.workdir = self.tf.mkdir("pdp0")
-        self.mintdir = self.tf.mkdir("idregs")
+        self.submitted = Path(self.workdir) / 'submitted'
         self.bagparent = Path(self.workdir) / 'sipbags'
         bgrcfg = {
             "bag_builder": {
@@ -184,6 +184,9 @@ class TestPDPWSGI(test.TestCase):
         self.assertIn("401 ", self.resp[0])
 
     def test_create_res(self):
+        """
+        create record via POST with no @id specified
+        """
         self.assertFalse((self.bagparent / "pdp0-0017").is_dir())
 
         nerd = utils.read_json(str(simplenerd))
@@ -201,13 +204,13 @@ class TestPDPWSGI(test.TestCase):
 
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:status"], 'pending')
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
-        self.assertTrue((self.bagparent / "pdp0-0017").is_dir())
+        self.assertTrue((self.bagparent / "pdp0:0017").is_dir())
 
         self.resp = []
         req = {
@@ -218,7 +221,7 @@ class TestPDPWSGI(test.TestCase):
         }
         body = self.tostr( self.app.handle_request(req, self.start) )
         self.assertIn("200 ", self.resp[0])
-        self.assertEqual(body, ['[\n  "pdp0-0017"\n]'])
+        self.assertEqual(body, ['[\n  "pdp0:0017"\n]'])
 
         self.resp = []
         req = {
@@ -233,7 +236,7 @@ class TestPDPWSGI(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': 'GET',
-            'PATH_INFO': '/pdp0/pdp0-0017',
+            'PATH_INFO': '/pdp0/pdp0:0017',
             'HTTP_X_OAR_USER': "tester",
             'HTTP_AUTHORIZATION': "Bearer NCNRTOKEN"
         }
@@ -243,7 +246,7 @@ class TestPDPWSGI(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': 'GET',
-            'PATH_INFO': '/pdp0/pdp0-0017',
+            'PATH_INFO': '/pdp0/pdp0:0017',
             'HTTP_X_OAR_USER': "tester",
             'HTTP_AUTHORIZATION': "Bearer DRAFTTOKEN"
         }
@@ -251,7 +254,7 @@ class TestPDPWSGI(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
         self.assertEqual(bnerd["pdr:status"], 'pending')
         self.assertEqual(bnerd["accessLevel"], 'public')
@@ -261,7 +264,7 @@ class TestPDPWSGI(test.TestCase):
         self.resp = []
         req = {
             'REQUEST_METHOD': 'PATCH',
-            'PATH_INFO': '/pdp0/pdp0-0017',
+            'PATH_INFO': '/pdp0/pdp0:0017',
             'QUERY_STRING': "action=publish",
             'HTTP_X_OAR_USER': "tester",
             'HTTP_AUTHORIZATION': "Bearer DRAFTTOKEN"
@@ -270,14 +273,17 @@ class TestPDPWSGI(test.TestCase):
         self.assertIn("200 ", self.resp[0])
         bnerd = json.loads("\n".join(body))
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:sipid"], "pdp0-0017")
+        self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:status"], 'published')
+        self.assertEqual(bnerd["pdr:status"], 'processing')
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
-        # bag dir was cleaned up
-        self.assertFalse((self.bagparent / "pdp0-0017").is_dir())
+        # moved to submitted directory
+        self.assertTrue(not (self.bagparent / "pdp0:0017").exists())
+
+        # being processed by preservation service; not cleaned up yet
+        self.assertTrue((self.submitted / "pdp0:0017").is_dir())
 
 
 

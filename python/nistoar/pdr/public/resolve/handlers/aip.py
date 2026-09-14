@@ -10,7 +10,7 @@ from nistoar.web.formats import (Format, FormatSupport, XHTMLSupport, TextSuppor
 from nistoar.pdr import constants as const
 from nistoar.pdr.exceptions import ConfigurationException, IDNotFound, StateException
 from nistoar.pdr import distrib
-from nistoar.pdr.publish.bagger import utils as bagutils
+from nistoar.pdr.preserve.bagit import utils as bagutils
 import nistoar.pdr.distrib as distrib
 
 import multibag

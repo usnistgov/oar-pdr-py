@@ -1,20 +1,24 @@
 import os, sys, pdb, shutil, logging, json, time, re
-
+from pathlib import Path
 import unittest as test
+
+# this hack is to prevent confusion about bagit modules when running this as a stand-alone script
+if sys.path[0] == os.path.dirname(os.path.abspath(__file__)):
+    sys.path.pop(0)
 
 from nistoar.testing import *
 from nistoar.pdr.distrib import client as dcli
 from nistoar.pdr.preserve.bagit.bag import NISTBag
-import nistoar.pdr.publish.bagger.datachecker as dc
+import nistoar.pdr.preserve.datachecker as dc
 from nistoar.pdr import utils
 
 import traceback
 import warnings
 import sys
 
-pdrdir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-storedir = os.path.join(pdrdir, "distrib", "data")
-basedir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(pdrdir))))
+pdrdir = Path(__file__).resolve().parents[1] 
+storedir = pdrdir / "distrib" / "data"
+basedir = pdrdir.parents[3]
 
 port = 9091
 baseurl = "http://localhost:{0}/".format(port)

@@ -4,14 +4,20 @@ Publishing (PDP) API.  In this framework, SIP inputs are primarily in the form o
 """
 import os, re, logging, json
 from collections import OrderedDict
-from collections.abc import Mapping
+from typing import Mapping, Union, List, Callable
 from abc import abstractmethod, abstractproperty
 from copy import deepcopy
 from urllib.parse import urlparse
+from pathlib import Path
+from logging import Logger
+from datetime import datetime, timezone
 
-import yaml, jsonpatch
+import yaml, jsonpatch, multibag
 
-from .. import BadSIPInputError, SIPStateException, PublishingStateException, ConfigurationException
+from nistoar.id.minter import IDMinter
+from nistoar.id.versions import OARVersion
+from .. import (BadSIPInputError, SIPStateException, PublishingStateException,
+                ConfigurationException, PublishException)
 from ... import constants as const
 from ....nerdm.constants import (CORE_SCHEMA_URI, PUB_SCHEMA_URI, EXP_SCHEMA_URI, SIP_SCHEMA_URI,
                                  core_schema_base)
@@ -21,10 +27,12 @@ from ....nerdm import utils as nerdmutils
 from ....nerdm.convert import latest
 from ...preserve.bagit.builder import BagBuilder
 from ... import def_etc_dir
-from .base import SIPBagger
+from .base import SIPBagger, UNKNOWN_AGENT
 from .prepupd import UpdatePrepService, PENDING_VERSION_SFX
 from ..idmint import PDPMinter
 from ...utils.prov import Action, Agent, dump_to_history
+from nistoar.base.config import merge_config
+from nistoar.id.versions import cmp_versions
 
 SIPEXT_RE = re.compile(core_schema_base + r'sip/(v[^/]+)#/definitions/\w+Submission')
 ARK_PFX_RE = re.compile(const.ARK_PFX_PAT)
@@ -37,22 +45,107 @@ ASSIGN_DOI_NEVER   = 'never'
 ASSIGN_DOI_ALWAYS  = 'always'
 ASSIGN_DOI_REQUEST = 'request'
 
+def import_fs_files(bldr: BagBuilder, srcinfo: Mapping, filepaths: List[str],
+                    include_all: bool, examine: bool=False, log: Logger=None,
+                    _action: Action=None) -> List[str]:
+    """
+    import files found in an import directory.  
+
+    This importer function will attempt to import files from a locally-mounted directory.  The files
+    must be organized within the import directory in the hierarchy intended for the target bag.  
+    Files that start with a "." or a "#" are ignored.  
+
+    By default, hard links will be attempted first; if this fails (because the directory in not in the 
+    same filesystem as the target bag), then a regular copy will be done.  (Hard links are preferred as 
+    they require less space on the disk and make the import faster.)  
+
+    The following properties will be looked for in the ``srcinfo`` argument:
+
+    ``location``
+         (str) _required_. The full path to the directory (on a locally mounted filesystem) where files 
+         to be imported are located.  
+    ``hard_link_data``
+         (bool) _optional_. If True (default), attempt to import the files by creating a hard link 
+         (falling back to a regular copy if not possible).  If False, all files will explicitly copied.  
+    ``consumable``
+         (bool) _optional_.  if True (default), this function will remove each source file from the 
+         source directory after successfully importing it.  This can prevent the file from being 
+         imported multiple times unnecessarily.  If False, the file will be kept intact in the source 
+         directory.
+
+    :param BagBuilder bldr:  the bag builder that can take in files
+    :param dict    srcinfo:  the description of the source of files.  It requires only one property,
+                             ``location``; see above for additional supported properties.
+    :param list[str] filepaths:  a list of the filepaths that have already be registered with the 
+                             bag (i.e. their metadata has already been added; see ``include_all``).
+    :param bool include_all: if False, a file will only be imported if its path is given in filepaths;
+                             if True, all files will be imported and default metadata will be 
+                             initialized.
+    :param bool     examine: if True, examine the file, extract metadata, and register the metadata
+                             into the bag; this will fully replace any metadata already set for the 
+                             filepath.  Note that this can incur a significant time cost for large or 
+                             numerous files.  If False (default), only minimal metadata will be set if 
+                             metadata does not already exist for it.
+    :param Logger      log:  a logger to use to report messages 
+    :param Action  _action:  a provenance action that this import is part of; if provided additional
+                             sub actions will be added to record the loading of each file
+    :return:  a list of filepaths that were found and imported
+              :rtype: List[str]
+    """
+    location = srcinfo.get('location')
+    if not location:
+        raise PublishingStateException("location not set in fs source info dictionary")
+    if not os.path.isdir(location):
+        raise PublishingStateException("%s: import location not found as a directory" % location)
+    hardlinks = srcinfo.get('hard_link_data', True)
+
+    act = None
+    out = []
+    for dir, subdirs, files in os.walk(location):
+        for file in files:
+            fp = os.path.relpath(os.path.join(dir, file), location)
+            if not include_all and fp not in filepaths:
+                continue
+            src = os.path.join(location, fp)
+            
+            bldr.add_data_file(fp, src, False, hardlinks, comptype='DataFile')
+            if _action:
+                act = _action.add_subaction(Action(Action.PUT, fp, _action.agent, "Add a data file"))
+
+            if fp not in filepaths or examine:
+                # add its metadata if we don't know about it
+                bldr.register_data_file(fp, src, examine, comptype='DataFile')
+                if act:
+                    act.add_subaction(Action(Action.PUT, "#m", act.agent, "update file metadata"))
+
+            out.append(fp)
+            if act:
+                _action.add_subaction(act)
+
+            if srcinfo.get('consumable', True):
+                try:
+                    os.unlink(src)
+                except Exception as ex:
+                    log.error("%s: Failed to remove source data file as requested: %s", src, str(ex))
+
+    return out
 
 class NERDmBasedBagger(SIPBagger):
     """
     An abstract SIPBagger that accepts NERDm metadata as its primarily inputs.
 
     This base class will look for the following parameters in the configuration:
-    :param Mapping repo_access:         the configuration describing the PDR's APIs 
+    :param Mapping repo_access:         the configuration describing the PDR's APIs.  This configuration
+                                        will be merged into the ``bag_builder`` configuration.
     :param Mapping bag_builder:         the configuration for the BagBuilder instance that will be
                                         used by this bagger (see BagBuilder)
     :param str assign_doi:              One of three values that controls the assignment of a DOI:
-                                         * `always` -- always assign a DOI; the NERDm DOI is set 
+                                         * ``always`` -- always assign a DOI; the NERDm DOI is set 
                                            according to convention as soon as possible and at least 
                                            by bag finalization time.
-                                         * `never` -- automatic assignment should never be applied
+                                         * ``never`` -- automatic assignment should never be applied
                                            (calling :py:meth:`ensure_doi()` does not override this).
-                                         * `request` -- (default) a DOI is only assigned by calling
+                                         * ``request`` -- (default) a DOI is only assigned by calling
                                            :py:meth:`ensure_doi`.
     :param bool hidden_comp_allowed:    if False (default), Hidden type components are not
                                         permitted to be included in the input NERDm metadata.
@@ -60,6 +153,9 @@ class NERDmBasedBagger(SIPBagger):
                                         permitted to be included in the input NERDm metadata.
     """
     
+    _data_source_file = "__data_sources.lis"
+    _file_importers = { 'fs': import_fs_files }
+
     def __init__(self, sipid: str, bagparent: str, config: Mapping, convention: str,
                  prepsvc: UpdatePrepService=None, id:str=None):
         """
@@ -96,14 +192,25 @@ class NERDmBasedBagger(SIPBagger):
             self.log.warning("Bagger operating without an UpdatePrepService!")
             # raise ValueError("NERDmBasedBagger: requires a UpdatePrepService instance for new bag")
 
+        if not self._id and self.bagbldr.bag and os.path.exists(self.bagbldr.bag.nerd_file_for('')):
+            nerd = self.bagbldr.bag.nerd_metadata_for('')
+            if nerd.get('@id'):
+                self._id = nerd.get('@id')
+
         self.prepared = False
         self._nerdmcore_re = None
         if self.cfg.get('required_core_nerdm_version'):
             self._nerdmcore_re = re.compile(core_schema_base + r'(' + 
                                             self.cfg['required_core_nerdm_version'] + r')#')
 
-        if not self.cfg.get('resolver_base_url') and self.cfg.get('repo_base_url'):
-            self.cfg['resolver_base_url'] = self.cfg['repo_base_url'].rstrip('/') + "/od/id/"
+        if not self.cfg.get('resolver_base_url') and self.cfg.get('repo_access'):
+            resurl = self.cfg['repo_access'].get('landing_page_service', '/id/')
+            if isinstance(resurl, Mapping):
+                resurl = resurl.get('service_endpoint', '/id/')
+            if not resurl.startswith("http"):
+                resurl = '/'.join([self.cfg['repo_access'].get('base_url', 'https://data.nist.gov/').rstrip('/'),
+                                   resurl.lstrip('/')])
+            self.cfg['resolver_base_url'] = resurl
 
         self._histfile = None
 
@@ -150,7 +257,7 @@ class NERDmBasedBagger(SIPBagger):
         :param Agent    who: an actor identifier object, indicating who is requesting this action.  This 
                              will get recorded in the history data.  If None, an internal administrative 
                              identity will be assumed.  This identity may affect the identifier assigned.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
@@ -192,10 +299,12 @@ class NERDmBasedBagger(SIPBagger):
         :param Agent    who: an actor identifier object, indicating who is requesting this action.  This 
                              will get recorded in the history data.  If None, an internal administrative 
                              identity will be assumed.  This identity may affect the identifier assigned.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
+        if not who:
+            who = UNKNOWN_AGENT
         if os.path.exists(self.bagdir):
             self.bagbldr.ensure_bagdir()  # sets builders bag instance
 
@@ -303,10 +412,12 @@ class NERDmBasedBagger(SIPBagger):
                            request may trigger the restaging of previously published data, in which 
                            case who triggered it will get recorded.  If None, an internal administrative 
                            identity will be assumed.  
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
+        if not who:
+            who = UNKNOWN_AGENT
         if not self.bagdir or not os.path.exists(self.bagdir):
             self.prepare(False, who, _action=_action)
         return self.bagbldr.bag.describe(relid)
@@ -323,98 +434,78 @@ class NERDmBasedBagger(SIPBagger):
                             identity will be assumed.  This identity may affect the identifier assigned.
         :param bool savefilemd:  if True (default), any DataFile or Subcollection metadata included will 
                                  be saved as well
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                self._set_res_nerdm(nerdm, who, savefilemd, _action)
+        if not who:
+            who = UNKNOWN_AGENT
+        with self._lock_when(lock):
+            nerdm = self._check_res_schema_id(nerdm)   # creates a deep copy of the record
 
-        else:
-            self._set_res_nerdm(nerdm, who, savefilemd, _action)
+            hist = Action(Action.PUT, self.id, who, "Set resource metadata")
+            if _action:
+                _action.add_subaction(hist)
+            self.ensure_preparation(True, who, hist)
 
-    def _set_res_nerdm(self, nerdm: Mapping, who: Agent=None, savecompmd: bool=True,
-                       _action: Action=None) -> None:
-        """
-        set the resource metadata (which may optionally include file component metadata) for the SIP.  
-        The input metadata should be as complete as is appropriate for the type of SIP being processed.  
+            # modify the input: remove properties that cannot be set, add others
+            handsoff = "@id @context publisher issued firstIssued revised annotated language " + \
+                       "bureauCode programCode doi ediid releaseHistory "
+            handsoff += " ".join([k for k in nerdm.keys() if k.startswith("pdr:")])
+            for prop in handsoff.strip().split():
+                if prop in nerdm:
+                    del nerdm[prop]
+            self._set_standard_res_modifications(nerdm)
+            self._set_provider_res_modifications(nerdm)
 
-        :param Mapping nerdm:  the resource-level NERDm metadata to save
-        :param who:         an actor identifier object, indicating who is requesting this action.  This 
-                            will get recorded in the history data.  If None, an internal administrative 
-                            identity will be assumed.  This identity may affect the identifier assigned.
-        :param bool savecompmd:  if True (default), any DataFile or Subcollection metadata included will 
-                                 be saved as well, replacing all previously set components.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
-                             that should be recorded within this function should be added as a subaction
-                             of this given one rather than recorded directly as a stand-alone action.
-        """
-        nerdm = self._check_res_schema_id(nerdm)   # creates a deep copy of the record
+            components = nerdm.get('components')
+            if 'components' in nerdm:
+                nerdm['components'] = []
 
-        hist = Action(Action.PUT, self.id, who, "Set resource metadata")
-        if _action:
-            _action.add_subaction(hist)
-        self.ensure_preparation(True, who, hist)
+            # set up history record (using who)
+            what = "Setting resource metadata"
+            if savefilemd and components:
+                what += " with components"
+            hist.add_subaction(self._history_comment("#m", who, what))
 
-        # modify the input: remove properties that cannot be set, add others
-        handsoff = "@id @context publisher issued firstIssued revised annotated language " + \
-                   "bureauCode programCode doi ediid releaseHistory "
-        handsoff += " ".join([k for k in nerdm.keys() if k.startswith("pdr:")])
-        for prop in handsoff.strip().split():
-            if prop in nerdm:
-                del nerdm[prop]
-        self._set_standard_res_modifications(nerdm)
-        self._set_provider_res_modifications(nerdm)
+            try:
+                old = self.bagbldr.bag.nerd_metadata_for('', True)   # for history record
 
-        components = nerdm.get('components')
-        if 'components' in nerdm:
-            nerdm['components'] = []
+                self.bagbldr.add_res_nerd(nerdm, False)
 
-        # set up history record (using who)
-        what = "Setting resource metadata"
-        if savecompmd and components:
-            what += " with components"
-        hist.add_subaction(self._history_comment("#m", who, what))
+                new = self.bagbldr.bag.nerd_metadata_for('', True)   # for history record
+                hist.add_subaction(self._putcreate_history_action("#m", who,
+                                                                  "Set resource-level metadata",
+                                                                  old, new))
 
-        try:
-            old = self.bagbldr.bag.nerd_metadata_for('', True)   # for history record
+                if savefilemd and components:
+                    # clear out any previously saved components
+                    oldcmps = self.bagbldr.bag.subcoll_children('')
+                    if oldcmps:
+                        for cmp in oldcmps:
+                            self.bagbldr.remove_component(cmp)
+                        hist.add_subaction(Action(Action.DELETE, FILE_DELIM, who,
+                                                  "Cleared previously added components"))
 
-            self.bagbldr.add_res_nerd(nerdm, False)
+                    for cmp in components:
+                        self._set_comp_nerdm(cmp, who, hist, False)
+                else:
+                    hist = hist.subactions[0]
 
-            new = self.bagbldr.bag.nerd_metadata_for('', True)   # for history record
-            hist.add_subaction(self._putcreate_history_action("#m", who, "Set resource-level metadata",
-                                                              old, new))
-
-            if savecompmd and components:
-                # clear out any previously saved components
-                oldcmps = self.bagbldr.bag.subcoll_children('')
-                if oldcmps:
-                    for cmp in oldcmps:
-                        self.bagbldr.remove_component(cmp)
-                    hist.add_subaction(Action(Action.DELETE, FILE_DELIM, who,
-                                              "Cleared previously added components"))
-
-                for cmp in components:
-                    self._set_comp_nerdm(cmp, who, hist, False)
-            else:
-                hist = hist.subactions[0]
-
-        except Exception as ex:
-            self.log.warning("Bag left in possible incomplete state due to error: %s", str(ex))
-            self.record_history(hist)
-            hist = self._history_comment("#m", who, "Failed to complete %s action" % hist.type)
-            raise
-
-        finally:
-            # record history record
-            if not _action:
+            except Exception as ex:
+                self.log.warning("Bag left in possible incomplete state due to error: %s", str(ex))
                 self.record_history(hist)
+                hist = self._history_comment("#m", who, "Failed to complete %s action" % hist.type)
+                raise
+
+            finally:
+                # record history record
+                if not _action:
+                    self.record_history(hist)
 
     def _check_res_schema_id(self, nerdm):
         if self._nerdmcore_re:
-            if '_schema' in nerdm:
+            if '_schema' not in nerdm:
                 raise BadSIPInputError("Required schema identifier property missing from input metadata: "+
                                        "_schema")
             if not self._nerdmcore_re.match(nerdm['_schema']):
@@ -429,6 +520,9 @@ class NERDmBasedBagger(SIPBagger):
         return nerdm
 
     def _set_standard_res_modifications(self, resmd):
+        if not resmd.get('landingPage'):
+            resmd['landingPage'] = "pdr:lp"
+
         # update the types
         types = resmd.setdefault('@type', [])
 #        while 'nrds:PDRSubmission' in types:
@@ -475,9 +569,18 @@ class NERDmBasedBagger(SIPBagger):
 
         if 'contactPoint' in resmd:
             resmd['contactPoint']['@type'] = "vcard:Contact"
-
+        if not resmd.get('ediid'):
+            resmd['ediid'] = self.id
         if not resmd.get('accessLevel'):
             resmd['accessLevel'] = "public"
+
+        if resmd.get('authors'):
+            for auth in resmd['authors']:
+                if not auth.get('fn') and any(auth.get(p) for p in "familyName givenName middleName".split()):
+                    auth['fn'] = \
+                        ' '.join([auth.get(p,'') for p in "familyName givenName middleName".split()]).strip()
+                    auth['fn'] = re.sub(r' +', ' ', auth['fn'])
+                    
 
     def _set_provider_res_modifications(self, resmd: Mapping):
         """
@@ -495,15 +598,12 @@ class NERDmBasedBagger(SIPBagger):
         a subcollection, it must contain a 'filepath' property.  
         :param Mapping nerdm:   the NERDm Component metadata.  
         """
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                return self._set_comp_nerdm(nerdm, who, _action=_action)
-
-        else:
+        with self._lock_when(lock):
             return self._set_comp_nerdm(nerdm, who, _action=_action)
 
     def _set_comp_nerdm(self, nerdm: Mapping, who: Agent=None, _action=None, tolatest=True) -> None:
+        if not who:
+            who = UNKNOWN_AGENT
         nerdm = self._check_input_comp(nerdm, tolatest)   # copies nerdm
 
         hist = Action(Action.PUT, self.id, who, "Set some component metadata")
@@ -530,7 +630,8 @@ class NERDmBasedBagger(SIPBagger):
         
         if 'filepath' in nerdm:
             if not self.bagbldr.bag.has_component(nerdm['filepath']):
-                self.bagbldr.register_data_file(nerdm['filepath'], comptype="DataFile")
+                ctype = nerdutils.which_type(nerdm, ['DataFile', 'Subcollection', 'ChecksumFile'])
+                self.bagbldr.register_data_file(nerdm['filepath'], comptype=ctype)
             self.bagbldr.update_metadata_for(nerdm['filepath'], nerdm)
         else:
             # add to non-file list of components
@@ -552,9 +653,13 @@ class NERDmBasedBagger(SIPBagger):
         u.port
         if not u.scheme:
             raise ValueError("Missing scheme")
-        if u.scheme not in ["http", "https", "ftp"]:
+        if u.scheme not in ["http", "https", "ftp", "pdr"]:
             raise ValueError("Unsupported scheme: " + u.scheme)
-        if not u.netloc:
+        if u.scheme == "pdr":
+            direct = u.path.split(':')[0]
+            if direct not in ["lp", "md", "dl"]:
+                raise ValueError("Unrecognized 'pdr:' path prefix: "+direct)
+        elif not u.netloc:
             raise ValueError("Missing server address")
 
 
@@ -583,15 +688,14 @@ class NERDmBasedBagger(SIPBagger):
                                        (str(ex), str(compmd['downloadURL'])))
 
         if tolatest:
+            if '_schema' not in compmd:
+                raise BadSIPInputError("Required schema identifier property missing from input metadata: "+
+                                       "_schema")
             if self._nerdmcore_re:
-                if '_schema' in compmd:
-                    raise BadSIPInputError("Required schema identifier property missing from input metadata: "+
-                                           "_schema")
                 if not self._nerdmcore_re.match(compmd['_schema']):
                     raise ValueError("Input metadata is not a NERDm record; schema: "+ compmd['_schema'])
-            elif '_schema' in compmd:
-                if not compmd['_schema'].startswith(core_schema_base):
-                    raise BadSIPInputError("Input metadata is not a NERDm record; schema: "+ compmd['_schema'])
+            elif not compmd['_schema'].startswith(core_schema_base):
+                raise BadSIPInputError("Input metadata is not a NERDm record; schema: "+ compmd['_schema'])
 
             compmd = latest.update_to_latest_schema(compmd, False)
         else:
@@ -645,7 +749,7 @@ class NERDmBasedBagger(SIPBagger):
                 extschs.add(CORE_SCHEMA_URI + "#/definitions/IncludedResource")
         if nerdutils.is_type(cmpmd, 'AcquisitionActivity'):
             if not any([s for s in extschs if s.endswith('/definitions/AcquisitionActivity')]):
-                extschs.add(EXP_SCHEMA_URI + "#/definitions/ExperimentalData")
+                extschs.add(EXP_SCHEMA_URI + "#/definitions/AcquisitionActivity")
         if extschs:
             cmpmd['_extensionSchemas'] = list(extschs)
 
@@ -675,7 +779,9 @@ class NERDmBasedBagger(SIPBagger):
             raise BadSIPInputError(msg)
 
         if 'filepath' not in cmpmd:
-            m = re.search(r'/od/ds/', cmpmd['downloadURL'])
+            m = re.search(r'^pdr:(\w+):?', cmpmd['downloadURL'])
+            if not m:
+                m = re.search(r'/od/ds/', cmpmd['downloadURL'])
             if m:
                 cmpmd['filepath'] = cmpmd['downloadURL'][m.end():]
             else:
@@ -733,19 +839,352 @@ class NERDmBasedBagger(SIPBagger):
                 else:
                     cmpmd['@id'] += cmpmd['proxyFor']
 
-    def delete(self, who: Agent=None, lock=True):
+    def add_data_file(self, srcfile: Union[str,Path], filepath: str, mdata: Mapping=None, 
+                      merge: bool=True, who: Agent=None, hardlink: bool=True, lock: bool=True,
+                      _action: Action=None):
+        """
+        add a data file to the bag
+
+        :param str|Path srcfile:  the path to the file to import
+        :param str     filepath:  the path relative to the bag's data directory to import the 
+                                  file into
+        :param dict       mdata:  the NERDm component metadata describeing the file to register.
+                                  if not provided and no metadata for the file has yet to be added
+                                  (via :py:meth:`set_comp_nerdm`), only minimal default metadata 
+                                  will be registered; otherwise, existing metadata will be unaltered.
+        :param bool       merge:  if True (default), the provided metadata will be merged with any 
+                                  existing metadata for the given filepath; if False, the given 
+                                  metadata will replace any previously registered metadata.  In either
+                                  case, this method will ensure that the save metadat includes the 
+                                  necessary minimum.
+        :param bool    hardlink:  If True (default), this method will attempt to import the file by 
+                                  creating a hard link to the source file; if it fails (because the 
+                                  filesystems for the source file and the bag are different), fallback 
+                                  to copying the file normally.  Specify False to force a hard copy.  
+        """
+        if not who:
+            who = UNKNOWN_AGENT
+
+        with self._lock_when(lock):
+            if not mdata and not self.bagbldr.bag.has_component(filepath):
+                mdata = self.bagbldr.describe_data_file(srcfile, filepath, examine=False)
+                mdata['filepath'] = filepath
+
+            hist = Action(Action.PUT, self.id+const.FILECMP_EXTENSION+'/'+filepath,
+                          who, "Add a data file")
+            self.ensure_preparation(True, who, hist)
+
+            message = f"Adding data file {filepath}"
+            if mdata:
+                message += " with metadata"
+            self.bagbldr.add_data_file(filepath, srcfile, False, hardlink, message, comptype='DataFile')
+                                    
+            if mdata:
+                if merge:
+                    self.bagbldr.update_metadata_for(filepath, mdata, message='', comptype='DataFile')
+                    hist.add_subaction(Action(Action.PATCH, "#m", who, "update file metadata"))
+                else:
+                    self.bagbldr.replace_metadata_for(filepath, mdata, message='', comptype='DataFile')
+                    hist.add_subaction(Action(Action.PUT, "#m", who, "add file metadata"))
+
+            if _action:
+                _action.add_subaction(hist)
+            else:
+                self.record_history(hist)
+                
+                
+    def import_data_files(self, srcinfo: Union[str, Mapping], include_all: bool=False, 
+                          examine: bool=False, who: Agent=None, forcecopy: bool=False, 
+                          lock: bool=True, _action: Action=None, _filepaths: List[str]=None) -> List[str]:
+        """
+        import data files found in a given data source.
+
+        The implementation can support multiple ways of importing data files of importing files into
+        the bag.  The where from and how of importing is specified in the ``srcinfo`` argument.  This 
+        argument can take one of two forms.  The brief format is in the form of a string representing 
+        a simple URN where the colon-delimited prefix indicates type type of source it is (e.g. "fs:"); 
+        the remainder is a location specifier appropriate for that type. More complex sources are 
+        described by by a dictionary that includes a ``type`` property indicating the type of the 
+        source; the remaining properties provide the details needed to access the source.
+
+        The types of sources that are supported is implementation-dependent.  This base implementation 
+        supports only the ``fs`` type which allows data to be imported from a filesystem-accessible 
+        directory.  In the brief format, the location specifier is the full path to the directory 
+        containing data files.  In the dictionary format, the following properties (in addition to 
+        ``type`` being set to ``fs``) are supported:
+
+        ``location``
+             (str) _required_.  the full path to the directory where files can be found
+        ``hard_link_data``
+             (bool) _optional_. If True (default), attempt to import the files by creating a hard link 
+             (falling back to a regular copy if not possible).  If False, all files will explicitly 
+             copied.  
+        ``consumbable``
+             (bool) _optional_.  If True (default), the file may be removed from the source directory
+             after it has been loaded into the bag; this is recommended to prevent the file from being 
+             inadvertantly reloaded with each call to :py:meth:`import_from_sources`.  False prevents
+             the removal of the source file after successful import.
+
+        See also :py:func:`import_fs_files` for more details on the import behavior for the ``fs`` type.
+
+        :param str|dict srcinfo:  a description of how and from where files can be pulled from (see above)
+        :param bool include_all:  if False (default), only files for which the bag holds file metadata 
+                                  for already will be imported.  If True, all files found in the source 
+                                  will be loaded; for any that the bag does not have metadata, default 
+                                  metadata will be created for it (see also the ``examine`` argument).
+        :param bool     examine:  If True, each file will be examined for extracting additional metadata
+                                  (e.g. a checksum hash).  A True value may incur a significant 
+                                  time cost.  If False (default), at most, only minimal metadata for the 
+                                  file will be created if it doesn't exist already.  
+        :return:  a list of the filepaths that were imported
+                  :rtype: List[str]
+        """
+        # convert string form to dict; can raise TypeError, ValueError
+        srcinfo = self._ensure_srcinfo_dict(srcinfo)
+        srctype = srcinfo['type']
+
+        if not who:
+            who = UNKNOWN_AGENT
+
+        with self._lock_when(lock):
+            self.ensure_preparation(True, who)
+            hmsg = "Importing data files from "+srcinfo.get('location', "source type="+srctype)
+            hist = Action(Action.PUT, self.id+const.FILECMP_EXTENSION+'/', who, hmsg)
+
+            if _filepaths is None:
+                _filepaths = list(self.bagbldr.bag.iter_data_components())
+
+            out = []
+            try:
+                out = self._file_importers[srcinfo['type']](self.bagbldr, srcinfo, _filepaths,
+                                                            include_all, examine, self.log, hist)
+            except PublishingStateException as ex:
+                self.log.error("Unable to import data from source (type=%s): %s",
+                               srcinfo['type'], str(ex))
+            except PublishException as ex:
+                raise
+            except Exception as ex:
+                raise PublishException("Unexpected failure while importing files from source "
+                                       "type=%s: %s" % (srcinfo['type'], str(ex)))
+                                          
+            if _action:
+                _action.add_subaction(hist)
+            else:
+                self.record_history(hist)
+
+            return out
+
+    def _ensure_srcinfo_dict(self, srcinfo):
+        if isinstance(srcinfo, str) and ':' in srcinfo:
+            # format should be type:location
+            srctp, loc = srcinfo.split(':', 1)
+            srcinfo = { 'type': srctp, 'location': loc }
+        elif not isinstance(srcinfo, Mapping):
+            raise TypeError("bagger: srcinfo not a str or Mapping")
+
+        if not srcinfo.get('type'):
+            raise ValueError("bagger: srcinfo dict is missing required 'type' property")
+        elif srcinfo['type'] not in self._file_importers:
+            raise ValueError("bagger: srcinfo type not supported: "+srcinfo['type'])
+
+        return srcinfo
+
+    def add_data_source(self, srcinfo: Union[str,Mapping], who: Agent=None,
+                        lock: bool=True, _action: Action=None):
+        """
+        declare a source for loading data files into this bag.  
+
+        Data files found at the source will be migrated into the bag when 
+        :py:meth:`ensure_data_files` is called (which is called by :py:meth:`finalize`).  The 
+        files themselves, therefore, do not need to be available at the source when this method
+        is called; they just need to be there by the time :py:meth:`finalize` is called.
+
+        :param str|dict srcinfo:  a description of the source.  The format is the same as ``srcinfo``
+                                  supported by the :py:meth:`import_data_files`.
+        :param Agent who:         an agent identifier object, indicating who is requesting this action.  
+                                  This will get recorded in the history data.  If None, an internal 
+                                  administrative identity will be assumed.  This identity may affect the 
+                                  identifier assigned.
+        """
+        # convert string form to dict; can raise TypeError, ValueError
+        srcinfo = self._ensure_srcinfo_dict(srcinfo)
+        try:
+            encoded = json.dumps(srcinfo)
+        except TypeError as ex:
+            raise TypeError("add_data_source: srcinfo is not a str or a JSON-encodable object (%s)" % \
+                            str(ex))
+
+        if not who:
+            who = UNKNOWN_AGENT
+
+        with self._lock_when(lock):
+            hist = Action(Action.COMMENT, self.id, who, "Setting payload data source", encoded)
+            self.ensure_preparation(True, who, hist)
+
+            dsrcf = os.path.join(self.bagdir, self._data_source_file)
+            try:
+                with open(dsrcf, 'a') as fd:
+                    fd.write(encoded)
+                    fd.write('\n')
+            except Exception as ex:
+                raise PublishingStateException("Unable to write data source to SIP bag: "+str(ex))
+
+            if _action:
+                _action.add_subaction(hist)
+            else:
+                self.record_history(hist)
+
+    def get_data_sources(self) -> List[Mapping]:
+        """
+        return a list of data sources attached to this bagger.  
+
+        These are data source added via :py:meth:`add_data_source`.  
+
+        :return:  a list of data source objects, each conforming to the data source objects supported 
+                  by :py:meth:`add_data_source`.
+                  :rtype: List[dict]
+        """
+        out = []
+        dsrcf = os.path.join(self.bagdir, self._data_source_file)
+        if os.path.isfile(dsrcf):
+            with open(dsrcf) as fd:
+                for line in fd:
+                    try:
+                        out.append(json.loads(line.strip()))
+                    except ValueError as ex:
+                        self.log.error("Corrupted data source entry: %s; skipping", line.strip())
+
+        return out
+
+    def remove_data_sources(self, who: Agent=None, lock: bool=True, _action: Action=None):
+        """
+        unregister all data sources previously added via :py:meth:`add_data_source`.
+        """
+        dsrcf = os.path.join(self.bagdir, self._data_source_file)
+        
+        if os.path.isfile(dsrcf):
+            if not who:
+                who = UNKNOWN_AGENT
+
+            hist = Action(Action.COMMENT, self.id, who, "Removing all payload data sources")
+            with self._lock_when(lock):
+                os.remove(dsrcf)
+
+                if _action:
+                    _action.add_subaction(hist)
+                else:
+                    self.record_history(hist)
+
+            
+    def ensure_data_files(self, include_all: bool=False, examine: bool=False, who: Agent=None,
+                          lock=True, _action: Action=None) -> List[str]:
+        """
+        import all data found in the registered data sources into the bag
+
+        Data sources are registered via :py:meth:`add_data_source`.  This method will iterate through
+        the registered data sources and import the data files found there.  This method is called 
+        by :py:meth:`finalize` to ensure that all data has been imported.  
+
+        :param bool include_all:  if False (default), only files that currently have a component metadata 
+                                  description will get migrated.  If True, all files found in the 
+                                  sources will be imported; for those without a component metadata
+                                  description, a default description will be created.
+        :param bool     examine:  If True, each imported file will be examined for extracting additional 
+                                  metadata (e.g. a checksum hash).  A True value may incur a significant 
+                                  time cost if the files are large or numerous.  If False (default), at 
+                                  most, only minimal metadata for the file will be created if it doesn't 
+                                  exist already.  
+        :return:  a list of the filepaths of the files imported.  
+                  :rtype: List[str]
+        """
+        if not who:
+            who = UNKNOWN_AGENT
+
+        with self._lock_when(lock):
+            filepaths = list(self.bagbldr.bag.iter_data_components())
+
+            hist = Action(Action.PATCH, self.id, who, "Ensuring all data imported")
+
+            imported = set()
+            dsrcf = os.path.join(self.bagdir, self._data_source_file)
+            if os.path.isfile(dsrcf):
+                with open(dsrcf) as fd:
+                    for line in fd:
+                        try:
+                            srcinfo = json.loads(line.strip())
+                        except ValueError as ex:
+                            self.log.error("Corrupted data source entry: %s; skipping", line.strip())
+                        else:
+                            imported |= set(self.import_data_files(srcinfo, include_all, examine, who,
+                                                                   False, False, hist, filepaths))
+
+                if _action:
+                    _action.add_subaction(hist)
+                else:
+                    self.record_history(hist)
+                    
+            elif not os.path.exists(dsrcf):
+                self.log.info("No data sources registered; no data files imported")
+
+            else:
+                self.log.warning("Data source file exists but is not a file: "+dscrf)
+
+            return list(imported)
+
+    @classmethod
+    def register_data_source_type(cls, type: str, importer: Callable):
+        """
+        add support for a mechanism for importing data files into a bag
+
+        This function can be used to extend this class to support additional mechanisms for 
+        importing data files.  The ``type`` value corresponds to a supported ``type`` property 
+        in the ``srcinfo`` provided to :py:meth:`import_data_files`` and :py:meth:`add_data_source`.
+        The mechanism implementation is given by ``importer`` which is a callable that must 
+        support the following arguments:
+
+        ``bldr``
+             (BagBuilder)  the bag builder instance to use to load the file from the source
+        ``srcinfo``
+             (dict)  the description of the data source in which the properties controls how 
+             and from where the files are loaded.  These properties are implementation-specific
+             (so it is recommended that the function definition document what is supported).
+        ``filepaths``
+             (list of str)  a list of the filepaths whose metadata have already been committed
+             to the bag.
+        ``include_all``
+             (bool)  if True, all eligible files found in the data source will be imported; 
+             otherwise, only those files corresponding to those listed in ``filepaths`` will 
+             be loaded.
+        ``examine``
+             (bool)  if True and if possible, each file should be examined for extractable metadata;
+             otherwise, only minimal metadata will be set if none already exist in the bag.
+        ``log``
+             (Logger) a Logger that should be used to record log messages
+        ``_action``
+             (Action) a provenance Action instance representing an aggregate action that this import 
+             function call is part of.  If provided, file loading actions will be recorded as 
+             sub-action into this Action.  If None, no provenance actions are recorded. 
+
+        The function must return a list of the filepaths that files were imported into.  The function
+        may raise exceptions; they will be handled.  
+
+        :param          str type:  the label that identifies the type of data source to support
+        :param function importer:  a function that implements the import mechanism (see above for 
+                                   description of the required function signature).  This will replace
+                                   any previously registered function for this type.
+        """
+        cls._file_importers[type] = importer
+
+    def delete(self, who: Agent=None, message: str=None, lock=True):
         """
         delete the working bag from store; this sets the bagger to a virgin state.
         """
-        msg = "Deleting SIP bag by request"
+        if not message:
+            message = "Deleting SIP bag by request"
         if who:
-            msg += " by "+str(who)
-        self.log.info(msg)
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                self.bagbldr.destroy()
-        else:
+            message += " by "+str(who)
+        self.log.info(message)
+        with self._lock_when(lock):
             self.bagbldr.destroy()
 
     def ensure_doi(self, who: Agent=None, lock: bool=True, _action=None):
@@ -759,15 +1198,13 @@ class NERDmBasedBagger(SIPBagger):
         """
         if self.cfg.get('assign_doi') == ASSIGN_DOI_NEVER:
             return
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                self._ensure_doi(who, _action=_action)
-
-        else:
-            self._ensure_doi
+        with self._lock_when(lock):
+            self._ensure_doi(who, _action)
 
     def _ensure_doi(self, who, _action=None, nerd=None):
+        if not who:
+            who = UNKNOWN_AGENT
+
         if not nerd:
             self.ensure_preparation(who, _action)
             nerd = self.bagbldr.bag.nerd_metadata_for('', True)
@@ -804,7 +1241,7 @@ class NERDmBasedBagger(SIPBagger):
         If updated, the version is updated by incrementing one of version fields.  Which field should 
         be incremented is determined by _determine_update_level().  
 
-        This method is intended to be called by :py:meth:`ensure_finalize`.
+        This method is intended to be called by :py:meth:`_ensure_finalize`.
 
         :param Agent     who:  the agent requesting the finalization
         :param int incrfield:  the position of the version field that should be incremented; if None, 
@@ -821,9 +1258,11 @@ class NERDmBasedBagger(SIPBagger):
         self.ensure_preparation(True, who, _action)
         nerd = self.bagbldr.bag.nerd_metadata_for('', True)
         oldver = nerd.get("version", "")
-        oldnerdfile = os.path.join(self.bagdir, "__old_nerdm.json")
+        oldnerdfile = os.path.join(self.bagdir, "#old_nerdm.json")
         oldnerd = None
         ver = None
+        if not vermsg:
+            vermsg =  nerd.get("versionNotes")
 
         if not oldver:
             # this shouldn't happen (unless, possibly, it's never been published before)
@@ -977,13 +1416,12 @@ class NERDmBasedBagger(SIPBagger):
     def _jsondiff(self, old, new):
         return {"jsonpatch": jsonpatch.make_patch(old, new)}
 
+NERDmBasedBagger.register_data_source_type('fs', import_fs_files)
 
 class PDPBagger(NERDmBasedBagger):
     """
     This bagger is a generic implementation of the NERDmBasedSIPBagger for the PDP API.  It implements 
     a base-level set of SIP assumptions that be used by many publishing clients with no special needs.
-    The resulting publications are file-less: no data files are preserved; any data files described 
-    are expected to be external.  
 
     This class will look for the following parameters in the configuration:
     :param str working_dir:             the directory where the default bag parent directory should 
@@ -1020,12 +1458,15 @@ class PDPBagger(NERDmBasedBagger):
     :param str default_*_md_file:       the path to the file containing (in YAML or JSON format)
                                         a collection of resource-level NERDm metadata common to all records
                                         processed under a specific convention, where * is the name of the 
-                                        convention.  Values in this file are overridden by metadata specified 
-                                        in "*_metadata".  
+                                        convention.  Values in this file are overridden by metadata 
+                                        specified in "*_metadata".  
     :param Mapping finalize:            the configuration specific to the finalize() function.  See 
-                                        BagBuilder.finalize for supported config subparameters; however,
-                                        subclasses of this Bagger may support additional parameters.
+                                        :py:method:`BagBuilder.finalize()<nistoar.pdr.preserve.bagit.builder>` 
+                                        for supported config subparameters; however, subclasses of this 
+                                        Bagger may support additional parameters.
     """
+
+    _file_importers = { 'fs': import_fs_files }
 
     def __init__(self, sipid: str, config: Mapping, idminter: PDPMinter, prepsvc: UpdatePrepService=None, 
                  convention: str="pdp0", id:str=None):
@@ -1083,6 +1524,10 @@ class PDPBagger(NERDmBasedBagger):
                            not currently registered.
         """
         data = {'sipid': sipid}
+        if not self._idmntr:
+            if mint:
+                raise ConfigurationException("Unable to mint ID: no minter configured!")
+            return None
         matches = self._idmntr.search(data)
         if not matches or len(matches) > 1:
             # no one-to-one match found; this should indicate that one has not been minted yet
@@ -1172,7 +1617,7 @@ class PDPBagger(NERDmBasedBagger):
         pubmd.update(self.cfg.get(mdk, {}))
         resmd.update(pubmd)
 
-    def ensure_finalize(self, who=None, lock=True, _action: Action=None):
+    def ensure_finalize(self, who=None, validate=False, lock=True, _action: Action=None):
         """
         Based on the current state of the bag, finalize its contents to a complete state according to 
         the conventions of this bagger implementation.  After a successful call, the bag should be in 
@@ -1186,7 +1631,16 @@ class PDPBagger(NERDmBasedBagger):
         self.ensure_preparation(True, who, hist)
 
         try:
-            self.finalize_version(who, _action=hist)
+            # pull in any data still waiting to be imported
+            self.ensure_data_files(lock=False, _action=hist)
+            dsrcf = os.path.join(self.bagdir, self._data_source_file)
+            if os.path.isfile(dsrcf):
+                os.remove(dsrcf)
+
+            vers = self.finalize_version(who, _action=hist)
+
+            # set all dates in metadata
+            self.assign_dates(who, vers, True, _action=hist)
 
             # remove use of Submission types
             nerd = self.bagbldr.bag.nerd_metadata_for('', True)
@@ -1203,7 +1657,23 @@ class PDPBagger(NERDmBasedBagger):
             if self.cfg.get('assign_doi') == ASSIGN_DOI_ALWAYS:
                 self._ensure_doi(who, hist, nerd)
 
-            self.bagbldr.finalize_bag(self.cfg.get('finalize', {}), True)
+            # clean up any "#oldnerdm.json" files and the like
+            for d, sds, files in os.walk(self.bagbldr.bag.metadata_dir):
+                for f in files:
+                    if f.startswith('#'):
+                        os.remove(os.path.join(d, f))
+            for f in os.listdir(self.bagbldr.bagdir):   # top-level files starting with '#' or '_'
+                if f.startswith('#') or f.startswith('_'):
+                    os.remove(os.path.join(self.bagbldr.bagdir, f))
+
+            fincfg = deepcopy(self.cfg.get('finalize', {}))
+            fincfg['repo_access'] = merge_config(fincfg.get('repo_access', {}),
+                                                 self.cfg.get('repo_access', {}))
+            self.bagbldr.finalize_bag(fincfg, True)
+
+            if validate:
+                self.validate(act)   # may raise exception
+                
             hist.add_subaction(act)
 
         except Exception as ex:
@@ -1241,9 +1711,16 @@ class PDPBagger(NERDmBasedBagger):
         #  *  an access page is added or deleted
         #
         oldfiles = set([c.get('@id','') for c in oldmd.get('components',[])
-                                        if nerdutils.is_any_type(["DataFile", "AccessPage"])])
-        newfiles = set([c.get('@id','') for c in oldmd.get('components',[]) 
-                                        if nerdutils.is_any_type(["DataFile", "AccessPage"])])
+                                        if nerdutils.is_any_type(c, ["DataFile", "AccessPage"])])
+        newfiles = set([c.get('@id','') for c in newmd.get('components',[]) 
+                                        if nerdutils.is_any_type(c, ["DataFile", "AccessPage"])])
+
+        # any files in the data directory?
+        updatedfiles = False
+        for dir, sd, files in os.walk(self.bagbldr.bag.data_dir):
+            if files:
+                updatedfiles = True
+                break
 
         if newfiles > oldfiles:
             return (1, "data links added")
@@ -1251,7 +1728,93 @@ class PDPBagger(NERDmBasedBagger):
             return (1, "data links removed")
         elif oldfiles != newfiles:
             return (1, "data links added and removed")
+        elif updatedfiles:
+            return (1, "data files updated")
 
         # metadata change only
         return (2, "metadata updates only")
     
+    def assign_dates(self, who: Agent, version: str=None, dodists: bool=False,
+                     withtime: bool=False, _action=None):
+        """
+        inject updated publication-related dates into the metadata.
+
+        This updates the dates assuming a publication time of right now.  This implementation 
+        will analyze the current state of the bag (e.g. like the currently set version) to determine
+        which dates need updating.  
+
+        :param Agent    who:  the agent requesting the finalization
+        :param str  version:  The version string to assume for this publication.  If not provided, the 
+                              version currently stored in the bag resource metadata will be assumed.
+        :param bool dodists:  if True, update the distribution-level dates as well.  If there are 
+                              many distributions, this may take a long time.  (Default: False)
+        :param bool withtime: if True, include a time of day in the dates; if False (default), the 
+                              dates will only indicate the day with no time.  
+        """
+        hist = _action
+        if not hist:
+            hist = Action(Action.PATCH, self.id, who, "finalizing publishing dates")
+            
+        nerd = self.bagbldr.bag.nerd_metadata_for('', True)
+        if not version:
+            version = nerd.get('version', '1.0.0')
+        vers = OARVersion(version)
+        if vers.is_draft():
+            raise SIPConflictError("Draft version string insufficient for updating dates: "+str(vers))
+
+        now = datetime.utcnow()
+        if not withtime:
+            now = now.date()
+        now = now.isoformat()
+
+        # update the resrouce-level dates.  Note: in this convention, issued & firstIssued are equivalent,
+        # and modified and revised are equivalent. 
+        upd = {}
+        if vers == "1.0.0":
+            upd['issued'] = upd['firstIssued'] = now
+        elif vers.fields[-1] == 0:
+            upd['modified'] = upd['revised'] = now
+        upd['annotated'] = now
+
+        # update the release history entry for this version
+        thisrel = None
+        rh = nerd.get('releaseHistory')
+        if rh:
+            for rel in rh.get('hasRelease', []):
+                if vers == rel.get('version'):
+                    rel['issued'] = now
+                    upd['releaseHistory'] = rh
+                    break
+
+        self.bagbldr.update_metadata_for('', upd, message="finalize: updating publication dates")
+
+        if dodists:
+            try:
+                mbag = multibag.open_headbag(self.bagbldr.bagdir, True)
+                if not mbag.is_head_multibag():
+                    mbag = None
+            except multibag.BagError as ex:
+                mbag = None
+
+            datadir = self.bagbldr.bag.data_dir
+            for basedir, dirs, files in os.walk(datadir):
+                fpbase = basedir[len(datadir)+1:] if basedir != datadir else ''
+                for df in files:
+                    upd = {}
+                    fp = f"{fpbase}/{df}" if fpbase else df
+                    md = self.bagbldr.bag.nerd_metadata_for(fp)
+                    if vers == "1.0.0":
+                        upd['issued'] = now
+                        msg = ''
+                    elif mbag and mbag.lookup_file(f"data/{fp}"):
+                        upd['issued'] = now
+                        msg = f"Setting issued data on newly added {fp}"
+                    else:
+                        upd['modified'] = now
+                        msg = f"Setting modified date on {fp}"
+                    if upd:
+                        self.bagbldr.update_metadata_for(fp, upd, message=msg)
+                        
+        hist.add_subaction(Action(Action.PATCH, "#m", who, "Updating dates for publication on "+now))
+        if not _action:
+            self.record_history(hist)

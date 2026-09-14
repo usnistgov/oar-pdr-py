@@ -7,10 +7,10 @@ from collections.abc import Mapping
 import multibag as mb
 import requests
 
-from .utils import parse_bag_name
-from ...exceptions import ConfigurationException, StateException
-from ...distrib import (RESTServiceClient, BagDistribClient, DistribServerError,
-                        DistribServiceException, DistribResourceNotFound)
+from .bagit.utils import parse_bag_name
+from nistoar.pdr.exceptions import ConfigurationException, StateException
+from nistoar.pdr.distrib import (RESTServiceClient, BagDistribClient, DistribServerError,
+                                 DistribServiceException, DistribResourceNotFound)
 
 class DataChecker(object):
     """

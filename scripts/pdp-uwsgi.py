@@ -61,5 +61,5 @@ if workdir:
 
 config.configure_log(config=cfg)
 
-application = wsgi.app(cfg)
+application = wsgi.app(cfg, base_ep="/pdp/")
 logging.info("PDP service ready")

@@ -1,6 +1,6 @@
 """
 This module provides tools for managing and retrieving the status of a 
-preservation efforts across multiple processes.  
+publishing efforts across multiple processes.  
 """
 import json, os, time, fcntl, re
 from collections import OrderedDict
@@ -8,9 +8,9 @@ from collections.abc import Mapping
 from typing import Iterable, Union, List
 from copy import deepcopy
 
+from ...utils import AtomicAccessFile
 from ...exceptions import StateException
 from .. import system as pubsys
-
 NOT_FOUND  = "not found"     # SIP has not been created
 AWAITING   = "awaiting"      # SIP requires an update before it can be published
 PENDING    = "pending"       # SIP has been created/updated but not yet published
@@ -18,12 +18,14 @@ PROCESSING = "processing"    # The SIP contents are being processed; further act
                              #  until processing completes.
 FINALIZED  = "finalized"     # The SIP has been finalized and is ready to be published; additional
                              #  actions other than to publish may change the state to PENDING or AWAITING.
+SUBMITTED  = "submitted"     # The SIP was submitted for preservation
 PUBLISHED  = "published"     # SIP was successfully published
 FAILED     = "failed"        # an attempt to publish (or finalize) was made but failed due to an
                              #  unexpected state or condition; SIP must be updated (or rebuilt from
-                             #  scratch) before it can be published 
+                             #  scratch) before it can be published
+ONHOLD     = "on-hold"       # Processing has been paused due to an internal issue or system error
 
-states = [ NOT_FOUND, AWAITING, PENDING, PROCESSING, FINALIZED, PUBLISHED, FAILED ]
+states = [ NOT_FOUND, AWAITING, PENDING, PROCESSING, FINALIZED, SUBMITTED, PUBLISHED, FAILED, ONHOLD ]
 
 user_message = {
     NOT_FOUND:   "Submission not found or available",
@@ -31,112 +33,25 @@ user_message = {
     PENDING:     "Submission is available to be published",
     PROCESSING:  "Submission is being processed (please stand by)",
     FINALIZED:   "Submission is ready to be published",
+    SUBMITTED:   "Submission was submitted for preservation and publication",
     PUBLISHED:   "Submission was successfully published",
-    FAILED:      "Submission cannot be published due to previous error"
+    FAILED:      "Submission cannot be published due to previous error",
+    ONHOLD:      "Submission processing is paused due to internal issue or system error"
 }
 
 LOCK_WRITE = fcntl.LOCK_EX
 LOCK_READ  = fcntl.LOCK_SH
 
-class SIPStatusFile(object):
+class SIPStatusFile(AtomicAccessFile):
     """
     a class used to manage locked access to the status data file
     """
-    LOCK_WRITE = fcntl.LOCK_EX
-    LOCK_READ  = fcntl.LOCK_SH
+    def _parse_data(self, fd):
+        return json.load(fd, object_pairs_hook=OrderedDict)
     
-    def __init__(self, filepath, locktype=None):
-        """
-        create the file wrapper
-        :param filepath  str: the path to the file
-        :param locktype:      the type of lock to acquire.  The value should 
-                              be either LOCK_READ or LOCK_WRITE.
-                              If None, no lock is acquired.  
-        """
-        self._file = filepath
-        self._fd = None
-        self._type = None
+    def _format_data(self, data, fd):
+        json.dump(data, fd, indent=2, separators=(',', ': '))
 
-        if locktype is not None:
-            self.acquire(locktype)
-
-    def __del__(self):
-        self.release()
-
-    @property
-    def lock_type(self):
-        """
-        the current type of lock held, or None if no lock is held.
-        """
-        return self._type
-
-    def acquire(self, locktype):
-        """
-        set a lock on the file
-        """
-        if self._fd:
-            if self._type == locktype:
-                return False
-            elif locktype == self.LOCK_WRITE:
-                raise RuntimeError("Release the read lock before "+
-                                   "requesting write lock")
-
-        if locktype == LOCK_READ:
-            self._fd = open(self._file)
-            fcntl.flock(self._fd, fcntl.LOCK_SH)
-            self._type = LOCK_READ
-        elif locktype == LOCK_WRITE:
-            self._fd = open(self._file, 'w')
-            fcntl.flock(self._fd, fcntl.LOCK_EX)
-            self._type = LOCK_WRITE
-        else:
-            raise ValueError("Not a recognized lock type: "+ str(locktype))
-        return True
-
-    def release(self):
-        if self._fd:
-            self._fd.seek(0, os.SEEK_END)
-            fcntl.flock(self._fd, fcntl.LOCK_UN)
-            self._fd.close()
-            self._fd = None
-            self._type = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, ex_type, ex_val, ex_tb):
-        self.release()
-
-    def read_data(self):
-        """
-        read the status data from the configured file.  If a lock is not 
-        currently set, one is acquired and immediately released.  
-        """
-        release = self.acquire(LOCK_READ)
-        self._fd.seek(0)
-        out = json.load(self._fd, object_pairs_hook=OrderedDict)
-        if release:
-            self.release()
-        return out
-        
-    def write_data(self, data):
-        """
-        write the status data to the configured file.  If a lock is not 
-        currently set, one is acquired and immediately released.  
-        """
-        release = self.acquire(LOCK_WRITE)
-        self._fd.seek(0)
-        json.dump(data, self._fd, indent=2, separators=(',', ': '))
-        if release:
-            self.release()
-
-    @classmethod
-    def read(cls, filepath):
-        return cls(filepath).read_data()
-
-    @classmethod
-    def write(cls, filepath, data):
-        cls(filepath).write_data(data)
 
 def _read_status(filepath):
     try:
@@ -150,7 +65,6 @@ def _read_status(filepath):
         raise StateException("Can't open preservation status file: "
                              +filepath+": "+str(ex), cause=ex,
                              sys=preservsys)
-
 
 def _write_status(filepath, data):
     try:
@@ -172,8 +86,9 @@ class SIPStatus(object):
     process progresses.  This data is cached to disk so that multiple processes can 
     access it.  
     """
+    DEF_CACHE_DIR = "/tmp/sipstatus"
 
-    def __init__(self, id: str, config: dict=None, sysdata: dict=None, _data: dict=None):
+    def __init__(self, id: str, statusdir: str=None, sysdata: dict=None, _data: dict=None):
         """
         open up the status for the given identifier.  Initial data can be 
         provided or, if no cached data exist, it can be initialized with 
@@ -191,11 +106,12 @@ class SIPStatus(object):
         """
         if not id:
             raise ValueError("SIPStatus(): id needs to be non-empty")
-        if not config:
-            config = {}
-        cachedir = config.get('cachedir', '/tmp/sipstatus')
+        if not statusdir:
+            statusdir = self.DEF_CACHE_DIR
+            if not os.path.isdir(statusdir):
+                os.mkdir(statusdir)
         fbase = re.sub(r'^ark:/\d+/', '', id)
-        self._cachefile = os.path.join(cachedir, fbase + ".json")
+        self._cachefile = os.path.join(statusdir, fbase + ".json")
 
         if _data:
             self._data = deepcopy(_data)
@@ -245,7 +161,8 @@ class SIPStatus(object):
         """
         the SIP's status state.  
 
-        :return str:  one of NOT_FOUND, AWAITING, PENDING, PROCESSING, FINALIZED, PUBLISHED, FAILED
+        :return str:  one of NOT_FOUND, AWAITING, PENDING, PROCESSING, FINALIZED, PUBLISHED, 
+                             SUBMITTED, FAILED, ONHOLD
         """
         return self._data['user']['state']
 
@@ -318,7 +235,7 @@ class SIPStatus(object):
             for key in userdata:
                 if key not in handsoff:
                     self._data['user'][key] = userdata[key]
-            
+
         self._data['user']['state'] = label
         self._data['user']['message'] = message
         if cache:
@@ -452,21 +369,38 @@ class SIPStatus(object):
         """
         out = deepcopy(self._data['user'])
         out['history'] = self._data['history']
-        if out['history'] or out['state'] == SUCCESSFUL:
+        if out['history'] or out['state'] == PUBLISHED:
             out['published'] = True
         return out
 
     @classmethod
-    def requests(cls, config: Mapping, agents: Union[str,Iterable[str],None]=None) -> List:
+    def from_status_file(cls, statusfile):
+        """
+        instantiate an instance directly from the file containing the cached data
+        """
+        if not os.path.isfile(statusfile):
+            raise ValueError("Status does not exist as a file: "+statusfile)
+        statusdir = os.path.dirname(statusfile)
+        data = SIPStatusFile.read(statusfile)
+        id = data.get('user', {}).get('id')
+        if not id:
+            raise ValueError("Status file is missing user.id (correct file?): "+statusfile)
+        return SIPStatus(id, statusdir, _data=data)
+
+    @classmethod
+    def requests(cls, statusdir: str=None, agents: Union[str,Iterable[str],None]=None) -> List:
         """
         return a list of SIP IDs for which there exist status information.  
-        :param Mapping config:  the status configurtion (which should include the `cachedir` parameter)
+        :param statusdir  str:  the directory where SIP status files are cached
         :param str|list agents: a name or a list of names of agent groups; if provided, the 
                                 returned list will include only those SIPs whose authorized agent 
                                 groups include at least one of these. 
         """
-        cachedir = config.get('cachedir', '/tmp/sipstatus')
-        all = [ os.path.splitext(id)[0] for id in os.listdir(cachedir)
+        if not statusdir:
+            statusdir = '/tmp/sipstatus'
+        if not os.path.isdir(statusdir):
+            return []
+        all = [ os.path.splitext(id)[0] for id in os.listdir(statusdir)
                                         if not id.startswith('_') and
                                            not id.startswith('.')      ]
         if agents is None:
@@ -476,6 +410,6 @@ class SIPStatus(object):
             agents = [agents]
         if not isinstance(agents, set):
             agents = set(agents)
-        out = [s for s in all if SIPStatus(s, config).any_authorized(agents)]
+        out = [s for s in all if SIPStatus(s, statusdir).any_authorized(agents)]
         return out
             
