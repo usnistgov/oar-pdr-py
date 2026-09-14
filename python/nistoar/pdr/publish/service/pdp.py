@@ -710,10 +710,14 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
                             pass
                     else:
                         # consult metadata service, if we can
+                        if not bagger.id:
+                            bagger._id = out.get('@id')
                         prepper = bagger._get_prepper()
                         if prepper and prepper.mdcli:
                             try:
-                                out = prepper.mdcli.describe(id)
+                                md = prepper.mdcli.describe(id)
+                                if md:
+                                    out = md
                             except:
                                 pass
             else:
