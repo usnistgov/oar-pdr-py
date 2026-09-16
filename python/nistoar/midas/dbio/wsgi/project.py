@@ -776,10 +776,11 @@ class ProjectSelectionHandler(ProjectRecordHandler):
                 return self.adv_select_records(input)
             except SyntaxError as syntax:
                 return self.send_error(400, "Wrong query structure for filter")
-            except ValueError as value:
-                return self.send_error(204, "No Content")
             except AttributeError as attribute:
                 return self.send_error(400, "Attribute Error, not a json")
+            except dbio.DBIOException as ex:
+                self.log.exception("Advanced search failed: %s", str(ex))
+                return self.send_error(500, "Search failed")
 
         elif path == ':export':
             return self.export_selected_records(input)
@@ -792,10 +793,16 @@ class ProjectSelectionHandler(ProjectRecordHandler):
         submit a record search
         :param dict filter:   the search constraints for the search.
         """
-        filter = input.get("filter", {})
+        filter = input.get("filter")
+        if not filter:
+            # an absent filter is a malformed search, not a request for everything
+            return self.send_error(400, "Missing or empty search filter")
+
         perms = input.get("permissions", [])
         if not perms:
-            perms = [ dbio.ACLs.OWN ]
+            # ACLs.OWN is a tuple of the four permissions; wrapping it in a list would
+            # send the tuple itself through as a single permission name
+            perms = list(dbio.ACLs.OWN)
 
         # sort the results by the best permission type permitted
         sortd = SortByPerm()
@@ -804,9 +811,8 @@ class ProjectSelectionHandler(ProjectRecordHandler):
 
         out = [rec.to_dict() for rec in sortd.sorted()]
         if not out:
-            raise ValueError("Empty Set")
-        else:
-            return self.send_json(out)
+            return self.send_error(204, "No Content")
+        return self.send_json(out)
 
     def _adv_select_records(self, filter, perms) -> Iterator[ProjectRecord]:
         """
