@@ -21,6 +21,8 @@ a different algorithm to its data--as marked by the :py:class:`JobQueue` propert
 allows a queue to ensure that multiple Job operations are not applied to the same target data 
 simultaneously.  Here's how one instantiates and uses a quue:
 
+.. code-block:: python
+
     queue = JobQueue("zipup", "/tmp/queuedir", "my.processing.module")
     queue.submit("data_id", ["--data-root", "/data/data_id"])
 
