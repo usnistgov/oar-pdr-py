@@ -16,7 +16,7 @@ command-line.  For command-line details, type,
 
 
 """
-import os, sys, logging, argparse
+import os, sys, logging, argparse, re
 from logging import Logger
 from typing import Mapping
 
@@ -24,7 +24,7 @@ from nistoar.midas import dbio
 from nistoar.midas.dbio import status as mstatus
 from nistoar.midas.dbio.project import ProjectService
 from nistoar.pdr.publish.service import status as pstatus
-from nistoar.pdr.publish.service.monitor import LocalPublishingMonitor
+from nistoar.pdr.publish.service.monitor import LocalPublishingMonitor, FileBasedPublishingMonitorClient
 from nistoar.base import config
 from nistoar.pdr.utils.cli import CommandFailure
 from nistoar.pdr.utils.prov import Agent
@@ -109,6 +109,8 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
             self.log.error("%s not authorized to update status of %s; has it really be submitted yet?",
                            str(self.projsvc.user), sipid)
 
+        return True
+
 description = """\
 Continuously monitor the publishing progress of SIPs on behalf of the MIDAS
 service 
@@ -187,6 +189,13 @@ def define_options(progname):
     parser.add_argument("-Q", "--queue-file", type=str, dest='qfile', metavar='FILE',
                         help="the location of the queue containing submitted SIPs that should be monitored "+
                              "(over-riding the configuration).")
+    parser.add_argument("-M", "--monitor", type=str, dest='qadd', metavar='SIP[ STATE[ MSG]]', action="append",
+                        help="before starting monitor, add SIP to the queue for monitoring.  SIP is an "+
+                             "SIP identifier, optionally followed by an initial state to give it and an "+
+                             "initial message.  STATE should be one of the recognized publishing states "+
+                             "(awaiting, pending, processing, finalized, submitted, published, failed, " +
+                             "on-hold).  If STATE and MSG are provide as well, all three must be provided "+
+                             "a single shell argument.")
     parser.add_argument("-c", "--config", type=str, dest='conf', metavar='FILE',
                         help="read configuration from FILE (see CONFIGURATION section below for details)")
     parser.add_argument("--until-empty", action='store_true', dest='tillempty',
@@ -286,6 +295,14 @@ def main(progname, args):
             # We have a midas-dbio configuration; extract the dap service configuration
             extracted = ServiceAppFactory(dapcfg, {}).config_for_convention("dap", "def")
             dapcfg = config.merge_config(extracted, dapcfg.get('dbio', {}))
+
+    if opts.qadd:
+        cli = FileBasedPublishingMonitorClient(opts.qfile)
+        delim = re.compile(r'\s+')
+        for sip in opts.qadd:
+            if sip:
+                sip = delim.split(sip, 2)
+                cli.watch(*sip)
 
     dbfact = create_dbfactory(dapcfg, opts.dburl)
     log = logging.getLogger(progname)

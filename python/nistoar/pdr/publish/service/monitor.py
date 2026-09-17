@@ -154,6 +154,8 @@ class PublishingMonitor(ABC):
 
         for sipid in stats:
             newstat = self.state_of(sipid)
+            if newstat[0] == status.NOT_FOUND:
+                self.log.warning("SIP %s not found in publishing system (removing from queue)", sipid)
 
             if newstat[0] in done_states or newstat[0] != stats[sipid][0]:
                 # SIP has either changed state or reached a done state
@@ -168,7 +170,7 @@ class PublishingMonitor(ABC):
                     else:
                         updates[sipid] = newstat
 
-        self._update_queue(updates, deletes)
+        stats = self._update_queue(updates, deletes)
         return list(stats.keys())
 
     def monitor(self, stop_after=Union[int|bool], timeout: int=0):
@@ -281,6 +283,7 @@ class FileBasedPublishingMonitor(PublishingMonitor):
             for finished in deletes:
                 del stats[finished]
             q.write_data(stats)
+        return stats
 
 class LocalPublishingMonitor(FileBasedPublishingMonitor):
     """
