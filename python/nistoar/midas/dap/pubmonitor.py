@@ -2,16 +2,27 @@
 Support for monitoring publishing requests so that MIDAS DAP records can be provided with 
 status updates.
 
-This modules includes support for running the monitor as stand-alone process launch from the 
-command-line.  
+This module extends the monitor framework defined in :py:mod:`nistoar.pdr.publish.service.monitor`
+in which a change in its publishing state will cause a DAP's record status to be updated in the 
+DBIO.  If the publishing process ends, successfully or otherwise, a signal can sent to a websocket
+server to trigger web clients to refresh their view of the record.  
+
+This modules includes support for running the monitor as a stand-alone process launched from the 
+command-line.  For command-line details, type, 
+
+.. code-block:: bash
+
+   python -m nistoar.midas.dap.pubmonitor -h
+
+
 """
 import os, sys, logging, argparse
 from logging import Logger
 from typing import Mapping
 
-from .. import dbio
-from ..dbio import status as mstatus
-from ..dbio.project import ProjectService
+from nistoar.midas import dbio
+from nistoar.midas.dbio import status as mstatus
+from nistoar.midas.dbio.project import ProjectService
 from nistoar.pdr.publish.service import status as pstatus
 from nistoar.pdr.publish.service.monitor import LocalPublishingMonitor
 from nistoar.base import config
@@ -24,7 +35,7 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
     that will update an SIP's corresponding MIDAS DAP record.  
     """
     def __init__(self, dbclient_factory: dbio.DBClientFactory, statusdir: str, qfile: str,
-                 cyclesecs: int=600, dapconfig: Mapping={}, who: Agent=None, log: Logger=None):
+                 cyclesecs: int=600, dapconfig: Mapping=None, who: Agent=None, log: Logger=None):
         """
         initialize the monitor with an internal :py:class:`~nistoar.midas.dbio.project.ProjectService`
         that will be used to update the status of MIDAS records going through the publishing service
@@ -50,6 +61,8 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
         if not log:
             log = logging.getLogger("MIDASPublishingMonitor")
         self.log = log
+        if not dapconfig:
+            dapconfig = {}
 
         if not who:
             who = Agent("MIDASPublishingMonitor", Agent.AUTO, dbio.AUTOADMIN, Agent.ADMIN)
@@ -236,7 +249,7 @@ def main(progname, args):
         cfg = {}  # there better be some CL options provided!
 
     if opts.cycletime is None:
-        opts.cycletype = cfg.get('cycle_time', 600)  # default: ten minutes
+        opts.cycletime = cfg.get('cycle_time', 600)  # default: ten minutes
     if opts.stopafter is None:
         opts.stopafter = cfg.get('stop_after', 0)    # default: run forever
     if opts.tillempty:
@@ -257,8 +270,8 @@ def main(progname, args):
     configure_log(opts, cfg, progname)
 
     who = None
-    if opts.agentid:
-        who = Agent("MIDASPublishingMonitor", Agent.AUTO, opts.agentid, Agent.ADMIN)
+    if opts.actor:
+        who = Agent("MIDASPublishingMonitor", Agent.AUTO, opts.actor, Agent.ADMIN)
 
     dapcfg = cfg.get('dap_service')
     if dapcfg is None:
@@ -276,7 +289,8 @@ def main(progname, args):
 
     dbfact = create_dbfactory(dapcfg, opts.dburl)
     log = logging.getLogger(progname)
-    monitor = MIDASPublishingMonitor(dbfact, opts.statusdir, opts.qfile, dapcfg, who, log)
+    monitor = MIDASPublishingMonitor(dbfact, opts.statusdir, opts.qfile, opts.cycletime,
+                                     dapcfg, who, log)
 
     # TODO: enable launching as daemon
     monitor.monitor(opts.stopafter)
@@ -332,17 +346,41 @@ def configure_log(args, cfg: Mapping, progname="pubmonitor"):
         cfg['loglevel'] = logging.DEBUG
     if cfg.get('loglevel') is None:
         cfg['loglevel'] = config.NORMAL
-        
+
     if args.logfile:
-        cfg['logfile'] = opts.logfile
-        # use of --logfile overrides logserver and logdir in configuration
-        if cfg.get('logserver'):
-            del cfg['logserver']
-        if cfg.get('logdir'):
-            del cfg['logdir']
+        if args.logfile == "-":
+            logcfg = cfg.get('logging', {})
+            cfg.setdefault('logging', {})
+            logcfg.setdefault('version', 1)
+            logcfg.setdefault('formatters', {})
+            logcfg['formatters'].setdefault('console', {})
+            logcfg['formatters']['console'].setdefault('format', config.CONSOLE_LOG_FORMAT)
+            logcfg.setdefault('handlers', {})
+            logcfg['handlers'].setdefault('console', {})
+            concfg = logcfg['handlers']['console']
+            logcfg['handlers']['console'] = {
+                'class': 'logging.StreamHandler',
+                'formatter': 'console',
+                'level': cfg['loglevel'],
+                'stream': 'ext://sys.stderr'
+            }
+            logcfg['handlers']['console'].update(concfg)
+            logcfg.setdefault('root', {})
+            logcfg['root']['level'] = cfg['loglevel']
+            logcfg['root']['handlers'] = list(logcfg['handlers'].keys())
+            cfg['logging'] = logcfg
+            del cfg['loglevel']
+        else:
+            cfg['logfile'] = args.logfile
+            # use of --logfile overrides logserver and logdir in configuration
+            cfg['logdir'] = os.getcwd()
+            if cfg.get('logserver'):
+                del cfg['logserver']
+            if cfg.get('logging'):
+                del cfg['logging']
 
     # config.configure_logging(cfg)
-    config.configure_log(config=cfg)   # deprecated method
+    config.configure_logging(cfg)
 
     if args.verbose:
         level = (args.debug and logging.DEBUG) or logging.INFO
