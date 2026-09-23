@@ -1,24 +1,10 @@
 """
-sim_distrib_srv Note:  this simulation server is deprecated by 
-:py:mod:`nistoar.pdr.public.sim.distrib`.  (See also test_client.py.)
+A simulated distribution service
 """
 import json, os, sys, re, hashlib
 from wsgiref.headers import Headers
 from urllib.parse import parse_qs
 
-try:
-    import uwsgi
-except ImportError:
-    print("Warning: running ingest-uwsgi in simulate mode", file=sys.stderr)
-    class uwsgi_mod(object):
-        def __init__(self):
-            self.opt={}
-    uwsgi=uwsgi_mod()
-
-testdir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-def_archdir = os.path.join(testdir, 'data')
-def_baseurl = "http://localhost/"
-    
 bagvnmre = re.compile("^([\w\-]+)\.(\d+\w*)\.mbag(\d+_\d+)-(\\d+)\.(\w+)$")
 bagnmre = re.compile("^([\w\-]+)\.mbag(\d+_\d+)-(\\d+)\.(\w+)$")
 
@@ -58,6 +44,9 @@ def mbprof_of(bagname):
     return ""
 
 class SimArchive(object):
+    """
+    the backend simulated archive that holds and accepts bags from the :py:class:`SimDistrib` service
+    """
     def __init__(self, archdir):
         self.dir = archdir
         self._aips = {}
@@ -156,7 +145,6 @@ class SimArchive(object):
             return None
         return out[-1]
         
-
 class SimDistrib(object):
     def __init__(self, archdir, baseurl='/'):
         self.archive = SimArchive(archdir)
@@ -165,7 +153,7 @@ class SimDistrib(object):
     def handle_request(self, env, start_resp):
         env['SIM_BASEURL'] = self.baseurl
         handler = SimDistribHandler(self.archive, env, start_resp, )
-        return handler.handle(env, start_resp)
+        return handler.handle()
 
     def __call__(self, env, start_resp):
         return self.handle_request(env, start_resp)
@@ -200,7 +188,7 @@ class SimDistribHandler(object):
         status = "{0} {1}".format(str(self._code), self._msg)
         self._start(status, list(self._hdr.items()))
 
-    def handle(self, env, start_resp):
+    def handle(self):
         meth_handler = 'do_'+self._meth
 
         path = self._env.get('PATH_INFO', '/')[1:]
@@ -221,7 +209,7 @@ class SimDistribHandler(object):
         path = path.strip('/')
         if path.startswith("od/ds/"):
             path = path[len("od/ds/"):]
-        print("processing "+path)
+        # print("processing "+path)
 
         # refresh the archive
         self.arch.loadinfo()
@@ -258,7 +246,7 @@ class SimDistribHandler(object):
             parts = path.split('/', 1)
             aid = parts[0]
             path = (len(parts) > 1 and parts[1]) or ''
-            print("accessing "+aid)
+            # print("accessing "+aid)
 
         elif path:
             aid = path
@@ -402,12 +390,32 @@ class SimDistribHandler(object):
             while buf:
                 yield buf
                 buf = fd.read(5000000)
+
+# setup for when this is used as uWSGI script
+application = None
+if __name__.startswith("uwsgi_file_"):
+  # running as a uwsgi script
+  try:
+    import uwsgi
+
+    archdir = uwsgi.opt.get("archive_dir")
+    if not archdir:
+        raise RuntimeError("required archive_dir option not set")
+    try:
+        archdir = archdir.decode()
+    except (UnicodeDecodeError, AttributeError):
+        pass
         
-            
-archdir = uwsgi.opt.get("archive_dir", def_archdir)
-baseurl = uwsgi.opt.get("baseurl", def_baseurl)
-try:
-    archdir = archdir.decode()
-except (UnicodeDecodeError, AttributeError):
-    pass
-application = SimDistrib(archdir, baseurl)
+    baseurl = uwsgi.opt.get("baseurl", "http://localhost/")
+    try:
+        baseurl = baseurl.decode()
+    except (UnicodeDecodeError, AttributeError):
+        pass
+
+    application = SimDistrib(archdir, baseurl)
+
+  except ImportError:
+    # not running 
+    print("*** WARNING: failed to load uwsgi environment; is uwsgi really executing this scripts?",
+          file=sys.stderr)
+    

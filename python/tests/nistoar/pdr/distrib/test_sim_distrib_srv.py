@@ -1,3 +1,7 @@
+"""
+sim_distrib_srv Note:  this simulation server is deprecated by 
+:py:mod:`nistoar.pdr.public.sim.distrib`.  (See also test_client.py.)
+"""
 import os, pdb, requests, logging, time, json, sys
 import unittest as test
 from copy import deepcopy

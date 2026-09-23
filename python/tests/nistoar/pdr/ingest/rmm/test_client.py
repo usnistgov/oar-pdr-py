@@ -6,6 +6,7 @@ from pathlib import Path
 
 from nistoar.testing import *
 from nistoar.pdr.ingest.rmm import client as rmm
+from nistoar.pdr.public.sim import rmm as rmmsrv
 
 testdir = Path(__file__).resolve().parents[0]
 basedir = testdir.parents[5]
@@ -13,8 +14,9 @@ oarmetadir = basedir / "metadata"
 testrec = oarmetadir / "model" / "examples" / "hitsc.json"
 assert testrec.exists()
 
+uwsgiscript = rmmsrv.__file__
 port = 9091
-url = "http://localhost:{0}/nerdm/".format(port)
+url = "http://localhost:{0}/ingest/".format(port)
 endpt = url + "?auth=critic"
 
 uwsgi_opts = "--plugin python3"
@@ -28,11 +30,10 @@ def startService(authmeth=None):
         srvport += 1
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
-    wpy = "python/tests/nistoar/pdr/ingest/rmm/sim_ingest_srv.py"
-    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
-          "--wsgi-file {3} --set-ph auth_key=critic --pidfile {4}"
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} --wsgi-file {3} --set-ph readonly=False " \
+          "--set-ph auth_key=critic --pidfile {4} --set-ph archive_dir={5}"
     cmd = cmd.format(os.path.join(tdir,"simsrv.log"), uwsgi_opts, srvport,
-                     os.path.join(basedir, wpy), pidfile)
+                     uwsgiscript, pidfile, tdir)
     os.system(cmd)
     time.sleep(0.5)
 
@@ -80,7 +81,7 @@ class TestSubmit(test.TestCase):
     def test_service_up(self):
         resp = requests.get(endpt)
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.reason, "Service is ready")
+        self.assertEqual(resp.reason, "Ready")
 
     def test_unauth(self):
         rec = getrec()
@@ -252,7 +253,7 @@ class TestIngestClient(test.TestCase):
         self.assertIn(" bother ", errs)
         
     def test_submit_staged_clerr(self):
-        self.cl._endpt = re.sub(r'/nerdm/','/noobum/', self.cl._endpt)
+        self.cl._endpt = re.sub(r'/ingest/','/noobum/', self.cl._endpt)
         rec = getrec()
         self.cl.stage(rec, 'bru')
         self.cl.stage(rec, 'bro')
