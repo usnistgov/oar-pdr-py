@@ -11,6 +11,7 @@ from nistoar.pdr.publish.service import status
 from nistoar.pdr.preserve.bagit.bag import NISTBag
 from nistoar.pdr.utils import prov
 from nistoar.base import config
+from nistoar.pdr.public.sim import repo
 
 import yaml
 
@@ -23,6 +24,7 @@ basedir = pdrdir.parents[3]
 ormdir = basedir / "metadata"
 assert storedir.is_dir()
 
+uwsgiscript = repo.__file__
 port = 9991
 prefixes = ["10.18434", "10.88888"]
 arkpre = re.compile(r'^ark:/\d+/')
@@ -36,20 +38,11 @@ def startServices(authmeth=None):
     srvport = port
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
-    wpy = "python/tests/nistoar/pdr/distrib/sim_distrib_srv.py"
-    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
-          "--wsgi-file {3} --pidfile {4}"
-    cmd = cmd.format(os.path.join(tdir,"simdistsrv.log"), uwsgi_opts, srvport,
-                     os.path.join(basedir, wpy), pidfile)
-    os.system(cmd)
-
-    srvport += 1
-    pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
-    wpy = "python/tests/nistoar/pdr/ingest/rmm/sim_ingest_srv.py"
-    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
-          "--wsgi-file {3} --set-ph auth_key=critic --set-ph auth_meth=header --pidfile {4}"
-    cmd = cmd.format(os.path.join(tdir,"simingsrv.log"), uwsgi_opts, srvport,
-                     os.path.join(basedir, wpy), pidfile)
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} --set-ph readonly=False " \
+          "--wsgi-file {3} --pidfile {4} --set-ph bagdir={5} --set-ph archive_dir={6} " \
+          "--set-ph baseurl=http://localhost:{2}/"
+    cmd = cmd.format(os.path.join(tdir,"simreposrv.log"), uwsgi_opts, srvport,
+                     uwsgiscript, pidfile, storedir, tdir)
     os.system(cmd)
 
     srvport += 1
@@ -61,24 +54,13 @@ def startServices(authmeth=None):
                      pidfile, ",".join(prefixes))
     os.system(cmd)
 
-    srvport += 1
-    pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
-    arcdir = os.path.join(tdir, "archive")
-    shutil.copytree(archdatadir, arcdir)
-    wpy = "python/tests/nistoar/pdr/describe/sim_describe_svc.py"
-    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
-          "--wsgi-file {3} --pidfile {4} --set-ph archive_dir={5}"
-    cmd = cmd.format(os.path.join(tdir,"simdescsrv.log"), uwsgi_opts, srvport,
-                     os.path.join(basedir, wpy), pidfile, arcdir)
-    os.system(cmd)
-
     time.sleep(0.5)
 
 def stopServices():
     tdir = tmpdir()
     srvport = port
 
-    for p in range(srvport, srvport+4):
+    for p in range(srvport, srvport+2):
         pidfile = os.path.join(tdir,"simsrv"+str(p)+".pid")
         if os.path.exists(pidfile):
             cmd = "uwsgi --stop {0}".format(pidfile)

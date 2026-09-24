@@ -53,9 +53,9 @@ conventions:
 repo_access: 
     headbag_cache: /data/pdr/headbags
     distrib_service: 
-        service_endpoint: "http://localhost:9991/"
+        service_endpoint: "http://localhost:9991/ds/"
     metadata_service: 
-        service_endpoint: "http://localhost:9994"
+        service_endpoint: "http://localhost:9991/"
     store_dir: /data/pdr/store
     restricted_store_dir: /data/pdr/restricted_store
 preservation: 
@@ -64,14 +64,14 @@ preservation:
         ingest: 
             rmm: 
                 data_dir: /data/pdr/ingestdir
-                service_endpoint: "http://localhost:9992/nerdm/"
+                service_endpoint: "http://localhost:9991/ingest/"
                 auth_key: "critic"
                 auth_method: "header"
             doi: 
                 data_dir: /data/pdr/dcdir
                 minting_naan: "10.18434"
                 datacite_api: 
-                    service_endpoint: "http://localhost:9993/dois/"
+                    service_endpoint: "http://localhost:9992/dois/"
                     user: "gurn"
                     pass: "cranston"
 

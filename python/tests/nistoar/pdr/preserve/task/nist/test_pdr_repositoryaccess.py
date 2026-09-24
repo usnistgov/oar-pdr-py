@@ -7,12 +7,14 @@ from nistoar.pdr.preserve.task import state as st
 from nistoar.pdr.preserve.task.nist import pdr
 from nistoar.pdr.distrib import DistribServiceException
 from nistoar.base import config
+from nistoar.pdr.public.sim import distrib
 
 pdrdir = Path(__file__).resolve().parents[3] 
 storedir = pdrdir / "distrib" / "data"
 basedir = pdrdir.parents[3]
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_repoaccess.")
+uwsgiscript = distrib.__file__
 port = 9091
 baseurl = "http://localhost:{0}/".format(port)
 
@@ -27,11 +29,10 @@ def startService(authmeth=None):
         srvport += 1
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
-    wpy = "python/tests/nistoar/pdr/distrib/sim_distrib_srv.py"
     cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
-          "--wsgi-file {3} --pidfile {4}"
+          "--wsgi-file {3} --pidfile {4} --set-ph archive_dir={5}"
     cmd = cmd.format(os.path.join(tdir,"simsrv.log"), uwsgi_opts, srvport,
-                     os.path.join(basedir, wpy), pidfile)
+                     uwsgiscript, pidfile, storedir)
     status = os.system(cmd) == 0
     time.sleep(0.5)
     return status
