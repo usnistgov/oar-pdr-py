@@ -30,6 +30,8 @@ class PDPApp(ServiceApp):
     def __init__(self, service: PDPublishingService, parentlog: logging.Logger, config: Mapping={}):
         super(PDPApp, self).__init__(service.convention, parentlog.getChild(service.convention), config)
         self.svc = service
+        if self._recorder:
+            self.log.info("Recording requests to %s", self._recorder._recfile)
 
     def sips_for(self, who: Agent):
         """
@@ -117,14 +119,14 @@ class PDPApp(ServiceApp):
                                                     "A data uploads directory has not yet been "
                                                     "initialized")
                     datasrc['pdr:sipid'] = parts[0]
-                    datasrc['pdr:status'] = stat.state   # pdr:status is deprecated
+                    datasrc['pdr:status'] = stat.user_export()
                     datasrc['pdr:state'] = stat.state
                     return self.send_json(datasrc, ashead=ashead)
 
                 else:
                     # request for nerdm metadata
                     out = self._app.svc.describe(path)
-                    out['pdr:status'] = stat.state
+                    out['pdr:status'] = stat.user_export()
                     if out.get('pdr:message') is not None:
                         out['pdr:message'] = status.user_message[stat.state]
                     return self.send_json(out, ashead=ashead)
@@ -227,7 +229,8 @@ class PDPApp(ServiceApp):
                         out = self._app.svc.describe(sipid)
 
                 stat = self._app.svc.status_of(sipid)
-                out['pdr:status'] = stat.state
+                out['pdr:status'] = stat.user_export()
+                out['pdr:state'] = stat.state
                 if out.get('pdr:message') is not None:
                     out['pdr:message'] = status.user_message[stat.state]
                 return self.send_json(out, code=success)
@@ -237,8 +240,9 @@ class PDPApp(ServiceApp):
                 return self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
 
             except ValidationError as ex:
-                self.log.error("Invalid NERDm data POSTed to %s: %s", path, str(ex))
-                return self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
+                self.log.error("Invalid NERDm data POSTed to %s: %s", path, ex.message)
+                return self.send_error_resp(400, "Bad Input NERDm data", ex.message, sipid,
+                                            extra={"pdr:explain": str(ex)})
 
             except SIPNotFoundError as ex:
                 return self.send_error_resp(404, "Not Found", "Requested SIP not found", parts[0])
@@ -325,7 +329,7 @@ class PDPApp(ServiceApp):
             try:
                 if compid == ":data":
                     # requesting space for uploads; nerdm is the data source details
-                    if nerdm and nerdm.get('type','') != 'fs':
+                    if nerdm and nerdm.get('type','fs') != 'fs':
                         return self.send_error_resp(400, "Bad uploads request",
                                                     "Data uploads request only supports type='fs'")
                     out = self._app.svc.init_data_upload(sipid, 'fs', self.who)
@@ -366,7 +370,8 @@ class PDPApp(ServiceApp):
                         out = self._app.svc.describe(sipid)
 
                 stat = self._app.svc.status_of(sipid)
-                out['pdr:status'] = stat.state
+                out['pdr:status'] = stat.user_export()
+                out['pdr:state'] = stat.state
                 if out.get('pdr:message') is not None:
                     out['pdr:message'] = status.user_message[stat.state]
                 return self.send_json(out)
@@ -376,8 +381,9 @@ class PDPApp(ServiceApp):
                 return self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
 
             except ValidationError as ex:
-                self.log.error("Invalid NERDm data PUT to %s: %s", path, str(ex))
-                return self.send_error_resp(400, "Bad Input NERDm data", str(ex), sipid)
+                self.log.error("Invalid NERDm data PUT to %s: %s", path, ex.message)
+                return self.send_error_resp(400, "Bad Input NERDm data", ex.message, sipid,
+                                            extra={"pdr:explain": str(ex)})
 
             except SIPNotFoundError as ex:
                 return self.send_error_resp(404, "Not Found", "Requested SIP not found", parts[0])
@@ -528,9 +534,8 @@ class PDPApp(ServiceApp):
                     out = self._app.svc.describe(sipid)
 
                 stat = self._app.svc.status_of(sipid)
-                out['pdr:status'] = stat.state
+                out['pdr:status'] = stat.user_export()
                 out['pdr:state'] = stat.state
-                out['pdr:pub_status'] = stat.user_export()
                 if out.get('pdr:message') is not None:
                     out['pdr:message'] = status.user_message[stat.state]
                 return self.send_json(out)
