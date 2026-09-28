@@ -285,7 +285,7 @@ class TestPDPApp(test.TestCase):
         self.assertIn('nanoparticles', saved['keyword'])
         self.assertNotIn('testing', saved['keyword'])
         self.assertEqual(saved['pdr:sipid'], sipid)
-        self.assertEqual(saved['pdr:status'], 'pending')
+        self.assertEqual(saved['pdr:state'], 'pending')
 
         sipdir = os.path.join(self.workdir, 'publish/pdp1/sipbags', sipid)
         self.assertTrue(os.path.isdir(sipdir))
