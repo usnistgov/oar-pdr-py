@@ -272,7 +272,7 @@ class MongoDBClient(base.DBClient):
             else:
                 constraints = {"acls."+perm.pop(): {"$in": idents}}
                 
-            filter["$and"].append(constraints)
+            filter.setdefault("$and", []).append(constraints)
             try:
                 coll = self.native[self._projcoll]
                 for rec in coll.find(filter, {'_id': False}):

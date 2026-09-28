@@ -590,7 +590,17 @@ class TestMongoDBClient(test.TestCase):
         self.assertEqual(recs[0].id, "pdr0:0002")
         self.assertEqual(recs[1].id, "pdr0:0006")
 
-        
+        # a filter that does not already carry a top-level $and still works
+        filter = {"$or": [{"name": "test 2"}, {"name": "test3"}]}
+        recs = list(self.cli.adv_select_records(filter, base.ACLs.READ))
+        self.assertEqual(len(recs), 2)
+        self.assertEqual(recs[0].id, "pdr0:0006")
+        self.assertEqual(recs[1].id, "pdr0:0003")
+
+        # the permission constraint is still applied to such a filter
+        self.assertEqual(len(filter["$and"]), 1)
+        idents = [self.cli.user_id] + list(self.cli.user_groups)
+        self.assertEqual(filter["$and"][0], {"acls.read": {"$in": idents}})
 
     def test_action_log_io(self):
         self.assertEqual(self.cli.native['prov_action_log'].count_documents({}), 0)
