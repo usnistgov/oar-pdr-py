@@ -455,6 +455,7 @@ class NERDmBasedBagger(SIPBagger):
             for prop in handsoff.strip().split():
                 if prop in nerdm:
                     del nerdm[prop]
+            nerdm['@id'] = self._id
             self._set_standard_res_modifications(nerdm)
             self._set_provider_res_modifications(nerdm)
 
@@ -580,6 +581,8 @@ class NERDmBasedBagger(SIPBagger):
                     auth['fn'] = \
                         ' '.join([auth.get(p,'') for p in "familyName givenName middleName".split()]).strip()
                     auth['fn'] = re.sub(r' +', ' ', auth['fn'])
+
+        self._add_publisher_md(resmd)
                     
 
     def _set_provider_res_modifications(self, resmd: Mapping):
@@ -589,7 +592,7 @@ class NERDmBasedBagger(SIPBagger):
         shoulder on the PDR identifier ("@id").  This should be overridden for by 
         convention-specific subclasses.
         """
-        return
+        self._add_provider_md(resmd)
 
     def set_comp_nerdm(self, nerdm: Mapping, who: Agent=None, lock: bool=True,
                        _action: Action=None) -> None:
