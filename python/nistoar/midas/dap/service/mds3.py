@@ -275,14 +275,14 @@ class DAPService(ProjectService):
         process to proceed before returning from a call to :py:meth:`publish`.  This gives small 
         publications or minor revisions to complete and allow :py:meth:`publish` to report success
         or (perhaps more helpfully) failures right away.  
-    ``monitor_queue_file``
-        (*str*) __optional__.  a path in the local filesystem for the location of 
-        :py:mod:`publication monitor<nistoar.pdr.publish.service.monitor` queue file.  If provided,
-        this class will create a 
+    ``monitor``
+        (*dict*) __optional__.  configuration for a 
         :py:class:`PublishingMonitorClient<nistoar.midas.pdr.service.monitor.FileBasedPublishingMonitorClient>`
-        instance internally to alert an external 
+        to use alert an external 
         :py:class:`~nistoar.midas.dap.service.pubmonitor.MIDASPublishingMonitor` process to monitor 
-        and report back progress on the asynchronous publishing process.  
+        and report back progress on the asynchronous publishing process.  Currently, this dictionary
+        needs only one parameter, ``queue_file``, providing the path to the external monitor's 
+        queue file.  
 
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
@@ -370,8 +370,9 @@ class DAPService(ProjectService):
                 self.log.warning("No publishing service configured; " \
                                  "falling back on DBIO-based publishing")
         self._pubmon = None
-        if self.cfg.get('publish', {}).get('monitor_queue_file'):
-            self._pubmon = FileBasedPublishingMonitorClient(self.cfg['publish']['monitor_queue_file'])
+        if self.cfg.get('publish', {}).get('monitor', {}).get('queue_file'):
+            qfile = self.cfg['publish']['monitor']['queue_file']
+            self._pubmon = FileBasedPublishingMonitorClient(qfile)
 
         self._notifier = notifier
 

@@ -208,7 +208,7 @@ class TestPublishViaMDS3DAPService(test.TestCase):
             "publish": {
                 "service_endpoint": "http://localhost:9993/pdp/pdp1",
                 "auth": { "auth_key": 'MIDASTOKEN' },
-                "monitor_queue_file": self.qfile
+                "monitor": { "queue_file": self.qfile }
             }
         }
         self.dbfact = inmem.InMemoryDBClientFactory({}, { "nextnum": { "mdsy": 2 }})
