@@ -26,7 +26,8 @@ def startService(logdir):
     dbdir = os.path.join(logdir, "archive")
     
     cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} --wsgi-file {3} --set-ph readonly=False " \
-          "--pidfile {4} --set-ph archive_dir={5} --set-ph bagdir={6} --set-ph baseurl={7}"
+          "--pidfile {4} --set-ph archive_dir={5} --set-ph bagdir={6} --set-ph baseurl={7} " \
+          "--post-buffering=1"
     cmd = cmd.format(os.path.join(logdir,"simsrv.log"), uwsgi_opts, srvport,
                      uwsgiscript, pidfile, dbdir, bagdir, baseurl)
     os.system(cmd)
@@ -78,10 +79,10 @@ class TestSimRepo(test.TestCase):
         nerdf = archdir/"records"/"mds2-7223.json"
         self.assertTrue(nerdf.is_file())
 
-        with open(nerdf, 'rb') as fd:
+        with open(nerdf, 'r') as fd:
             data = json.load(fd)
         try:
-            resp = requests.post(baseurl+"ingest/", json=data)
+            resp = requests.post(baseurl+"ingest/?auth=token", json=data)
         except Exception as ex:
             self.fail("request post failed: "+str(ex))
         self.assertEqual(resp.reason, "Accepted")
