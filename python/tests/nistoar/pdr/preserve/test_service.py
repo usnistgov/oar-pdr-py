@@ -275,6 +275,7 @@ class TestPreservationService(test.TestCase):
         # preservation space will be all cleaned up (callback will have been called)
         self.assertTrue(not os.path.exists(self.bagdir))
         pworkdir = os.path.join(self.workdir, 'preserve',self.aipid)
+        time.sleep(0.25)
         self.assertTrue(not os.path.exists(pworkdir))
         lfile = self.svc.preslogdir/f"{self.aipid}.log"
         self.assertTrue(os.path.exists(lfile))

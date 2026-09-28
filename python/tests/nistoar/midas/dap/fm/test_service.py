@@ -111,7 +111,8 @@ class MIDASFileManagerServiceTest(test.TestCase):
 
     def test_space(self):
         id = "mdst:XXX1"
-        self.assertTrue(not (rootdir/id).exists())
+        nm = "mdst_XXX1"
+        self.assertTrue(not (rootdir/nm).exists())
         self.assertTrue(not self.cli.space_exists(id))
         self.assertNotIn(id, self.cli.space_ids())
         with self.assertRaises(FileManagerResourceNotFound):
@@ -120,18 +121,18 @@ class MIDASFileManagerServiceTest(test.TestCase):
         sp = self.cli.create_space_for(id, 'ava1')
         self.assertTrue(isinstance(sp, fm.FMSpace))
         self.assertTrue(self.cli.nccli.is_user('ava1'))
-        self.assertTrue((rootdir/id).is_dir())
-        self.assertTrue((rootdir/id/id).is_dir())
-        self.assertTrue((rootdir/id/(id+"-sys")).is_dir())
-        self.assertTrue((rootdir/id/id/'#TRASH').is_dir())
-        self.assertTrue((rootdir/id/id/'#HIDE').is_dir())
+        self.assertTrue((rootdir/nm).is_dir())
+        self.assertTrue((rootdir/nm/nm).is_dir())
+        self.assertTrue((rootdir/nm/(nm+"-sys")).is_dir())
+        self.assertTrue((rootdir/nm/nm/'#TRASH').is_dir())
+        self.assertTrue((rootdir/nm/nm/'#HIDE').is_dir())
 
         self.cli.wdcli.is_directory("/".join((id, id, '#TRASH',)))
         self.assertEqual(sp.id, id)
-        self.assertTrue(sp.resource_exists(id))
-        self.assertTrue(sp.resource_exists(id+"-sys"))
-        self.assertTrue(sp.resource_exists(id+"/#HIDE"))
-        self.assertTrue(sp.resource_exists(id+"/#TRASH"))
+        self.assertTrue(sp.resource_exists(nm))
+        self.assertTrue(sp.resource_exists(nm+"-sys"))
+        self.assertTrue(sp.resource_exists(nm+"/#HIDE"))
+        self.assertTrue(sp.resource_exists(nm+"/#TRASH"))
 
         self.assertEqual(sp.creator, 'ava1')
         self.assertEqual(sp.get_known_users(), ['ava1'])
@@ -141,10 +142,10 @@ class MIDASFileManagerServiceTest(test.TestCase):
         sp = self.cli.get_space(id)
         self.assertTrue(isinstance(sp, fm.FMSpace))
         self.assertEqual(sp.id, id)
-        self.assertTrue(sp.resource_exists(id))
-        self.assertTrue(sp.resource_exists(id+"-sys"))
-        self.assertTrue(sp.resource_exists(id+"/#HIDE"))
-        self.assertTrue(sp.resource_exists(id+"/#TRASH"))
+        self.assertTrue(sp.resource_exists(nm))
+        self.assertTrue(sp.resource_exists(nm+"-sys"))
+        self.assertTrue(sp.resource_exists(nm+"/#HIDE"))
+        self.assertTrue(sp.resource_exists(nm+"/#TRASH"))
         self.assertIn(id, self.cli.space_ids())
 
         self.cli.delete_space(id)
@@ -159,33 +160,34 @@ class MIDASFileManagerServiceTest(test.TestCase):
 
     def test_fmspace(self):
         id = "mdst:XXX1"
+        nm = "mdst_XXX1"
         sp = self.cli.create_space_for(id, 'ava1')
         self.assertTrue(isinstance(sp, fm.FMSpace))
 
         self.assertEqual(sp.id, id)
-        self.assertEqual(sp.root_dir, rootdir/id)
+        self.assertEqual(sp.root_dir, rootdir/nm)
         self.assertIsNotNone(sp._uploads_fileid)
         self.assertIsNotNone(sp.uploads_file_id)
 
-        self.assertEqual(sp.root_davpath, id)
-        self.assertEqual(sp.uploads_davpath, '/'.join((id,id,)))
-        self.assertEqual(sp.hide_davpath, '/'.join((id,id,"#HIDE",)))
-        self.assertEqual(sp.trash_davpath, '/'.join((id,id,"#TRASH",)))
-        self.assertEqual(sp.system_davpath, '/'.join((id,id+"-sys",)))
+        self.assertEqual(sp.root_davpath, nm)
+        self.assertEqual(sp.uploads_davpath, '/'.join((nm,nm,)))
+        self.assertEqual(sp.hide_davpath, '/'.join((nm,nm,"#HIDE",)))
+        self.assertEqual(sp.trash_davpath, '/'.join((nm,nm,"#TRASH",)))
+        self.assertEqual(sp.system_davpath, '/'.join((nm,nm+"-sys",)))
 
-        self.assertEqual(sp.uploads_folder, id)
-        self.assertEqual(sp.system_folder, id+"-sys")
+        self.assertEqual(sp.uploads_folder, nm)
+        self.assertEqual(sp.system_folder, nm+"-sys")
 
-        info = sp.get_resource_info(id+"-sys")
+        info = sp.get_resource_info(nm+"-sys")
         self.assertIn('size', info)
         self.assertIn('fileid', info)
-        self.assertEqual(info['path'], f"/{id}/{id}-sys")
+        self.assertEqual(info['path'], f"/{nm}/{nm}-sys")
 
-        self.assertEqual(sp.get_permissions_for(id, 'ava1'), fm.PERM_ALL)
-        self.assertEqual(sp.get_permissions_for(id, 'gurn'), fm.PERM_NONE)
-        sp.set_permissions_for(id, "gurn", fm.PERM_READ)
-        self.assertEqual(sp.get_permissions_for(id, 'ava1'), fm.PERM_ALL)
-        self.assertEqual(sp.get_permissions_for(id, 'gurn'), fm.PERM_READ)
+        self.assertEqual(sp.get_permissions_for(nm, 'ava1'), fm.PERM_ALL)
+        self.assertEqual(sp.get_permissions_for(nm, 'gurn'), fm.PERM_NONE)
+        sp.set_permissions_for(nm, "gurn", fm.PERM_READ)
+        self.assertEqual(sp.get_permissions_for(nm, 'ava1'), fm.PERM_ALL)
+        self.assertEqual(sp.get_permissions_for(nm, 'gurn'), fm.PERM_READ)
         
         self.assertEqual(sp.uploads_file_id, "100")
 
@@ -258,7 +260,7 @@ class MIDASFileManagerServiceTest(test.TestCase):
         ]
         self.cli.revive_space_for("mdsx:8888", "nstr", files)
 
-        upldir = rootdir/"mdsx:8888"/"mdsx:8888"
+        upldir = rootdir/"mdsx_8888"/"mdsx_8888"
         self.assertTrue(upldir.is_dir())
         prev = upldir/"#previously_published_files.tsv"
         self.assertTrue(prev.is_file())
