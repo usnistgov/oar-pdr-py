@@ -144,6 +144,20 @@ class NERDResource(ABC):
         return the resource metadata, excluding the authors, references, and all components
         """
         raise NotImplementedError()
+
+    def has_local_data(self) -> bool:
+        """
+        return True if any of the files included as components on this record are files to be 
+        provided by the PDR.  
+
+        This default implementation looks for downloadURL values that begin with the "pdr:dl:" 
+        alias.  File components with downloadURLs pointing to external sources will be ignored.
+        """
+        for u in self.files.get_files():
+            if u.get('downloadURL', '').startswith("pdr:dl:"):
+                return True
+        return False
+        
         
 class _NERDOrderedObjectList(metaclass=ABCMeta):
     """
