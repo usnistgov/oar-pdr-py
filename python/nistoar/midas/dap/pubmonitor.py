@@ -92,14 +92,17 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
             prec.status.set_state(mstatus.ACCEPTED)
             prec.status.message = message
         elif state == pstatus.PROCESSING:
-            prec.status.set_state(mstatus.INPRESS)
-            prec.status.message = "Publication is being preserved and published"
+            if mstatus != mstatus.INPRESS:
+                prec.status.set_state(mstatus.INPRESS)
+                prec.status.message = "Publication is being preserved and published"
         elif state == pstatus.PUBLISHED:
-            prec.status.set_state(mstatus.PUBLISHED)
-            prec.status.message = message
+            if mstatus != mstatus.PUBLISHED:
+                prec.status.set_state(mstatus.PUBLISHED)
+                prec.status.message = message
         elif state == pstatus.FAILED:
-            prec.status.set_state(mstatus.UNWELL)
-            prec.status.message = "A publication failure was encountered; admins have been alerted"
+            if mstatus != mstatus.UNWELL:
+                prec.status.set_state(mstatus.UNWELL)
+                prec.status.message = "A publication failure was encountered; admins have been alerted"
         elif state == pstatus.ONHOLD:
             prec.status.set_state(mstatus.INPRESS)
             prec.status.message = "Publication has been paused; admins have been alerted"
@@ -108,6 +111,13 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
         except dbio.NotAuthorized as ex:
             self.log.error("%s not authorized to update status of %s; has it really be submitted yet?",
                            str(self.projsvc.user), sipid)
+        else:
+            if self.projsvc.dbcli.notifier:
+                self.projsrv.dbcli.notifier(f"proj-publish,{self.dbcli._projcol},{prec.name}")
+            if state == pstatus.PUBLISHED:
+                # clean-up
+                # self.projsvc.delete()
+                pass
 
         return True
 
@@ -149,6 +159,8 @@ The supported configuration parameters are:
       to determine this from the "midas-dbio" configuration pulled from the 
       configuration service.  If provided, it should at least include a 'dbio'
       configuration.
+
+The usual logging parameters are supported as well.
 
 ENVIRONMENT
 
