@@ -13,7 +13,7 @@ import re
 from logging import Logger, getLogger
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
-from typing import List, Union
+from typing import List, Union, Tuple
 from copy import deepcopy
 
 import jsonpatch
@@ -1182,7 +1182,7 @@ class ProjectService(MIDASSystem):
                              (e.g. from a downstream service). 
         """
         if self.cfg.get('auto_publish', True):
-            return self._publish(prec)  # returned state will be PUBLISHED if completed
+            return self._publish(prec)[0]  # returned state will be PUBLISHED if completed
         return status.ACCEPTED
 
     def _submit__prep(self, prec: ProjectRecord, message: str= None, options: Mapping=None):
@@ -1325,7 +1325,7 @@ class ProjectService(MIDASSystem):
 
         return prec
 
-    def publish(self, id: str, _prec=None, **kwargs):
+    def publish(self, id: str, _prec=None, **kwargs) -> status.RecordStatus:
         """
         initiate the publishing processing for the given record (including preservation).  Generally,
         regular users are not authorized to call this function directly.  The record must be in a 
@@ -1364,7 +1364,10 @@ class ProjectService(MIDASSystem):
         self.log.info("Submitting rec, %s, for publication", _prec.id)
         try:
             poststat = self._publish(_prec)
-            if poststat not in [status.PUBLISHED, status.INPRESS]:
+            if poststat[0] == status.UNWELL:
+                defmsg = "Publishing failed due to internal error"
+                raise SubmissionFailed(_prec.id, poststat[1] or defmsg)
+            if poststat[0] not in [status.PUBLISHED, status.INPRESS, status.ACCEPTED]:
                 raise RuntimeException("Publishing submission returned unexpected state: "+poststat)
 
         except InvalidRecord as ex:
@@ -1377,13 +1380,22 @@ class ProjectService(MIDASSystem):
             self._try_save(_prec)
             raise
 
+        except SubmissionFailed as ex:
+            self.log.error(str(ex))
+            self._record_action(Action(Action.PROCESS, _prec.id, self.who, str(ex),
+                                       {"name": "publish", "errors": [str(ex)]}))
+            stat.set_state(status.UNWELL)
+            stat.act(self.STATUS_ACTION_PUBLISH, str(ex), self.who.actor)
+            self._try_save(_prec)
+            raise
+
         except Exception as ex:
             emsg = "Publishing process failed due to an internal error"
             self.log.exception(ex)
             self._record_action(Action(Action.PROCESS, _prec.id, self.who, emsg,
                                        {"name": "publish", "errors": [emsg]}))
             stat.set_state(status.UNWELL)
-            emsg += f": {str(ex)}"
+            # emsg += f": {str(ex)}"
             stat.act(self.STATUS_ACTION_PUBLISH, emsg, self.who.actor)
             self._try_save(_prec)
             raise
@@ -1393,21 +1405,23 @@ class ProjectService(MIDASSystem):
             if _prec.data.get('@version', '1.0.0') == '1.0.0':
                 message = "Initial"
             message +=  " publication"
-            if poststat == status.PUBLISHED:
+            if poststat[0] == status.PUBLISHED:
                 message += " successful"
+            elif poststat[1]:
+                message += ": "+poststat[1]
             else:
                 message += " in progress"
 
             # record provenance record
             self.dbcli.record_action(Action(Action.PROCESS, _prec.id, self.who, message, {"name": "publish"}))
 
-            stat.set_state(poststat)
+            stat.set_state(poststat[0])
             stat.act(self.STATUS_ACTION_PUBLISH, message, self.who.actor)
             try:
                 _prec.save()
             except Exception as ex:
                 self.log.error("%s: Failed to save record state for publishing (%s): %s",
-                               _prec.id, poststat, str(ex))
+                               _prec.id, poststat[0], str(ex))
                 raise
 
             self.log.info(message)
@@ -1478,7 +1492,7 @@ class ProjectService(MIDASSystem):
         """
         self.dbcli.free()
 
-    def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None):
+    def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None) -> Tuple[str,str]:
         """
         Actually launch the publishing process on the given record and update its state  
         accordingly.
@@ -1489,8 +1503,11 @@ class ProjectService(MIDASSystem):
         This default implement will save the data in a project record with PROJCOLL_latest collection
         (and the PROJCOLL_version collection).  
 
-        :returns:  the label indicating its post-editing state
-                   :rtype: str
+        :returns:  a 2-string tuple where the first is a label indicating its post-editing state, and 
+                   the second is a more specific message about the step or None if a generic message
+                   should be used.  The message should be one appropriate for presenting to an end 
+                   user.  
+                   :rtype: tuple
         :raises NotSubmitable:  if this record is not in a publishable state.
         :raises SubmissionFailed:  if an error occurs while submitting the record for publication.
                              This error is typically not due to anything the client did, but rather 
@@ -1537,7 +1554,7 @@ class ProjectService(MIDASSystem):
 
         self.log.info("Successfully published %s as %s version %s (into %s_latest collection)",
                       prec.id, pubid, recd['data'].get("@version", 0), self.dbcli.project)
-        return endstate
+        return (endstate, None)
 
 class ProjectServiceFactory:
     """

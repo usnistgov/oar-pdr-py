@@ -41,6 +41,9 @@ from nistoar.pdr import def_schema_dir, def_etc_dir, constants as const
 from nistoar.pdr.utils import build_mime_type_map, read_json
 from nistoar.pdr.utils.prov import Agent, Action
 from nistoar.pdr.utils.validate import ValidationResults, ALL, REQ
+from nistoar.pdr.publish.client import create_publishing_client
+from nistoar.pdr.publish.client.pdp import PDPPublishingClient, PublishException
+from nistoar.pdr.publish.service.monitor import FileBasedPublishingMonitorClient
 from nistoar.nsd import NSDServerError
 import nistoar.taxonomy as taxonomy
 
@@ -252,6 +255,34 @@ class DAPService(ProjectService):
     ``auto_publish``
         (*bool*) __optional__.  If True and an external review is not required, the record will be 
         immediately published upon submission.  
+    ``publish``
+        (*dict*) __optional__.  configuration for the publishing process initiated via 
+        :py:meth:`publish`; see below for details.  
+
+    This service, if will be used to publish its draft DAPS, should be connected to an external 
+    publishing service.  This is done by providing a publishing service to this ``DAPService``'s 
+    constructor; this is normally handled by the by the :py:class:`DAPServiceFactory` which will 
+    consult the ``publish`` configuration to do so.  If no such client is provided, the constructor
+    will attempt to create a default publishing client using the ``publish`` configuration.  If 
+    the ``publish`` configuration is not provided (and no client is provided to the constructor),
+    this ``DAPService`` will fall back using the default DBIO-based publishing (which does not 
+    preserve data files!).  In addition to the parameters looked for by 
+    :py:class:`~nistoar.pdr.publish.client.PDPPublishingClient`, the ``DAPService`` will look for 
+    these additional parameters to control the publishing process:
+
+    ``wait_after_submit``
+        (*int*) __optional__.  the number of seconds to wait to all the asynchronous publishing 
+        process to proceed before returning from a call to :py:meth:`publish`.  This gives small 
+        publications or minor revisions to complete and allow :py:meth:`publish` to report success
+        or (perhaps more helpfully) failures right away.  
+    ``monitor_queue_file``
+        (*str*) __optional__.  a path in the local filesystem for the location of 
+        :py:mod:`publication monitor<nistoar.pdr.publish.service.monitor` queue file.  If provided,
+        this class will create a 
+        :py:class:`PublishingMonitorClient<nistoar.midas.pdr.service.monitor.FileBasedPublishingMonitorClient>`
+        instance internally to alert an external 
+        :py:class:`~nistoar.midas.dap.service.pubmonitor.MIDASPublishingMonitor` process to monitor 
+        and report back progress on the asynchronous publishing process.  
 
     Note that the DOI is not yet registered with DataCite; it is only internally reserved and included
     in the record NERDm data.  
@@ -261,7 +292,7 @@ class DAPService(ProjectService):
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, who: Agent=None,
                  log: Logger=None, nerdstore: NERDResourceStorage=None, project_type=DAP_PROJECTS,
-                 minnerdmver=(0, 6), fmcli=None, extrevcli=None):
+                 minnerdmver=(0, 6), fmcli=None, extrevcli=None, publishcli=None, notifier=None):
         """
         create the service
         :param DBClientFactory dbclient_factory:  the factory to create the DBIO service client from
@@ -279,6 +310,13 @@ class DAPService(ProjectService):
         :param ExternReviewClient extrevcli: An external review request client to use to submit records
                                    for external review.  If None, no external review will be required
                                    to publish records.  
+        :param publishcli:  The PDP publishing service that DAPs should be sent to when 
+                                   :py:meth:`publish` is called.  If not provided, records will be 
+                                   published only into the DBIO as a fallback.
+        :param NotificationService notifier: A notification service to alert about failures.  This should
+                                   be provided when DAPService calls orginate in an automated process 
+                                   where there is no human to communicate failures to.  Currently, this 
+                                   is used to alert about failures to send DAPs to the publishing service.
         """
         super(DAPService, self).__init__(project_type, dbclient_factory, config, who, log,
                                          _subsys="Digital Asset Publication Authoring System",
@@ -323,6 +361,19 @@ class DAPService(ProjectService):
         self._taxcache = None
 #        if 'auto_publish' not in self.cfg:
 #            self.cfg['auto_publish'] = False
+
+        self._pubcli = publishcli
+        if not self._pubcli:
+            if self.cfg.get('publish'):
+                self._pubcli = PDPPublishingClient(self.cfg['publish'])
+            else:
+                self.log.warning("No publishing service configured; " \
+                                 "falling back on DBIO-based publishing")
+        self._pubmon = None
+        if self.cfg.get('publish', {}).get('monitor_queue_file'):
+            self._pubmon = FileBasedPublishingMonitorClient(self.cfg['publish']['monitor_queue_file'])
+
+        self._notifier = notifier
 
     def _make_fm_client(self, fmcfg):
         return FileManager(fmcfg)
@@ -2805,7 +2856,7 @@ class DAPService(ProjectService):
 
         if not needreview:
             if self.cfg.get("auto_publish", True):
-                return self._publish(prec, vers, options.get('purpose'))
+                return self._publish(prec, vers, options.get('purpose'))[0]
             else:
                 return status.ACCEPTED
         elif self.cfg.get('disable_review'):
@@ -2968,14 +3019,86 @@ class DAPService(ProjectService):
 
         return True
 
-    def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None):
-        # will replace this implementation with submitting to publication service
-        # in this temporary impl., fill _prec.data with the full NERDm record
-        nerd = self._store.open(prec.id)
-        prec.data = nerd.get_data()  
-        return super()._publish(prec)
+    def _publish(self, prec: ProjectRecord, version: str = None, revsummary: str = None) -> str:
+        try:
+            nerd = self._store.open(prec.id)
+            if self._pubcli:
 
-    def publish(self, id: str, _prec=None, **kwargs):
+                # Submit the NERDm metadata and data files to the publishing service
+                pdatadir = None
+                stat = None
+                nerdm = nerd.get_data()
+                nerdm['pdr:sipid'] = prec.id
+                stat = self._pubcli.create_sip(nerdm).get('pdr:status')
+                try:
+                    if nerd.has_local_data():
+                        pdatadir = self._pubcli.get_data_folder(prec.id)
+                        self._migrate_fs_files(prec, pdatadir)
+                        self._pubcli.import_files(prec.id)
+                    stat = self._pubcli.submit(prec.id).get('pdr:status')
+
+                    # optionally wait a bit for the state to get interesting (or maybe quickly finish)
+                    if self.cfg.get('publish', {}).get('wait_after_submit'):
+                        try:
+                            time.sleep(self.cfg['publish']['wait_after_submit'])
+                        except Exception as ex:
+                            self.log.warning("Sleep failure likely due to bad wait_after_submit value "+
+                                             "in config: "+str(cfg['publish']['wait_after_submit']))
+                    if not stat:
+                        try:
+                            stat = self._pubcli.get_status(prec.id)
+                        except Exception as ex:
+                            self.log.error("Failed to update SIP publishing status: %s", str(ex))
+                    
+                except PublishException:
+                    self.log.warning("Canceling publishing request for %s due to detected error (see below)",
+                                     prec.id)
+                    try:
+                        if stat:
+                            if pdatadir:
+                                self._pubcli.delete_data_folder(prec.id)
+                            self._pubcli.delete(prec.id)
+                    except Exception as ex:
+                        self.log.exception("Failure while canceling publishing request: "+str(ex))
+
+                    raise
+
+                else:
+                    if not stat:
+                        raise RuntimeError("No status information returned from publishing service")
+
+                    # Add SIP to pubmonitor
+                    if stat['state'] not in [ self._pubcli.PUBLISHED,  self._pubcli.FAILED ] and self._pubmon:
+                        self._pubmon.watch(prec.id, stat['state'])
+
+                    if stat['state'] == self._pubcli.SUBMITTED:
+                        return (status.INPRESS, stat.get('message'))
+                    if stat['state'] == self._pubcli.ONHOLD:
+                        # email has been sent preservation service
+                        return (status.INPRESS, stat.get('message'))
+                    if stat['state'] == self._pubcli.FAILED:
+                        return (status.UNWELL, None)
+                    if stat['state'] == self._pubcli.PUBLISHED:
+                        # clean-up as necessary (?)
+                        return (status.PUBLISHED, None)
+
+            else:
+                # in this fall-back impl., fill _prec.data with the full NERDm record
+                prec.data = nerd.get_data()  
+                return super()._publish(prec)
+
+        except Exception as ex:
+            if not isinstance(ex, PublishException):
+                self.log.exception("Problem publishing %s: %s", prec.id, str(ex))
+            else:
+                self.log.error("Publishing failure: %s", str(ex))
+            if self._notifier:
+                self._notifier.alert("publish.failure", f"Failed to submit {prec.id}",
+                                     f"Publishing failure: {str(ex)}", "DAPService",
+                                     id=prec.id)
+            return (status.UNWELL, None)
+
+    def publish(self, id: str, _prec=None, **kwargs) -> status.RecordStatus:
         # will replace this implementation with submitting to publication service (see also _publish())
         stat = super().publish(id, _prec, **kwargs)
 
@@ -2992,6 +3115,10 @@ class DAPService(ProjectService):
                                           "Failed to save record (id=%s) which publishing: %s: %s" %
                                           (prec.id, type(ex).__name__, str(ex)))
             stat = prec.status.clone()
+
+        # send signal to websocket service to alert clients
+        if self.dbcli.notifier:
+            self.dbcli.notifier(f"proj-publish,{self.dbcli._projcol},{prec.name}")
 
         return stat
         
@@ -3061,6 +3188,25 @@ class DAPServiceFactory(ProjectServiceFactory):
     is the union of those supported by the following classes:
       * :py:class:`DAPService` (``assign_doi`` and ``doi_naan``)
       * :py:class:`~nistoar.midas.dbio.project.ProjectService` (``default_perms`` and ``dbio``)
+
+    This factory will also look for the following properties:
+
+    ``external_review``
+        configuration for creating an :py:class:`~nistoar.midas.dap.extrev.base.ExternalReviewClient`
+        instance to inject into the :py:class:`DAPService`.  If not provided, a client will not 
+        be injected and external review will not be required for publishing.
+
+    ``publish``
+        configuration for creating a publishing client to be injected into the :py:class:`DAPService`
+        (see :py:class:`~nistoar.pdr.publish.client.pdp.PDPPublishingClient` for details).
+        In not provided, a publishing client will not be injected, and the :py:class:`DAPService`
+        will fall back on the simple DBIO-based method of "publishing".
+
+    ``notify``
+        configuration for creating a :py:class:`~nistoar.pdr.notify.service.NotificationService` to 
+        inject into the :py:class:`DAPService`.  This is used to send alerts about failures submitting
+        DAPs for publication.  If not provided, alerts will be issued.  (In practice, this only is 
+        useful if ``publish`` is also specified.)
     """
 
     def __init__(self, dbclient_factory: DBClientFactory, config: Mapping={}, log: Logger=None,
@@ -3085,14 +3231,25 @@ class DAPServiceFactory(ProjectServiceFactory):
     def _create_external_review_client(self, config: Mapping):
         return create_external_review_client(config)
 
+    def _create_publishing_client(self, config: Mapping):
+        return create_publishing_client(config)
+
+    def _create_notifier(self, config: Mapping):
+        if not config:
+            return None
+        return NotificationService(config)
+
     def create_service_for(self, who: Agent=None):
         """
         create a service that acts on behalf of a specific user.  
+
         :param Agent who:    the user that wants access to a project
         """
         revcli = self._create_external_review_client(self._cfg.get("external_review"))
+        pubcli = self._create_publishing_client(self._cfg.get("publish"))
+        notifier = self._create_notifier(self._cfg.get("notify"))
         out = DAPService(self._dbclifact, self._cfg, who, self._log, self._nerdstore, self._prjtype,
-                         extrevcli=revcli)
+                         extrevcli=revcli, publishcli=pubcli, notifier=notifier)
         if hasattr(revcli, 'projsvc') and not revcli.projsvc:
             revcli.projsvc = out
         return out
