@@ -3317,13 +3317,13 @@ class DAPProjectSelectionHandler(ProjectSelectionHandler):
         for rec in self._dbcli.select_records_by_ids(ids, perms):
             yield to_DAPRec(rec, self._fmcli)
 
-    def _adv_selected_records(self, filter, perms) -> Iterator[ProjectRecord]:
+    def _adv_select_records(self, filter, perms) -> Iterator[ProjectRecord]:
         """
         submit the advanced search query in a project-specific way. This implementation passes 
         the query directly to the generic DBClient instance.
         :return:  a generator that iterates through the matched records
         """
-        for rec in self._dbcli.select_constraint_records(filter, perms):
+        for rec in self._dbcli.adv_select_records(filter, perms):
             yield to_DAPRec(rec, self._fmcli)
 
 class DAPProjectStatusHandler(ProjectStatusHandler):

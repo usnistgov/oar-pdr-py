@@ -237,6 +237,15 @@ class TestMIDASProjectApp(test.TestCase):
         self.assertEqual(resp[0]['data']['title'],"Standard Reference Materials")
         self.resp = []
 
+        # no permissions given: the default must cover every permission, not be passed
+        # through as a single name
+        req['wsgi.input'] = StringIO(json.dumps({"filter": {"$and": [{"data.title": "Standard Reference Materials"}]}}))
+        hdlr = self.app.create_handler(req, self.start, path, nistr)
+        body = hdlr.handle()
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(len(self.body2dict(body)), 1)
+        self.resp = []
+
         req['wsgi.input'] = StringIO(json.dumps( {"filter": {"$and": [ {"data.name": "Supplementary material for: The detection of carbon dioxide leaks using quasi-tomographic laser absorption spectroscopy"} ]},
     "permissions": ["read", "write"]} ))
         hdlr = self.app.create_handler(req, self.start, path, nistr)

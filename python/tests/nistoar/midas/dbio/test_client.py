@@ -294,6 +294,46 @@ class TestDBClient(test.TestCase):
         
 
                          
+    def test_check_query_structure(self):
+        self.assertTrue(base.DBClient.check_query_structure({"$and": [{"name": "test"}]}))
+        self.assertTrue(base.DBClient.check_query_structure({"$or": [{"name": "test"}]}))
+        self.assertTrue(base.DBClient.check_query_structure({}))
+        self.assertTrue(base.DBClient.check_query_structure({"$text": {"$search": "carbon"}}))
+        self.assertTrue(base.DBClient.check_query_structure(
+            {"$and": [{"$or": [{"name": "a"}]}, {"owner": "bob"}]}))
+
+        self.assertFalse(base.DBClient.check_query_structure({"$not": {"bogus": 1}}))
+        self.assertFalse(base.DBClient.check_query_structure({"$and": [{"name": "a"}], "bogus": 1}))
+        self.assertFalse(base.DBClient.check_query_structure({"name": {"$regex": "x"}}))
+        self.assertFalse(base.DBClient.check_query_structure("not a dict"))
+        self.assertFalse(base.DBClient.check_query_structure(None))
+
+        # mongo errors on an empty $and/$or array rather than matching nothing
+        self.assertFalse(base.DBClient.check_query_structure({"$and": []}))
+
+    def test_check_query_structure_rejects_javascript(self):
+        # $and holds an array, so these are invisible to a check that only walks dict values
+        for op in ["$where", "$expr", "$function", "$accumulator"]:
+            self.assertFalse(base.DBClient.check_query_structure({"$and": [{op: "anything"}]}),
+                             "%s was accepted inside $and" % op)
+
+        self.assertFalse(base.DBClient.check_query_structure(
+            {"$and": [{"$or": [{"$where": "while(true){}"}]}]}))
+
+    def test_check_query_structure_limits_depth(self):
+        # json.loads accepts far deeper nesting than the checks can recurse through
+        def nest(levels, wrap):
+            query = {"name": "test"}
+            for i in range(levels):
+                query = {wrap: [query]} if wrap == "$and" else {wrap: query}
+            return query
+
+        self.assertTrue(base.DBClient.check_query_structure(nest(3, "$and")))
+        self.assertFalse(base.DBClient.check_query_structure(nest(500, "$and")))
+        self.assertFalse(base.DBClient.check_query_structure(nest(500, "$not")))
+
+
+
 if __name__ == '__main__':
     test.main()
 
