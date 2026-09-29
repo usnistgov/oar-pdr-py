@@ -249,19 +249,18 @@ def define_options(progname):
 
     return parser
 
-def main(progname, args):
+def main(progname, opts):
     """
     Launch the SIP publishing monitor on behalf of MIDAS.
-    """
-    parser = define_options(progname)
-    opts = parser.parse_args(args)
 
+    :param opts: the parsed command-line arguments
+    """
     if opts.conf:
         cfg = config.resolve_configuration(opts.conf)
         
     elif config.service:
         if not opts.moncfgname:
-            raise cli.CommandFailure("--monitor-config-name: empty value provided", 2)
+            raise cli.CommandFailure(progname, "--monitor-config-name: empty value provided", 2)
             
         config.service.wait_until_up(int(os.environ.get('OAR_CONFIG_TIMEOUT', 10)),
                                      True, sys.stderr)
@@ -279,14 +278,14 @@ def main(progname, args):
     if not opts.statusdir:
         opts.statusdir = cfg.get('status_dir')
     if not opts.statusdir:
-        raise CommandFailure("No queue_file specified/configured (try --status-dir)", 2)
+        raise CommandFailure(progname, "No queue_file specified/configured (try --status-dir)", 2)
     if not os.path.isdir(opts.statusdir):
-        raise CommandFailure(f"{opts.statusdir}: status dir does not exists", 6)
+        raise CommandFailure(progname, f"{opts.statusdir}: status dir does not exists", 6)
         
     if not opts.qfile:
         opts.qfile = cfg.get('queue_file')
     if not opts.qfile:
-        raise CommandFailure("No queue_file specified/configured (try --queue-file)", 2)
+        raise CommandFailure(progname, "No queue_file specified/configured (try --queue-file)", 2)
 
     configure_log(opts, cfg, progname)
 
@@ -298,7 +297,7 @@ def main(progname, args):
     if dapcfg is None:
         if config.service:
             if not opts.moncfgname:
-                raise cli.CommandFailure("--midas-config-name: empty value provided", 2)
+                raise cli.CommandFailure(progname, "--midas-config-name: empty value provided", 2)
             dapcfg = config.service.get(opts.moncfgname, {})
         else:
             # it's actually likely that no DAP-specific configuration is needed
@@ -340,7 +339,7 @@ def create_dbfactory(cfg: Mapping, dburl: str=None):
             dbcfg['factory'] = "mongo"
             dbcfg['db_url'] = dburl
         else:
-            raise CommandFailure("Unrecognized DBIO URL: "+dburl, 2)
+            raise CommandFailure(progname, "Unrecognized DBIO URL: "+dburl, 2)
 
     dbtype = dbcfg.get('factory', 'inmem') 
     if dbtype == "mongo":
@@ -365,7 +364,7 @@ def create_dbfactory(cfg: Mapping, dburl: str=None):
     elif dbtype == "inmem":
         return dbio.InMemoryDBClientFactory(dbcfg)
 
-    raise CommandFailure("No DBIO service configured (dap_service.dbio)", 6)
+    raise CommandFailure(progname, "No DBIO service configured (dap_service.dbio)", 6)
 
 def configure_log(args, cfg: Mapping, progname="pubmonitor"):
     """
@@ -424,7 +423,8 @@ def configure_log(args, cfg: Mapping, progname="pubmonitor"):
 if __name__ == "__main__":
     try:
         progname = os.path.splitext(os.path.basename(sys.argv[0]))[0]
-        opts = main(progname, sys.argv[1:])
+        opts = define_options(progname).parse_args(sys.argv[1:])
+        main(progname, opts)
         sys.exit(0)
     except CommandFailure as ex:
         logging.getLogger(progname).critical(str(ex))
