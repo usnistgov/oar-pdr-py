@@ -45,6 +45,7 @@ from nistoar.pdr.publish.client import create_publishing_client
 from nistoar.pdr.publish.client.pdp import PDPPublishingClient, PublishException
 from nistoar.pdr.publish.service.monitor import FileBasedPublishingMonitorClient
 from nistoar.nsd import NSDServerError
+from nistoar.pdr.notify.service import NotificationService
 import nistoar.taxonomy as taxonomy
 
 from . import validate

@@ -212,7 +212,7 @@ class PDPPublishingClient:
                                  message="Expected JSON response; got "+resp.text) from ex
             
         except requests.RequestException as ex:
-            raise PDRServiceException("Failed to connect to remote file manager service: "+
+            raise PDRServiceException("PDP", "Failed to connect to remote publishing service: "+
                                        str(ex)) from ex
 
     def create_sip(self, resmd: Mapping) -> Mapping:
