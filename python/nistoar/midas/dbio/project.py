@@ -932,6 +932,7 @@ class ProjectService(MIDASSystem):
         if _prec.status.state not in [status.EDIT, status.READY, status.PROCESSING]:
             raise NotEditable(id, state=_prec.status.state)
 
+        self.log.info("Finalizing %s %s", str(_prec.type), _prec.id)
         stat.set_state(status.PROCESSING)
         stat.act(self.STATUS_ACTION_FINALIZE, "in progress", self.who.actor)
         _prec.save()
