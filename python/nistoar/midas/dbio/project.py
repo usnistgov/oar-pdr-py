@@ -1277,7 +1277,7 @@ class ProjectService(MIDASSystem):
         # This exists as a specialization point.  return True if the record was saved
         return False
 
-    def approve(self, id: str, revsys: str, revid: str=None, infourl: str=None, publish: bool=False):
+    def approve(self, id: str, revsys: str, revid: str=None, infourl: str=None, publish: bool=None):
         """
         mark this project as approved for publication by an external review system.  This will
         call :py:meth:`apply_external_review` with phase "approved".  If ``publish`` is ``True``
@@ -1294,6 +1294,13 @@ class ProjectService(MIDASSystem):
             prec.status.set_state(status.ACCEPTED)
             prec.save(ACLs.PUBLISH)
 
+            if publish is None:
+                # base decision to publish on configuration
+                publish = self.cfg.get("publish_on_approval")
+                if isinstance(publish, str):
+                    # if str, anything other than a case-variation of "True" or "T" is considered False
+                    publish = publish.lower()
+                    publish = publish == "true" or publish == 't'
             if publish:
                 self.publish(id)
 
