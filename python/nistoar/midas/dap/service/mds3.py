@@ -2681,6 +2681,12 @@ class DAPService(ProjectService):
         update the data content for the record in preparation for submission.
         """
         nerd = self._store.open(prec.id)
+
+        md = nerd.get_res_data()
+        if not md.get('accessLevel'):
+            md['accessLevel'] = self.cfg.get('default_access_level', 'public')
+            nerd.replace_res_data(md)
+        
         self._finalize_authors(prec, nerd)
 
         # should sub-IDs be normalized in some way?
