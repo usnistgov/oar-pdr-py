@@ -919,8 +919,8 @@ class ProjectService(MIDASSystem):
         :raises ObjectNotFound:  if no record with the given ID exists
         :raises NotAuthorized:   if the authenticated user does not have permission to update the 
                                  record given by `id`.  
-        :raises NotEditable:  the requested record in not in the edit state 
-        :raises InvalidUpdate:  if the finalization produces an invalid record
+        :raises NotEditable:     the requested record in not in the edit state 
+        :raises InvalidRecord:   if the finalization fails to produce valid record ready for submission
         """
         reset_state = False
         if not _prec:
@@ -996,8 +996,8 @@ class ProjectService(MIDASSystem):
         if not res:
             self.log.warning(f"{prec.id}: No final validations applied!")
         elif res.count_failed(REQ) > 0:
-            raise InvalidUpdate("Final validation checks failed", prec.id,
-                                errors=[t.specification for t in res.failed()])
+            raise InvalidRecord("Final validation checks failed", prec.id,
+                                errors=[t.specification for t in res.failed(REQ)])
         elif res.count_failed(WARN) > 0:
             note = " (some warnings detected)"
 
@@ -1069,7 +1069,7 @@ class ProjectService(MIDASSystem):
 
     def _finally_validate(self, prec: ProjectRecord) -> ValidationResults:
         # Note: we'll need to expand the checks applied; just do a review for now
-        return self.review(prec.id, REQ&WARN, prec)
+        return self.review(prec.id, REQ|WARN, prec)
 
     def submit(self, id: str, message: str=None, options: Mapping=None, _prec=None) -> status.RecordStatus:
         """
@@ -1120,7 +1120,7 @@ class ProjectService(MIDASSystem):
 
         # this record is ready for submission.  Send the record to its post-editing destination,
         # and return the state that it should be set to.  Normally, this implementation function
-        # does not update the state of _prec nor saved the record.  If the returned state is None,
+        # does not update the state of _prec nor save the record.  If the returned state is None,
         # this function (and its delegates) may assume that the state has already been set and
         # saved.  If the implementation function fails, it should raise an exception; normally,
         # clean up from an exception happens here.

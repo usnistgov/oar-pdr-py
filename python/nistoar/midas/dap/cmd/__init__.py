@@ -11,6 +11,7 @@ include
   - ``prepupd``:  prepare a previously published DAP for editing
   - ``get``:      retrieve and display DAP records in JSON format
   - ``setstate``: update the state of a DAP record
+  - ``finalize``: apply final updates to ready record for submission (for review/publication)
   - ``revreq``:   request a review of an external reviewer system
   - ``unsubmit``: pull a record submitted for review back to an editable state
   - ``revperm``:  set or unset a record's permissions for review.
@@ -134,7 +135,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 
                                                 interface into it 
     """
-    from . import regpub, setstate, review, revreq, get, unsubmit, revperm
+    from . import regpub, setstate, finalize, review, revreq, get, unsubmit, revperm
 
     subparser.description = description
     p = subparser
@@ -148,6 +149,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     out.load_subcommand(regpub)
     out.load_subcommand(get)
     out.load_subcommand(setstate)
+    out.load_subcommand(finalize)
     out.load_subcommand(revreq)
     out.load_subcommand(unsubmit)
     out.load_subcommand(revperm)
