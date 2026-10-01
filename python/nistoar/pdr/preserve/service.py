@@ -346,13 +346,13 @@ class AIP1PreservationService(PreservationService):
     ``job_dir``:
          (str) _optional_.  The directory where the state of the preservation 
          :py:class:`~nistoar.jobmgt.JobQueue` is stored (default: in_progress_dir/``_jobs``).
-    ``history_dir``
-         (str) _optional_.  The directory where histories of preservation requests for each of the 
-         are requested AIPs are stored (default: in_progressdir/``_history``).  
-    ``preserve_log_dir``
+    ``preserve_logdir``
          (str) _recommended_. When a preservation task completes, the log messages will be appended 
          to a per-AIP historical log file (called _aipid_``.log``) located in the directory given by
-         this parameter (default: history_dir).
+         this parameter (default: in_progressdir/``logs``).
+    ``history_dir``
+         (str) _optional_.  The directory where histories of preservation requests for each of the 
+         are requested AIPs are stored (default: preserve_logdir/``_history``).  
     ``task``
          (dict) _required by default_.  The details configuring the 
          :py:class:`~nistoar.pdr.preserve.task.frameowrk.PreservationTask` that is created when
@@ -414,15 +414,20 @@ class AIP1PreservationService(PreservationService):
         else:
             self.jobdir = Path(self.jobdir)
 
+        logdir = self.cfg.get('logdir')
+        self.preslogdir = self.cfg.get('preserve_logdir', logdir)
+        if not self.preslogdir:
+            self.preslogdir = self.inprogdir / 'logs'
+        else:
+            self.preslogdir = Path(self.preslogdir)
+
         self.historydir = self.cfg.get('history_dir')
         if not self.historydir:
-            self.historydir = self.inprogdir / '_history'
+            self.historydir = self.preslogdir / '_history'
         else:
             self.historydir = Path(self.historydir)
 
-        self.preslogdir = self.cfg.get('history_dir', self.historydir)
-
-        for dir in (self.inprogdir, self.jobdir, self.historydir, self.preslogdir):
+        for dir in (self.inprogdir, self.jobdir, self.preslogdir, self.historydir):
             if not dir.exists():
                 try:
                     dir.mkdir()
