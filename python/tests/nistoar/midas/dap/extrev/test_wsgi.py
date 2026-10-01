@@ -72,9 +72,9 @@ class TestLegacyNPSFeedbackHandler(test.TestCase):
             'dap_service': {
                 "doi_naan": "10.88888",
                 "nerdstorage": {
-#                    "type": "fsbased",
-#                    "store_dir": os.path.join(tmpdir.name, "nrdstore")
-                    "type": "inmem",
+                    "type": "fsbased",
+                    "store_dir": os.path.join(tmpdir.name, "nrdstore")
+#                    "type": "inmem",
                 },
                 "default_responsible_org": {
                     "@type": "org:Organization",
@@ -109,7 +109,13 @@ class TestLegacyNPSFeedbackHandler(test.TestCase):
 
     def create_record(self):
         svc = self.create_service()
-        prec = svc.create_record("testrec")
+        data = {"title": "Shazam!: the Movie",
+                "description":  "meh",
+                "topic": [{
+                    "scheme": "https://data.nist.gov/od/dm/nist-themes/v2.0",
+                    "tag": "Information Technolog"
+                }] }
+        prec = svc.create_record("testrec", data)
 #        svc._set_review_permissions(prec)
 #        prec.save()
         return prec.id
@@ -140,7 +146,10 @@ class TestLegacyNPSFeedbackHandler(test.TestCase):
 
         # submit for review so we can receive feedback
         svc = self.create_service()
-        svc.submit(id)
+        try:
+            svc.submit(id)
+        except Exception as ex:
+            raise
 
         # start a review
         # self.create_service().apply_external_review(id, "nps", "requested", id)

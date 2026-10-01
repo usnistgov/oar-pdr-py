@@ -245,6 +245,12 @@ class TestPublishViaMDS3DAPService(test.TestCase):
         nerdm = self.open_nerd()
         prec = self.svc.create_record("simple", nerdm)
         id = prec.id
+        self.svc.update_data(id, {"title": "Shazam!: the Movie",
+                                  "description":  "meh",
+                                  "topic": [{
+                                      "scheme": "https://data.nist.gov/od/dm/nist-themes/v2.0",
+                                      "tag": "Information Technolog"
+                                  }] })
         self.svc.replace_authors(id, [
             { "familyName": "Cranston", "givenName": "Gurn", "middleName": "J." },
             { "fn": "Edgar Allen Poe", "affiliation": "NIST" },
