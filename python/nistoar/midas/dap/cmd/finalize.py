@@ -103,7 +103,7 @@ def execute(args, config: Mapping=None, log: Logger=None):
             else:
                 raise CommandFailure(args.cmd, f"{args.dbid}: Sorry, invalid record detected: {str(ex)}", 1)
 
-        self.log.execption(ex)
+        log.execption(ex)
         raise CommandFailure(args.cmd, f"{args.dbid}: Unexpected failure: {str(ex)}") from ex
 
     
