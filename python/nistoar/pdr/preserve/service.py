@@ -53,7 +53,7 @@ class PreservationStatus(PreservationStepsAware):
     ``message``:
         (str) a displayable message indicating what is currently happening in the preservation process
 
-    All other properties are only accessibel via :py:meth:`get`.  Additional parameters that may 
+    All other properties are only accessible via :py:meth:`get`.  Additional parameters that may 
     be included if the presrevation effort has been started:
 
     ``reqtime``:
@@ -389,7 +389,7 @@ class AIP1PreservationService(PreservationService):
 
         self.sipdir = self.cfg.get('sip_dir')   
         if not self.sipdir:
-            self.log.warning("JobQueuePreservationService: sip_dir not specified; "
+            self.log.warning("AIP1PreservationService: sip_dir not specified; "
                              "ID-based submission not enabled")
         else:
             self.sipdir = Path(self.sipdir)

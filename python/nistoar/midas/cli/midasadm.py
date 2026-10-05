@@ -10,6 +10,8 @@ from collections.abc import Mapping
 from nistoar.midas import MIDASException
 from nistoar.midas.dap import cmd as dap
 from nistoar.midas.dmp import cmd as dmp
+from nistoar.pdr.publish import cmd as pub
+from nistoar.pdr.preserve import cmd as pres
 from nistoar.base import config as cfgmod
 from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils import cli
@@ -82,6 +84,10 @@ def main(cmdname, args):
     midas.load_subcommand(dap)
     midas.load_subcommand(dmp)
     midas.load_subcommand(jwt)
+    midas.load_subcommand(pub)
+    midas.load_subcommand(pub.PubAliasCommand("pdp0", pub.pdp0_description))
+    midas.load_subcommand(pub.PubAliasCommand("pdp1", pub.pdp1_description))
+    midas.load_subcommand(pres)
 
     # execute the command
     # args = midas.parse_args(args)

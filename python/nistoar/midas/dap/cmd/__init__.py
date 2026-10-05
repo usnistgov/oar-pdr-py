@@ -46,7 +46,7 @@ in this priority:
   2. if set, the value of the OAR_DAP_CONVENTION environment variable,
   3. The default_convention property in the provided configuration (when the midas-dbio schema 
      is used; see midasadm -h for more details), 
-  4. The loan convention configured when only one convention is provided.
+  4. The lone convention configured when only one convention is provided.
 """
 
 class DAPCmd(cli.CommandSuite):
@@ -135,7 +135,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     :param argparser.ArgumentParser subparser:  the argument parser instance to define this command's 
                                                 interface into it 
     """
-    from . import regpub, setstate, finalize, review, revreq, get, unsubmit, revperm
+    from . import regpub, setstate, finalize, publish, review, revreq, get, unsubmit, revperm
 
     subparser.description = description
     p = subparser
@@ -150,6 +150,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     out.load_subcommand(get)
     out.load_subcommand(setstate)
     out.load_subcommand(finalize)
+    out.load_subcommand(publish)
     out.load_subcommand(revreq)
     out.load_subcommand(unsubmit)
     out.load_subcommand(revperm)

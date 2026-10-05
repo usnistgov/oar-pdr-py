@@ -50,7 +50,7 @@ def tearDownModule():
         loghdlr = None
     tmpdir.cleanup()
 
-class TestFinalizeCmd(test.TestCase):
+class TestPublishCmd(test.TestCase):
 
     def setUp(self):
         self.cmd = cli.CLISuite("midasadm")

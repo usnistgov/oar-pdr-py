@@ -54,7 +54,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
 
 def execute(args, config: Mapping=None, log: Logger=None):
     """
-    execute this command: register a previously published DAP into the DBIO, marking it published
+    execute this command:  publish a DAP 
     """
     if not log:
         log = logging.getLogger(default_name)
