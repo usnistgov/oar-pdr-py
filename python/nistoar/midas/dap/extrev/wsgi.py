@@ -133,7 +133,8 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
                         input['changesRequested'] = False
                     self._svc.apply_external_review(id, self.system_name, input['phase'], 
                                                     str(input['systemID']), input.get('info_at'), 
-                                                    input.get('feedback'), input.get('changesRequested'))
+                                                    input.get('feedback'), input.get('changesRequested'),
+                                                    input.get('fbreplace'))
 
                 if input['phase'] == "approved":
                     self._svc.approve(id, self.system_name, str(input['systemID']), input.get('info_at'))
