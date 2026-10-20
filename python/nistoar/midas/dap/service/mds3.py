@@ -2954,17 +2954,16 @@ class DAPService(ProjectService):
                                  fully reset to the permissions as if going either to a published 
                                  state or a complete edit state (because publishing was canceled).
         """
+        reset_perms = [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]
         if for_review:
-            # just give original writers their write permission
-            who = list(prec.acls.iter_perm_granted("_"+ACLs.WRITE))
-            prec.acls.grant_perm_to(ACLs.WRITE, *who, _need_perm=ACLs.PUBLISH)
+            # don't restore DELETE permission
+            reset_perms  = [p for p in reset_perms if p != ACLs.DELETE]
 
-        else:
-            for perm in [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]:
-                who = list(prec.acls.iter_perm_granted("_"+perm))
-                prec.acls.revoke_perm_from_all(perm, _need_perm=ACLs.PUBLISH)  # take out the reviewers
-                prec.acls.grant_perm_to(perm, *who, _need_perm=ACLs.PUBLISH)   # restore the original editors
-                prec.acls.revoke_perm_from_all("_"+perm, _need_perm=ACLs.PUBLISH)
+        for perm in reset_perms:
+            who = list(prec.acls.iter_perm_granted("_"+perm))
+            prec.acls.revoke_perm_from_all(perm, _need_perm=ACLs.PUBLISH)  # take out the reviewers
+            prec.acls.grant_perm_to(perm, *who, _need_perm=ACLs.PUBLISH)   # restore the original editors
+            prec.acls.revoke_perm_from_all("_"+perm, _need_perm=ACLs.PUBLISH)
 
         # revoke update permissions in the file manager
         if self._fmcli:
