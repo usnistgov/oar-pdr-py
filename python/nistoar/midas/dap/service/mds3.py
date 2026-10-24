@@ -2957,13 +2957,16 @@ class DAPService(ProjectService):
         reset_perms = [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]
         if for_review:
             # don't restore DELETE permission
-            reset_perms  = [p for p in reset_perms if p != ACLs.DELETE]
+            reset_perms  = [p for p in reset_perms if p not in [ACLs.ADMIN,  ACLs.DELETE]]
 
         for perm in reset_perms:
             who = list(prec.acls.iter_perm_granted("_"+perm))
-            prec.acls.revoke_perm_from_all(perm, _need_perm=ACLs.PUBLISH)  # take out the reviewers
+            if not for_review:
+                # to remove reviewers
+                prec.acls.revoke_perm_from_all(perm, _need_perm=ACLs.PUBLISH)
             prec.acls.grant_perm_to(perm, *who, _need_perm=ACLs.PUBLISH)   # restore the original editors
-            prec.acls.revoke_perm_from_all("_"+perm, _need_perm=ACLs.PUBLISH)
+            if not for_review:
+                prec.acls.revoke_perm_from_all("_"+perm, _need_perm=ACLs.PUBLISH)
 
         # revoke update permissions in the file manager
         if self._fmcli:

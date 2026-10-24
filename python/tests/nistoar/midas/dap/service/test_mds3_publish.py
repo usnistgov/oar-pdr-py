@@ -278,7 +278,7 @@ class TestPublishViaMDS3DAPService(test.TestCase):
         statdir = os.path.join(tmpdir.name, "pdr/publish/pdp1/status")
         pmon = MIDASPublishingMonitor(self.dbfact, statdir, self.qfile, 2, self.cfg, nistr,
                                       logging.getLogger("test.pubmon"))
-        pmon.monitor(stop_after=2, timeout=5)
+        pmon.monitor(stop_after=3, timeout=5)
 
         qitems = []
         with open(self.qfile, 'r') as fd:
