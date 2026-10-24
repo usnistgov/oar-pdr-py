@@ -2957,7 +2957,7 @@ class DAPService(ProjectService):
         reset_perms = [ACLs.ADMIN, ACLs.WRITE, ACLs.DELETE, ACLs.READ]
         if for_review:
             # don't restore DELETE permission
-            reset_perms  = [p for p in reset_perms if p not in [ACLs.ADMIN,  ACLs.DELETE]]
+            reset_perms  = [p for p in reset_perms if p != ACLs.DELETE]
 
         for perm in reset_perms:
             who = list(prec.acls.iter_perm_granted("_"+perm))
