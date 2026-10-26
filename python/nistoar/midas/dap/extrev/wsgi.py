@@ -141,10 +141,10 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
 
             status = self._get_review_status_for(id)
                 
-        except ObjectNotFound as ex:
+        except dbio.ObjectNotFound as ex:
             return self.send_error_obj(404, "ID Not Found", "No DAP record with requested ID")
 
-        except NotAuthorized as ex:
+        except dbio.NotAuthorized as ex:
             self.log.warning("%s: Premature review in progress? %s", id, str(ex))
             return self.send_error_obj(401, "Not Authorized",
                                        f"Record is not set to accept review feedback at this time")

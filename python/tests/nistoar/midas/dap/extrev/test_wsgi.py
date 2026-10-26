@@ -207,6 +207,11 @@ class TestLegacyNPSFeedbackHandler(test.TestCase):
         self.assertEqual(fb['type'], "req")
         self.assertTrue(fb['description'].startswith("Visit NPS"))
 
+        try:
+            svc.submit(id)
+        except Exception as ex:
+            raise
+
         # now approve
         self.resp = []
         post['wsgi.input'] = StringIO(json.dumps({"reviewResponse": True}))

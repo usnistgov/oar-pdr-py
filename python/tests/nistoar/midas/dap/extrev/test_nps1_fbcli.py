@@ -72,7 +72,11 @@ class TestExternalReviewFeedbackClient(test.TestCase):
         self.cli = ExternalReviewFeedbackClient(self.cfg)
 
     def tearDown(self):
-        self.cli.send_feedback(RECID, "requested", info_url='')
+        try:
+            self.cli._send("reset", {})
+        except Exception as ex:
+            print("tearDown: WARNING: "+repr(ex))
+            pass
 
     def test_get_review(self):
         rev = self.cli.get_review(RECID)
