@@ -35,8 +35,10 @@ from ...exceptions import IDNotFound
 from ... import utils
 from ...preserve.bagit import NISTBag, BagBuilder, utils as bagutils
 from ....nerdm.convert import latest as nerdm_latest
+from ...constants import ARK_PFX_PAT
 
 PENDING_VERSION_SFX = "+ (in edit)"
+arkpfx = re.compile(ARK_PFX_PAT)
 
 class HeadBagCacher(object):
     """
@@ -203,17 +205,17 @@ class UpdatePrepService(object):
         if scfg.get('service_endpoint'):
             self.mdsvc  = rmm.MetadataClient(scfg.get('service_endpoint'))
 
-    def prepper_for(self, pdrid: str, aipid: str, version: str=None, log=None):
+    def prepper_for(self, pdrid: str, version: str=None, log=None, aipid: str=None):
         """
         return an UpdatePrepper instance for the SIP that has been assigned given 
         PDR and AIP identifiers.
         :param str pdrid:    the PDR identifier assigned to the SIP.  This is used to pull the previously 
                              published NERDm record from the RMM
-        :param str aipid:    the AIP identifier associated with the PDR ID.  This is used to pull 
-                             the previously preserved head bag.
         :param str version:  the specific version to retrieve of the publication to draw from.  If None
                              (typically), the latest version is retrieved
         :param Logger log:   the logger to record messages to during preparation
+        :param str aipid:    the AIP identifier associated with the PDR ID.  This is used to pull 
+                             the previously preserved head bag.
         """
         return UpdatePrepper(pdrid, aipid, self.cfg, self.cacher, self.mdsvc,
                              self.storedir, version, log)
@@ -236,7 +238,7 @@ class UpdatePrepper(object):
         the UpdatePrepService.prepper_for() factory method. 
         """
         self.pdrid = pdrid
-        self.aipid = aipid
+        self.aipid = aipid  # This can be None at construction time
         self.cfg = config
         self.cacher = headcacher
         self.storedir = storedir
@@ -247,14 +249,21 @@ class UpdatePrepper(object):
             os.mkdir(self.mdcache)
         if not os.path.isdir(self.mdcache):
             raise StateException("UpdatePrepper: not a directory: "+self.mdcache)
+        self._cachestale = True
 
         if not log:
             _sys = system.get_global_system() or system
-            nm = self.aipid
-            if len(nm) > 12:
-                nm = "..."+nm[8:]
+            nm = arkpfx.sub('', self.pdrid)
             log = _sys.getSysLogger().getChild(nm)
         self.log = log
+
+    def _determine_aipid(self):
+        latest_nerdf = self.cache_nerdm_rec()
+        if latest_nerdf:
+            nerd = utils.read_nerd(latest_nerdf)
+            self.aipid = nerd.get("pdr:aipid")
+            if not self.aipid and nerd.get('ediid'):
+                self.aipid = arkpfx.sub('', nerd['ediid'])
 
     def cache_headbag(self):
         """
@@ -262,6 +271,8 @@ class UpdatePrepper(object):
         :rtype: str giving the path to the cached, serialized head bag or 
                 None if no such bag exists.  
         """
+        if not self.aipid:
+            self._determine_aipid()
         try:
             return self.cacher.cache_headbag(self.aipid, self.version)
         except CorruptedBagError as ex:
@@ -276,8 +287,9 @@ class UpdatePrepper(object):
         :rtype: str giving the path to the cached NERDm record, or
                 None if no such bag exists.  
         """
-        out = os.path.join(self.mdcache, self.aipid+".json")
-        if not os.path.exists(out):
+        shortid = arkpfx.sub('', self.pdrid)
+        out = os.path.join(self.mdcache, shortid+".json")
+        if not os.path.exists(out) or self._cachestale:
             if not self.mdcli:
                 # not configured to consult repository
                 return None
@@ -285,6 +297,7 @@ class UpdatePrepper(object):
                 data = self.mdcli.describe(self.pdrid)
                 with open(out, 'w') as fd:
                     json.dump(data, fd, indent=2)
+                self._cachestale = False
             except IDNotFound as ex:
                 return None
         return out
@@ -297,6 +310,8 @@ class UpdatePrepper(object):
         """
         if not self.storedir:
             return None
+        if not self.aipid:
+            self._determine_aipid()
 
         foraip = [f for f in os.listdir(self.storedir)
                     if f.startswith(self.aipid+'.') and
@@ -378,17 +393,20 @@ class UpdatePrepper(object):
         """
         mdbag = destbag
         if os.path.exists(mdbag):
-            self.log.warning("Removing existing metadata bag for id="+self.aipid+
+            self.log.warning("Removing existing metadata bag for id="+(self.aipid or self.pdrid)+
                              "\n   (may indicate earlier failure)")
             shutil.rmtree(mdbag)
 
-        latest_nerd = self.cache_nerdm_rec()
-        if not latest_nerd:
+        latest_nerdf = self.cache_nerdm_rec()
+        if not latest_nerdf:
+            # will now be None if pdrid has never been published before
             self.log.info("ID not published previously; will start afresh")
             return False
+        nerd = utils.read_nerd(latest_nerdf)
+        if not self.aipid:
+            self.aipid = nerd.get('pdr:aipid') or arkpfx.sub('', nerd.get('ediid'))
         version = self.version
         if not version:
-            nerd = utils.read_nerd(latest_nerd)
             version = nerd.get('version', '0')
 
         # This has been published before; look for a head bag in the store dir
@@ -406,7 +424,7 @@ class UpdatePrepper(object):
         # This dataset was "published" without a preservation bag
         self.log.info("No previous bag available; preparing based on " +
                       "existing published NERDm record")
-        self.create_from_nerdm(latest_nerd, mdbag)
+        self.create_from_nerdm(latest_nerdf, mdbag)
         return True
 
 
@@ -421,7 +439,7 @@ class UpdatePrepper(object):
         """
         if os.path.exists(mdbag):
             raise StateException("UpdatePrepper: metadata bag already exists "+
-                                 "for id=" + self.aipid + ": " + mdbag)
+                                 "for id=" + (self.aipid or self.pdrid) + ": " + mdbag)
         parent = os.path.dirname(mdbag)
         if not os.path.isdir(parent):
             raise StateException("metadata bag working space does not exist: "+
@@ -487,7 +505,7 @@ class UpdatePrepper(object):
         """
         if os.path.exists(mdbag):
             raise StateException("UpdatePrepper: metadata bag already exists "+
-                                 "for id=" + self.aipid + ": "+mdbag)
+                                 "for id=" + (self.aipid or self.pdrid) + ": "+mdbag)
         parent = os.path.dirname(mdbag)
         bagname = os.path.basename(mdbag)
         if not os.path.isdir(parent):
@@ -556,7 +574,8 @@ class UpdatePrepper(object):
         return self._latest_version_from_nerdmfile(latest_nerd)
 
     def _latest_version_from_nerdcache(self):
-        nerdf = os.path.join(self.mdcache, self.aipid+".json")
+        shortid = arkpfx.sub('', self.pdrid)
+        nerdf = os.path.join(self.mdcache, shortid+".json")
         return self._latest_version_from_nerdmfile(nerdf)
 
     def _latest_version_from_dir(self, bagparent):

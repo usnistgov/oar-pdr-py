@@ -177,6 +177,7 @@ class NERDmBasedBagger(SIPBagger):
         sipid = ARK_PFX_RE.sub('', sipid)
         self._sipid = sipid
         self._id = id
+        self._aipid = None
         self._conv = convention
 
         syslog = self.getSysLogger().getChild(convention)
@@ -278,11 +279,14 @@ class NERDmBasedBagger(SIPBagger):
         raise NotImplementedError()
 
     @abstractmethod
-    def _aipid_for(self, pdrid):
+    def _new_aipid_for(self, pdrid):
         """
         determine the AIP ID to be used for preserving datasets with the given PDR ID.
+
         The details will depend on the SIP convention.  It can be determined by the SIP
-        ID itself or minted anew as appropriate.  
+        ID itself or minted anew as appropriate.  This is intended only for SIPs that 
+        have not previously been published; when revising a publication, the previously 
+        published record must be consulted.
         """
         raise NotImplementedError()
 
@@ -318,6 +322,8 @@ class NERDmBasedBagger(SIPBagger):
                 self.isrevision = True
                 self.log.info("Working bag initialized with metadata from previous "
                               "publication.")
+                if not self._aipid:
+                    self._aipid = prepper.aipid
 
                 # lock some metadata by saving them as annotations
                 self.bagbldr.ensure_bagdir()
@@ -330,7 +336,7 @@ class NERDmBasedBagger(SIPBagger):
                     if prop in nerdm:
                         locked_md[prop] = nerdm[prop]
                 if not 'pdr:aipid' in locked_md:
-                    locked_md['pdr:aipid'] = self._aipid_for(self.id)
+                    locked_md['pdr:aipid'] = self._aipid  # or self._new_aipid_for(self.id)
                 self._add_publisher_md(locked_md)
                 self._add_provider_md(locked_md)
                 self.bagbldr.update_annotations_for('', locked_md,
@@ -348,6 +354,8 @@ class NERDmBasedBagger(SIPBagger):
         if not os.path.exists(self.bagdir):
             self.bagbldr.ensure_bag_structure()
             self.bagbldr.assign_id(self.id)
+            if not self._aipid:
+                self._aipid = self._new_aipid_for(self.id)
 
             # set some minimal metadata
             version = "1.0.0"
@@ -355,7 +363,7 @@ class NERDmBasedBagger(SIPBagger):
                 ("@id", self.id),
                 ("version", version),
                 ("pdr:sipid", self.sipid),
-                ("pdr:aipid", self._aipid_for(self.id))
+                ("pdr:aipid", self._aipid)
             ])
             self._add_publisher_md(minimal_md)
             self._add_provider_md(minimal_md)
@@ -384,8 +392,7 @@ class NERDmBasedBagger(SIPBagger):
     def _get_prepper(self):
         if not self.prepsvc:
             return None
-        return self.prepsvc.prepper_for(self.id, self._aipid_for(self.id),
-                                        log=self.log.getChild("prepper"))
+        return self.prepsvc.prepper_for(self.id, log=self.log.getChild("prepper"), aipid=self._aipid)
 
     @abstractmethod
     def _add_publisher_md(self, resmd) -> None:
@@ -1540,7 +1547,7 @@ class PDPBagger(NERDmBasedBagger):
 
         return matches[0]
 
-    def _aipid_for(self, pdrid):
+    def _new_aipid_for(self, pdrid):
         """
         determine the AIP ID to be used for preserving datasets with the given PDR ID.
 
@@ -1554,7 +1561,7 @@ class PDPBagger(NERDmBasedBagger):
         return ARK_PFX_RE.sub('', pdrid).replace('/', ' ')
 
     def _determine_doi(self):
-        localid = self._aipid_for(self.id)
+        localid = self._new_aipid_for(self.id)
         naan = self.cfg.get('doi_naan')
         if not naan:
             raise PublishingStateException("DOI NAAN not set in configuration")

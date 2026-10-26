@@ -195,7 +195,7 @@ class TestUpdatePrepService(test.TestCase):
 
 
     def test_prepper_for(self):
-        prepper = self.prepsvc.prepper_for("hdl:20.88888/abcdefg", "ABCDEFG", "2.0")
+        prepper = self.prepsvc.prepper_for("hdl:20.88888/abcdefg", "2.0", aipid="ABCDEFG")
         self.assertEqual(prepper.cacher.cachedir, self.config['headbag_cache'])
         self.assertEqual(prepper.aipid, "ABCDEFG")
 
@@ -230,7 +230,7 @@ class TestUpdatePrepper(test.TestCase):
             }
         }
         self.prepsvc = prepupd.UpdatePrepService(self.config)
-        self.prepr = self.prepsvc.prepper_for("ark:/88434/pdr02d4t", "ABCDEFG")
+        self.prepr = self.prepsvc.prepper_for("ark:/88434/pdr02d4t", aipid="ABCDEFG")
         self.prepr.mdcli = self.mdcli
         self.prepr.cacher.distsvc = self.distcli
 
@@ -249,14 +249,14 @@ class TestUpdatePrepper(test.TestCase):
         self.assertTrue(os.path.exists(cached))
 
     def test_cache_nerdm_rec(self):
-        cached = os.path.join(self.headcache,"_nerd","ABCDEFG.json")
+        cached = os.path.join(self.headcache,"_nerd","pdr02d4t.json")
         self.assertTrue(not os.path.exists(cached))
 
         self.assertEqual(self.prepr.cache_nerdm_rec(), cached)
         self.assertTrue(os.path.exists(cached))
 
     def test_latest_version_from_nerdmfile(self):
-        cached = os.path.join(self.headcache,"_nerd","ABCDEFG.json")
+        cached = os.path.join(self.headcache,"_nerd","pdr02d4t.json")
         self.prepr.cache_nerdm_rec()        
         self.assertTrue(os.path.exists(cached))
         self.assertEqual(self.prepr._latest_version_from_nerdmfile(cached), "1.0")
@@ -265,12 +265,12 @@ class TestUpdatePrepper(test.TestCase):
         self.assertEqual(self.prepr._latest_version_from_nerdmfile(cached), "0")
         
     def test_latest_version_from_nerdcache(self):
-        cached = os.path.join(self.headcache,"_nerd","ABCDEFG.json")
+        cached = os.path.join(self.headcache,"_nerd","pdr02d4t.json")
         self.prepr.cache_nerdm_rec()        
         self.assertTrue(os.path.exists(cached))
         self.assertEqual(self.prepr._latest_version_from_nerdcache(), "1.0")
         self.assertEqual(self.prepr.latest_version("nerdm-cache"), "1.0")
-        self.prepr.aipid = "goober"
+        self.prepr.pdrid = "goober"
         self.assertEqual(self.prepr._latest_version_from_nerdcache(), "0")
         
     def test_latest_version_from_repo(self):
@@ -406,7 +406,7 @@ class TestUpdatePrepper(test.TestCase):
         root = os.path.join(self.workdir, "goober")
         self.assertTrue(not os.path.exists(root))
 
-        self.prepr = self.prepsvc.prepper_for("ark:/88484/goober", "goober")
+        self.prepr = self.prepsvc.prepper_for("ark:/88484/goober", aipid="goober")
         self.prepr.mdcli = self.mdcli
 
         self.assertFalse(self.prepr.create_new_update(root))
@@ -446,7 +446,7 @@ class TestUpdatePrepper(test.TestCase):
     
         cachedbag = os.path.join(self.headcache, "pdr2210.3_1_3.mbag0_3-5.zip")
 
-        self.prepr = self.prepsvc.prepper_for("ark:/88434/pdr2210", "pdr2210")
+        self.prepr = self.prepsvc.prepper_for("ark:/88434/pdr2210", aipid="pdr2210")
         self.prepr.mdcli = self.mdcli
         self.prepr.cacher.distsvc = self.distcli
 

@@ -168,9 +168,9 @@ class TestPDPBagger(test.TestCase):
 
     def test_aipid_for(self):
         self.set_bagger_for("pdp1:goob")
-        self.assertEqual(self.bgr._aipid_for("ark:/88888/pdp1-foopj"), "pdp1-foopj")
-        self.assertEqual(self.bgr._aipid_for("ark:/88434/pdp1-foopj"), "pdp1-foopj")
-        self.assertEqual(self.bgr._aipid_for("ark:/88434/pdp0-0029x"), "pdp0-0029x")
+        self.assertEqual(self.bgr._new_aipid_for("ark:/88888/pdp1-foopj"), "pdp1-foopj")
+        self.assertEqual(self.bgr._new_aipid_for("ark:/88434/pdp1-foopj"), "pdp1-foopj")
+        self.assertEqual(self.bgr._new_aipid_for("ark:/88434/pdp0-0029x"), "pdp0-0029x")
 
     def test_ensure_preparation(self):
         bagdir = self.bagparent / 'pdp1:goob'

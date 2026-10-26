@@ -1125,7 +1125,7 @@ class PDPublishingService(BagBasedPublishingService):
                                                                  deepcopy(self.cfg['repo_access']))
             prescfg['sip_dir'] = self.bagparent
             
-            return AIP1PreservationService(prescfg, log)
+            return AIP1PreservationService(prescfg, log, resumejobs=True)
 
         self.log.warning("No preservation service configured!")
         return None
