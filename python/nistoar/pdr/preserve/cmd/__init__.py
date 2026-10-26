@@ -107,7 +107,7 @@ def load_into(subparser: argparse.ArgumentParser, current_dests: list=None, as_c
     return out
 
 def create_preservation_service(config: Mapping, log: Logger):
-    return AIP1PreservationService(config, log)
+    return AIP1PreservationService(config, log, resumejobs=False)
 
 
         

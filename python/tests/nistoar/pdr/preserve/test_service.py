@@ -1,4 +1,4 @@
-import sys, os, json, pdb, logging, tempfile, zipfile, shutil, time, re
+import sys, os, json, logging, tempfile, zipfile, shutil, time, re
 from pathlib import Path
 import unittest as test
 
@@ -275,6 +275,10 @@ class TestPreservationService(test.TestCase):
         # preservation space will be all cleaned up (callback will have been called)
         self.assertTrue(not os.path.exists(self.bagdir))
         pworkdir = os.path.join(self.workdir, 'preserve',self.aipid)
+        for i in range(6):
+            if not os.path.exists(pworkdir):
+                break
+            time.sleep(0.25)
         self.assertTrue(not os.path.exists(pworkdir))
         lfile = self.svc.preslogdir/f"{self.aipid}.log"
         self.assertTrue(os.path.exists(lfile))
