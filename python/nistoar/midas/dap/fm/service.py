@@ -77,10 +77,13 @@ class MIDASFileManagerService:
         server's site certificate.  This is needed only if the required CA certs are not installed 
         into the OS.  If provided, this parameter will be passed is as a default for the API clients.
     ``windows_permissions``
-        (dict) _required_.  configuration for the Windows Permissions Manager batch-file integration.
-        ``batch_file_path`` and ``path_prefix`` are required.  Commands write ``path_prefix`` plus
-        the path relative to ``local_storage_root_dir``, using Windows path separators.  The Windows
-        Permissions Manager owns the base root that ``path_prefix`` is resolved under.
+        (dict) _optional_.  configuration for the Windows Permissions Manager batch-file integration.
+        Omit this section or set ``enabled`` to False to disable the integration without creating or
+        writing the batch file.  When the section is provided, ``enabled`` defaults to True, and
+        ``batch_file_path`` and ``path_prefix`` are required when enabled.  Commands write
+        ``path_prefix`` plus the path relative to ``local_storage_root_dir``, using Windows path
+        separators.  The Windows Permissions Manager owns the base root that ``path_prefix`` is
+        resolved under.
     """
 
     def __init__(self, config: Mapping, log: Logger=None,
@@ -132,11 +135,15 @@ class MIDASFileManagerService:
         self.wdcli = wdcli
 
         self.space_name_pats = [re.compile(p) for p in self.cfg.get('space_name_patterns', ['_'])]
-        self.winperms = WindowsPermissionsIntegration.from_config(
-            self.cfg.get('windows_permissions'),
-            self.log.getChild('windows_permissions'),
-            self._root_dir,
-        )
+        self.winperms = None
+        if 'windows_permissions' in self.cfg:
+            wpcfg = self.cfg['windows_permissions']
+            if not isinstance(wpcfg, Mapping) or wpcfg.get('enabled', True) is not False:
+                self.winperms = WindowsPermissionsIntegration.from_config(
+                    wpcfg,
+                    self.log.getChild('windows_permissions'),
+                    self._root_dir,
+                )
 
     def make_webdav_client(self, generic_url: str=None, _override=None):
         """
@@ -772,6 +779,9 @@ class FMSpace:
         """
         if perm not in perm_name:
             raise ValueError(f"perm: code not recognized/supported: {perm}")
+
+        if self.svc.winperms is None:
+            return
 
         relpath = self._storage_relative_path_for(resource)
         return self.svc.winperms.set_record_permission(

@@ -169,6 +169,49 @@ class MIDASFileManagerServiceTest(test.TestCase):
             self.cli.get_space(id)
         self.assertTrue(not (rootdir/id).exists())
 
+    def test_disabled_windows_permissions_does_not_create_batch_file(self):
+        self.batch_file.unlink()
+        wpcfg = self.config.pop('windows_permissions')
+        configs = [None, {'enabled': False}, dict(wpcfg, enabled=False)]
+
+        for index, config in enumerate(configs):
+            with self.subTest(windows_permissions=config):
+                if config is not None:
+                    self.config['windows_permissions'] = config
+                self.cli = fm.MIDASFileManagerService(
+                    self.config, nccli=self.cli.nccli, wdcli=self.cli.wdcli,
+                )
+                self.assertIsNone(self.cli.winperms)
+                self.assertFalse(self.batch_file.exists())
+
+                sp = self.cli.create_space_for("disabled%d" % index, "ava1")
+                self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "ava1"), fm.PERM_ALL)
+                sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_WRITE)
+                self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "gurn"), fm.PERM_WRITE)
+                self.assertFalse(self.batch_file.exists())
+
+    def test_disabled_windows_permissions_preserves_existing_batch_file(self):
+        existing = b"existing command\r\n"
+        self.batch_file.write_bytes(existing)
+        self.config['windows_permissions']['enabled'] = False
+        self.cli = fm.MIDASFileManagerService(
+            self.config, nccli=self.cli.nccli, wdcli=self.cli.wdcli,
+        )
+
+        sp = self.cli.create_space_for("disabled_existing", "ava1")
+        sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_WRITE)
+
+        self.assertEqual(self.batch_file.read_bytes(), existing)
+
+    def test_invalid_windows_permissions_configuration_is_rejected(self):
+        for config in [None, {}, False, "invalid", {'enabled': True}]:
+            with self.subTest(windows_permissions=config):
+                self.config['windows_permissions'] = config
+                with self.assertRaises(ConfigurationException):
+                    fm.MIDASFileManagerService(
+                        self.config, nccli=self.cli.nccli, wdcli=self.cli.wdcli,
+                    )
+
     def test_create_space_appends_owner_windows_permission(self):
         sp = self.cli.create_space_for("rec0001", "ava1")
 
