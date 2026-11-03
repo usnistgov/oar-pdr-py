@@ -911,6 +911,10 @@ class ProjectACLsHandler(ProjectRecordHandler):
             raise ValueError("Missing ProjectRecord id")
 
 
+    def _save_acls(self, prec, previous_acls):
+        """Save an ACL update; specialized handlers may synchronize file access."""
+        prec.save(dbio.ACLs.ADMIN)
+
     def do_OPTIONS(self, path):
         return self.send_options(["GET", "POST", "PUT", "PATCH", "DELETE"])
 
@@ -979,9 +983,13 @@ class ProjectACLsHandler(ProjectRecordHandler):
                                         "Record with requested identifier not found", self._id)
 
         if path in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
+            previous_acls = {
+                perm: set(prec.acls.iter_perm_granted(perm))
+                for perm in dbio.ACLs.OWN
+            }
             prec.acls.grant_perm_to(path, identity)
-            prec.save(dbio.ACLs.ADMIN)
-            return self.send_json(prec.to_dict().get('acls', {}).get(path,[]))
+            self._save_acls(prec, previous_acls)
+            return self.send_json(prec.to_dict().get('acls', {}).get(path, []))
 
         return self.send_error_resp(405, "POST not allowed on this permission type",
                                     "Updating specified permission is not allowed")
@@ -1035,6 +1043,11 @@ class ProjectACLsHandler(ProjectRecordHandler):
             return self.send_error_resp(404, "ID not found",
                                         "Record with requested identifier not found", self._id)
 
+        previous_acls = {
+            perm: set(prec.acls.iter_perm_granted(perm))
+            for perm in dbio.ACLs.OWN
+        }
+
         for perm in input:
             if perm not in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
                 return self.send_error_resp(405, f"{meth} not allowed on provided permission type",
@@ -1047,7 +1060,7 @@ class ProjectACLsHandler(ProjectRecordHandler):
             except dbio.NotAuthorized as ex:
                 return self.send_unauthorized()
 
-        prec.save(dbio.ACLs.ADMIN)
+        self._save_acls(prec, previous_acls)
         acls = prec.to_dict().get('acls', {})
         if path:
             return self.send_json(acls.get(path, []))

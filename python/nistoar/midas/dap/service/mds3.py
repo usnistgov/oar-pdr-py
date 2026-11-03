@@ -30,8 +30,10 @@ from functools import reduce
 from ...dbio import (DBClient, DBClientFactory, ProjectRecord, AlreadyExists, NotAuthorized, ACLs,
                      InvalidUpdate, ObjectNotFound, PartNotAccessible, NotEditable, DBIORecordException,
                      ProjectService, ProjectServiceFactory, DAP_PROJECTS)
-from ...dbio.wsgi.project import (MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
-                                  ProjectSelectionHandler, ProjectStatusHandler, ServiceApp)
+from ...dbio.wsgi.project import (
+    MIDASProjectApp, ProjectDataHandler, ProjectInfoHandler,
+    ProjectSelectionHandler, ProjectStatusHandler, ProjectACLsHandler, ServiceApp
+)
 from ...dbio import status, ANONYMOUS, PUBLIC_GROUP, restore
 from ..review import DAPReviewer, DAPNERDmReviewValidator
 from ..extrev import ExternalReviewException, create_external_review_client
@@ -3098,6 +3100,43 @@ class DAPServiceFactory(ProjectServiceFactory):
         return out
 
     
+class DAPProjectACLsHandler(ProjectACLsHandler):
+    """Synchronize newly shared individual users through the file manager."""
+
+    def _save_acls(self, prec, previous_acls):
+        if not prec.authorized(ACLs.ADMIN):
+            raise NotAuthorized(self.who.actor, "update record permissions")
+
+        fmcli = self.svc._fmcli
+        if fmcli:
+            current_acls = {
+                perm: set(prec.acls.iter_perm_granted(perm))
+                for perm in ACLs.OWN
+            }
+            previous_users = set().union(*previous_acls.values())
+            current_users = set().union(*current_acls.values())
+
+            permissions = {}
+            for userid in sorted(current_users - previous_users):
+                # This integration handles individual usernames, not DBIO groups.
+                if userid == prec.owner or userid == ANONYMOUS or ":" in userid:
+                    continue
+
+                if userid in current_acls[ACLs.ADMIN]:
+                    permissions[userid] = "All"
+                elif userid in current_acls[ACLs.DELETE]:
+                    permissions[userid] = "Delete"
+                elif userid in current_acls[ACLs.WRITE]:
+                    permissions[userid] = "Write"
+                else:
+                    permissions[userid] = "Read"
+
+            if permissions:
+                fmcli.set_space_permissions(prec.id, permissions)
+
+        super()._save_acls(prec, previous_acls)
+
+
 class DAPApp(MIDASProjectApp):
     """
     A MIDAS ServiceApp supporting a DAP service following the mds3 conventions
@@ -3118,6 +3157,7 @@ class DAPApp(MIDASProjectApp):
         self._data_update_handler = DAPProjectDataHandler
         self._info_update_handler = DAPProjectInfoHandler
         self._selection_handler = DAPProjectSelectionHandler
+        self._acls_update_handler = DAPProjectACLsHandler
 
 class DAPProjectDataHandler(ProjectDataHandler):
     """
