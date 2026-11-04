@@ -66,9 +66,10 @@ class PublishingMonitor(ABC):
 
         :param Callable onchange:  a function to call when a submitted SIP changes state or 
                                    reaches a state indicating the completion of its 
-                                   publication processing.  This function takes three arguments:
-                                   the SIP-ID, the publication state, and a message about its 
-                                   current state.
+                                   publication processing.  This function takes four arguments:
+                                   the SIP-ID, the publication state, a message about its 
+                                   current state, and an object of properties and values.  
+                                   The last object can None.  
         :param int     cyclesecs:  the number of seconds to allow to pass before starting a new
                                    before updating the status of the SIPs in the queue.
         :param Logger        log:  the log to report activity to.
@@ -119,8 +120,11 @@ class PublishingMonitor(ABC):
     @abstractmethod
     def state_of(self, sipid: str) -> Tuple[str, str]:
         """
-        return the remember publishing state of the SIP as a tuple of the state label and
-        its message.
+        return the remembered publishing state of the SIP as a tuple of the state label and
+        its message.  The tuple can optional contain a third element containing a JSON-encoded
+        object of additional metadata describing the state.  This is used, in particular, when 
+        the state label is 'published': the metadata can include when it was published and under
+        what public identifier.
         """
         raise NotImplemented()
 
@@ -133,7 +137,7 @@ class PublishingMonitor(ABC):
     def update_statuses_in_queue(self):
         """
         iterate (once) through the SIPs in the monitor queue file and update their statuses, 
-        calling the "on-complete" function when a status changes.
+        calling the "on-change" function when a status changes.
 
         The updated status are written back to the queue file, removing any SIPs that have 
         reached any of the "not found", "submitted", and "failed" states.  
@@ -159,8 +163,11 @@ class PublishingMonitor(ABC):
 
             if newstat[0] in done_states or newstat[0] != stats[sipid][0]:
                 # SIP has either changed state or reached a done state
+                data=None
+                if len(newstat) > 2:
+                    data = newstat[2]
                 try:
-                    self._onchange(sipid, newstat[0], newstat[1])
+                    self._onchange(sipid, newstat[0], newstat[1], data)
                 except Exception as ex:
                     self.log.exception("Failed to process sipid=" + sipid + " that reached state=" +
                                        newstat[0] + ": " + str(ex))
@@ -316,10 +323,22 @@ class LocalPublishingMonitor(FileBasedPublishingMonitor):
     
     def state_of(self, sipid: str) -> Tuple[str, str]:
         """
-        return the remember publishing state of the SIP as a tuple of the state label and
+        return the remembered publishing state of the SIP as a tuple of the state label and
         its message.
         """
         stat = status.SIPStatus(sipid, self._statusdir)
+        md = {}
+        if stat.state == status.PUBLISHED:
+            # add some extra metadata with publishing details
+            userdata = stat.data.get('user', {})
+            pubtimeprop = 'last_published_time' if userdata.get('last_published_time') else 'updated_time'
+            if md.get(pubtimeprop):
+                md['published'] = stat.data['user'][pubtimeprop]
+            if userdata.get('pdrid'):
+                md['published_as'] = userdata['pdrid']
+        if md:
+            return (stat.state, stat.message, md)
+
         return (stat.state, stat.message)
 
 class PublishingMonitorQueue(AtomicAccessFile):

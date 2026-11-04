@@ -204,7 +204,7 @@ class TestPDRBagFinalization(test.TestCase):
         self.assertTrue(self.ingestdir/"staging"/"mds2-7223.json")
         self.assertTrue(self.dcdir/"staging"/"mds2-7223.json")
         self.assertEqual(self.mgr.steps_completed, self.mgr.FINALIZED)
-        self.assertEqual(self.mgr.get_state_property("nerdm:version"), "1.1.0")
+        self.assertEqual(self.mgr.get_state_property("version"), "1.1.0")
         self.assertIs(self.mgr.get_state_property("finalizing:has_data"), True)
 
     def test_has_no_data(self):

@@ -21,7 +21,7 @@ from logging import Logger
 from typing import Mapping
 
 from nistoar.midas import dbio
-from nistoar.midas.dbio import status as mstatus
+from nistoar.midas.dbio import status as mstatus, ObjectNotFound, NotAuthorized
 from nistoar.midas.dbio.project import ProjectService
 from nistoar.pdr.publish.service import status as pstatus
 from nistoar.pdr.publish.service.monitor import LocalPublishingMonitor, FileBasedPublishingMonitorClient
@@ -72,7 +72,7 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
 
         super(MIDASPublishingMonitor, self).__init__(statusdir, qfile, self.update_status, cyclesecs, log)
 
-    def update_status(self, sipid: str, state:str , message: str):
+    def update_status(self, sipid: str, state:str , message: str, data: Mapping=None):
         """
         process a detected change in the publishing state and update the MIDAS record status accordingly. 
         """
@@ -84,9 +84,11 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
             prec = self.projsvc.get_record(sipid)
         except ObjectNotFound as ex:
             self.log.warning("Failed to find record %s currently under watch", sipid)
+            raise
         except NotAuthorized as ex:
             self.log.error("Not authorized to read record %s as %s; has it really been submitted yet?",
                            sipid, str(self.projsvc.user))
+            raise
 
         if state == pstatus.SUBMITTED:
             prec.status.set_state(mstatus.ACCEPTED)
@@ -97,7 +99,11 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
                 prec.status.message = "Publication is being preserved and published"
         elif state == pstatus.PUBLISHED:
             if mstatus != mstatus.PUBLISHED:
-                prec.status.set_state(mstatus.PUBLISHED)
+                if data and data.get('published_as'):
+                    prec.status.publish(data['published_as'], data.get('version', '(unknown)'),
+                                        when=data.get('last_published_time', -1))
+                else:
+                    prec.status.set_state(mstatus.PUBLISHED)
                 prec.status.message = message
         elif state == pstatus.FAILED:
             if mstatus != mstatus.UNWELL:

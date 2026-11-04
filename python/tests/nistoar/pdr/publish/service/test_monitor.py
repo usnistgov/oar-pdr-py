@@ -77,7 +77,7 @@ class TestLocalPublishingMonitor(test.TestCase):
         self.sips = ["mds2:500"+str(i) for i in range(3)]
         self.client = monitor.FileBasedPublishingMonitorClient(self.qfile)
 
-    def onchange(self, sipid, state, msg):
+    def onchange(self, sipid, state, msg, data=None):
         monitor.PublishingMonitorQueue(self.changefile).add_SIP(sipid, state, msg)        
 
     def tearDown(self):
@@ -238,7 +238,10 @@ class TestLocalPublishingMonitor(test.TestCase):
         self.monitor.launch_monitoring(True, timeout=5)
         self.assertGreater(launchtime + 5, time.time())
         self.assertTrue(self.monitor.is_running())
-        time.sleep(0.25)
+        for i in range(0, 20):
+            if os.path.exists(self.changefile):
+                break
+            time.sleep(0.2)
 
         # should process sips[0] on first cycle
         ch = monitor.PublishingMonitorQueue.read(self.changefile)

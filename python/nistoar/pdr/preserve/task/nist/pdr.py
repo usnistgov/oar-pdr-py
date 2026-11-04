@@ -186,7 +186,7 @@ class PDRBagFinalization(fw.AIPFinalization):
 
         # stage NERDm record for publishing
         nerdm = bldr.bag.nerdm_record()
-        statemgr.set_state_property("nerdm:version", nerdm.get("version", "0"))
+        statemgr.set_state_property("version", nerdm.get("version", "0"))
         if self._ingester:
             try:
                 self._ingester.stage(nerdm, aipid)
