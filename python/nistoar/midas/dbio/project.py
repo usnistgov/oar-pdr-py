@@ -1464,7 +1464,7 @@ class ProjectService(MIDASSystem):
             _prec = self.dbcli.get_record_for(id, ACLs.WRITE)   # may raise ObjectNotFound/NotAuthorized
         stat = _prec.status
         if stat.state == status.EDIT:
-            return stat.status
+            return _prec
         if stat.state != status.PUBLISHED:
             raise NotEditable(_prec.id, "Project not in published state; "+
                                         "thus, it cannot be revised at this time", stat.state)
