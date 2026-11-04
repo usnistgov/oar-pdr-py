@@ -12,6 +12,7 @@ from nistoar.midas.dap.nerdstore.inmem import InMemoryResourceStorage
 from nistoar.midas.dbio.inmem import InMemoryDBClient
 from nistoar.midas.dbio.mongo import MongoDBClient
 from nistoar.midas.dbio.fsbased import FSBasedDBClient
+from nistoar.midas.cli.midasadm import MidasadmSuite
 from nistoar.nsd import service as nsd
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_regpub.")
@@ -53,7 +54,7 @@ def tearDownModule():
 class TestRegpubCmd(test.TestCase):
 
     def setUp(self):
-        self.cmd = cli.CLISuite("midasadm")
+        self.cmd = MidasadmSuite()
         self.cmd.load_subcommand(regpub)
 
     def tearDown(self):

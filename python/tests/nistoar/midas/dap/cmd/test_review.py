@@ -14,6 +14,7 @@ from nistoar.midas.dbio.mongo import MongoDBClient
 from nistoar.midas.dbio.fsbased import FSBasedDBClient
 from nistoar.midas.dbio import status
 from nistoar.midas.dbio.project import NotSubmitable
+from nistoar.midas.cli.midasadm import MidasadmSuite
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_review.")
 testdir = Path(__file__).parents[0]
@@ -53,7 +54,7 @@ def tearDownModule():
 class TestReviewCmd(test.TestCase):
 
     def setUp(self):
-        self.cmd = cli.CLISuite("midasadm")
+        self.cmd = MidasadmSuite()
         self.cmd.load_subcommand(review)
 
         root = os.path.join(tmpdir.name, "dbfiles")
