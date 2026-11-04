@@ -302,9 +302,9 @@ def main(progname, opts):
     dapcfg = cfg.get('dap_service')
     if dapcfg is None:
         if config.service:
-            if not opts.moncfgname:
+            if not opts.midascfgname:
                 raise cli.CommandFailure(progname, "--midas-config-name: empty value provided", 2)
-            dapcfg = config.service.get(opts.moncfgname, {})
+            dapcfg = config.service.get(opts.midascfgname, {})
         else:
             # it's actually likely that no DAP-specific configuration is needed
             dapcfg = {}
