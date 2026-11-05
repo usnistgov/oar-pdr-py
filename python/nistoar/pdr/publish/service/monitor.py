@@ -336,6 +336,8 @@ class LocalPublishingMonitor(FileBasedPublishingMonitor):
                 md['published'] = stat.data['user'][pubtimeprop]
             if userdata.get('pdrid'):
                 md['published_as'] = userdata['pdrid']
+            if userdata.get('version'):
+                md['version'] = userdata['version']
         if md:
             return (stat.state, stat.message, md)
 

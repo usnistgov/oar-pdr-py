@@ -212,7 +212,10 @@ class TestLocalPublishingMonitor(test.TestCase):
         self.assertEqual(ch[self.sips[1]][1], "darn")
         self.assertEqual(ch[self.sips[2]][0], status.PROCESSING)
 
-        s = status.SIPStatus(self.sips[2], self.statusdir).update(status.PUBLISHED, "Yay!")
+        s = status.SIPStatus(self.sips[2], self.statusdir)
+        s.update(status.PUBLISHED, "Yay!",
+                 {"last_published_time": 1793878719.7235043,
+                  'pdrid': 'ark:/88888/mds3-0001', 'version': '1.0.0'})
         self.monitor.update_statuses_in_queue()
         q = monitor.PublishingMonitorQueue.read(self.qfile)
         self.assertEqual(len(q), 1)

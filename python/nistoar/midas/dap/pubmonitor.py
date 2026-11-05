@@ -23,6 +23,7 @@ from typing import Mapping
 from nistoar.midas import dbio
 from nistoar.midas.dbio import status as mstatus, ObjectNotFound, NotAuthorized
 from nistoar.midas.dbio.project import ProjectService
+from nistoar.midas.wsgi import ServiceAppFactory as MIDASServiceAppFactory
 from nistoar.pdr.publish.service import status as pstatus
 from nistoar.pdr.publish.service.monitor import LocalPublishingMonitor, FileBasedPublishingMonitorClient
 from nistoar.base import config
@@ -222,14 +223,14 @@ def define_options(progname):
                         help="stop monitoring and exit after COUNT loops through the queue.  If COUNT is "+
                              "negative, monitoring will stop when the queue is empty (see also "+
                              "--until-empty).  If COUNT is 0 (default), the monitor will run forever.")
-    parser.add_argument("--dbio-url", type=str, dest='dburl', metavar='DBURL', default='inmem',
-                        help="the URL for accessing the DBIO database.  If the URL starts with 'mongodb://', "+
-                             "it will be taken as a MongoDB URL (it should include the database name and "+
-                             "user credentials).  If it starts with 'file:', a filesystem-based backend will "+
-                             "be assumed with the rest of the URL providing the root path to the DBIO "+
-                             "directory.  If it equals 'inmem' (the default when no configuration is "+
-                             "provided), an in-memory implementation will be assumed; this can be used for "+
-                             "testing.")
+    parser.add_argument("--dbio-url", type=str, dest='dburl', metavar='DBURL', default=None,
+                        help="the URL for accessing the DBIO database, overriding the configuration.  If "+
+                             "the URL starts with 'mongodb://', it will be taken as a MongoDB URL (it "+
+                             "should include the database name and user credentials).  If it starts with "+
+                             "'file:', a filesystem-based backend will be assumed with the rest of the "+
+                             "URL providing the root path to the DBIO directory.  If it equals 'inmem' "+
+                             "(the default when no configuration is provided), an in-memory implementation "+
+                             "will be assumed; this can be used for testing.")
     parser.add_argument("-l", "--logfile", type=str, dest='logfile', metavar='FILE', 
                         help="log messages to FILE, over-riding the configured logfile.  Use of this option "+
                              "also over-rides 'logserver' and 'logdir' in the configuration.")
@@ -295,9 +296,12 @@ def main(progname, opts):
 
     configure_log(opts, cfg, progname)
 
-    who = None
-    if opts.actor:
-        who = Agent("MIDASPublishingMonitor", Agent.AUTO, opts.actor, Agent.ADMIN)
+    who = opts.actor
+    if not who:
+        who = cfg.get('as_actor', dbio.AUTOADMIN)
+    if not who:
+        raise config.ConfigurationException("Misisng config parameter: as_actor")
+    who = Agent("MIDASPublishingMonitor", Agent.AUTO, opts.actor, Agent.ADMIN)
 
     dapcfg = cfg.get('dap_service')
     if dapcfg is None:
@@ -310,8 +314,8 @@ def main(progname, opts):
             dapcfg = {}
         if 'services' in dapcfg:
             # We have a midas-dbio configuration; extract the dap service configuration
-            extracted = ServiceAppFactory(dapcfg, {}).config_for_convention("dap", "def")
-            dapcfg = config.merge_config(extracted, dapcfg.get('dbio', {}))
+            extracted = MIDASServiceAppFactory(dapcfg, {}).config_for_convention("dap", "def")
+            dapcfg = config.merge_config(extracted, { 'dbio': dapcfg.get('dbio', {}) })
 
     if opts.qadd:
         cli = FileBasedPublishingMonitorClient(opts.qfile)
