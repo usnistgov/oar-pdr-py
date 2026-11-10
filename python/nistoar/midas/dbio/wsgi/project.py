@@ -1104,8 +1104,14 @@ class ProjectACLsHandler(ProjectRecordHandler):
         if parts[0] in [dbio.ACLs.READ, dbio.ACLs.WRITE, dbio.ACLs.ADMIN, dbio.ACLs.DELETE]:
             # remove the identity from the ACL
             try:
+                # Capture membership before removal so the hook can detect a complete unshare.
+                previous_acls = {
+                    perm: set(prec.acls.iter_perm_granted(perm))
+                    for perm in dbio.ACLs.OWN
+                }
                 prec.acls.revoke_perm_from(parts[0], parts[1])
-                prec.save()
+                # Use the same hook as PUT/PATCH so individual DAP ACL deletes reach FM.
+                self._save_acls(prec, previous_acls)
                 return self.send_ok(message="ID removed")
             except dbio.NotAuthorized as ex:
                 return self.send_unauthorized()

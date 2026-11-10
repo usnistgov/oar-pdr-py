@@ -8,7 +8,9 @@ from pathlib import Path
 
 from nistoar.base.config import ConfigurationException
 
-from .commands import format_setpermissions, rights_for
+from .commands import (
+    format_setpermissions, format_removepermissions, rights_for
+)
 from .errors import WindowsPermissionsAppendError
 from .paths import join_windows_paths, windows_path
 from .validation import is_under
@@ -42,38 +44,46 @@ class WindowsPermissionsIntegration:
         return cls(batch_file_path, config["path_prefix"], log)
 
     def set_record_permission(self, record_id, storage_relative_path, principal,
-                              permission_name, is_owner=False, event_type="permission_update"):
-        rights = rights_for(permission_name, is_owner)
-        target_path = join_windows_paths(self.path_prefix, storage_relative_path)
-        command = format_setpermissions(target_path, principal, rights)
+                              permission_name, is_owner=False,
+                              event_type="permission_update"):
+        """Append a grant or removal command for the record's storage path."""
+        # FM uses the label "None" to request removal of the user's share.
+        removing = permission_name == "None"
+
+        # Use FullControl as the rights value for removal commands.
+        # For grants, keep the existing mapping from the requested permission.
+        rights = rights_for(
+            "All" if removing else permission_name,
+            is_owner,
+        )
+        # Combine the configured Windows path prefix with the record's relative path.
+        target_path = join_windows_paths(
+            self.path_prefix, storage_relative_path
+        )
+        # Removal commands omit the control type; grant commands include Allow.
+        formatter = (
+            format_removepermissions if removing else format_setpermissions
+        )
+        command = formatter(target_path, principal, rights)
 
         self.log.info(
-            "Appending Windows permission command: record_id=%s event_type=%s principal=%s "
-            "target_path=%s rights=%s control_type=Allow",
-            record_id,
-            event_type,
-            principal,
-            target_path,
-            ",".join(rights),
+            "Appending Windows permission command: record_id=%s "
+            "event_type=%s command=%s",
+            record_id, event_type, command,
         )
 
         try:
+            # The existing writer locks the batch file and flushes the command to disk.
             append_line(self.batch_file_path, command)
         except OSError as ex:
             self.log.error(
-                "Failed to append Windows permission command: record_id=%s event_type=%s "
-                "principal=%s target_path=%s rights=%s control_type=Allow batch_file_path=%s error=%s",
-                record_id,
-                event_type,
-                principal,
-                target_path,
-                ",".join(rights),
-                self.batch_file_path,
-                str(ex),
+                "Failed to append Windows permission command: record_id=%s "
+                "event_type=%s command=%s batch_file_path=%s error=%s",
+                record_id, event_type, command, self.batch_file_path, str(ex),
             )
             raise WindowsPermissionsAppendError(
-                "Unable to append Windows permission command to %s: %s" %
-                (self.batch_file_path, str(ex))
+                "Unable to append Windows permission command to %s: %s"
+                % (self.batch_file_path, str(ex))
             ) from ex
 
         return command

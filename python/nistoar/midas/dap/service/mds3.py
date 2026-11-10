@@ -3101,7 +3101,7 @@ class DAPServiceFactory(ProjectServiceFactory):
 
     
 class DAPProjectACLsHandler(ProjectACLsHandler):
-    """Synchronize newly shared individual users through the file manager."""
+    """Synchronize new individual shares and complete unshares through FM."""
 
     def _save_acls(self, prec, previous_acls):
         if not prec.authorized(ACLs.ADMIN):
@@ -3116,13 +3116,18 @@ class DAPProjectACLsHandler(ProjectACLsHandler):
             previous_users = set().union(*previous_acls.values())
             current_users = set().union(*current_acls.values())
 
+            added_users = current_users - previous_users
+            # A user is fully unshared only when absent from all four standard ACLs.
+            removed_users = previous_users - current_users
+
             permissions = {}
-            for userid in sorted(current_users - previous_users):
-                # This integration handles individual usernames, not DBIO groups.
+            for userid in sorted(added_users | removed_users):
                 if userid == prec.owner or userid == ANONYMOUS or ":" in userid:
                     continue
 
-                if userid in current_acls[ACLs.ADMIN]:
+                if userid in removed_users:
+                    permissions[userid] = "None"
+                elif userid in current_acls[ACLs.ADMIN]:
                     permissions[userid] = "All"
                 elif userid in current_acls[ACLs.DELETE]:
                     permissions[userid] = "Delete"

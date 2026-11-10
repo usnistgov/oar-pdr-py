@@ -33,3 +33,11 @@ def format_setpermissions(target_path, principal, rights):
         clean("principal", principal),
         ",".join(rights),
     )
+
+
+def format_removepermissions(target_path, principal, rights):
+    return "removepermissions %s %s %s" % (
+        clean("path", target_path),
+        clean("principal", principal),
+        ",".join(rights),
+    )

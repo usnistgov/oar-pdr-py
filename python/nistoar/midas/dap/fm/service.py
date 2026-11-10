@@ -755,21 +755,40 @@ class FMSpace:
                             sync_windows: bool = True,
                             event_type: str = "permission_update",
                             is_owner: bool = False):
-        """
-        assign the permission level on the specified resource to the given user
-
-        :param str resource:  the path to the resource relative to the space's root folder
-        :param str   userid:  the id of the user of interest
-        :param int     perm:  the permission level code to set
-        """
+        """Assign permissions, or remove the user's share for PERM_NONE."""
         if perm not in perm_name:
             raise ValueError(f"perm: code not recognized/supported: {perm}")
 
-        self.svc.ensure_user(userid)
-        self._add_user(userid)
-        self.svc.nccli.set_user_permissions(userid, perm, self.root_davpath+'/'+resource)
+        if perm == PERM_NONE and userid == self.creator:
+            raise FileManagerOpConflict(
+                "Cannot remove the file-space creator's permissions"
+            )
+
+        target = self.root_davpath + '/' + resource
+
+        if perm == PERM_NONE:
+            # Query first: a retry may find that Nextcloud was already
+            # updated before a previous Windows batch append failed.
+            if self.get_permissions_for(resource, userid) != PERM_NONE:
+                # Delete the share to remove this user's direct Nextcloud access.
+                self.svc.nccli.delete_user_permissions(userid, target)
+
+                if self.get_permissions_for(resource, userid) != PERM_NONE:
+                    raise FileManagerException(
+                        f"Nextcloud still reports a share for {userid} on {target}"
+                    )
+
+            # Preserve the known-user entry so permission queries report None.
+            self._add_user(userid)
+        else:
+            self.svc.ensure_user(userid)
+            self._add_user(userid)
+            self.svc.nccli.set_user_permissions(userid, perm, target)
+
         if sync_windows:
-            self.sync_windows_permissions_for(resource, userid, perm, event_type, is_owner)
+            self.sync_windows_permissions_for(
+                resource, userid, perm, event_type, is_owner
+            )
 
     def sync_windows_permissions_for(self, resource: str, userid: str, perm: int,
                                      event_type: str = "permission_update",
