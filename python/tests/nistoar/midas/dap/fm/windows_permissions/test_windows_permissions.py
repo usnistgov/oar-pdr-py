@@ -76,6 +76,21 @@ class WindowsPermissionsIntegrationTest(test.TestCase):
                 b"setpermissions " + WINDOWS_PATH_PREFIX_BYTES + b"\\rec1\\rec1 bob Read,Write Allow\r\n",
             )
 
+    def test_unshare_appends_removepermissions_without_control_type(self):
+        integ = self._integration()
+
+        command = integ.set_record_permission("rec1", "rec1/rec1", "alice", "None")
+
+        self.assertEqual(
+            command,
+            rf"removepermissions {WINDOWS_PATH_PREFIX}\rec1\rec1 alice FullControl",
+        )
+        self.assertEqual(
+            self.batch_file.read_bytes(),
+            b"removepermissions " + WINDOWS_PATH_PREFIX_BYTES +
+            b"\\rec1\\rec1 alice FullControl\r\n",
+        )
+
     def test_config_validation(self):
         with self.assertRaises(ConfigurationException):
             WindowsPermissionsIntegration.from_config({
@@ -117,7 +132,6 @@ class WindowsPermissionsIntegrationTest(test.TestCase):
             lambda: integ.set_record_permission("rec1", r"C:\Other\rec1", "alice", "Read"),
             lambda: integ.set_record_permission("rec1", "rec1/one\nsetpermissions two", "alice", "Read"),
             lambda: integ.set_record_permission("rec1", "rec1/rec1", "bad user", "Read"),
-            lambda: integ.set_record_permission("rec1", "rec1/rec1", "alice", "None"),
             lambda: integ.set_record_permission("rec1", "rec1/rec1", "alice", "Bogus"),
         ]
         for bad_call in bad_calls:

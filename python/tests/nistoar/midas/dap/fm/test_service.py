@@ -188,6 +188,8 @@ class MIDASFileManagerServiceTest(test.TestCase):
                 self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "ava1"), fm.PERM_ALL)
                 sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_WRITE)
                 self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "gurn"), fm.PERM_WRITE)
+                sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_NONE)
+                self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "gurn"), fm.PERM_NONE)
                 self.assertFalse(self.batch_file.exists())
 
     def test_disabled_windows_permissions_preserves_existing_batch_file(self):
@@ -200,7 +202,9 @@ class MIDASFileManagerServiceTest(test.TestCase):
 
         sp = self.cli.create_space_for("disabled_existing", "ava1")
         sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_WRITE)
+        sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_NONE)
 
+        self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "gurn"), fm.PERM_NONE)
         self.assertEqual(self.batch_file.read_bytes(), existing)
 
     def test_invalid_windows_permissions_configuration_is_rejected(self):
@@ -242,6 +246,82 @@ class MIDASFileManagerServiceTest(test.TestCase):
                 b"setpermissions " + win_path_prefix + b"\\rec0002\\rec0002 ava1 FullControl Allow\r\n"
                 b"setpermissions " + win_path_prefix + b"\\rec0002\\rec0002 gurn Read,Write Allow\r\n",
             )
+
+    def test_simulated_unshare_preserves_other_shares_and_files(self):
+        sp = self.cli.create_space_for("unshare1", "ava1")
+        sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_WRITE)
+        sp.set_permissions_for(sp.uploads_folder, "other", fm.PERM_READ)
+        uploaded = sp.root_dir / sp.uploads_folder / "keep.txt"
+        uploaded.write_text("Keep this uploaded file.")
+
+        sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_NONE)
+
+        self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "gurn"), fm.PERM_NONE)
+        self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "ava1"), fm.PERM_ALL)
+        self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "other"), fm.PERM_READ)
+        self.assertEqual(uploaded.read_text(), "Keep this uploaded file.")
+        self.assertIn("gurn", sp.get_known_users())
+        self.assertTrue(self.batch_file.read_bytes().endswith(
+            b"removepermissions " + win_path_prefix +
+            b"\\unshare1\\unshare1 gurn FullControl\r\n"
+        ))
+
+    def test_simulated_unshare_can_be_repeated(self):
+        sp = self.cli.create_space_for("unshare2", "ava1")
+        sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_WRITE)
+
+        for _ in range(2):
+            sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_NONE)
+
+        self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "gurn"), fm.PERM_NONE)
+        self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "ava1"), fm.PERM_ALL)
+        command = b"removepermissions " + win_path_prefix + b"\\unshare2\\unshare2 gurn FullControl"
+        self.assertEqual(self.batch_file.read_bytes().splitlines().count(command), 2)
+
+    def test_simulated_delete_user_permissions_is_idempotent(self):
+        sp = self.cli.create_space_for("unshare3", "ava1")
+        sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_WRITE)
+
+        for _ in range(2):
+            self.cli.nccli.delete_user_permissions("gurn", sp.uploads_davpath)
+
+        self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "gurn"), fm.PERM_NONE)
+        self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "ava1"), fm.PERM_ALL)
+
+    def test_simulated_delete_user_permissions_rejects_missing_directory(self):
+        with self.assertRaises(FileManagerResourceNotFound):
+            self.cli.nccli.delete_user_permissions("gurn", "missing-directory")
+
+    def test_simulated_unshare_retries_after_windows_append_failure(self):
+        sp = self.cli.create_space_for("unshare4", "ava1")
+        sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_WRITE)
+        before = self.batch_file.read_bytes()
+
+        with self.assertLogs("file-manager.windows_permissions", level="ERROR"):
+            with patch("nistoar.midas.dap.fm.windows_permissions.integration.append_line",
+                       side_effect=OSError("batch file unavailable")):
+                with self.assertRaises(WindowsPermissionsAppendError):
+                    sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_NONE)
+
+        self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "gurn"), fm.PERM_NONE)
+        self.assertEqual(self.batch_file.read_bytes(), before)
+
+        sp.set_permissions_for(sp.uploads_folder, "gurn", fm.PERM_NONE)
+
+        self.assertTrue(self.batch_file.read_bytes().endswith(
+            b"removepermissions " + win_path_prefix +
+            b"\\unshare4\\unshare4 gurn FullControl\r\n"
+        ))
+
+    def test_simulated_unshare_protects_creator(self):
+        sp = self.cli.create_space_for("unshare5", "ava1")
+        before = self.batch_file.read_bytes()
+
+        with self.assertRaises(FileManagerOpConflict):
+            sp.set_permissions_for(sp.uploads_folder, "ava1", fm.PERM_NONE)
+
+        self.assertEqual(sp.get_permissions_for(sp.uploads_folder, "ava1"), fm.PERM_ALL)
+        self.assertEqual(self.batch_file.read_bytes(), before)
 
     def test_windows_permission_append_failure_is_propagated(self):
         if self.batch_file.exists():

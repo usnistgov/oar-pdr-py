@@ -103,7 +103,7 @@ class SimNextcloudApi(NextcloudApi):
 
     def delete_user_permissions(self, user_name, dir_name):
         dir = self.rootdir / dir_name
-        if not dir.exists(dir):
+        if not dir.exists():
             raise FileManagerResourceNotFound(dir_name, "folder does not exist")
 
         if dir.is_file():
@@ -111,7 +111,7 @@ class SimNextcloudApi(NextcloudApi):
                                          "Method not allowed", "Can only delete permissions on folders")
 
         data = self.get_user_permissions(dir_name)
-        data.set_default('ocs', { 'data': [] })
+        data.setdefault('ocs', {}).setdefault('data', [])
         if any(p.get('share_with') == user_name for p in data['ocs']['data']):
             newperms = [p for p in data['ocs']['data'] if p['share_with'] != user_name]
             with open(dir/self.PERMFILE, 'w') as fd:
