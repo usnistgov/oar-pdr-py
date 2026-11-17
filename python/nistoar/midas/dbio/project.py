@@ -41,6 +41,7 @@ _STATUS_ACTION_PUBLISH  = "publish"
 _STATUS_ACTION_REVISE   = "revise"
 
 DEF_PUBLISHED_SUFFIX = "_published"
+BAD_NAME_RE = re.compile(r'(^[\.#])|([<>])')
 
 class ProjectService(MIDASSystem):
     """
@@ -75,6 +76,8 @@ class ProjectService(MIDASSystem):
     STATUS_ACTION_UPDATEPREP = _STATUS_ACTION_UPDATEPREP
     STATUS_ACTION_RESTORE  = _STATUS_ACTION_RESTORE  
     STATUS_ACTION_REVISE   = _STATUS_ACTION_REVISE
+
+    _bad_name_re = BAD_NAME_RE
 
     def __init__(self, project_type: str, dbclient_factory: DBClientFactory, config: Mapping={},
                  who: Agent=None, log: Logger=None, _subsys=None, _subsysabbrev=None):
@@ -155,6 +158,11 @@ class ProjectService(MIDASSystem):
         :raises AlreadyExists:  if a record owned by the user already exists with the given name or
                                 the given ``dbid``.
         """
+        # reject sus names
+        if self._bad_name_re.search(name):
+            raise InvalidUpdate("Illegal record name requested",
+                                errors=["Name contains illegal characters or sequences"])
+        
         localid = None
         shoulder = None
         if dbid:
