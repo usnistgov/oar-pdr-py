@@ -182,7 +182,8 @@ class TestFlaskApp(test.TestCase):
                                headers=self.authhdrs)
         data = resp.json
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(data['file_count'], -1)
+        self.assertEqual(data['file_count'], 2)
+        self.assertEqual(data['folder_count'], 1)
         self.assertEqual(data['created_by'], 'ava1')
         self.assertEqual(data['users'], ['ava1'])
         self.assertEqual(data['id'], "mds3:0030")
