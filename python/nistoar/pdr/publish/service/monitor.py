@@ -338,6 +338,8 @@ class LocalPublishingMonitor(FileBasedPublishingMonitor):
                 md['published_as'] = userdata['pdrid']
             if userdata.get('version'):
                 md['version'] = userdata['version']
+            if userdata.get('aipid'):
+                md['archived_at'] = f"aip:{userdata['aipid']}"
         if md:
             return (stat.state, stat.message, md)
 

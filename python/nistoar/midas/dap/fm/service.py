@@ -211,8 +211,8 @@ class MIDASFileManagerService:
                              that originally published the dataset or otherwise originally created
                              the space.
         :param dict published_files:  a dictionary describing the previously published files.  Each
-                             key is a path a file (relative to the uploads directory), and the 
-                             value are is a dictionary containing the file metadata: "size" giving 
+                             key is a path a file (relative to the uploads directory), and each
+                             value is a dictionary containing the file metadata: "size" giving 
                              file's size in bytes, and checksum, giving the (SHA256) checksum hash.
         """
         if published_files and \
@@ -238,21 +238,32 @@ class MIDASFileManagerService:
 
         # create the previously published list files
         if published_files:
+            # we will update the summary, so load it
+            summ = space._load_summary()
+            
             # determine the hierarchy
             files = sorted(published_files, key=lambda f: f['filepath'], reverse=True)
             foldercnts = {}
+            fc = 0
             for file in files:
                 fp = Path(file['filepath'])
-                for fldr in fp.parents:
+                for fldr in fp.parents:       # Note: last fldr will be '.'
                     fldr = str(fldr)
                     if fldr not in foldercnts:
                         foldercnts[fldr] = []
-                fldr = str(fp.parents[0])
-                file['name'] = fp.name
-                foldercnts[fldr].append(file)
+                if file.get('type') == 'folder':
+                    if file['filepath'] not in foldercnts:
+                        foldercnts[file['filepath']] = []
+                else:
+                    fc += 1
+                    fldr = str(fp.parents[0])
+                    file['name'] = fp.name
+                    foldercnts[fldr].append(file)
+            summ['file_count'] = fc
 
             # create needed directories
             prob = []
+            fc = 0
             for fldr in sorted(foldercnts.keys()):
                 fldrpth = space.root_dir / space.uploads_folder / fldr
                 if not fldrpth.exists():
@@ -261,12 +272,15 @@ class MIDASFileManagerService:
                 elif not fldrpth.is_dir():
                     prob.append(fldr)
                     continue
+                fc += 1
 
                 filelist = []
                 for file in foldercnts[fldr]:
                     filelist.append(self._format_published_file(file))
                 self.wdcli.wdcli.upload_to(self._filelist2listfile(filelist).encode('utf-8'),
                                            '/'.join([space.uploads_davpath, fldr, self._PPFName]))
+            summ['folder_count'] = fc - 1  # (don't count '.')
+            space._cache_fm_summary(summ)
             
             if prob:
                 # should not happen

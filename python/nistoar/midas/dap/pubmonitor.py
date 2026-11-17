@@ -29,6 +29,7 @@ from nistoar.pdr.publish.service.monitor import LocalPublishingMonitor, FileBase
 from nistoar.base import config
 from nistoar.pdr.utils.cli import CommandFailure
 from nistoar.pdr.utils.prov import Agent
+from nistoar.pdr.constants import ARK_PFX_PAT
 
 class MIDASPublishingMonitor(LocalPublishingMonitor):
     """
@@ -101,8 +102,10 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
         elif state == pstatus.PUBLISHED:
             if mstatus != mstatus.PUBLISHED:
                 if data and data.get('published_as'):
+                    aipid = re.sub(ARK_PFX_PAT, '', data['published_as'])
                     prec.status.publish(data['published_as'], data.get('version', '(unknown)'),
-                                        when=data.get('last_published_time', -1))
+                                        data.get('archived_at', f"aip:{aipid}"),
+                                        data.get('last_published_time', -1))
                 else:
                     prec.status.set_state(mstatus.PUBLISHED)
                 prec.status.message = message

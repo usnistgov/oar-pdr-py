@@ -214,7 +214,7 @@ class URLRestorer(ProjectRestorer):
     def recover(self):
         self.free()
         try:
-            resp = requests.get(self._src, hdrs={ "Accept": "application/json" })
+            resp = requests.get(self._src, headers={ "Accept": "application/json" })
 
             if resp.status_code > 500:
                 raise DBIOException("Server error while accessing project data archive: "+resp.reason)

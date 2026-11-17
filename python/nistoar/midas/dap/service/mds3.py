@@ -3134,15 +3134,15 @@ class DAPService(ProjectService):
         
     def _revise(self, prec: ProjectRecord):
         # restore data to nerdstore
-        msg = f"Creating Revision based on last published version"
+        msg = f"Creating revision based on last published version"
         provact = Action(Action.PUT, self.who, msg)
         self._restore_last_published_data(prec, msg, provact, False)
 
         # populate file space
         if self._fmcli:
-            nerdfiles = self._strore.open(prec.id).files().get_files()
+            nerdfiles = self._store.open(prec.id).files.get_files()
             dfiles = [n.get('filepath','') for n in nerdfiles if not nerdutils.is_type(n, "Collection")]
-            self.fmcli.revive_space(id, self.user, dfiles)
+            self._fmcli.revive_space(prec.id, self.who.actor, dfiles)
         
         if not prec.data.get('version', "").endswith('+'):
             prec.data['version'] = prec.data.get('version', "") + "+"
@@ -3175,7 +3175,7 @@ class DAPService(ProjectService):
 
             if reset_state:
                 prec.status.set_state(status.PUBLISHED)
-            prec.status.act(self.STATUS_ACTION_RESTORE, msg or defmsg)
+            prec.status.act(self.STATUS_ACTION_RESTORE, msg or defmsg, self.who.actor)
             prec.save()
             
         except Exception as ex:

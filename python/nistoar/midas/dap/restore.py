@@ -40,19 +40,19 @@ class AIPRestorer(ProjectRestorer):
         """
         super(AIPRestorer, self).__init__()
         self._aipid = aipid
-        self.cfg = config
+        self.cfg = config or {}
 
         ep = None
         if self.cfg.get('nerdm_resolver', {}).get('service_endpoint'):
             ep = self.cfg['nerdm_resolver']['service_endpoint'].rstrip('/')
-        elif self.cfg('pdr_home_url'):
+        elif self.cfg.get('pdr_home_url'):
             ep = self.cfg['pdr_home_url'].rstrip('/')
             ep += "/od/id"
         else:
             raise ConfigurationException("Missing required configuration parameter: "+
                                          "nerdm_resolver.service_endpoint")
 
-        # Note that we have chosen an delegation pattern here (rather than inheritance) because
+        # Note that we have chosen a delegation pattern here (rather than inheritance) because
         # a future implementation may in corporate a second delegate along side this one.
         self._urestorer = URLRestorer(ep+'/'+self._aipid, self._aipid, log)
 

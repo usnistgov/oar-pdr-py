@@ -108,6 +108,7 @@ class NISTBagSerialization(fw.AIPSerialization):
         
         if hasattr(statemgr, "annotate"):
             statemgr.annotate("bagfiles", info)
+            statemgr.annotate("aipid", statemgr.aipid)
 
         statemgr.mark_completed(statemgr.SERIALIZED, "AIP bag serialization completed")
 

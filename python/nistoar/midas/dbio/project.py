@@ -19,8 +19,8 @@ from copy import deepcopy
 import jsonpatch
 
 from .base import (DBClient, DBClientFactory, ProjectRecord, ACLs, PUBLIC_GROUP, ANONYMOUS, AUTOADMIN,
-                   RecordStatus, AlreadyExists, NotAuthorized, ObjectNotFound, DBIORecordException,
-                   InvalidUpdate, InvalidRecord)
+                   DBIOException, RecordStatus, AlreadyExists, NotAuthorized, ObjectNotFound, 
+                   DBIORecordException, InvalidUpdate, InvalidRecord)
 from . import status, restore
 from .. import MIDASException, MIDASSystem
 from nistoar.pdr.utils.prov import Agent, Action

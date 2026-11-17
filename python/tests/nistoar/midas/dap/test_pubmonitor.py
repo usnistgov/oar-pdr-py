@@ -83,6 +83,7 @@ class TestMIDASPublishingMonitor(test.TestCase):
         self.monitor.update_status(id, pstatus.PUBLISHED, "published!", {"published_as": "mds2-8888"})
         self.assertEqual(self.dapsvc.get_status(id).state, mstatus.PUBLISHED)
         self.assertEqual(self.dapsvc.get_status(id).message, "published!")
+        self.assertEqual(self.dapsvc.get_status(id).to_dict()['published_as'], "mds2-8888")
         self.monitor.update_status(id, pstatus.FAILED, "failed!", {"a": "b"})
         self.assertEqual(self.dapsvc.get_status(id).state, mstatus.UNWELL)
         self.assertNotEqual(self.dapsvc.get_status(id).message, "published!")
