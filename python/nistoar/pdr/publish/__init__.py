@@ -6,6 +6,8 @@ storage (after conversion to an AIP) and ingested into the PDR.  Typically, the 
 of an unserialized BagIt bag that conforms to the NIST Preservation Bag Profile; however, this 
 publishing model does not require this.  
 """
+from typing import List
+
 from ..exceptions import *
 from ..preserve import CorruptedBagError
 from ... import pdr as _pdr
@@ -39,7 +41,7 @@ class PublishException(PDRException):
         if not msg and not cause:
             msg = "Unknown publishing error"
         if not sys:
-            sys = pdrsys.get_global_system() or system
+            sys = system.get_global_system() or system
         super(PublishException, self).__init__(msg, cause, sys)
 
 class PublishingStateException(PublishException):
@@ -79,11 +81,33 @@ class BadSIPInputError(PublishException):
                 msg += ": " + str(cause)
         super(BadSIPInputError, self).__init__(msg, cause)
 
+class UploadMethodNotSupported(BadSIPInputError):
+    """
+    an exception indicating that a publishing client requested an data upload method that is not 
+    supported the service.  
+
+    .. seealso:: :py:meth:`nistoar.pdr.publish.service.base.SimpleNerdmPublishingService.init_data_upload`
+    """
+    def __init__(self, method: str, msg=None, cause=None):
+        """
+        create the exception
+
+        :param str method: the name of the method that was requested for uploading
+        :param str    msg: a message to override the default
+        :param Exception cause: a caught exception that represents the underlying cause of the problem.  
+        """
+        if not msg:
+            msg = f"{method}: upload method is not supported"
+            if cause:
+                msg += f" ({str(cause)})"
+        super(UploadMethodNotSupported, self).__init__(msg, cause)
+        self.method = method
+
 class SIPStateException(PublishingStateException):
     """
     An exception indicating that an SIP is in an illegal or unexpected state, preventing an operation.
     """
-    def __init__(self, sipid, msg=None, cause=None):
+    def __init__(self, sipid: str, msg: str=None, cause=None):
         """
         create the exception.
 
@@ -99,6 +123,33 @@ class SIPStateException(PublishingStateException):
             else:
                 msg = "Unknown " + msg
         super(SIPStateException, self).__init__(msg, cause)
+
+class SIPValidationFailure(SIPStateException):
+    """
+    An exception indicating that the SIP is not ready for a particular operation (namely, publication)
+    because a validationg check shows it is invalid and/or incomplete in one or more ways.
+    """
+    def __init__(self, sipid: str, msg: str=None, errors: List=None):
+        """
+        instantiate the exception
+
+        :param str   sipid:  The ID for the SIP in the bad state
+        :param str     msg:  A message to override the default.
+        :param list errors:  the validation errors detected given as a list.  An element can 
+                             be either a simple explanatory string, or a 
+                             jsonschema.ValidationError which can contain more details about 
+                             a JSON Schema-specific error.  
+        """
+        if not msg:
+            msg = f"SIP {sipid} is not fully valid"
+            if errors:
+                if len(errors) > 0:
+                    msg += f": {len(errors)} validation errors detected"
+                elif hasattr(errors[0], 'message'):
+                    msg += f": {errors[0].message}"
+        super(SIPValidationFailure, self).__init__(sipid, msg)
+        self.errors = errors or []
+        
 
 class SIPConflictError(SIPStateException):
     """

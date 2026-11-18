@@ -1,4 +1,4 @@
-import os, json, pdb, logging
+import os, json, logging
 from pathlib import Path
 import unittest as test
 
@@ -268,11 +268,11 @@ class TestDBClient(test.TestCase):
         
         self.cli.record_action(Action(Action.CREATE, "pdr0:2222", testuser, "created"))
         self.cli.record_action(Action(Action.COMMENT, "pdr0:2222", testuser, "i'm hungry"))
-        self.cli._close_actionlog_with(prec, finalact, {"published_as": "comicbook", "recid": "goob"})
+        self.cli._close_actionlog_with(prec, finalact, {"published_as": "comicbook", "id": "goob"})
         self.assertIn('history', self.cli._db)
         self.assertEqual(len(self.cli._db['history']["pdr0:2222"]), 1)
         self.assertEqual(len(self.cli._db['history']["pdr0:2222"][0]['history']), 3)
-        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['recid'], "pdr0:2222")
+        self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['id'], "pdr0:2222")
         self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['published_as'], "comicbook")
         self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['close_action'], "PROCESS:submit")
         self.assertEqual(self.cli._db['history']["pdr0:2222"][0]['acls'],

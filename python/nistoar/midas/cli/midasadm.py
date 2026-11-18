@@ -9,6 +9,7 @@ from collections.abc import Mapping
 
 from nistoar.midas import MIDASException
 from nistoar.midas.dap import cmd as dap
+from nistoar.midas.dmp import cmd as dmp
 from nistoar.base import config as cfgmod
 from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils import cli
@@ -79,7 +80,7 @@ def main(cmdname, args):
     midas = MidasadmSuite(cmdname, default_conf_file, argparser)
 
     midas.load_subcommand(dap)
-    # midas.load_subcommand(dmp)
+    midas.load_subcommand(dmp)
     midas.load_subcommand(jwt)
 
     # execute the command

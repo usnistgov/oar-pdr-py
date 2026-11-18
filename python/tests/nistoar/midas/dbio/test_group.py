@@ -68,9 +68,10 @@ class TestMIDASGroupApp(test.TestCase):
         self.cfg = {
             "dbio": {
                 "superusers": ["adminuser"],
-            },
-            "group_id_minting": {
-                "default_shoulder": { "public": "grp0" }
+                "group_id_minting": {
+                    "default_shoulder": { "public": "grp0" },
+                    "allowed_shoulders": { "midas": ["grp0", "grp1"] }
+                }
             }
         }
         self.dbfact = InMemoryDBClientFactory({}, {})
@@ -120,6 +121,41 @@ class TestMIDASGroupApp(test.TestCase):
         self.assertIn("grp0:tester1:", resp['id'])
         self.assertEqual(resp['members'], ["tester1"])  # By default, the group is owned by user
 
+    def test_create_group_uses_requested_shoulder(self):
+        """
+        POST /midas/group/grp1 creates a grp1 group when the caller is authorized for that shoulder.
+        """
+        path = "grp1"
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path,
+            'wsgi.input': StringIO(json.dumps({"name": "alternate-shoulder-group"}))
+        }
+
+        hdlr = self.app.create_handler(req, self.start, path, test_agent)
+        body = hdlr.handle()
+
+        self.assertIn("201 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual(resp['name'], "alternate-shoulder-group")
+        self.assertIn("grp1:tester1:", resp['id'])
+
+    def test_create_group_rejects_unauthorized_shoulder(self):
+        """
+        POST /midas/group/grp2 is rejected when the caller is not authorized for that shoulder.
+        """
+        path = "grp2"
+        req = {
+            'REQUEST_METHOD': 'POST',
+            'PATH_INFO': self.rootpath + path,
+            'wsgi.input': StringIO(json.dumps({"name": "unauthorized-shoulder-group"}))
+        }
+
+        hdlr = self.app.create_handler(req, self.start, path, test_agent)
+        hdlr.handle()
+
+        self.assertIn("401 ", self.resp[0])
+
     def test_list_groups(self):
         """
         GET /midas/group/grp0 returns all groups the caller owns or belongs to.
@@ -150,6 +186,38 @@ class TestMIDASGroupApp(test.TestCase):
         self.assertEqual(len(resp), 2)
         names = {g['name'] for g in resp}
         self.assertEqual(names, {"alpha", "beta"})
+
+    def test_list_groups_filters_requested_shoulder(self):
+        """
+        GET /midas/group/{shoulder} returns only groups from that shoulder.
+        """
+        for path, name in [("grp0", "alpha"), ("grp1", "beta")]:
+            req = {
+                'REQUEST_METHOD': 'POST',
+                'PATH_INFO': self.rootpath + path,
+                'wsgi.input': StringIO(json.dumps({"name": name}))
+            }
+            self.app.create_handler(req, self.start, path, test_agent).handle()
+            self.resp = []
+
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + "grp0"
+        }
+        body = self.app.create_handler(req, self.start, "grp0", test_agent).handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual([g['name'] for g in resp], ["alpha"])
+
+        self.resp = []
+        req = {
+            'REQUEST_METHOD': 'GET',
+            'PATH_INFO': self.rootpath + "grp1"
+        }
+        body = self.app.create_handler(req, self.start, "grp1", test_agent).handle()
+        self.assertIn("200 ", self.resp[0])
+        resp = self.body2dict(body)
+        self.assertEqual([g['name'] for g in resp], ["beta"])
 
     def test_create_group_missing_name(self):
         """
@@ -442,9 +510,9 @@ class TestMIDASGroupAppMongo(test.TestCase):
         self.cfg = {
             "dbio": {
                 "superusers": ["adminuser"],
-            },
-            "group_id_minting": {
-                "default_shoulder": { "public": "grp0" }
+                "group_id_minting": {
+                    "default_shoulder": { "public": "grp0" }
+                }
             }
         }
         self.dburl = os.environ['MONGO_TESTDB_URL']

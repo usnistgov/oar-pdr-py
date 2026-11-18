@@ -150,7 +150,8 @@ class MIDASFileManagerClientTest(test.TestCase):
         self.assertEqual(self.cli.last_scan_id(spid), scid)
 
         # add some files
-        uplfldr = os.path.join(fmdatadir, spid, spid)
+        fmdirnm = screp['uploads_dir']
+        uplfldr = os.path.join(fmdatadir, fmdirnm, fmdirnm)
         shutil.copytree(sampdatadir/'simplesip', uplfldr, dirs_exist_ok=True)
         os.rename(os.path.join(uplfldr, '_nerdm.json'), os.path.join(uplfldr, '#nerdm.json'))
         self.assertTrue(os.path.isdir(os.path.join(uplfldr, 'trial3')))

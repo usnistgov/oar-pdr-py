@@ -1,0 +1,336 @@
+import os, pdb, sys, json, requests, logging, time, re
+import unittest as test
+from copy import deepcopy
+from pathlib import Path
+
+from nistoar.testing import *
+from nistoar.pdr.ingest.rmm import client as rmm
+
+testdir = Path(__file__).resolve().parents[0]
+basedir = testdir.parents[5]
+oarmetadir = basedir / "metadata"
+testrec = oarmetadir / "model" / "examples" / "hitsc.json"
+assert testrec.exists()
+
+port = 9091
+url = "http://localhost:{0}/nerdm/".format(port)
+endpt = url
+
+uwsgi_opts = "--plugin python3"
+if os.environ.get("OAR_UWSGI_OPTS") is not None:
+    uwsgi_opts = os.environ['OAR_UWSGI_OPTS']
+
+def startService(authmeth=None):
+    tdir = tmpdir()
+    srvport = port
+#    if authmeth == 'header':
+#        srvport += 1
+    pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
+    
+    wpy = "python/tests/nistoar/pdr/ingest/rmm/sim_ingest_srv.py"
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
+          "--wsgi-file {3} --set-ph auth_key=critic --set-ph auth_meth=header " \
+          "--pidfile {4}"
+    cmd = cmd.format(os.path.join(tdir,"simsrv.log"), uwsgi_opts, srvport,
+                     os.path.join(basedir, wpy), pidfile)
+    os.system(cmd)
+    time.sleep(0.5)
+
+def stopService(authmeth=None):
+    tdir = tmpdir()
+    srvport = port
+#    if authmeth == 'header':
+#        srvport += 1
+    pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
+    
+    cmd = "uwsgi --stop {0}".format(os.path.join(tdir, "simsrv"+str(srvport)+".pid"))
+    os.system(cmd)
+    time.sleep(1)
+
+loghdlr = None
+rootlog = None
+def setUpModule():
+    global loghdlr
+    global rootlog
+    ensure_tmpdir()
+    rootlog = logging.getLogger()
+    loghdlr = logging.FileHandler(os.path.join(tmpdir(),"test_rmm.log"))
+    loghdlr.setLevel(logging.DEBUG)
+    rootlog.addHandler(loghdlr)
+    startService("header")
+
+def tearDownModule():
+    global loghdlr
+    if loghdlr:
+        if rootlog:
+            rootlog.removeHandler(loghdlr)
+            loghdlr.flush()
+            loghdlr.close()
+        loghdlr = None
+    stopService("header")
+    rmtmpdir()
+
+def getrec():
+    with open(testrec) as fd:
+        return json.load(fd)
+
+class TestSubmit(test.TestCase):
+
+    authhdr = {"Authorization": "Bearer critic"}
+
+    def test_service_up(self):
+        resp = requests.get(endpt, headers=self.authhdr)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.reason, "Service is ready")
+
+    def test_unauth(self):
+        rec = getrec()
+        try:
+            rmm.submit_for_ingest(rec, url, 'bo', authmeth='header')
+            self.fail("Failed to raise IngestException")
+        except rmm.IngestAuthzError as ex:
+            self.assertEqual(ex.status, 401)
+            
+    def test_clienterror(self):
+        rec = getrec()
+        try:
+            rmm.submit_for_ingest(rec, url+"/goob/", 'bo', 'critic', 'header')
+            self.fail("Failed to raise IngestException")
+        except rmm.IngestClientError as ex:
+            self.assertGreater(ex.status, 400)
+
+    def test_invalid(self):
+        rec = getrec()
+        try:
+            rmm.submit_for_ingest(rec, endpt+"?strictness=abusive", 'bo',
+                                  'critic', 'header')
+            self.fail("Failed to raise IngestException")
+        except rmm.NotValidForIngest as ex:
+            self.assertEqual(ex.status, 400)
+            self.assertEqual(len(ex.errors), 4)
+
+    def test_servererror(self):
+        try:
+            rec = getrec()
+            stopService()
+            rmm.submit_for_ingest(rec, endpt, 'bo', 'critic', 'header')
+        except rmm.IngestServerError as ex:
+            self.assertIsNone(ex.status)
+        finally:
+            startService()
+
+    def test_ok(self):
+        rec = getrec()
+        rmm.submit_for_ingest(rec, endpt, 'bo', 'critic', 'header')
+
+
+class TestIngestClient(test.TestCase):
+
+    def setUp(self):
+        self.tf = Tempfiles()
+        self.tmp = self.tf.mkdir("ingesttest")
+        self.datadir = os.path.join(self.tmp, "ingest")
+        self.stagedir = os.path.join(self.datadir, "staging")
+        self.inprogdir = os.path.join(self.datadir, "inprogress")
+        self.successdir = os.path.join(self.datadir, "succeeded")
+        self.faildir = os.path.join(self.tmp, "failed")
+        self.cfg = {
+            "data_dir": self.datadir,
+            "auth_key": "critic",
+            "auth_method": "header",
+            "service_endpoint": url,
+            "failed_dir": self.faildir
+        }
+        self.cl = rmm.IngestClient(self.cfg)
+
+    def tearDown(self):
+        self.tf.clean()
+
+    def test_ctor(self):
+        self.assertTrue(self.datadir)
+        self.assertTrue(os.path.exists(self.stagedir))
+        self.assertTrue(os.path.exists(self.successdir))
+        self.assertTrue(os.path.exists(self.inprogdir))
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "failed")))
+        self.assertFalse(os.path.exists(os.path.join(self.datadir, "failed")))
+        self.assertTrue(self.cl._endpt)
+        self.assertEqual(self.cl.submit_mode, "named")
+
+        # look for a warning about our service endpoint
+        with open(os.path.join(tmpdir(),"test_rmm.log")) as fd:
+            warnings = [l for l in fd if "Non-HTTPS" in l]
+        self.assertGreater(len(warnings), 0)
+
+    def test_stage(self):
+        rec = getrec()
+        self.cl.stage(rec, 'bru')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+        self.assertEqual(self.cl.staged_names(), ["bru"])
+
+        self.cl.stage(rec, 'bro')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+        names = self.cl.staged_names()
+        self.assertIn("bru", names)
+        self.assertIn("bro", names)
+        self.assertEqual(len(names), 2)
+        self.assertTrue(self.cl.is_staged("bru"))
+        self.assertTrue(self.cl.is_staged("bro"))
+
+        self.cl.stage(rec, 'bru')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+        names = self.cl.staged_names()
+        self.assertIn("bru", names)
+        self.assertIn("bro", names)
+        self.assertEqual(len(names), 2)
+
+    def test_submit_staged(self):
+        rec = getrec()
+        self.cl.stage(rec, 'bru')
+        self.cl.stage(rec, 'bro')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+
+        self.cl.submit_staged("bru")
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.successdir,"bru.json")))
+
+        self.cl.submit_staged("bro")
+        self.assertTrue(os.path.exists(os.path.join(self.successdir,"bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.successdir,"bru.json")))
+
+        
+    def test_submit_named(self):
+        rec = getrec()
+        self.cl.stage(rec, 'bru')
+        self.cl.stage(rec, 'bro')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+
+        self.assertEqual(self.cl.submit_mode, "named")
+        self.cl.submit("bru")
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.successdir,"bru.json")))
+        
+    def test_submit_none(self):
+        rec = getrec()
+        self.cl.stage(rec, 'bru')
+        self.cl.stage(rec, 'bro')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+
+        self.cl.submit_mode = "none"
+        self.cl.submit("bru")
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir,"bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir,"bru.json")))
+        self.cl.submit("bro")
+        
+    def test_submit_staged_invalid(self):
+        self.cl._endpt += "?strictness=abusive"
+        rec = getrec()
+        self.cl.stage(rec, 'bru')
+        self.cl.stage(rec, 'bro')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+
+        with self.assertRaises(rmm.NotValidForIngest):
+            self.cl.submit_staged("bru")
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.faildir,"bru.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.faildir,"bru.err.txt")))
+
+        with open(os.path.join(self.faildir,"bru.err.txt")) as fd:
+            errs = fd.read()
+
+        self.assertIn("Validation Errors:", errs)
+        self.assertIn(" bother ", errs)
+        
+    def test_submit_staged_clerr(self):
+        self.cl._endpt = re.sub(r'/nerdm/','/noobum/', self.cl._endpt)
+        rec = getrec()
+        self.cl.stage(rec, 'bru')
+        self.cl.stage(rec, 'bro')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+
+        with self.assertRaises(rmm.IngestClientError):
+            self.cl.submit_staged("bru")
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertFalse(os.path.exists(os.path.join(self.faildir,"bru.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+        
+    def test_submit_staged_srverr(self):
+        rec = getrec()
+        self.cl.stage(rec, 'bru')
+        self.cl.stage(rec, 'bro')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+
+        stopService()
+        try:
+         with self.assertRaises(rmm.IngestServerError):
+            self.cl.submit_staged("bru")
+         self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+         self.assertFalse(os.path.exists(os.path.join(self.faildir,"bru.json")))
+         self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+        finally:
+         startService()
+
+
+    def test_submit_all(self):
+        rec = getrec()
+        self.cl.stage(rec, 'bru')
+        self.cl.stage(rec, 'bro')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+
+        results = self.cl.submit_all()
+        self.assertIn("bru", results['succeeded'])
+        self.assertIn("bro", results['succeeded'])
+        self.assertEqual(len(results['succeeded']), 2)
+        self.assertEqual(results['failed'], [])
+        self.assertEqual(results['skipped'], [])
+        
+        self.assertFalse(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertFalse(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.successdir,"bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.successdir,"bru.json")))
+
+    def test_submit_modeall(self):
+        rec = getrec()
+        self.cl.stage(rec, 'bru')
+        self.cl.stage(rec, 'bro')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+
+        self.cl.submit_mode = "all"
+        self.cl.submit("bru")
+        self.assertFalse(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertFalse(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.successdir,"bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.successdir,"bru.json")))
+
+    def test_submit_all_failed(self):
+        rec = getrec()
+        self.cl.stage(rec, 'bru')
+        self.cl.stage(rec, 'bro')
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+
+        self.cl._endpt += "?strictness=abusive"
+        results = self.cl.submit_all()
+        self.assertIn("bru", results['failed'])
+        self.assertIn("bro", results['failed'])
+        self.assertEqual(len(results['failed']), 2)
+        self.assertEqual(results['succeeded'], [])
+        self.assertEqual(results['skipped'], [])
+        
+        self.assertFalse(os.path.exists(os.path.join(self.stagedir, "bro.json")))
+        self.assertFalse(os.path.exists(os.path.join(self.stagedir, "bru.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.faildir,"bro.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.faildir,"bru.json")))
+
+
+if __name__ == '__main__':
+    test.main()

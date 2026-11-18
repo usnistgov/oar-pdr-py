@@ -45,7 +45,7 @@ class GroupService:
         self._groups: DBGroups = dbclient.groups
         self.log = log
 
-    def create_group(self, name: str, foruser: str = None) -> Group:
+    def create_group(self, name: str, foruser: str = None, shoulder: str = None) -> Group:
         """
         Use DBGroups.create_group to create a new group.
 
@@ -53,11 +53,12 @@ class GroupService:
         :param str foruser:  the identifier of the user to create the group for.  This user will be set as
                              the group's owner/administrator.  If not given, the user attached to the
                              underlying :py:class:`DBClient` will be used.
+        :param str shoulder: the identifier shoulder to use for the new group.
         :raises AlreadyExists:  if the user has already defined a group with this name
         :raises NotAuthorized:  if the user is not authorized to create this group
         :return: the newly created Group object
         """
-        return self._groups.create_group(name, foruser)
+        return self._groups.create_group(name, foruser, shoulder)
 
     def get_group(self, group_id: str) -> Group:
         """
@@ -121,10 +122,10 @@ class GroupService:
         grp.save()
         return True
 
-    def list_groups(self) -> list:
+    def list_groups(self, shoulder: str = None) -> list:
         """Return all groups the current user owns or belongs to."""
         user_id = self._cli.user_id
-        return [g.to_dict() for g in self._groups.select_for_user(user_id)]
+        return [g.to_dict() for g in self._groups.select_for_user(user_id, shoulder)]
 
 
 class GroupServiceFactory:
@@ -134,7 +135,11 @@ class GroupServiceFactory:
 
     def __init__(self, dbcli_factory: DBClientFactory, config: dict, log: Logger = None):
         self.dbcli_factory = dbcli_factory
-        self.config = config
+        self.config = config or {}
+        self.dbio_config = dict(self.config)
+        if isinstance(self.config.get("dbio"), Mapping):
+            self.dbio_config.update(self.config["dbio"])
+            self.dbio_config.pop("dbio", None)
         self.log = log
 
     def create_service_for(self, who: Agent) -> GroupService:
@@ -143,7 +148,7 @@ class GroupServiceFactory:
         """
         if who is None:
             who = Agent("dbio.group", Agent.USER, Agent.ANONYMOUS, Agent.PUBLIC)
-        dbcli = self.dbcli_factory.create_client("groups", config = self.config, foruser = who.actor)
+        dbcli = self.dbcli_factory.create_client("groups", config = self.dbio_config, foruser = who)
         return GroupService(dbcli, self.log)
 
 
@@ -166,7 +171,7 @@ class GroupSelectionHandler(DBIOHandler):
         GET /{shoulder} — list all groups the caller owns or belongs to.
         """
         try:
-            groups = self.svc.list_groups()
+            groups = self.svc.list_groups(self._shoulder)
             return self.send_json(groups, ashead=ashead)
         except NotAuthorized:
             return self.send_unauthorized()
@@ -195,7 +200,7 @@ class GroupSelectionHandler(DBIOHandler):
 
         foruser = data.get("foruser", None)
         try:
-            grp = self.svc.create_group(name, foruser)
+            grp = self.svc.create_group(name, foruser, self._shoulder)
             return self.send_json(grp.to_dict(), "Group Created", 201)
         except AlreadyExists as ex:
             return self.send_error_resp(400, "Already Exists", str(ex))
@@ -403,4 +408,3 @@ class MIDASGroupApp(ServiceApp):
         Return a function that can create a MIDASGroupApp.
         """
         return cls._factory()
-

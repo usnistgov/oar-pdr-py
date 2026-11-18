@@ -9,7 +9,6 @@ from nistoar.pdr import utils, ARK_NAAN
 import nistoar.pdr.exceptions as exceptions
 import nistoar.pdr.publish.bagger.pdp as pdp
 from nistoar.pdr.publish.bagger import prepupd
-from nistoar.pdr.publish.bagger import utils as bagutils
 from nistoar.pdr.publish import idmint as minter
 from nistoar.pdr.publish import BadSIPInputError
 from nistoar.nerdm import constants as consts

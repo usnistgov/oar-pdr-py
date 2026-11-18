@@ -5,7 +5,7 @@ import re, logging
 from abc import ABCMeta, abstractmethod, abstractproperty
 from collections.abc import Mapping
 from ...utils.prov import Agent
-from .. import PublishSystem, PublishingStateException, ConfigurationException
+from .. import PublishSystem, PublishingStateException, UploadMethodNotSupported, ConfigurationException
 from ....nerdm.constants import core_schema_base as NERDM_SCHEMA_BASE, CORE_SCHEMA_URI
 from ....nerdm import validate
 from .. import PublishSystem
@@ -169,7 +169,7 @@ class SimpleNerdmPublishingService(PublishingService):
         :param tuple minnerdmver:  a tuple of ints specifying the minimum version of the NERDm schema
                                 that provided NERDm records must be compliant with.
         """
-        super(SimpleNerdmPublishingService, self).__init__(convention, config)
+        super(SimpleNerdmPublishingService, self).__init__(convention, config, baselog)
 
         self._schemadir = self.cfg.get('nerdm_schema_dir', pdr.def_schema_dir)
         self._valid8r = None
@@ -336,6 +336,10 @@ class SimpleNerdmPublishingService(PublishingService):
                 raise NERDError("Specified NERDm schema version, " + m.group(1) +
                                 " does not meet minimum requirement of " + ".".join(self._minnerdmver))
 
+        # special tweak for accepting v0.6
+        if ver >= [0, 6] and ver < [0, 7]:
+            schema = f"{NERDM_SCHEMA_BASE}v0.7"
+
         if '#' not in schema:
             schema += schematype
         elif not schema.endswith(schematype):
@@ -343,5 +347,4 @@ class SimpleNerdmPublishingService(PublishingService):
                             schematype + ": " + schema)
 
         return schema
-
 

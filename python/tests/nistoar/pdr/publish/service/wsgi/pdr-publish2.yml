@@ -1,0 +1,94 @@
+working_dir: /data/pdr
+uploads_dir: /data/pdr/uploads
+authorized: 
+  - auth_key: "NCNRTOKEN"
+    user:     "gurn"
+    client:   "ncnr"
+  - auth_key: "MIDASTOKEN"
+    user:     "oarop"
+    client:   "midas"
+conventions:
+  pdp0:
+    # No file support (used by NCNR)
+    type: pdp0
+    clients: 
+        ncnr: 
+            default_shoulder: "ncnr0"
+            localid_provider: True
+            auth_key: "NCNRdev"
+    shoulders: 
+        ncnr0: 
+            allowed_clients: [ "ncnr" ]
+            bagger: 
+                override_config_for: "pdp0"
+                factory_function: "nistoar.pdr.publish.service.pdp.PDPBaggerFactory"
+            id_minter: 
+                naan: "88434"
+                based_on_sipid: True
+                sequence_start: 21
+  pdp1:
+    # With file support (used by MIDAS)
+    type: pdp1
+    clients: 
+        midas: 
+            default_shoulder: "mds3"
+            localid_provider: True
+            auth_key: "MDSdev"
+    shoulders: 
+        mds3: 
+            allowed_clients: [ "midas" ]
+            bagger: 
+                bag_builder: 
+                    ensure_nerdm_type_on_add: "https://data.nist.gov/od/dm/nerdm-schema/v0.7"
+                doi_naan: "10.18434"
+                assign_doi: "always"
+                finalize: {}
+                repo_base_url: "https://test.pdr.net/"
+            id_minter: 
+                naan: "88434"
+                based_on_sipid: True
+                add_check_digit: False
+                sequence_start: 17
+
+repo_access: 
+    headbag_cache: /data/pdr/headbags
+    distrib_service: 
+        service_endpoint: "http://localhost:9991/"
+    metadata_service: 
+        service_endpoint: "http://localhost:9994"
+    store_dir: /data/pdr/store
+    restricted_store_dir: /data/pdr/restricted_store
+preservation: 
+    wait_to_start: 0.1
+    task: 
+        ingest: 
+            rmm: 
+                data_dir: /data/pdr/ingestdir
+                service_endpoint: "http://localhost:9992/nerdm/"
+                auth_key: "critic"
+                auth_method: "header"
+            doi: 
+                data_dir: /data/pdr/dcdir
+                minting_naan: "10.18434"
+                datacite_api: 
+                    service_endpoint: "http://localhost:9993/dois/"
+                    user: "gurn"
+                    pass: "cranston"
+
+        finalize: { }
+        validate: 
+            check_data_files: False
+            nist: 
+                profile_version: "0.5"
+        serialize: 
+            multibag: 
+                validate: True
+        archive: 
+            polling: 
+                cycle_time: 5
+                wait_for_completion: False
+        publish: 
+            allow_replace: True
+        cleanup: { }
+
+

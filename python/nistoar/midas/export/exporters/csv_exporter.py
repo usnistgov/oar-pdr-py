@@ -136,12 +136,13 @@ class CSVExporter(Exporter):
         else:
             # DMP CSV headers and data
             headers = [
-                "Name", "ID", "Type", "Owner", "Status_State", "Status_Action", 
-                "Status_CreatedDate", "Status_ModifiedDate", "Status_Message", 
-                "Title", "ProjectDescription", "StartDate", "DmpSearchable", 
-                "Grant_Source", "Grant_ID", "Keywords", "DataSize", "SizeUnit", 
-                "SoftwareDevelopment", "TechnicalResources", "DataDescription", 
-                "DataCategories", "PreservationDescription"
+                "Name", "ID", "Type", "Owner", "Status_State", "Status_Action",
+                "Status_CreatedDate", "Status_ModifiedDate", "Status_Message",
+                "Title", "ProjectDescription", "StartDate", "DmpSearchable",
+                "Grant_Source", "Grant_ID", "Keywords", "DataSize", "SizeUnit",
+                "SoftwareDevelopment", "TechnicalResources", "DataDescription",
+                "DataCategories", "PreservationDescription",
+                "DataSizeFrequency", "DataFilePaths"
             ]
             writer.writerow(headers)
             
@@ -187,7 +188,9 @@ class CSVExporter(Exporter):
                 "; ".join(data.get("technicalResources", [])),
                 data.get("dataDescription", "Not Provided"),
                 "; ".join(data.get("dataCategories", [])),
-                data.get("preservationDescription", "Not Provided")
+                data.get("preservationDescription", "Not Provided"),
+                data.get("dataSizeDescription") or "Not Provided",
+                "; ".join(s.strip() for s in data.get("pathsURLs", []))
             ]
         
         writer.writerow(row)

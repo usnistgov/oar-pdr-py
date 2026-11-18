@@ -15,6 +15,9 @@ class TestGroup(test.TestCase):
             "group_id_minting": {
                 "default_shoulder": {
                     "public": "grp0"
+                },
+                "allowed_shoulders": {
+                    "public": ["grp0", "grp1"]
                 }
             }
         }
@@ -110,6 +113,9 @@ class TestDBGroups(test.TestCase):
             "group_id_minting": {
                 "default_shoulder": {
                     "public": "grp0"
+                },
+                "allowed_shoulders": {
+                    "public": ["grp0", "grp1"]
                 }
             }
         }
@@ -160,6 +166,14 @@ class TestDBGroups(test.TestCase):
         self.assertEqual(grp.id, "grp0:alice:friends")
         self.assertTrue(grp.is_member("alice"))
         self.assertTrue(not grp.is_member(self.user))
+
+    def test_create_group_requested_shoulder(self):
+        grp = self.dbg.create_group("collaborators", shoulder="grp1")
+
+        self.assertEqual(grp.name, "collaborators")
+        self.assertEqual(grp.owner, self.user)
+        self.assertEqual(grp.id, "grp1:nist0:ava1:collaborators")
+        self.assertIn(grp.id, self.fact._db[base.GROUPS_COLL])
 
     def test_get(self):
         self.assertIsNone(self.dbg.get("grp0:nist0:ava1:friends"))
@@ -328,6 +342,20 @@ class TestDBGroups(test.TestCase):
         self.assertIn(g2.id, ids)
         self.assertIn(g3.id, ids)   # member but not owner
         self.assertEqual(len(ids), 3)  # no duplicates
+
+        # filtering by shoulder should keep only matching group IDs
+        g4 = self.dbg.create_group("team-c", shoulder="grp1")
+        results = list(self.dbg.select_for_user(self.user, "grp0"))
+        ids = [g.id for g in results]
+        self.assertIn(g1.id, ids)
+        self.assertIn(g2.id, ids)
+        self.assertIn(g3.id, ids)
+        self.assertNotIn(g4.id, ids)
+        self.assertEqual(len(ids), 3)
+
+        results = list(self.dbg.select_for_user(self.user, "grp1"))
+        ids = [g.id for g in results]
+        self.assertEqual(ids, [g4.id])
 
         # user with no groups sees nothing
         stranger_cli = self.fact.create_client(base.DMP_PROJECTS, self.cfg, "stranger")

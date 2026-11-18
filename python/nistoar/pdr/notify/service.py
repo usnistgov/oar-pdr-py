@@ -3,6 +3,7 @@ A module for sending out notifications
 """
 import logging, os, importlib
 from copy import copy as copyobj
+from typing import List
 
 from .base import NotificationTarget, ChannelService, Notice
 from .email import Mailer, FakeMailer, EmailTarget
@@ -354,18 +355,28 @@ class NotificationService(object):
                     self._subscribers[alert['type']] |= set(targets)
 
     @property
-    def channels(self):
+    def channels(self) -> List[str]:
         """
         the names of available channels
         """
         return self._targetmgr.channel_names
               
     @property
-    def targets(self):
+    def targets(self) -> List[str]:
         """
         the names of available targets.  
         """
         return self._targetmgr.targets
+
+    @property
+    def supported_types(self) -> List[str]:
+        """
+        the names of the supported notification types.
+
+        The :py:meth:`alert` method will do nothing if it does not recognize the type as one 
+        the names in this list.  
+        """
+        return self._subscribers.keys()
               
     def distribute(self, target, notice):
         """

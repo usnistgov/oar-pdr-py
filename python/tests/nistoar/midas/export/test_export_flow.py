@@ -291,6 +291,7 @@ class ExportFlowProjectRecordTest(test.TestCase):
             "keywords": ["materials science", "data management", "testing", "metadata"],
             "dataSize": 500.5,
             "sizeUnit": "GB",
+            "dataSizeDescription": "Annual",
             "softwareDevelopment": {
                 "development": "yes",
                 "softwareUse": "Python scripts for data analysis",
@@ -364,6 +365,10 @@ class ExportFlowProjectRecordTest(test.TestCase):
         self.assertIn("NSF", csv_content)
         self.assertIn("500.5", csv_content)
         self.assertIn("materials science", csv_content)
+        self.assertIn("DataSizeFrequency", csv_content)
+        self.assertIn("Annual", csv_content)
+        self.assertIn("DataFilePaths", csv_content)
+        self.assertIn("https://data.nist.gov/test-project", csv_content)
 
     @patch("nistoar.midas.export.exporters.csv_exporter.preppy.getModule")
     def test_export_csv_single_dap(self, mock_get_module):

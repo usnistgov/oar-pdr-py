@@ -4,6 +4,7 @@ a single bag into multiple output multbags for preservation.
 """
 import os, logging, re, json, shutil
 from functools import cmp_to_key
+from pathlib import Path
 
 import multibag
 from multibag.restore import restore_bag
@@ -76,6 +77,8 @@ class MultibagSplitter(object):
         if not config:
             config = {}
         self.cfg = config
+        if isinstance(source_bagdir, Path):
+            source_bagdir = str(source_bagdir)
         self.srcdir = source_bagdir
 
         if not os.path.exists(self.srcdir):
@@ -153,6 +156,8 @@ class MultibagSplitter(object):
 
         :param str destdir:  the directory where output bags will be written.
         """
+        if isinstance(destdir, Path):
+            destdir = str(destdir)
         nameiter = _OARNamer(self.srcdir)
 
         origsrc = self.srcdir

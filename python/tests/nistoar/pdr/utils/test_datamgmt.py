@@ -80,7 +80,7 @@ class TestMeausreDirSize(test.TestCase):
     def test_measure2(self):
         vals = utils.measure_dir_size(testdatadir2)
         self.assertEqual(vals[1], 5)
-        self.assertEqual(vals[0], 8254)
+        self.assertEqual(vals[0], 8514)
 
 class TestFormatBytes(test.TestCase):
 

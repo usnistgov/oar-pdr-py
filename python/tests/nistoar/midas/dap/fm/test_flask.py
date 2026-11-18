@@ -172,7 +172,7 @@ class TestFlaskApp(test.TestCase):
         self.assertEqual(data['created_by'], 'ava1')
         self.assertEqual(data['users'], ['ava1'])
         self.assertEqual(data['id'], "mds3:0020")
-        upldir = rootdir/"mds3:0020"/"mds3:0020"
+        upldir = rootdir/"mds3_0020"/"mds3_0020"
         self.assertTrue(upldir.is_dir())
         self.assertTrue((upldir/'#HIDE').is_dir())
         self.assertTrue(not (upldir/'#previously_published_files.tsv').exists())
@@ -186,7 +186,7 @@ class TestFlaskApp(test.TestCase):
         self.assertEqual(data['created_by'], 'ava1')
         self.assertEqual(data['users'], ['ava1'])
         self.assertEqual(data['id'], "mds3:0030")
-        upldir = rootdir/"mds3:0030"/"mds3:0030"
+        upldir = rootdir/"mds3_0030"/"mds3_0030"
         self.assertTrue(upldir.is_dir())
         self.assertTrue((upldir/'#HIDE').is_dir())
         self.assertTrue((upldir/'#previously_published_files.tsv').exists())
