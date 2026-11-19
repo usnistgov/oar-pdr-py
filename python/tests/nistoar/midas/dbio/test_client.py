@@ -135,8 +135,14 @@ class TestDBClient(test.TestCase):
 
         rec = self.cli.get_record_for("pdr0:0001")
         self.assertEqual(rec.name, "test1")
+        self.assertEqual(rec._data.get('requester'), self.user)
+        self.assertEqual(rec._data.get('requester_permissions'),
+                         ['read', 'write', 'admin', 'delete'])
         rec = self.cli.get_record_for("pdr0:0002")
         self.assertEqual(rec.name, "test2")
+        self.assertEqual(rec._data.get('requester'), self.user)
+        self.assertEqual(rec._data.get('requester_permissions'),
+                         ['read', 'write', 'admin', 'delete'])
         self.assertTrue(self.cli.exists("pdr0:0003"))
         self.assertTrue(self.cli.name_exists("goob", "alice"))
         with self.assertRaises(base.NotAuthorized):
@@ -149,6 +155,8 @@ class TestDBClient(test.TestCase):
         goob.save()
         rec = self.cli.get_record_for("pdr0:0003")
         self.assertEqual(goob.name, "goob")
+        self.assertEqual(rec._data.get('requester'), self.user)
+        self.assertEqual(rec._data.get('requester_permissions'), ['read'])
 
         with self.assertRaises(base.NotAuthorized):
             self.cli.get_record_for("pdr0:0003", base.ACLs.WRITE)
@@ -156,6 +164,9 @@ class TestDBClient(test.TestCase):
         goob.save()
         rec = self.cli.get_record_for("pdr0:0003", base.ACLs.WRITE)
         self.assertEqual(goob.name, "goob")
+        self.assertEqual(rec._data.get('requester'), self.user)
+        self.assertEqual(rec._data.get('requester_permissions'), ['read', 'write'])
+        # self.assertEqual(rec._data.get('userPerms'), ['read', 'write'])
         
         with self.assertRaises(base.NotAuthorized):
             self.cli.get_record_for("pdr0:0003", base.ACLs.OWN)
@@ -168,9 +179,15 @@ class TestDBClient(test.TestCase):
         rec = self.cli.get_record_by_name("test1")
         self.assertEqual(rec.name, "test1")
         self.assertEqual(rec.id, "pdr0:0001")
+        self.assertEqual(rec._data.get('requester'), self.user)
+        self.assertEqual(rec._data.get('requester_permissions'),
+                         ['read', 'write', 'admin', 'delete'])
         rec = self.cli.get_record_by_name("test2")
         self.assertEqual(rec.name, "test2")
         self.assertEqual(rec.id, "pdr0:0002")
+        self.assertEqual(rec._data.get('requester'), self.user)
+        self.assertEqual(rec._data.get('requester_permissions'),
+                         ['read', 'write', 'admin', 'delete'])
         self.assertIsNone(self.cli.get_record_by_name("goob"))
         self.assertIsNone(self.cli.get_record_by_name("goob", "alice"))
 
@@ -184,6 +201,8 @@ class TestDBClient(test.TestCase):
         rec = self.cli.get_record_by_name("goob", "alice")
         self.assertEqual(rec.name, "goob")
         self.assertEqual(rec.id, "pdr0:0003")
+        self.assertEqual(rec._data.get('requester'), self.user)
+        self.assertEqual(rec._data.get('requester_permissions'), ['read'])
 
     def test_select_records(self):
         rec = self.cli.create_record("mine1")

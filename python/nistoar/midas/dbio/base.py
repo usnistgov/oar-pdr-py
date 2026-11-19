@@ -1285,7 +1285,7 @@ class DBClient(ABC):
         for m in matches:
             m = ProjectRecord(self._projcoll, m, self)
             if m.authorized(ACLs.READ):
-                return m
+                return self._add_requester_info(m, ACLs.READ)
         return None
 
     def get_record_for(self, id: str, perm: str = ACLs.READ) -> ProjectRecord:
@@ -1307,7 +1307,32 @@ class DBClient(ABC):
         out = ProjectRecord(self._projcoll, out, self)
         if not out.authorized(perm):
             raise NotAuthorized(self.user_id, perm)
-        return out
+        return self._add_requester_info(out, perm)
+
+    def _add_requester_info(self, rec, assume_perms=None, include_perms=None):
+        if include_perms is None:
+            include_perms=ACLs.OWN
+
+        if assume_perms is None:
+            assume_perms = []   # i.e. check key 4 permissions
+        elif isinstance(assume_perms, str):
+            assume_perms = [ assume_perms ]
+
+        if isinstance(rec, ProtectedRecord):
+            recmd = rec._data
+            prec = rec
+        else:
+            recmd = rec
+            prec = ProtectedRecord('gen', remd, self)
+
+        recmd['requester'] = self._who.actor
+        userperms = []
+        for perm in include_perms:
+            if perm in assume_perms or prec.authorized(perm):
+                userperms.append(perm)
+
+        recmd['userPerms'] = recmd['requester_permissions'] = userperms
+        return rec
 
     # a real search nests a handful of levels deep; anything beyond this is a client trying to
     # exhaust the interpreter stack, which json.loads is happy to hand us
