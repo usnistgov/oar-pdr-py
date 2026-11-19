@@ -17,6 +17,10 @@ from nistoar.nsd.service import PeopleService, MongoPeopleService, create_people
 _dburl_re = re.compile(r"^mongodb://(\w+(:\S+)?@)?\w+(\.\w+)*(:\d+)?/\w+(\?\w.*)?$")
 SUPPORTED_CONSTRAINTS = set("name id owner status_state".split())
 
+# a caller-supplied filter can be made arbitrarily expensive (a pathological $regex, say),
+# so don't let one search occupy a server thread indefinitely
+ADV_SEARCH_TIMEOUT_MS = 30000
+
 class MongoDBClient(base.DBClient):
     """
     an implementation of DBClient using a MongoDB database as the backend store.
@@ -272,10 +276,11 @@ class MongoDBClient(base.DBClient):
             else:
                 constraints = {"acls."+perm.pop(): {"$in": idents}}
                 
-            filter["$and"].append(constraints)
+            # the filter belongs to the caller; don't mutate it
+            filter = {"$and": [filter, constraints]} if filter else constraints
             try:
                 coll = self.native[self._projcoll]
-                for rec in coll.find(filter, {'_id': False}):
+                for rec in coll.find(filter, {'_id': False}, max_time_ms=ADV_SEARCH_TIMEOUT_MS):
                     yield base.ProjectRecord(self._projcoll, rec, self)
 
             except Exception as ex:

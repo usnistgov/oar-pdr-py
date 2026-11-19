@@ -444,10 +444,10 @@ class ProtectedRecord(ABC):
         return True if the given records respect all the constraints in cst.
         :param is a dict of constraints for the records
         """
-        # parse the query
+        # parse the query; a filter need not be wrapped in a top-level $and
         or_conditions = {}
         and_conditions = {}
-        for condition in cst["$and"]:
+        for condition in cst.get("$and", [cst]):
             for key, value in condition.items():
                 if key == "$or":
                     for or_condition in value:
@@ -1309,24 +1309,51 @@ class DBClient(ABC):
             raise NotAuthorized(self.user_id, perm)
         return out
 
+    # a real search nests a handful of levels deep; anything beyond this is a client trying to
+    # exhaust the interpreter stack, which json.loads is happy to hand us
+    MAX_QUERY_DEPTH = 20
+
     @classmethod
-    def check_query_structure(cls, query):
-        if not isinstance(query, dict):
+    def check_query_structure(cls, query, depth=0):
+        if not isinstance(query, dict) or depth > cls.MAX_QUERY_DEPTH:
             return False
 
         valid_operators = ['$and', '$or', '$not', '$nor', '$eq', '$ne', '$gt', '$gte', '$lt',
                            '$lte', '$in', '$nin', '$exists', '$type', '$mod', '$regex', '$text',
-                           '$all', '$elemMatch', '$size']
+                           '$search', '$all', '$elemMatch', '$size']
 
         for key in query.keys():
             if key not in valid_operators:
                 return False
 
             if isinstance(query[key], dict):
-                if not check_query_structure(query[key]):
+                if not cls.check_query_structure(query[key], depth+1):
                     return False
 
-            return True
+        return cls._query_is_safe(query)
+
+    # these run server-side javascript or arbitrary expressions; the loop above never sees them
+    # because it does not descend into the arrays that $and, $or and $nor hold.
+    _unsafe_operators = frozenset(["$where", "$expr", "$function", "$accumulator"])
+
+    @classmethod
+    def _query_is_safe(cls, node, depth=0):
+        if depth > cls.MAX_QUERY_DEPTH:
+            return False
+
+        if isinstance(node, dict):
+            for key, val in node.items():
+                if key in cls._unsafe_operators:
+                    return False
+                if key in ("$and", "$or", "$nor") and not val:
+                    # mongo rejects an empty array with an error; catch it as a bad query
+                    return False
+                if not cls._query_is_safe(val, depth+1):
+                    return False
+        elif isinstance(node, list):
+            return all(cls._query_is_safe(item, depth+1) for item in node)
+
+        return True
 
     @abstractmethod
     def select_records(self, perm: Permissions = ACLs.OWN, **constraints) -> Iterator[ProjectRecord]:
