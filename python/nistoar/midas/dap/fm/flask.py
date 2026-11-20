@@ -345,14 +345,12 @@ class SpaceResource(Resource):
         if "for_user" not in rec:
             return {"message": "Create space request missing 'for_user' property" }, 400
 
-        contents = None
+        contents = rec.get('contents')
         if "contents" in rec:
-            if not isinstance(contents, list) or \
-               (contents and any(not isinstance(e, Mapping) for e in contents)):
+            if not isinstance(contents, list) or not all(isinstance(e, Mapping) for e in contents):
                 return { "message": "contents: not a list of objects" }, 400
             if not all('filepath' in e for e in contents):
                 return { "message": "contents: one or more entries missing filepath property" }, 400
-            contents = rec['contents']
 
         doing = "creating"
         try:
