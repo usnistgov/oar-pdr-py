@@ -14,6 +14,7 @@ from nistoar.midas.dbio.mongo import MongoDBClient
 from nistoar.midas.dbio.fsbased import FSBasedDBClient
 from nistoar.midas.dbio import status
 from nistoar.midas.dbio.project import NotSubmitable
+from nistoar.midas.cli.midasadm import MidasadmSuite
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_revperm.")
 testdir = Path(__file__).parents[0]
@@ -53,7 +54,7 @@ def tearDownModule():
 class TestRevpermCmd(test.TestCase):
 
     def setUp(self):
-        self.cmd = cli.CLISuite("midasadm")
+        self.cmd = MidasadmSuite()
         self.cmd.load_subcommand(revperm)
 
         root = os.path.join(tmpdir.name, "dbfiles")
@@ -138,7 +139,7 @@ class TestRevpermCmd(test.TestCase):
         self.assertIn(who.actor, permitted)
         self.assertIn("greenlantern", permitted)
         self.assertEqual(len(permitted), 2)
-        self.assertEqual(list(prec.acls.iter_perm_granted('admin')), ["greenlantern"])
+        self.assertEqual(list(prec.acls.iter_perm_granted('admin')), ["greenlantern", who.actor])
         self.assertEqual(list(prec.acls.iter_perm_granted('delete')), [])
         self.assertEqual(list(prec.acls.iter_perm_granted('publish')), ["greenlantern"])
         self.assertNotEqual(list(prec.acls.iter_perm_granted('_write')), [])
@@ -208,7 +209,7 @@ class TestRevpermCmd(test.TestCase):
         self.assertIn(who.actor, permitted)
         self.assertIn("greenlantern", permitted)
         self.assertEqual(len(permitted), 2)
-        self.assertEqual(list(prec.acls.iter_perm_granted('admin')), ["greenlantern"])
+        self.assertEqual(list(prec.acls.iter_perm_granted('admin')), ["greenlantern", who.actor])
         self.assertEqual(list(prec.acls.iter_perm_granted('delete')), [])
         self.assertEqual(list(prec.acls.iter_perm_granted('publish')), ["greenlantern"])
         self.assertNotEqual(list(prec.acls.iter_perm_granted('_write')), [])

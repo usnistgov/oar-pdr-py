@@ -8,6 +8,7 @@ from typing import List
 from urllib.parse import urlsplit, unquote, urljoin, urlparse
 
 from nistoar.base.config import ConfigurationException
+from nistoar.nerdm import utils as nrdutils
 from ..exceptions import *
 
 import requests
@@ -136,7 +137,7 @@ class FileManager:
 
             elif resp.status_code < 200 or resp.status_code >= 300:
                 msg = f": {output['message']}" if output and output.get('message') else resp.reason
-                raise UnexpectedFileManagerResponse(msg, respath, resp.reason, resp.status_code)                
+                raise UnexpectedFileManagerResponse(msg, respath, resp.reason, resp.status_code)
 
             return output
 
@@ -196,6 +197,51 @@ class FileManager:
         clean out the identified space making it inaccessible.
         """
         return self._handle_request("DELETE", id)
+
+    def revive_space(self, id: str, foruser: str, files: List[Mapping] = None):
+        """
+        :param str      id:  the identifier of the DAP being revised that needs its revived 
+                             file space
+        :param str foruser:  the identifier for the primary user of the space.  If this user does 
+                             not known to nextcloud, it will be created.
+        :param list[dict] files:  a list of previously published files, each described by a NERDm
+                             file description.  Each description dictionary must contain must 
+                             contain a ``filepath`` property and an ``@type`` property that 
+                             indicates if it is a subcollection or a file.  
+        :return: a dictionary summarizing the current state of the newly created space.  See 
+                 :py:meth:`summarize_space` for a description of the properties included in the 
+                 summary.
+                 :rtype:  dict
+        """
+        if not foruser:
+            raise ValueError("revive_space: Null or empty user identifier, foruser")
+        if not files:
+            files = []
+        if len(files) > 0:
+            missing = len([f for f in files if not f.get('filepath')])
+            if missing > 0:
+                s = "s" if missing > 1 else ""
+                raise ValueError(f"revive_space: {str(missing)} file description{s} "
+                                 "missing filepath property")
+
+        # set the list of files and folders to setup
+        contents = []
+        for fcomp in files:
+            fd = {
+                'filepath': fcomp.get('filepath'),
+                'type': 'folder' if nrdutils.is_type(fcomp, 'Subcollection') else 'file'
+            }
+            if fd['type'] == 'file':
+                if 'size' in fcomp:
+                    fd['size'] = fcomp['size']
+                if fcomp.get('checksum',{}).get('hash') and \
+                   fcomp['checksum'].get('algorithm', {}).get('tag') == 'sha256':
+                    fd['checksum'] = fcomp['checksum']['hash']
+            contents.append(fd)
+
+        payload = { 'for_user': foruser, 'contents': contents }
+        
+        return self._handle_request("PUT", id, input=payload)
 
     def get_space_permissions(self, id: str):
         """

@@ -206,7 +206,8 @@ class TestPDPWSGI(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
         self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:status"], 'pending')
+        self.assertEqual(bnerd["pdr:state"], 'pending')
+        self.assertIn('pdr:status', bnerd)
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
@@ -256,7 +257,8 @@ class TestPDPWSGI(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
         self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:status"], 'pending')
+        self.assertEqual(bnerd["pdr:state"], 'pending')
+        self.assertIn('pdr:status', bnerd)
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
@@ -275,7 +277,8 @@ class TestPDPWSGI(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
         self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:status"], 'processing')
+        self.assertEqual(bnerd["pdr:state"], 'processing')
+        self.assertIn('pdr:status', bnerd)
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 

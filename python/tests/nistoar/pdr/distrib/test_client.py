@@ -4,12 +4,14 @@ import unittest as test
 
 from nistoar.testing import *
 from nistoar.pdr.distrib import client as dcli
+from nistoar.pdr.public.sim import distrib
 
 testdir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 datadir = os.path.join(testdir, 'data')
 basedir = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.dirname(testdir)))))
 
+uwsgiscript = distrib.__file__
 port = 9091
 baseurl = "http://localhost:{0}/".format(port)
 
@@ -24,11 +26,10 @@ def startService(authmeth=None):
         srvport += 1
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
-    wpy = "python/tests/nistoar/pdr/distrib/sim_distrib_srv.py"
-    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
-          "--wsgi-file {3} --pidfile {4}"
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} --wsgi-file {3} " \
+          "--pidfile {4} --set-ph archive_dir={5} --set-ph baseurl={6}"
     cmd = cmd.format(os.path.join(tdir,"simsrv.log"), uwsgi_opts, srvport,
-                     os.path.join(basedir, wpy), pidfile)
+                     uwsgiscript, pidfile, datadir, baseurl)
     os.system(cmd)
     time.sleep(0.5)
 

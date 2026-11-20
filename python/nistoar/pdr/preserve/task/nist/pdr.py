@@ -105,6 +105,7 @@ class PDRBagFinalization(fw.AIPFinalization):
                                               aipid)
 
         statemgr.record_progress("Finalizing the AIP bag")
+        log.info("Finalizing the AIP bag")
 
         # start by determining the sequence number; if this fails, we shouldn't go on
         repo = RepositoryAccess(self.cfg.get('repo_access'), log)
@@ -185,7 +186,7 @@ class PDRBagFinalization(fw.AIPFinalization):
 
         # stage NERDm record for publishing
         nerdm = bldr.bag.nerdm_record()
-        statemgr.set_state_property("nerdm:version", nerdm.get("version", "0"))
+        statemgr.set_state_property("version", nerdm.get("version", "0"))
         if self._ingester:
             try:
                 self._ingester.stage(nerdm, aipid)
@@ -697,6 +698,7 @@ class PDRPublication(fw.AIPPublication):
         aipid = statemgr.aipid
         version = statemgr.get_state_property("nerdm:version", "?")
         statemgr.record_progress("Releasing dataset to the PDR")
+        log.info("Releasing dataset to the PDR")
 
         # TODO: submit for caching
         if self._cachecli:

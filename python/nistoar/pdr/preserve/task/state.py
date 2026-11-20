@@ -2,7 +2,7 @@
 This module provides an implementation of the 
 :py:class:`~nistoar.pdr.preserve.task.framework.PreservationStateManager`.
 """
-import json, os
+import json, os, time
 from pathlib import Path
 from collections import OrderedDict
 from collections.abc import Mapping
@@ -239,6 +239,9 @@ class JSONPreservationStateManager(PreservationStateManager):
             raise ValueError(f"mark_complete(): Unrecognized steps included in step code: {step}")
         self._data["_completed"] = self.steps_completed | step
 
+        if step & self.PUBLISHED:
+            self._data["published_time"] = time.time()
+
         if message:
             self.record_progress(message)  # calls _cache()
         else:
@@ -246,7 +249,10 @@ class JSONPreservationStateManager(PreservationStateManager):
 
         if self._pubstat:
             if step & self.PUBLISHED:
-                self._pubstat.update(status.PUBLISHED)   # this will update its message
+                vers = self.get_state_property("version", '(unkn)')
+                ptime = self._data.setdefault("published_time", time.time())
+                data = { "last_published_time": ptime, "last_published": time.asctime(), "version": vers }
+                self._pubstat.update(status.PUBLISHED, userdata=data)   # this will update its message
             elif step & self.STARTED:
                 self._pubstat.update(status.SUBMITTED, message)
 
@@ -396,7 +402,7 @@ class JSONPreservationStateManager(PreservationStateManager):
         self._data["_message"] = message
         self._cache()
 
-        if self._pubstat:
+        if self._pubstat and self._pubstat.state != status.PUBLISHED:
             self._pubstat.update(status.PUBLISHED)
 
     def record_failure(self, message: str):

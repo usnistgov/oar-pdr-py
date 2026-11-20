@@ -256,9 +256,14 @@ class MIDASFileManagerServiceTest(test.TestCase):
     def test_revive_space_for(self):
         files = [
             { "filepath": "README.txt",       "size": 16340,  "checksum": "XXXX" },
-            { "filepath": "bkfst/bagels.csv", "size": 220341, "checksum": "YYYY" }
+            { "filepath": "bkfst/bagels.csv", "size": 220341, "checksum": "YYYY" },
+            { "filepath": "bkfst", "type": 'folder' }
         ]
-        self.cli.revive_space_for("mdsx:8888", "nstr", files)
+        sp = self.cli.revive_space_for("mdsx:8888", "nstr", files)
+
+        summ = sp.summarize()
+        self.assertEqual(summ['file_count'], 2)
+        self.assertEqual(summ['folder_count'], 1)
 
         upldir = rootdir/"mdsx_8888"/"mdsx_8888"
         self.assertTrue(upldir.is_dir())

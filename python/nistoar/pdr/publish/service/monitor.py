@@ -1,6 +1,33 @@
 """
 A module that provides monitoring the asynchronous publication of SIPs via a 
 :py:class:`~nistoar.pdr.publish.service.base.PublishingService`.
+
+Typically, SIP publishing is asynchronous (primarily due to the longer running preservation 
+part).  This class provides a way to monitor SIPs that have been submitted to a 
+:py:class:`~nistoar.pdr.publish.service.base.PublishingService`
+so that when publishing is complete, some follow-up activity can be accomplished.  More 
+specifically, this module facilitates communication of publishing progress to MIDAS, 
+the default service that talks to interactive authoring clients, from the downstream 
+publishing service--services that (can) run on different machines.  The specific 
+implementation assumes that the two share access to the disk where state is stored, but 
+other implementations are allowed.  
+
+The communication model is built around a persisted queue of publishing jobs.  The 
+:py:class:`~nistoar.pdr.publish.service.base.PublishingService` is configured with a client 
+to the queue (:py:class:`PublishingMonitorClient`): each time a request is received to 
+publish an SIP, it adds the SIP to the queue.  Meanwhile, running in its own process is the 
+monitor, :py:class:`PublishingMonitor`.  It will cycle through the SIPs in its queue and check 
+each SIP processing job's progress; if the status changes from the last check, it calls a 
+function configured in it at construction time.  In the 
+:py:mod:`MIDAS use case<nistoar.midas.dap.pubmonitor>`, 
+this function updates the status of a submitted DBIO record and sends a message to the 
+websocket server to signal web clients to refresh their state.  
+
+The two key parts of the monitor design, the :py:class:`PublishingMonitorClient` and the 
+:py:class:`PublishingMonitor`, define abstract interfaces, allowing for different ways to 
+persist queue and to probe the current publishing state of an SIP.  The implementation 
+provided here assumes the client and monitor are running in different processes (usually on 
+different machines, virtual or otherwise), but both have access to a shared filesystem.  
 """
 import logging, threading, csv, time
 from logging import Logger
@@ -19,7 +46,9 @@ class PublishingMonitor(ABC):
     Typically, SIP publishing is asynchronous (primarily due to the longer running preservation 
     part).  This class provides a way to monitor SIPs that have been submitted to a 
     :py:class:`~nistoar.pdr.publish.service.base.PublishingService`
-    so that when publishing is complete, some follow-up activity can be accomplished.  
+    so that when publishing is complete, some follow-up activity can be accomplished.  See 
+    the :py:mod:`module description<nistoar.pdr.publish.service.monitor>` for an overview of 
+    the monitor motivation and design.
 
     This base class abstracts two implementation details: how the queue is stored and how 
     the publishing state is determined.
@@ -37,9 +66,10 @@ class PublishingMonitor(ABC):
 
         :param Callable onchange:  a function to call when a submitted SIP changes state or 
                                    reaches a state indicating the completion of its 
-                                   publication processing.  This function takes three arguments:
-                                   the SIP-ID, the publication state, and a message about its 
-                                   current state.
+                                   publication processing.  This function takes four arguments:
+                                   the SIP-ID, the publication state, a message about its 
+                                   current state, and an object of properties and values.  
+                                   The last object can None.  
         :param int     cyclesecs:  the number of seconds to allow to pass before starting a new
                                    before updating the status of the SIPs in the queue.
         :param Logger        log:  the log to report activity to.
@@ -90,8 +120,11 @@ class PublishingMonitor(ABC):
     @abstractmethod
     def state_of(self, sipid: str) -> Tuple[str, str]:
         """
-        return the remember publishing state of the SIP as a tuple of the state label and
-        its message.
+        return the remembered publishing state of the SIP as a tuple of the state label and
+        its message.  The tuple can optional contain a third element containing a JSON-encoded
+        object of additional metadata describing the state.  This is used, in particular, when 
+        the state label is 'published': the metadata can include when it was published and under
+        what public identifier.
         """
         raise NotImplemented()
 
@@ -104,7 +137,7 @@ class PublishingMonitor(ABC):
     def update_statuses_in_queue(self):
         """
         iterate (once) through the SIPs in the monitor queue file and update their statuses, 
-        calling the "on-complete" function when a status changes.
+        calling the "on-change" function when a status changes.
 
         The updated status are written back to the queue file, removing any SIPs that have 
         reached any of the "not found", "submitted", and "failed" states.  
@@ -125,11 +158,16 @@ class PublishingMonitor(ABC):
 
         for sipid in stats:
             newstat = self.state_of(sipid)
+            if newstat[0] == status.NOT_FOUND:
+                self.log.warning("SIP %s not found in publishing system (removing from queue)", sipid)
 
             if newstat[0] in done_states or newstat[0] != stats[sipid][0]:
                 # SIP has either changed state or reached a done state
+                data=None
+                if len(newstat) > 2:
+                    data = newstat[2]
                 try:
-                    self._onchange(sipid, newstat[0], newstat[1])
+                    self._onchange(sipid, newstat[0], newstat[1], data)
                 except Exception as ex:
                     self.log.exception("Failed to process sipid=" + sipid + " that reached state=" +
                                        newstat[0] + ": " + str(ex))
@@ -139,7 +177,7 @@ class PublishingMonitor(ABC):
                     else:
                         updates[sipid] = newstat
 
-        self._update_queue(updates, deletes)
+        stats = self._update_queue(updates, deletes)
         return list(stats.keys())
 
     def monitor(self, stop_after=Union[int|bool], timeout: int=0):
@@ -171,14 +209,22 @@ class PublishingMonitor(ABC):
         elif stop_after is False:
             stop_after = 0
 
+        self.log.info("Starting monitoring")
+
         while stop_after < 1 or cycles < stop_after:
             self._in_queue = self.update_statuses_in_queue()
             cycles += 1
             now = time.time()
-            if ((stop_after < 0 and len(self._in_queue) <= 0) or  # queue is empty,
-                (stop_after > 0 and cycles > stop_after) or       # max cycles exceeded, or
-                (exittime > 0 and now > exittime)):               # timeout exceeded
+            if stop_after < 0 and len(self._in_queue) <= 0:
+                self.log.info("Queue is empty; stopping monitoring")
                 break
+            elif stop_after > 0 and cycles >= stop_after:
+                self.log.info("Max monitoring cycles (%d) exceeded; stopping monitoring", stop_after)
+                break
+            elif exittime > 0 and now > exittime:
+                self.log.info("Max monitoring time (%d) exceeded; stopping monitoring", timeout)
+                break
+
             rest = cyclestart + self._cycletime - now
             if rest < 0:
                 rest = 0
@@ -244,14 +290,15 @@ class FileBasedPublishingMonitor(PublishingMonitor):
             for finished in deletes:
                 del stats[finished]
             q.write_data(stats)
+        return stats
 
 class LocalPublishingMonitor(FileBasedPublishingMonitor):
     """
-    A (concrete) :py:meth:`PublishingMonitor` that is can determine the publishing status of 
+    A (concrete) :py:meth:`PublishingMonitor` that can determine the publishing status of 
     an SIP by consulting the local filesystem.  
 
     When the publishing service and the MIDAS service share a filesystem, accessing the persisted
-    state directly is cheaper than going through the publishing web service.  
+    state directly is cheaper and more reliable than going through the publishing web service.  
     """
     def __init__(self, statusdir: str, queue_file: str, onchange: Callable,
                  cyclesecs: int=600, log: Logger=None):
@@ -276,10 +323,26 @@ class LocalPublishingMonitor(FileBasedPublishingMonitor):
     
     def state_of(self, sipid: str) -> Tuple[str, str]:
         """
-        return the remember publishing state of the SIP as a tuple of the state label and
+        return the remembered publishing state of the SIP as a tuple of the state label and
         its message.
         """
         stat = status.SIPStatus(sipid, self._statusdir)
+        md = {}
+        if stat.state == status.PUBLISHED:
+            # add some extra metadata with publishing details
+            userdata = stat.data.get('user', {})
+            pubtimeprop = 'last_published_time' if userdata.get('last_published_time') else 'updated_time'
+            if md.get(pubtimeprop):
+                md['published'] = stat.data['user'][pubtimeprop]
+            if userdata.get('pdrid'):
+                md['published_as'] = userdata['pdrid']
+            if userdata.get('version'):
+                md['version'] = userdata['version']
+            if userdata.get('aipid'):
+                md['archived_at'] = f"aip:{userdata['aipid']}"
+        if md:
+            return (stat.state, stat.message, md)
+
         return (stat.state, stat.message)
 
 class PublishingMonitorQueue(AtomicAccessFile):

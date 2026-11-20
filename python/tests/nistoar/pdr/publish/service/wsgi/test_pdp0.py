@@ -2,6 +2,7 @@ import os, pdb, sys, json, requests, logging, time, re, hashlib
 from pathlib import Path
 from io import StringIO
 import unittest as test
+from collections.abc import Mapping
 
 from nistoar.testing import *
 from nistoar.pdr.publish.service.wsgi import pdp0
@@ -102,7 +103,8 @@ class TestPDP0App(test.TestCase):
                         "sequence_start": 17
                     }
                 }
-            }
+            },
+            "record_to": os.path.join(tmpdir(), "requests.log")
         }
         self.app = pdp0.PDP0App(rootlog, self.cfg)
         self.resp = []
@@ -123,7 +125,7 @@ class TestPDP0App(test.TestCase):
         }
         hdlr = self.app.create_handler(req, self.start, '/', tstag)
         self.assertIs(hdlr._app, self.app)
-        self.assertIsNone(hdlr._reqrec)
+        # self.assertIsNone(hdlr._reqrec)
         self.assertEqual(hdlr._env.get('PATH_INFO'), '/')
 
     def test_get_action(self):
@@ -278,8 +280,10 @@ class TestPDP0App(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
         self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:status"], 'pending')
+        self.assertEqual(bnerd["pdr:state"], 'pending')
+        self.assertIn('pdr:status', bnerd)
         self.assertEqual(bnerd["accessLevel"], 'public')
+        self.assertIn('publisher', bnerd)
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
         self.assertTrue((self.bagparent / "pdp0:0017").is_dir())
@@ -321,7 +325,8 @@ class TestPDP0App(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
         self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:status"], 'pending')
+        self.assertEqual(bnerd["pdr:state"], 'pending')
+        self.assertIn('pdr:status', bnerd)
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
@@ -338,7 +343,8 @@ class TestPDP0App(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
         self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:status"], 'processing')
+        self.assertEqual(bnerd["pdr:state"], 'processing')
+        self.assertIn('pdr:status', bnerd)
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
@@ -367,7 +373,8 @@ class TestPDP0App(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/pdp0-0017sg")
         self.assertEqual(bnerd["pdr:sipid"], "pdp0:0017")
         self.assertEqual(bnerd["pdr:aipid"], "pdp0-0017sg")
-        self.assertEqual(bnerd["pdr:status"], 'processing')
+        self.assertEqual(bnerd["pdr:state"], 'processing')
+        self.assertIn('pdr:status', bnerd)
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
@@ -420,8 +427,10 @@ class TestPDP0App(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/ncnr0-33411pv")
         self.assertEqual(bnerd["pdr:sipid"], "ncnr0:33411")
         self.assertEqual(bnerd["pdr:aipid"], "ncnr0-33411pv")
-        self.assertEqual(bnerd["pdr:status"], 'pending')
+        self.assertEqual(bnerd["pdr:state"], 'pending')
+        self.assertIn('pdr:status', bnerd)
         self.assertEqual(bnerd["accessLevel"], 'public')
+        self.assertIn('publisher', bnerd)
         self.assertNotIn("testing", bnerd["keyword"])
         self.assertTrue(len(bnerd.get('components',[])) > 0)
 
@@ -437,7 +446,8 @@ class TestPDP0App(test.TestCase):
         self.assertEqual(bnerd["@id"], "ark:/88434/ncnr0-33411pv")
         self.assertEqual(bnerd["pdr:sipid"], "ncnr0:33411")
         self.assertEqual(bnerd["pdr:aipid"], "ncnr0-33411pv")
-        self.assertEqual(bnerd["pdr:status"], 'pending')
+        self.assertEqual(bnerd["pdr:state"], 'pending')
+        self.assertIn('pdr:status', bnerd)
         self.assertEqual(bnerd["accessLevel"], 'public')
         self.assertIn("testing", bnerd["keyword"])
         self.assertTrue(len(bnerd.get('components',[])) > 0)
@@ -570,9 +580,11 @@ class TestPDP1App(test.TestCase):
         req['wsgi.input'] = StringIO('')
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
         self.assertIn("200 ", self.resp[0])
-        self.assertEqual(json.loads(''.join(body)),
-                         {"type": 'fs', "location": 'pdp0:0017',
-                          "pdr:sipid": "pdp0:0017", "pdr:status": "pending" })
+        resp = json.loads(''.join(body))
+        self.assertTrue(isinstance(resp.get('pdr:status'), Mapping))
+        del resp['pdr:status']
+        self.assertEqual(resp, {"type": 'fs', "location": 'pdp0:0017',
+                                "pdr:sipid": "pdp0:0017", "pdr:state": "pending" })
 
         self.assertTrue((self.bagparent / "pdp0:0017" / "__data_sources.lis").is_file())
 
@@ -580,9 +592,11 @@ class TestPDP1App(test.TestCase):
         req['REQUEST_METHOD'] = 'GET'
         body = self.tostr( self.app.handle_path_request(req, self.start, who=tstag) )
         self.assertIn("200 ", self.resp[0])
-        self.assertEqual(json.loads(''.join(body)),
-                         {"type": 'fs', "location": 'pdp0:0017', "pdr:sipid": "pdp0:0017", 
-                          "pdr:status": "pending", "pdr:state": "pending" })
+        resp = json.loads(''.join(body))
+        self.assertTrue(isinstance(resp.get('pdr:status'), Mapping))
+        del resp['pdr:status']
+        self.assertEqual(resp, {"type": 'fs', "location": 'pdp0:0017',
+                                "pdr:sipid": "pdp0:0017", "pdr:state": "pending" })
 
         self.resp = []
         req = {

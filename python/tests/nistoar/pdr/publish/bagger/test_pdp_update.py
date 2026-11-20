@@ -196,7 +196,7 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(self.bgr.bagdir, str(self.bagparent / 'mds8-8888'))
 
         prepr = self.bgr._get_prepper()
-        self.assertEqual(prepr.aipid, "mds8-8888")
+        self.assertIsNone(prepr.aipid)   # not known yet
         self.assertEqual(prepr.pdrid, "ark:/88888/mds8-8888")
 
     def test_ensure_preparation_update_frombag(self):

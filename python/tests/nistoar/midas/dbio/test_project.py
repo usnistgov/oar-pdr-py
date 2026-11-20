@@ -113,6 +113,20 @@ class TestProjectService(test.TestCase):
         with self.assertRaises(project.ObjectNotFound):
             self.project._extract_data_part(data, "stuff/items/c", "id")
 
+    def test_bad_name_on_create_record(self):
+        self.create_service()
+
+        with self.assertRaises(project.InvalidUpdate):
+            self.project.create_record(".hidden")
+        with self.assertRaises(project.InvalidUpdate):
+            self.project.create_record("#ignorable")
+        with self.assertRaises(project.InvalidUpdate):
+            self.project.create_record("devious\"><script>alert(42)</script>")
+
+        prec = self.project.create_record('allowed ("but twisted")')
+        self.assertEquals(prec.name, 'allowed ("but twisted")')
+
+
     def test_create_record(self):
         self.create_service()
         self.assertTrue(not self.project.dbcli.name_exists("goob"))

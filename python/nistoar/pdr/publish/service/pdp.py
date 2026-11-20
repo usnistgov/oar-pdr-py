@@ -753,7 +753,10 @@ class BagBasedPublishingService(SimpleNerdmPublishingService):
             resmd['ediid'] = resmd.get('@id')
 
         types = resmd.setdefault('@type', [])
-        extschs = set(resmd.setdefault('_extensionSchemas', []))
+        # filter all extension metadata except for the sufficiently permissive ones
+        extschs = set(x for x in resmd.setdefault('_extensionSchemas', [])
+                        if any(x.endswith(t) for t in ["/Resource", "/PDRSubmission",
+                                                       "/ExperimentalContext"]))
         
         if not nerdutils.is_type(resmd, "PDRSubmission"):
             types.append('nrds:PDRSubmission')
@@ -1122,7 +1125,7 @@ class PDPublishingService(BagBasedPublishingService):
                                                                  deepcopy(self.cfg['repo_access']))
             prescfg['sip_dir'] = self.bagparent
             
-            return AIP1PreservationService(prescfg, log)
+            return AIP1PreservationService(prescfg, log, resumejobs=True)
 
         self.log.warning("No preservation service configured!")
         return None

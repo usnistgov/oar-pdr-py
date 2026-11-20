@@ -21,6 +21,8 @@ a different algorithm to its data--as marked by the :py:class:`JobQueue` propert
 allows a queue to ensure that multiple Job operations are not applied to the same target data 
 simultaneously.  Here's how one instantiates and uses a quue:
 
+.. code-block:: python
+
     queue = JobQueue("zipup", "/tmp/queuedir", "my.processing.module")
     queue.submit("data_id", ["--data-root", "/data/data_id"])
 
@@ -376,8 +378,8 @@ class JobQueue:
                                     and its integer exit code.  An exit code of -1 indicates that 
                                     the Job failed to start or was prematurely killed before it could 
                                     exit (the log will indicate which).  
-        :param bool       resume:   if True (default), any jobs found in ``queuedir`` will be 
-                                    placed back into the queue and rerun.  
+        :param bool       resume:   if True (default), any "zombied" jobs found in ``queuedir`` will 
+                                    be placed back into the queue and rerun.  
         """
         self.name = queuename
         if isinstance(queuedir, str):
@@ -399,7 +401,8 @@ class JobQueue:
         self.pq = queue.PriorityQueue()
         self.runner = JobRunner(self.name, self.qdir, self.pq, self.log.getChild("runner"), 
                                 self.cfg.get("runner"), self.post_job_callback)
-        self._restore_queue(resume)
+        if resume:
+            self._restore_queue(True)
 
     def _restore_queue(self, trigger=True):
         lockfile = self.qdir/"_restorer.json"

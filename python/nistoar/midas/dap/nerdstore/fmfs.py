@@ -294,7 +294,7 @@ class FMFSFileComps(FSBasedFileComps):
                 ("@type", deepcopy(self._comp_types["DataFile"][0])),
                 ("_extensionSchemas", deepcopy(self._comp_types["DataFile"][1])),
                 ("filepath", fpath),
-                ("downloadURL", "pdr:nrd:@id/nrd:filepath")
+                ("downloadURL", "pdr:dl:filepath")   # nrd:@id/nrd
             ])
             if size is not None:
                 out['size'] = size

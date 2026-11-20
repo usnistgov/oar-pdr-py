@@ -53,7 +53,9 @@ class TestMIDASPublishingMonitor(test.TestCase):
         self.dbfact = InMemoryDBClientFactory(svccfg)
         self.db = self.dbfact._db
         self.dapsvc = ProjectService(dbio.DAP_PROJECTS, self.dbfact, {})
-        self.monitor = pubmonitor.MIDASPublishingMonitor(self.dbfact, self.statusdir, self.qfile)
+        self.dapcfg = { 'nerdstorage': { 'type': 'inmem' }, 'doi_naan': '10.18434' }
+        self.monitor = pubmonitor.MIDASPublishingMonitor(self.dbfact, self.statusdir, self.qfile,
+                                                         dapconfig=self.dapcfg)
         self.client = monitor.FileBasedPublishingMonitorClient(self.qfile)
 
     def tearDown(self):
@@ -80,10 +82,11 @@ class TestMIDASPublishingMonitor(test.TestCase):
         self.monitor.update_status(id, pstatus.PROCESSING, "processing...")
         self.assertEqual(self.dapsvc.get_status(id).state, mstatus.INPRESS)
         self.assertNotEqual(self.dapsvc.get_status(id).message, "processing...")
-        self.monitor.update_status(id, pstatus.PUBLISHED, "published!")
+        self.monitor.update_status(id, pstatus.PUBLISHED, "published!", {"published_as": "mds2-8888"})
         self.assertEqual(self.dapsvc.get_status(id).state, mstatus.PUBLISHED)
         self.assertEqual(self.dapsvc.get_status(id).message, "published!")
-        self.monitor.update_status(id, pstatus.FAILED, "failed!")
+        self.assertEqual(self.dapsvc.get_status(id).to_dict()['published_as'], "mds2-8888")
+        self.monitor.update_status(id, pstatus.FAILED, "failed!", {"a": "b"})
         self.assertEqual(self.dapsvc.get_status(id).state, mstatus.UNWELL)
         self.assertNotEqual(self.dapsvc.get_status(id).message, "published!")
         self.monitor.update_status(id, pstatus.ONHOLD, "err...")

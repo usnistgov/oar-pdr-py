@@ -64,10 +64,6 @@ def define_prog_opts(progname: str, description: str=None, epilog: str=None, par
                         help="send DEBUG level messages to the log file")
     parser.add_argument("-v", "--verbose", action="store_true", dest='verbose',
                         help="print INFO and (with -d) DEBUG messages to the terminal")
-    parser.add_argument("-A", "--actor-id", type=str, dest="actor", metavar='USERID',
-                        help="An identifer representing the real user executing this command, used to "+
-                             "record the actor in provenance logs")
-    parser.add_argument("--vehicle", type=str, dest="vehicle", default=parser.prog, help=SUPPRESS)
 
     return parser
 

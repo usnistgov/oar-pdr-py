@@ -1,3 +1,7 @@
+"""
+sim_describe_srv Note:  this simulation server is deprecated by 
+:py:mod:`nistoar.pdr.public.sim.rmm`.  (See also test_client.py.)
+"""
 from __future__ import print_function
 import json, os, cgi, sys
 from urllib.parse import parse_qs

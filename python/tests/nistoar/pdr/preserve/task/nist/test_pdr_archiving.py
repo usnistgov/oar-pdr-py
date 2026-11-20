@@ -8,6 +8,7 @@ from nistoar.pdr.preserve.task import framework as fw
 from nistoar.pdr.preserve import PreservationStateError
 from nistoar.base import config
 from nistoar.pdr.utils import checksum_of
+from nistoar.pdr.public.sim import distrib
 
 pdrdir = Path(__file__).resolve().parents[3] 
 datadir = pdrdir / "distrib" / "data"
@@ -16,6 +17,7 @@ cksfiles = []
 basedir = pdrdir.parents[3]
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_archiving.")
+uwsgiscript = distrib.__file__
 port = 9091
 baseurl = "http://localhost:{0}/".format(port)
 
@@ -30,11 +32,10 @@ def startService(authmeth=None):
         srvport += 1
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
-    wpy = "python/tests/nistoar/pdr/distrib/sim_distrib_srv.py"
-    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
-          "--wsgi-file {3} --pidfile {4}"
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} --wsgi-file {3} " \
+          "--pidfile {4} --set-ph archive_dir={5} --set-ph baseurl={6}"
     cmd = cmd.format(os.path.join(tdir,"simsrv.log"), uwsgi_opts, srvport,
-                     os.path.join(basedir, wpy), pidfile)
+                     uwsgiscript, pidfile, datadir, baseurl)
     status = os.system(cmd) == 0
     time.sleep(0.5)
     return status

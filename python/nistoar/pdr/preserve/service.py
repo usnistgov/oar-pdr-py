@@ -18,7 +18,7 @@ from nistoar.pdr.exceptions import IDNotFound, StateException
 from nistoar.pdr.utils import read_json
 from nistoar.pdr.publish.service.status import SIPStatus
 from nistoar import jobmgt
-from .task.framework import PreservationStepsAware
+from .task.framework import PreservationStepsAware, PreservationStateManager
 from .task.state import JSONPreservationStateManager
 from . import PreservationException, PreservationInProgress, PreservationStateError, PreservationSystem
 from .bagit import NISTBag
@@ -53,7 +53,7 @@ class PreservationStatus(PreservationStepsAware):
     ``message``:
         (str) a displayable message indicating what is currently happening in the preservation process
 
-    All other properties are only accessibel via :py:meth:`get`.  Additional parameters that may 
+    All other properties are only accessible via :py:meth:`get`.  Additional parameters that may 
     be included if the presrevation effort has been started:
 
     ``reqtime``:
@@ -132,7 +132,7 @@ class PreservationStatus(PreservationStepsAware):
     @property
     def in_progress(self):
         "True if preservation appears to be underway"
-        return self.steps > self.UNSTARTED and self.steps != self._all_steps
+        return self.steps > self.UNSTARTED and self.steps != self._all_steps and not self.get('exitcode')
 
     def items(self) -> Iterator[Tuple]:
         return self._info.items()
@@ -346,13 +346,13 @@ class AIP1PreservationService(PreservationService):
     ``job_dir``:
          (str) _optional_.  The directory where the state of the preservation 
          :py:class:`~nistoar.jobmgt.JobQueue` is stored (default: in_progress_dir/``_jobs``).
-    ``history_dir``
-         (str) _optional_.  The directory where histories of preservation requests for each of the 
-         are requested AIPs are stored (default: in_progressdir/``_history``).  
-    ``preserve_log_dir``
+    ``preserve_logdir``
          (str) _recommended_. When a preservation task completes, the log messages will be appended 
          to a per-AIP historical log file (called _aipid_``.log``) located in the directory given by
-         this parameter (default: history_dir).
+         this parameter (default: in_progressdir/``logs``).
+    ``history_dir``
+         (str) _optional_.  The directory where histories of preservation requests for each of the 
+         are requested AIPs are stored (default: preserve_logdir/``_history``).  
     ``task``
          (dict) _required by default_.  The details configuring the 
          :py:class:`~nistoar.pdr.preserve.task.frameowrk.PreservationTask` that is created when
@@ -363,20 +363,22 @@ class AIP1PreservationService(PreservationService):
 
     _state_file = "_state.json"
 
-    def __init__(self, config: Mapping, log: Logger=None, execmod=None):
+    def __init__(self, config: Mapping, log: Logger=None, resumejobs=False, execmod=None):
         """
         initialize the service 
 
         :param dict config:  the configuration for the service
         :param Logger  log:  the log to use for messages from this service.  If not 
                              provided, a default one will be used.  
+        :param bool resumejobs:  If True, attempt to restart zombie preservation jobs (jobs 
+                             externally killed as opposed to jobs that fail due to an error)
+                             when setting up the job queue.  (Default: False)
         :param module|str execmod:  the :py:mod:`~nistoar.jobmgt` execution module, containing the 
                              required ``process()`` funtion to use.  If not provided (typically),
                              the default preservation job module 
                              (:py:mod:`nistoar.pdr.preserve.task.jobexec) will be used.
                              Either a module (dot-delimited) name or an imported module object can 
                              be used as a value. 
-
         """
         super(AIP1PreservationService, self).__init__(config, log)
         if not execmod:
@@ -389,7 +391,7 @@ class AIP1PreservationService(PreservationService):
 
         self.sipdir = self.cfg.get('sip_dir')   
         if not self.sipdir:
-            self.log.warning("JobQueuePreservationService: sip_dir not specified; "
+            self.log.warning("AIP1PreservationService: sip_dir not specified; "
                              "ID-based submission not enabled")
         else:
             self.sipdir = Path(self.sipdir)
@@ -414,15 +416,20 @@ class AIP1PreservationService(PreservationService):
         else:
             self.jobdir = Path(self.jobdir)
 
+        logdir = self.cfg.get('logdir')
+        self.preslogdir = self.cfg.get('preserve_logdir', logdir)
+        if not self.preslogdir:
+            self.preslogdir = self.inprogdir / 'logs'
+        else:
+            self.preslogdir = Path(self.preslogdir)
+
         self.historydir = self.cfg.get('history_dir')
         if not self.historydir:
-            self.historydir = self.inprogdir / '_history'
+            self.historydir = self.preslogdir / '_history'
         else:
             self.historydir = Path(self.historydir)
 
-        self.preslogdir = self.cfg.get('history_dir', self.historydir)
-
-        for dir in (self.inprogdir, self.jobdir, self.historydir, self.preslogdir):
+        for dir in (self.inprogdir, self.jobdir, self.preslogdir, self.historydir):
             if not dir.exists():
                 try:
                     dir.mkdir()
@@ -431,7 +438,7 @@ class AIP1PreservationService(PreservationService):
                                                  (dir, str(ex)))
 
         self.presq = jobmgt.JobQueue("preservation", self.jobdir, execmod, jqcfg,
-                                     self.log.getChild('jobq'), self._pres_job_exited, True)
+                                     self.log.getChild('jobq'), self._pres_job_exited, resumejobs)
 
 
     def _state_file_for(self, aipid):
@@ -518,6 +525,22 @@ class AIP1PreservationService(PreservationService):
         :return:  the intials status preservation request
                   :rtype: PreservationStatus
         """
+        with filelock.FileLock(self._lock_file_for(aipid)):
+            job = self.presq.get_job(aipid)
+            if job and job.state < jobmgt.EXITED:
+                raise PreservationInProgress(aipid)
+
+            statef = self._state_file_for(aipid)
+            if statef.exists():
+                pstate = JSONPreservationStateManager.from_file(statef, self.log,
+                                                                self.cfg.get('state_manager', {}))
+                self._submit_preservation(state)
+        
+                # return status
+                if isinstance(self.cfg.get('wait_to_start'), (int, float)):
+                    time.sleep(self.cfg['wait_to_start'])
+                return self.status_of(aipid)
+
         if not self.sipdir:
             raise ConfigurationException("sip_dir: parameter required for ID-based submission not set")
 
@@ -548,6 +571,7 @@ class AIP1PreservationService(PreservationService):
         aipdir = Path(aipdir)
         if not aipdir.is_dir():
             raise PreservationException(f"{str(aipdir)}: not an existing directory")
+        sipdir = aipdir.parent
 
         # open the bag and get key info
         bag = NISTBag(aipdir)
@@ -569,7 +593,7 @@ class AIP1PreservationService(PreservationService):
         smcfg['working_dir'] = str(workparent/"work")
         smcfg['stage_dir']   = str(workparent/"stage")
         smcfg['persist_in']  = self._state_file_for(aipid)
-        smcfg['sip_dir']     = self.sipdir
+        smcfg['sip_dir']     = sipdir
         try:
             for dir in (workparent, smcfg['working_dir'], smcfg['stage_dir']):
                 if not os.path.isdir(dir):
@@ -587,21 +611,7 @@ class AIP1PreservationService(PreservationService):
             pstate = JSONPreservationStateManager.for_aip(smcfg, aipid, aipdir, self.log,
                                                           pubstat, startover)
             pstate.set_state_property('version', version)
-
-            # submit job
-            jcfg = {
-                "status_manager": smcfg,
-                "task": self.cfg.get('task', {}),
-                "logfile": str(workparent/"preservation.log"),
-                "history_dir": self.historydir
-            }
-            if self.cfg.get('repo_access'):
-                if not jcfg['task'].get('repo_access'):
-                    jcfg['task']['repo_access'] = self.cfg['repo_access']
-                else:
-                    jcfg['task']['repo_access'] = merge_config(jcfg['task']['repo_access'],
-                                                               deepcopy(self.cfg['repo_access']))
-            self.presq.submit(aipid, [self._state_file_for(aipid)], jcfg)
+            self._submit_preservation(pstate, message, startover)
 
         self.presq.clean()
 
@@ -609,6 +619,26 @@ class AIP1PreservationService(PreservationService):
         if isinstance(self.cfg.get('wait_to_start'), (int, float)):
             time.sleep(self.cfg['wait_to_start'])
         return self.status_of(aipid)
+
+    def _submit_preservation(self, presstate: PreservationStateManager, message: str=None, 
+                             startover: bool=False) -> PreservationStatus:
+        # this method assumes we've already grabbed a lock
+        aipid = presstate.aipid
+
+        # submit job
+        jcfg = {
+            "status_manager": presstate.cfg,
+            "task": self.cfg.get('task', {}),
+            "logfile": str(self.inprogdir/aipid/"preservation.log"),
+            "history_dir": self.historydir
+        }
+        if self.cfg.get('repo_access'):
+            if not jcfg['task'].get('repo_access'):
+                jcfg['task']['repo_access'] = self.cfg['repo_access']
+            else:
+                jcfg['task']['repo_access'] = merge_config(jcfg['task']['repo_access'],
+                                                           deepcopy(self.cfg['repo_access']))
+        self.presq.submit(aipid, [self._state_file_for(aipid)], jcfg)
 
     def _pres_job_exited(self, job: jobmgt.Job, ec: int):
         """

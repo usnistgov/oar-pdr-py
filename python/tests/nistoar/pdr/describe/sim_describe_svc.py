@@ -1,3 +1,7 @@
+"""
+sim_describe_srv Note:  this simulation server is deprecated by 
+:py:mod:`nistoar.pdr.public.sim.rmm`.  (See also test_rmm.py.)
+"""
 import json, os, sys, re, hashlib, traceback as tb
 from urllib.parse import parse_qs
 from collections import OrderedDict

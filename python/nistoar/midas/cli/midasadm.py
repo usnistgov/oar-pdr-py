@@ -6,10 +6,13 @@ import logging, os, sys
 from copy import deepcopy
 import traceback as tb
 from collections.abc import Mapping
+from argparse import ArgumentParser, SUPPRESS
 
 from nistoar.midas import MIDASException
 from nistoar.midas.dap import cmd as dap
 from nistoar.midas.dmp import cmd as dmp
+from nistoar.pdr.publish import cmd as pub
+from nistoar.pdr.preserve import cmd as pres
 from nistoar.base import config as cfgmod
 from nistoar.base.config import ConfigurationException
 from nistoar.pdr.utils import cli
@@ -36,6 +39,14 @@ class MidasadmSuite(cli.CLISuite):
     service configuration to ensure to ensure a matching behavior of underlying functions.
     """
     config_svc_app_name = "midas-dbio"   # to get identical behavior to the web service version
+
+    def __init__(self, progname=None, defconffile=None, parser=None):
+        if not progname:
+            progname = default_prog_name
+        parser = define_prog_opts(progname, description, epilog, parser)
+        if not defconffile:
+            defconffile = default_conf_file
+        super(MidasadmSuite, self).__init__(progname, defconffile, parser)
 
     def extract_config_for_cmd(self, config, cmdname, cmd=None):
         """
@@ -67,7 +78,25 @@ class MidasadmSuite(cli.CLISuite):
             return out
 
         return config
-            
+
+def define_prog_opts(progname: str, description: str=None, epilog: str=None, parser: ArgumentParser=None):
+    """
+    define the top level arguments for the midasadm script
+
+    :param str progname:    the name show as the name of the top-level program
+    :param str description: the summary of the command that precedes the argument descriptions (optional)
+    :param str epilog:      description to appear after the argument descriptions (optional)
+    :param ArgumentParser parser:  a pre-instantiated parser to configure and resturn; if not provided,
+                            one will be created fresh and returned configured.
+    """
+    parser = cli.define_prog_opts(progname, description, epilog, parser)
+    
+    parser.add_argument("-A", "--actor-id", type=str, dest="actor", metavar='USERID',
+                        help="An identifer representing the real user executing this command, used to "+
+                             "record the actor in provenance logs")
+    parser.add_argument("--vehicle", type=str, dest="vehicle", default=parser.prog, help=SUPPRESS)
+
+    return parser
 
 def main(cmdname, args):
     """
@@ -76,12 +105,15 @@ def main(cmdname, args):
     if not cmdname:
         cmdname = default_prog_name
 
-    argparser = cli.define_prog_opts(cmdname, description, epilog)
-    midas = MidasadmSuite(cmdname, default_conf_file, argparser)
+    midas = MidasadmSuite(cmdname)
 
     midas.load_subcommand(dap)
     midas.load_subcommand(dmp)
     midas.load_subcommand(jwt)
+    midas.load_subcommand(pub)
+    midas.load_subcommand(pub.PubAliasCommand("pdp0", pub.pdp0_description))
+    midas.load_subcommand(pub.PubAliasCommand("pdp1", pub.pdp1_description))
+    midas.load_subcommand(pres)
 
     # execute the command
     # args = midas.parse_args(args)

@@ -244,6 +244,10 @@ class ProtectedRecord(ABC):
         return self._data.get('id')
 
     @property
+    def type(self):
+        return self._coll
+
+    @property
     def owner(self):
         return self._data.get('owner', "")
 

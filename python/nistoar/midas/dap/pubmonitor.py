@@ -2,21 +2,34 @@
 Support for monitoring publishing requests so that MIDAS DAP records can be provided with 
 status updates.
 
-This modules includes support for running the monitor as stand-alone process launch from the 
-command-line.  
+This module extends the monitor framework defined in :py:mod:`nistoar.pdr.publish.service.monitor`
+in which a change in its publishing state will cause a DAP's record status to be updated in the 
+DBIO.  If the publishing process ends, successfully or otherwise, a signal can sent to a websocket
+server to trigger web clients to refresh their view of the record.  
+
+This modules includes support for running the monitor as a stand-alone process launched from the 
+command-line.  For command-line details, type, 
+
+.. code-block:: bash
+
+   python -m nistoar.midas.dap.pubmonitor -h
+
+
 """
-import os, sys, logging, argparse
+import os, sys, logging, argparse, re
 from logging import Logger
 from typing import Mapping
 
-from .. import dbio
-from ..dbio import status as mstatus
-from ..dbio.project import ProjectService
+from nistoar.midas import dbio
+from nistoar.midas.dbio import status as mstatus, ObjectNotFound, NotAuthorized
+from nistoar.midas.dap.service.mds3 import DAPService
+from nistoar.midas.wsgi import ServiceAppFactory as MIDASServiceAppFactory
 from nistoar.pdr.publish.service import status as pstatus
-from nistoar.pdr.publish.service.monitor import LocalPublishingMonitor
+from nistoar.pdr.publish.service.monitor import LocalPublishingMonitor, FileBasedPublishingMonitorClient
 from nistoar.base import config
 from nistoar.pdr.utils.cli import CommandFailure
 from nistoar.pdr.utils.prov import Agent
+from nistoar.pdr.constants import ARK_PFX_PAT
 
 class MIDASPublishingMonitor(LocalPublishingMonitor):
     """
@@ -24,15 +37,11 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
     that will update an SIP's corresponding MIDAS DAP record.  
     """
     def __init__(self, dbclient_factory: dbio.DBClientFactory, statusdir: str, qfile: str,
-                 cyclesecs: int=600, dapconfig: Mapping={}, who: Agent=None, log: Logger=None):
+                 cyclesecs: int=600, dapconfig: Mapping=None, who: Agent=None, log: Logger=None):
         """
         initialize the monitor with an internal :py:class:`~nistoar.midas.dbio.project.ProjectService`
         that will be used to update the status of MIDAS records going through the publishing service
         (i.e. "in press").  
-
-        Implementation Note: this internally creates a generic ``ProjectService`` rather than a 
-        :py:class:`~nistoar.midas.dap.service.mds3.DAPService`.  Since this monitor only updates 
-        the status, it does not need to be attached to a particular convention.  
 
         :param DBClientFactory dbclient_factory:  the factory needed to the proper DBIO client instance 
                                     to back the ``ProjectService``.
@@ -50,16 +59,18 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
         if not log:
             log = logging.getLogger("MIDASPublishingMonitor")
         self.log = log
+        if not dapconfig:
+            dapconfig = {}
 
         if not who:
             who = Agent("MIDASPublishingMonitor", Agent.AUTO, dbio.AUTOADMIN, Agent.ADMIN)
 
-        self.projsvc = ProjectService(dbio.DAP_PROJECTS, dbclient_factory, dapconfig, who,
-                                      self.log.getChild(dbio.DAP_PROJECTS))
+        self.projsvc = DAPService(dbclient_factory, dapconfig, who,
+                                  self.log.getChild(dbio.DAP_PROJECTS))
 
         super(MIDASPublishingMonitor, self).__init__(statusdir, qfile, self.update_status, cyclesecs, log)
 
-    def update_status(self, sipid: str, state:str , message: str):
+    def update_status(self, sipid: str, state:str , message: str, data: Mapping=None):
         """
         process a detected change in the publishing state and update the MIDAS record status accordingly. 
         """
@@ -71,30 +82,56 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
             prec = self.projsvc.get_record(sipid)
         except ObjectNotFound as ex:
             self.log.warning("Failed to find record %s currently under watch", sipid)
+            raise
         except NotAuthorized as ex:
             self.log.error("Not authorized to read record %s as %s; has it really been submitted yet?",
                            sipid, str(self.projsvc.user))
+            raise
 
+        self.log.debug("processing publishing state change to %s", state)
+        precupdated = True
         if state == pstatus.SUBMITTED:
             prec.status.set_state(mstatus.ACCEPTED)
             prec.status.message = message
         elif state == pstatus.PROCESSING:
-            prec.status.set_state(mstatus.INPRESS)
-            prec.status.message = "Publication is being preserved and published"
+            if mstatus != mstatus.INPRESS:
+                prec.status.set_state(mstatus.INPRESS)
+                prec.status.message = "Publication is being preserved and published"
         elif state == pstatus.PUBLISHED:
-            prec.status.set_state(mstatus.PUBLISHED)
-            prec.status.message = message
+            if mstatus != mstatus.PUBLISHED:
+                if data and data.get('published_as'):
+                    aipid = re.sub(ARK_PFX_PAT, '', data['published_as'])
+                    prec.status.publish(data['published_as'], data.get('version', '(unknown)'),
+                                        data.get('archived_at', f"aip:{aipid}"),
+                                        data.get('last_published_time', -1))
+                else:
+                    prec.status.set_state(mstatus.PUBLISHED)
+
+                self.projsvc._unset_review_permissions(prec)
+                prec.status.message = message
         elif state == pstatus.FAILED:
-            prec.status.set_state(mstatus.UNWELL)
-            prec.status.message = "A publication failure was encountered; admins have been alerted"
+            if mstatus != mstatus.UNWELL:
+                prec.status.set_state(mstatus.UNWELL)
+                prec.status.message = "A publication failure was encountered; admins have been alerted"
         elif state == pstatus.ONHOLD:
             prec.status.set_state(mstatus.INPRESS)
             prec.status.message = "Publication has been paused; admins have been alerted"
+        self.log.info("%s: %s", prec.id, prec.status.message)
+        
         try:
             prec.save()
         except dbio.NotAuthorized as ex:
             self.log.error("%s not authorized to update status of %s; has it really be submitted yet?",
                            str(self.projsvc.user), sipid)
+        else:
+            if self.projsvc.dbcli.notifier:
+                self.projsrv.dbcli.notifier(f"proj-publish,{self.dbcli._projcol},{prec.name}")
+            if state == pstatus.PUBLISHED:
+                # clean-up
+                # self.projsvc.delete()
+                pass
+
+        return True
 
 description = """\
 Continuously monitor the publishing progress of SIPs on behalf of the MIDAS
@@ -135,6 +172,8 @@ The supported configuration parameters are:
       configuration service.  If provided, it should at least include a 'dbio'
       configuration.
 
+The usual logging parameters are supported as well.
+
 ENVIRONMENT
 
 Several environmnent variables can be set to affect the monitor's behavior, and 
@@ -174,6 +213,13 @@ def define_options(progname):
     parser.add_argument("-Q", "--queue-file", type=str, dest='qfile', metavar='FILE',
                         help="the location of the queue containing submitted SIPs that should be monitored "+
                              "(over-riding the configuration).")
+    parser.add_argument("-M", "--monitor", type=str, dest='qadd', metavar='SIP[ STATE[ MSG]]', action="append",
+                        help="before starting monitor, add SIP to the queue for monitoring.  SIP is an "+
+                             "SIP identifier, optionally followed by an initial state to give it and an "+
+                             "initial message.  STATE should be one of the recognized publishing states "+
+                             "(awaiting, pending, processing, finalized, submitted, published, failed, " +
+                             "on-hold).  If STATE and MSG are provide as well, all three must be provided "+
+                             "a single shell argument.")
     parser.add_argument("-c", "--config", type=str, dest='conf', metavar='FILE',
                         help="read configuration from FILE (see CONFIGURATION section below for details)")
     parser.add_argument("--until-empty", action='store_true', dest='tillempty',
@@ -182,14 +228,14 @@ def define_options(progname):
                         help="stop monitoring and exit after COUNT loops through the queue.  If COUNT is "+
                              "negative, monitoring will stop when the queue is empty (see also "+
                              "--until-empty).  If COUNT is 0 (default), the monitor will run forever.")
-    parser.add_argument("--dbio-url", type=str, dest='dburl', metavar='DBURL', default='inmem',
-                        help="the URL for accessing the DBIO database.  If the URL starts with 'mongodb://', "+
-                             "it will be taken as a MongoDB URL (it should include the database name and "+
-                             "user credentials).  If it starts with 'file:', a filesystem-based backend will "+
-                             "be assumed with the rest of the URL providing the root path to the DBIO "+
-                             "directory.  If it equals 'inmem' (the default when no configuration is "+
-                             "provided), an in-memory implementation will be assumed; this can be used for "+
-                             "testing.")
+    parser.add_argument("--dbio-url", type=str, dest='dburl', metavar='DBURL', default=None,
+                        help="the URL for accessing the DBIO database, overriding the configuration.  If "+
+                             "the URL starts with 'mongodb://', it will be taken as a MongoDB URL (it "+
+                             "should include the database name and user credentials).  If it starts with "+
+                             "'file:', a filesystem-based backend will be assumed with the rest of the "+
+                             "URL providing the root path to the DBIO directory.  If it equals 'inmem' "+
+                             "(the default when no configuration is provided), an in-memory implementation "+
+                             "will be assumed; this can be used for testing.")
     parser.add_argument("-l", "--logfile", type=str, dest='logfile', metavar='FILE', 
                         help="log messages to FILE, over-riding the configured logfile.  Use of this option "+
                              "also over-rides 'logserver' and 'logdir' in the configuration.")
@@ -215,19 +261,18 @@ def define_options(progname):
 
     return parser
 
-def main(progname, args):
+def main(progname, opts):
     """
     Launch the SIP publishing monitor on behalf of MIDAS.
-    """
-    parser = define_options(progname)
-    opts = parser.parse_args(args)
 
+    :param opts: the parsed command-line arguments
+    """
     if opts.conf:
         cfg = config.resolve_configuration(opts.conf)
         
     elif config.service:
         if not opts.moncfgname:
-            raise cli.CommandFailure("--monitor-config-name: empty value provided", 2)
+            raise cli.CommandFailure(progname, "--monitor-config-name: empty value provided", 2)
             
         config.service.wait_until_up(int(os.environ.get('OAR_CONFIG_TIMEOUT', 10)),
                                      True, sys.stderr)
@@ -236,7 +281,7 @@ def main(progname, args):
         cfg = {}  # there better be some CL options provided!
 
     if opts.cycletime is None:
-        opts.cycletype = cfg.get('cycle_time', 600)  # default: ten minutes
+        opts.cycletime = cfg.get('cycle_time', 600)  # default: ten minutes
     if opts.stopafter is None:
         opts.stopafter = cfg.get('stop_after', 0)    # default: run forever
     if opts.tillempty:
@@ -245,38 +290,50 @@ def main(progname, args):
     if not opts.statusdir:
         opts.statusdir = cfg.get('status_dir')
     if not opts.statusdir:
-        raise CommandFailure("No queue_file specified/configured (try --status-dir)", 2)
+        raise CommandFailure(progname, "No queue_file specified/configured (try --status-dir)", 2)
     if not os.path.isdir(opts.statusdir):
-        raise CommandFailure(f"{opts.statusdir}: status dir does not exists", 6)
+        raise CommandFailure(progname, f"{opts.statusdir}: status dir does not exists", 6)
         
     if not opts.qfile:
         opts.qfile = cfg.get('queue_file')
     if not opts.qfile:
-        raise CommandFailure("No queue_file specified/configured (try --queue-file)", 2)
+        raise CommandFailure(progname, "No queue_file specified/configured (try --queue-file)", 2)
 
     configure_log(opts, cfg, progname)
 
-    who = None
-    if opts.agentid:
-        who = Agent("MIDASPublishingMonitor", Agent.AUTO, opts.agentid, Agent.ADMIN)
+    who = opts.actor
+    if not who:
+        who = cfg.get('as_actor', dbio.AUTOADMIN)
+    if not who:
+        raise config.ConfigurationException("Misisng config parameter: as_actor")
+    who = Agent("MIDASPublishingMonitor", Agent.AUTO, opts.actor, Agent.ADMIN)
 
     dapcfg = cfg.get('dap_service')
     if dapcfg is None:
         if config.service:
-            if not opts.moncfgname:
-                raise cli.CommandFailure("--midas-config-name: empty value provided", 2)
-            dapcfg = config.service.get(opts.moncfgname, {})
+            if not opts.midascfgname:
+                raise cli.CommandFailure(progname, "--midas-config-name: empty value provided", 2)
+            dapcfg = config.service.get(opts.midascfgname, {})
         else:
             # it's actually likely that no DAP-specific configuration is needed
             dapcfg = {}
         if 'services' in dapcfg:
             # We have a midas-dbio configuration; extract the dap service configuration
-            extracted = ServiceAppFactory(dapcfg, {}).config_for_convention("dap", "def")
-            dapcfg = config.merge_config(extracted, dapcfg.get('dbio', {}))
+            extracted = MIDASServiceAppFactory(dapcfg, {}).config_for_convention("dap", "def")
+            dapcfg = config.merge_config(extracted, { 'dbio': dapcfg.get('dbio', {}) })
+
+    if opts.qadd:
+        cli = FileBasedPublishingMonitorClient(opts.qfile)
+        delim = re.compile(r'\s+')
+        for sip in opts.qadd:
+            if sip:
+                sip = delim.split(sip, 2)
+                cli.watch(*sip)
 
     dbfact = create_dbfactory(dapcfg, opts.dburl)
     log = logging.getLogger(progname)
-    monitor = MIDASPublishingMonitor(dbfact, opts.statusdir, opts.qfile, dapcfg, who, log)
+    monitor = MIDASPublishingMonitor(dbfact, opts.statusdir, opts.qfile, opts.cycletime,
+                                     dapcfg, who, log)
 
     # TODO: enable launching as daemon
     monitor.monitor(opts.stopafter)
@@ -297,7 +354,7 @@ def create_dbfactory(cfg: Mapping, dburl: str=None):
             dbcfg['factory'] = "mongo"
             dbcfg['db_url'] = dburl
         else:
-            raise CommandFailure("Unrecognized DBIO URL: "+dburl, 2)
+            raise CommandFailure(progname, "Unrecognized DBIO URL: "+dburl, 2)
 
     dbtype = dbcfg.get('factory', 'inmem') 
     if dbtype == "mongo":
@@ -322,7 +379,7 @@ def create_dbfactory(cfg: Mapping, dburl: str=None):
     elif dbtype == "inmem":
         return dbio.InMemoryDBClientFactory(dbcfg)
 
-    raise CommandFailure("No DBIO service configured (dap_service.dbio)", 6)
+    raise CommandFailure(progname, "No DBIO service configured (dap_service.dbio)", 6)
 
 def configure_log(args, cfg: Mapping, progname="pubmonitor"):
     """
@@ -332,17 +389,41 @@ def configure_log(args, cfg: Mapping, progname="pubmonitor"):
         cfg['loglevel'] = logging.DEBUG
     if cfg.get('loglevel') is None:
         cfg['loglevel'] = config.NORMAL
-        
+
     if args.logfile:
-        cfg['logfile'] = opts.logfile
-        # use of --logfile overrides logserver and logdir in configuration
-        if cfg.get('logserver'):
-            del cfg['logserver']
-        if cfg.get('logdir'):
-            del cfg['logdir']
+        if args.logfile == "-":
+            logcfg = cfg.get('logging', {})
+            cfg.setdefault('logging', {})
+            logcfg.setdefault('version', 1)
+            logcfg.setdefault('formatters', {})
+            logcfg['formatters'].setdefault('console', {})
+            logcfg['formatters']['console'].setdefault('format', config.CONSOLE_LOG_FORMAT)
+            logcfg.setdefault('handlers', {})
+            logcfg['handlers'].setdefault('console', {})
+            concfg = logcfg['handlers']['console']
+            logcfg['handlers']['console'] = {
+                'class': 'logging.StreamHandler',
+                'formatter': 'console',
+                'level': cfg['loglevel'],
+                'stream': 'ext://sys.stderr'
+            }
+            logcfg['handlers']['console'].update(concfg)
+            logcfg.setdefault('root', {})
+            logcfg['root']['level'] = cfg['loglevel']
+            logcfg['root']['handlers'] = list(logcfg['handlers'].keys())
+            cfg['logging'] = logcfg
+            del cfg['loglevel']
+        else:
+            cfg['logfile'] = args.logfile
+            # use of --logfile overrides logserver and logdir in configuration
+            cfg['logdir'] = os.getcwd()
+            if cfg.get('logserver'):
+                del cfg['logserver']
+            if cfg.get('logging'):
+                del cfg['logging']
 
     # config.configure_logging(cfg)
-    config.configure_log(config=cfg)   # deprecated method
+    config.configure_logging(cfg)
 
     if args.verbose:
         level = (args.debug and logging.DEBUG) or logging.INFO
@@ -357,7 +438,8 @@ def configure_log(args, cfg: Mapping, progname="pubmonitor"):
 if __name__ == "__main__":
     try:
         progname = os.path.splitext(os.path.basename(sys.argv[0]))[0]
-        opts = main(progname, sys.argv[1:])
+        opts = define_options(progname).parse_args(sys.argv[1:])
+        main(progname, opts)
         sys.exit(0)
     except CommandFailure as ex:
         logging.getLogger(progname).critical(str(ex))

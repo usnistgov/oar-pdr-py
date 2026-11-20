@@ -9,6 +9,7 @@ from nistoar.base import config
 from nistoar.pdr.distrib import DistribServiceException
 from nistoar.pdr.preserve.bagit import BagBuilder
 from nistoar.pdr.utils import read_nerd, write_json
+from nistoar.pdr.public.sim import repo
 
 pdrdir = Path(__file__).resolve().parents[3] 
 storedir = pdrdir / "distrib" / "data"
@@ -16,6 +17,7 @@ basedir = pdrdir.parents[3]
 ormdir = basedir / "metadata"
 assert storedir.is_dir()
 
+uwsgiscript = repo.__file__
 port = 9091
 prefixes = ["10.88434", "10.88888"]
 
@@ -28,20 +30,11 @@ def startServices(authmeth=None):
     srvport = port
     pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
     
-    wpy = "python/tests/nistoar/pdr/distrib/sim_distrib_srv.py"
-    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
-          "--wsgi-file {3} --pidfile {4}"
-    cmd = cmd.format(os.path.join(tdir,"simdistsrv.log"), uwsgi_opts, srvport,
-                     os.path.join(basedir, wpy), pidfile)
-    os.system(cmd)
-
-    srvport += 1
-    pidfile = os.path.join(tdir,"simsrv"+str(srvport)+".pid")
-    wpy = "python/tests/nistoar/pdr/ingest/rmm/sim_ingest_srv.py"
-    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} " \
-          "--wsgi-file {3} --set-ph auth_key=critic --set-ph auth_meth=header --pidfile {4}"
-    cmd = cmd.format(os.path.join(tdir,"simingsrv.log"), uwsgi_opts, srvport,
-                     os.path.join(basedir, wpy), pidfile)
+    cmd = "uwsgi --daemonize {0} {1} --http-socket :{2} --set-ph readonly=False " \
+          "--wsgi-file {3} --pidfile {4} --set-ph bagdir={5} --set-ph archive_dir={6} " \
+          "--set-ph baseurl=http://localhost:{2}/"
+    cmd = cmd.format(os.path.join(tdir,"simreposrv.log"), uwsgi_opts, srvport,
+                     uwsgiscript, pidfile, storedir, tdir)
     os.system(cmd)
 
     srvport += 1
@@ -59,7 +52,7 @@ def stopServices():
     tdir = tmpdir.name
     srvport = port
 
-    for p in range(srvport, srvport+3):
+    for p in range(srvport, srvport+2):
         pidfile = os.path.join(tdir,"simsrv"+str(p)+".pid")
         if os.path.exists(pidfile):
             cmd = "uwsgi --stop {0}".format(pidfile)
@@ -104,7 +97,7 @@ class TestPDRBagFinalization(test.TestCase):
         self.cfg = {
             'repo_access': {
                 'distrib_service': {
-                    'service_endpoint': 'http://localhost:9091/'
+                    'service_endpoint': 'http://localhost:9091/ds/'
                 },
                 "store_dir": storedir  # ,
 #                "restricted_store_dir": self.restricted
@@ -113,7 +106,7 @@ class TestPDRBagFinalization(test.TestCase):
             'ingest': {
                 'rmm': {
                     'data_dir': self.ingestdir,
-                    'service_endpoint': 'http://localhost:9092/nerdm/',
+                    'service_endpoint': 'http://localhost:9091/ingest/',
                     'auth_key': 'critic',
                     'auth_method': 'header'
                 },
@@ -121,7 +114,7 @@ class TestPDRBagFinalization(test.TestCase):
                     'data_dir': self.dcdir,
                     'minting_naan': '10.88888',
                     'datacite_api': {
-                        'service_endpoint': 'http://localhost:9093/dois/',
+                        'service_endpoint': 'http://localhost:9092/dois/',
                         'user': "gurn",
                         'pass': "cranston"
                     }
