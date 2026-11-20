@@ -24,6 +24,7 @@ are handled accordingly:
 ``/<group_id>/<user>`` -- :py:class:`GroupHandler`
     removes a single user (or group) from the membership list (DELETE).
 """
+import re
 from collections.abc import Callable, Mapping
 from logging import Logger
 
@@ -36,10 +37,14 @@ from nistoar.midas.dbio.base import Group, DBGroups, DEF_GROUPS_SHOULDER
 import logging
 logger = logging.getLogger(__name__)
 
+BAD_NAME_RE = re.compile(r'(^[\.#])|([<>])')
+
 class GroupService:
     """
     A service class that wraps basic group operations provided by the Group class
     """
+    _bad_name_re = BAD_NAME_RE
+
     def __init__(self, dbclient, log: Logger = None):
         self._cli = dbclient
         self._groups: DBGroups = dbclient.groups
@@ -58,6 +63,11 @@ class GroupService:
         :raises NotAuthorized:  if the user is not authorized to create this group
         :return: the newly created Group object
         """
+        # reject sus names
+        if self._bad_name_re.search(name):
+            raise InvalidUpdate("Illegal group name requested",
+                                errors=["Name contains illegal characters or sequences"])
+        
         return self._groups.create_group(name, foruser, shoulder)
 
     def get_group(self, group_id: str) -> Group:

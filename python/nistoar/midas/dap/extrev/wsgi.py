@@ -133,17 +133,18 @@ class LegacyNPSFeedbackHandler(HandlerWithJSON):
                         input['changesRequested'] = False
                     self._svc.apply_external_review(id, self.system_name, input['phase'], 
                                                     str(input['systemID']), input.get('info_at'), 
-                                                    input.get('feedback'), input.get('changesRequested'))
+                                                    input.get('feedback'), input.get('changesRequested'),
+                                                    input.get('fbreplace'))
 
                 if input['phase'] == "approved":
                     self._svc.approve(id, self.system_name, str(input['systemID']), input.get('info_at'))
 
             status = self._get_review_status_for(id)
                 
-        except ObjectNotFound as ex:
+        except dbio.ObjectNotFound as ex:
             return self.send_error_obj(404, "ID Not Found", "No DAP record with requested ID")
 
-        except NotAuthorized as ex:
+        except dbio.NotAuthorized as ex:
             self.log.warning("%s: Premature review in progress? %s", id, str(ex))
             return self.send_error_obj(401, "Not Authorized",
                                        f"Record is not set to accept review feedback at this time")

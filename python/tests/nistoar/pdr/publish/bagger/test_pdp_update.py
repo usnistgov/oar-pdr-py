@@ -9,7 +9,6 @@ from nistoar.pdr import utils, ARK_NAAN
 import nistoar.pdr.exceptions as exceptions
 import nistoar.pdr.publish.bagger.pdp as pdp
 from nistoar.pdr.publish.bagger import prepupd
-from nistoar.pdr.publish.bagger import utils as bagutils
 from nistoar.pdr.publish import idmint as minter
 from nistoar.pdr.publish import BadSIPInputError
 from nistoar.nerdm import constants as consts
@@ -197,7 +196,7 @@ class TestPDPBagger(test.TestCase):
         self.assertEqual(self.bgr.bagdir, str(self.bagparent / 'mds8-8888'))
 
         prepr = self.bgr._get_prepper()
-        self.assertEqual(prepr.aipid, "mds8-8888")
+        self.assertIsNone(prepr.aipid)   # not known yet
         self.assertEqual(prepr.pdrid, "ark:/88888/mds8-8888")
 
     def test_ensure_preparation_update_frombag(self):

@@ -392,7 +392,7 @@ def create_slow_scan_queue(queuedir: Union[Path,str], config: Mapping=None,
     :param bool       resume:  if True, launch any zombied jobs found in the state directory
     """
     from . import jobexec
-    return JobQueue("slow_scan", queuedir, jobexec, config, log, resume)
+    return JobQueue("slow_scan", queuedir, jobexec, config, log, resume=resume)
 
 def set_slow_scan_queue(queuedir: Union[Path,str], config: Mapping=None,
                         log: Logger=None, resume: bool=True) -> JobQueue:

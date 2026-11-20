@@ -16,13 +16,23 @@
             "givenName": "Zachary",
             "middleName": "H.",
             "familyName": "Levine",
-            "affiliation": "National Institute of Standards and Technology"
+            "affiliation": [
+                {
+                    "@type": "org:Organization",
+                    "title": "National Institute of Standards and Technology"
+                }
+            ]
         },
         {
             "givenName": "John",
             "middleName": "J.",
             "familyName": "Curry",
-            "affiliation": "National Institute of Standards and Technology"
+            "affiliation": [
+                {
+                    "@type": "org:Organization",
+                    "title": "National Institute of Standards and Technology"
+                }
+            ]
         }
     ],
     "contactPoint": {

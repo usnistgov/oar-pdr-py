@@ -125,7 +125,7 @@ class MIDASFileManagerService:
             wdcli = self.make_webdav_client(nccli.base_url)
         self.wdcli = wdcli
 
-        self.spaceid_pats = [re.compile(p) for p in self.cfg.get('space_id_patterns', [':'])]
+        self.space_name_pats = [re.compile(p) for p in self.cfg.get('space_name_patterns', ['_'])]
 
     def make_webdav_client(self, generic_url: str=None, _override=None):
         """
@@ -211,8 +211,8 @@ class MIDASFileManagerService:
                              that originally published the dataset or otherwise originally created
                              the space.
         :param dict published_files:  a dictionary describing the previously published files.  Each
-                             key is a path a file (relative to the uploads directory), and the 
-                             value are is a dictionary containing the file metadata: "size" giving 
+                             key is a path a file (relative to the uploads directory), and each
+                             value is a dictionary containing the file metadata: "size" giving 
                              file's size in bytes, and checksum, giving the (SHA256) checksum hash.
         """
         if published_files and \
@@ -238,21 +238,32 @@ class MIDASFileManagerService:
 
         # create the previously published list files
         if published_files:
+            # we will update the summary, so load it
+            summ = space._load_summary()
+            
             # determine the hierarchy
             files = sorted(published_files, key=lambda f: f['filepath'], reverse=True)
             foldercnts = {}
+            fc = 0
             for file in files:
                 fp = Path(file['filepath'])
-                for fldr in fp.parents:
+                for fldr in fp.parents:       # Note: last fldr will be '.'
                     fldr = str(fldr)
                     if fldr not in foldercnts:
                         foldercnts[fldr] = []
-                fldr = str(fp.parents[0])
-                file['name'] = fp.name
-                foldercnts[fldr].append(file)
+                if file.get('type') == 'folder':
+                    if file['filepath'] not in foldercnts:
+                        foldercnts[file['filepath']] = []
+                else:
+                    fc += 1
+                    fldr = str(fp.parents[0])
+                    file['name'] = fp.name
+                    foldercnts[fldr].append(file)
+            summ['file_count'] = fc
 
             # create needed directories
             prob = []
+            fc = 0
             for fldr in sorted(foldercnts.keys()):
                 fldrpth = space.root_dir / space.uploads_folder / fldr
                 if not fldrpth.exists():
@@ -261,12 +272,15 @@ class MIDASFileManagerService:
                 elif not fldrpth.is_dir():
                     prob.append(fldr)
                     continue
+                fc += 1
 
                 filelist = []
                 for file in foldercnts[fldr]:
                     filelist.append(self._format_published_file(file))
                 self.wdcli.wdcli.upload_to(self._filelist2listfile(filelist).encode('utf-8'),
                                            '/'.join([space.uploads_davpath, fldr, self._PPFName]))
+            summ['folder_count'] = fc - 1  # (don't count '.')
+            space._cache_fm_summary(summ)
             
             if prob:
                 # should not happen
@@ -349,7 +363,16 @@ class MIDASFileManagerService:
             msg = "Failed to preload uploads dir with files from %s: %s" % (srcdir, str(e))
             raise FileManagerServerError(msg) from e
         
-            
+    def space_name_for(self, id) -> str:
+        """
+        return the folder name (relative to the space root folder) for the space corresponding 
+        to the given id.
+        """
+        return re.sub(r':', '_', id)
+
+    def _space_id_for(self, spname):
+        # inverse of space_name_for()
+        return re.sub(r'_', ':', spname, 1)
 
     def space_exists(self, id: str) -> bool:
         """
@@ -359,7 +382,7 @@ class MIDASFileManagerService:
             if not self._root_dir.exists():
                 self.log.warning("data root dir still does not exist! (%s)", self._root_dir)
             else:
-                return (self._root_dir / id).exists()
+                return (self._root_dir / self.space_name_for(id)).exists()
         return self.wdcli.is_directory(id)
 
     def space_ids(self) -> List[str]:
@@ -371,9 +394,9 @@ class MIDASFileManagerService:
                 self.log.warning("data root dir still does not exist! (%s)", self._root_dir)
             else:
                 # Consult the local filesystem
-                return [d for d in os.listdir(self._root_dir)
+                return [self._space_id_for(d) for d in os.listdir(self._root_dir)
                           if not d.startswith('.') and not d.startswith("_") and
-                          any([p.search(d) for p in self.spaceid_pats])]
+                          any([p.search(d) for p in self.space_name_pats])]
         return []
     
     def get_space(self, id: str):
@@ -396,7 +419,7 @@ class MIDASFileManagerService:
         if not self.space_exists(id):
             raise FileManagerResourceNotFound(id)
 
-        self.wdcli.delete_resource(id)
+        self.wdcli.delete_resource(self.space_name_for(id))
 
     def ensure_user(self, userid: str):
         """
@@ -469,7 +492,8 @@ class FMSpace:
         """
         self.svc = fmsvc
         self._id = id
-        self._root = self.svc._root_dir / id
+        self._spname = self.svc.space_name_for(self._id)
+        self._root = self.svc._root_dir / self._spname
         self._uploads_fileid = None
         if not log:
             log = self.svc.log.getChild(id)
@@ -498,7 +522,7 @@ class FMSpace:
         the resource path to the root folder for the space.  This path is used to access the 
         folder via the WebDAV API.
         """
-        return self.id
+        return self._spname
 
     @property
     def uploads_davpath(self):
@@ -513,7 +537,7 @@ class FMSpace:
         """
         the resource path to the uploads folder for the space relative to the :py:prop:`root_davpath`.
         """
-        return f"{self.id}"
+        return f"{self._spname}"
 
     @property
     def hide_davpath(self):
@@ -544,7 +568,7 @@ class FMSpace:
         """
         the resource path to the system folder for the space relative to the :py:prop:`root_davpath`.
         """
-        return f"{self.id}-sys"
+        return f"{self._spname}-sys"
 
     @property
     def uploads_file_id(self):
@@ -592,7 +616,7 @@ class FMSpace:
             out['location'] = self._make_gui_url(self.uploads_file_id)
             davurlep = self.svc.wdcli.cfg.get('service_endpoint')
             if davurlep:
-                out['uploads_dav_url'] = '/'.join([davurlep, self.id, self.id])
+                out['uploads_dav_url'] = '/'.join([davurlep, self._spname, self._spname])
             self._cache_fm_summary(out)
         return out
 

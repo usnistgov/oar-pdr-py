@@ -12,7 +12,7 @@ from nistoar.pdr.utils.cli import CommandFailure
 from nistoar.pdr.describe import MetadataClient, RMMServerError
 from nistoar.pdr.distrib import (RESTServiceClient, BagDistribClient,
                                  DistribServerError, DistribResourceNotFound)
-from nistoar.pdr.publish.bagger.utils import Version
+from nistoar.pdr.preserve.bagit.utils import Version
 from nistoar.pdr.preserve.bagit.serialize import DefaultSerializer
 from ._args import process_svcep_args, define_comm_md_opts
 

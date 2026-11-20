@@ -47,7 +47,7 @@ class Ready(Handler):
             format = self.select_format(format, path)
             if not format:
                 if self.log:
-                    self.log.failure("Failed to determine output format")
+                    self.log.critical("Failed to determine output format")
                 return send_error(500, "Server Error")
         except Unacceptable as ex:
             return self.send_unacceptable(content=str(ex))

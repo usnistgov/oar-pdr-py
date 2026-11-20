@@ -14,6 +14,7 @@ from nistoar.midas.dbio.mongo import MongoDBClient
 from nistoar.midas.dbio.fsbased import FSBasedDBClient
 from nistoar.midas.dbio import status
 from nistoar.midas.dbio.project import NotSubmitable
+from nistoar.midas.cli.midasadm import MidasadmSuite
 
 tmpdir = tempfile.TemporaryDirectory(prefix="_test_unsubmit.")
 testdir = Path(__file__).parents[0]
@@ -53,7 +54,7 @@ def tearDownModule():
 class TestReviewCmd(test.TestCase):
 
     def setUp(self):
-        self.cmd = cli.CLISuite("midasadm")
+        self.cmd = MidasadmSuite()
         self.cmd.load_subcommand(unsubmit)
 
         root = os.path.join(tmpdir.name, "dbfiles")
@@ -67,6 +68,11 @@ class TestReviewCmd(test.TestCase):
                     }
                 }
             },
+            "nerdstorage": {
+                "type": "fsbased",
+                "store_dir": os.path.join(tmpdir.name)
+#                "type": "inmem",
+            },
             'doi_naan': '10.88888',
             'external_review': {
                 "name": "simulated",
@@ -74,6 +80,15 @@ class TestReviewCmd(test.TestCase):
                 "as_system": "nps1"
             }
         }
+        self.nerddata = {
+            "title": "Shazam!: the Movie",
+            "description":  "meh",
+            "topic": [{
+                "scheme": "https://data.nist.gov/od/dm/nist-themes/v2.0",
+                "tag": "Information Technolog"
+            }]
+        }
+
         self.log = logging.getLogger()
         
     def tearDown(self):
@@ -98,7 +113,7 @@ class TestReviewCmd(test.TestCase):
         who = get_agent(args, self.cfg)
         svc = create_DAPService(who, args, self.cfg, self.log)
         self.assertTrue(svc._extrevcli)
-        rec = svc.create_record("goob")
+        rec = svc.create_record("goob", self.nerddata)
         self.assertEqual(rec.status.state, status.EDIT)
         self.assertIsNone(rec.status.get_review_from("nps1"))
 
@@ -125,7 +140,7 @@ class TestReviewCmd(test.TestCase):
         who = get_agent(args, self.cfg)
         svc = create_DAPService(who, args, self.cfg, self.log)
         self.assertTrue(svc._extrevcli)
-        rec = svc.create_record("goob")
+        rec = svc.create_record("goob", self.nerddata)
         self.assertEqual(rec.status.state, status.EDIT)
         self.assertIsNone(rec.status.get_review_from("nps1"))
 
@@ -153,7 +168,7 @@ class TestReviewCmd(test.TestCase):
         who = get_agent(args, self.cfg)
         svc = create_DAPService(who, args, self.cfg, self.log)
         self.assertTrue(svc._extrevcli)
-        rec = svc.create_record("goob")
+        rec = svc.create_record("goob", self.nerddata)
         self.assertEqual(rec.status.state, status.EDIT)
         self.assertIsNone(rec.status.get_review_from("nps1"))
 
@@ -179,7 +194,7 @@ class TestReviewCmd(test.TestCase):
         who = get_agent(args, self.cfg)
         svc = create_DAPService(who, args, self.cfg, self.log)
         self.assertTrue(svc._extrevcli)
-        rec = svc.create_record("goob")
+        rec = svc.create_record("goob", self.nerddata)
         self.assertEqual(rec.status.state, status.EDIT)
         self.assertIsNone(rec.status.get_review_from("nps1"))
 

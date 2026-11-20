@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from nistoar.testing import *
 from nistoar.midas.dap.fm.clients import fm
 from nistoar.midas.dap.fm.exceptions import *
+from nistoar.pdr.utils.io import read_nerd
 
 port = 8999
 baseurl = f"http://localhost:{port}/mfm1"
@@ -16,7 +17,8 @@ fmdatadir = os.path.join(tmpdir.name, 'svc', "fmdata")
 jobdir =  os.path.join(tmpdir.name, 'svc', "jobqueue")
 
 nistoardir = testdir.parents[3]
-sampdatadir = nistoardir / 'pdr' / 'preserve' / 'data' 
+sampdatadir = nistoardir / 'pdr' / 'preserve' / 'data'
+nerdfile = nistoardir / 'pdr' / 'describe' / 'data' / 'pdr2210.json'
 
 uwsgi_opts = "--plugin python3"
 if os.environ.get("OAR_UWSGI_OPTS") is not None:
@@ -129,6 +131,17 @@ class MIDASFileManagerClientTest(test.TestCase):
         with self.assertRaises(FileManagerResourceNotFound):
             self.cli.summarize_space("mds3:0010")
 
+        # revive the space with some previously published files
+        nerdm = read_nerd(nerdfile)
+        files = [c for c in nerdm.get('components') if 'filepath' in c]
+        summ = self.cli.revive_space("mds3:0010", 'ava1', files)
+        self.assertEqual(summ['created_by'], 'ava1')
+        self.assertEqual(summ['users'], ['ava1'])
+        self.assertEqual(summ['id'], "mds3:0010")
+        self.assertEqual(summ['file_count'], 3)
+        self.assertEqual(summ['folder_count'], 1)
+        
+
     def test_scans(self):
         spid = "mds3:0000"
         userid = 'ava1'
@@ -150,7 +163,8 @@ class MIDASFileManagerClientTest(test.TestCase):
         self.assertEqual(self.cli.last_scan_id(spid), scid)
 
         # add some files
-        uplfldr = os.path.join(fmdatadir, spid, spid)
+        fmdirnm = screp['uploads_dir']
+        uplfldr = os.path.join(fmdatadir, fmdirnm, fmdirnm)
         shutil.copytree(sampdatadir/'simplesip', uplfldr, dirs_exist_ok=True)
         os.rename(os.path.join(uplfldr, '_nerdm.json'), os.path.join(uplfldr, '#nerdm.json'))
         self.assertTrue(os.path.isdir(os.path.join(uplfldr, 'trial3')))

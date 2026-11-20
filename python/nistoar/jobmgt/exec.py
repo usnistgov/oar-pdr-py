@@ -134,7 +134,9 @@ def main(args):
         args = opts.args
         if not args:
             args = job.info.get('args',[])
-        mod.process(opts.id, cfg, args, log)
+        result = mod.process(opts.id, cfg, args, log)
+        if result is not None:
+            job.info['result'] = result
 
     except KeyboardInterrupt as ex:
         if log:
@@ -154,7 +156,10 @@ def main(args):
         errors.append(str(ex))
         if log:
             log.exception(ex)
-        raise FatalError("Failure occurred during processing: "+str(ex), 11) from ex
+        msg = str(ex)
+        if not msg:
+            msg = str(ex.__class__.__name__)
+        raise FatalError("Failure occurred during processing: "+msg, 11) from ex
     finally:
         ended = time.time()
         runt = ended - start
@@ -163,6 +168,14 @@ def main(args):
         else:
             job.mark_complete(exitcode, ended, runt, errors)
         job.save_to(statefile)
+
+        if hasattr(mod, 'notify'):
+            log.info("sending job completion notification")
+            try:
+                mod.notify(statefile, cfg, log)
+            except Exception as ex:
+                log.error("Failure during job completiong notification: "+str(ex))
+                log.exception(ex)
 
         
 if __name__ == '__main__':

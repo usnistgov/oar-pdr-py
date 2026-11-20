@@ -241,8 +241,8 @@ class SpacesResource(Resource):
             return sp.summarize()
 
         except FileManagerOpConflict as ex:
+            current_app.logger.error(str(ex))
             return make_error_response(str(ex), 409, "creating a new space")
-            return {"message": str(ex)}, 405
         except FileManagerException as ex:
             current_app.logger.error(str(ex))
             return server_error(intent="creating a new space")
@@ -347,23 +347,23 @@ class SpaceResource(Resource):
 
         contents = rec.get('contents')
         if "contents" in rec:
-            if not isinstance(contents, list) or any(not isinstance(e, Mapping) for e in contents):
+            if not isinstance(contents, list) or not all(isinstance(e, Mapping) for e in contents):
                 return { "message": "contents: not a list of objects" }, 400
             if not all('filepath' in e for e in contents):
                 return { "message": "contents: one or more entries missing filepath property" }, 400
 
         doing = "creating"
         try:
-            if contents:
+            if contents is not None:
                 doing = "reviving"
                 sp = svc.revive_space_for(id, rec['for_user'], contents)
-            else:
+            elif not svc.space_exists(id):
                 sp = svc.create_space_for(id, rec['for_user'])
             return sp.summarize()
 
         except FileManagerOpConflict as ex:
-            return make_error_response(str(ex), 405, "creating a new space")
-            return {"message": str(ex)}, 405
+            current_app.logger.error(str(ex))
+            return make_error_response(str(ex), 409, "{doing} a new space")
         except FileManagerException as ex:
             current_app.logger.error(str(ex))
             return server_error(intent=f"{doing} a new space")

@@ -236,7 +236,7 @@ class ValidationIssue(ValidationTest):
             ("profile_name", self.profile),
             ("profile_version", self.profile_version),
             ("label", self.label),
-            ("spec", self.message),
+            ("spec", self.specification),
             ("comments", self.comments)
         ])
 

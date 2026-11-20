@@ -1,3 +1,7 @@
+"""
+sim_distrib_srv Note:  this simulation server is deprecated by 
+:py:mod:`nistoar.pdr.public.sim.distrib`.  (See also test_client.py.)
+"""
 import json, os, sys, re, hashlib
 from wsgiref.headers import Headers
 from urllib.parse import parse_qs

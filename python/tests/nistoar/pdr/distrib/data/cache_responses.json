@@ -1,0 +1,94 @@
+{
+    "volumes": [
+        {
+          "totalsize": 9999907217091,
+          "filecount": 2931,
+          "checkedDate": "(never)",
+          "roles": 9,
+          "name": "gen0",
+          "checked": 0,
+          "sinceDate": "2026-04-27T09:41:00.640Z",
+          "status": 3,
+          "capacity": 10000000000000,
+          "since": 1777282860640
+        },
+        {
+          "totalsize": 9901267021768,
+          "filecount": 4077,
+          "checkedDate": "(never)",
+          "roles": 9,
+          "name": "gen1",
+          "checked": 0,
+          "sinceDate": "2026-04-27T09:23:31.023Z",
+          "status": 3,
+          "capacity": 10000000000000,
+          "since": 1777281811023
+        }
+    ],
+    "objects": [
+        {
+            "bagfile": "mds2-3834.1_0_0.mbag0_4-0.zip",
+            "pdrid": "ark:/88434/mds2-3834",
+            "volumeChecksum": "etag \"aec24896b73d2548e9339b9f04624497-1\"",
+            "checkedDate": "2026-04-25T21:53:19.106Z",
+            "cachePrefs": 4,
+            "checksumAlgorithm": "sha256",
+            "aipid": "mds2-3834",
+            "priority": 10,
+            "version": "1.0.0",
+            "sinceDate": "2026-04-24T20:11:36.396Z",
+            "volume": "fst4",
+            "score": 0,
+            "filepath": "EVMG Survey - data for publication.csv",
+            "size": 4293190,
+            "cached": true,
+            "checksum": "10a08fd61819f311248a6ff7aa625009837611d2fbd090df512660223dffd015",
+            "name": "mds2-3834/EVMG Survey - data for publication.csv",
+            "modified": 1759511194000,
+            "checked": 1777153999106,
+            "ediid": "ark:/88434/mds2-3834",
+            "id": "mds2-3834/EVMG Survey - data for publication.csv",
+            "contentType": "text/csv",
+            "since": 1777061496396
+        },
+        {
+          "bagfile": "mds2-3834.1_0_0.mbag0_4-0.zip",
+          "pdrid": "ark:/88434/mds2-3834",
+          "checkedDate": "2026-04-25T21:53:20.488Z",
+          "cachePrefs": 4,
+          "checksumAlgorithm": "sha256",
+          "aipid": "mds2-3834",
+          "priority": 10,
+          "version": "1.0.0",
+          "sinceDate": "2026-04-24T20:11:30.100Z",
+          "volume": "fst2",
+          "score": 0,
+          "filepath": "EVMG Survey - data for publication.xlsx",
+          "size": 1996165,
+          "cached": true,
+          "checksum": "d2028c8e48fdea5c33e9adeaa3e4d5cca301383cd9898ac902cb935a9e36cd4a",
+          "name": "mds2-3834/EVMG Survey - data for publication.xlsx",
+          "modified": 1759511203934,
+          "checked": 1777154000488,
+          "ediid": "ark:/88434/mds2-3834",
+          "id": "mds2-3834/EVMG Survey - data for publication.xlsx",
+          "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "since": 1777061490100
+        }
+    ],
+    "monitor_status": {
+        "lastCheckedDate": "2025-12-12T13:00:00.544509447Z",
+        "running": true,
+        "filecount": 1,
+        "deleted": [],
+        "lastRan": 1765544400544,
+        "lastChecked": 1765544400544,
+        "lastRanDate": "2025-12-12T13:00:00.544509447Z"
+    },
+    "queue_status": {
+        "current": null,
+        "waiting": [],
+        "status": "not running"
+    }
+}
+

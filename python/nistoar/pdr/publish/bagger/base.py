@@ -5,7 +5,7 @@ abstract base for subclasses that understand different input sources.
 """
 import os, json, filelock
 from collections import OrderedDict
-from collections.abc import Mapping
+from typing import Mapping, Union
 from abc import ABCMeta, abstractmethod, abstractproperty
 from copy import deepcopy
 
@@ -15,6 +15,9 @@ from ...utils import read_nerd, read_pod, read_json, write_json
 from ...preserve.bagit.builder import checksum_of
 from ....base.config import merge_config
 from ...utils.prov import Agent, Action
+from nistoar.id.minter import IDMinter
+
+UNKNOWN_AGENT = Agent("", Agent.UNKN, Agent.ANONYMOUS)
 
 def moddate_of(filepath):
     """
@@ -89,7 +92,7 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
         :param Agent    who: an actor identifier object, indicating who is requesting this action.  This 
                              will get recorded in the history data.  If None, an internal administrative 
                              identity will be assumed.  This identity may affect the identifier assigned.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
@@ -106,6 +109,25 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
             self.ensure_bag_parent_dir()
             self.lock = filelock.FileLock(lockfile)
 
+    class _nolock:
+        def __enter__(self):
+            return None
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    def _lock_when(self, dolock: bool):
+        """
+        return a context manager that, if requested, will lock this bag.  
+
+        This is a convenience function intended for use internally by this class and subclasses
+
+        :param bool dolock:  if True, lock the bag; otherwise, do nothing
+        """
+        if dolock:
+            self.ensure_filelock()
+            return self.lock
+        return self._nolock()
+
     def prepare(self, nodata=False, who=None, lock=True, _action: Action=None):
         """
         initialize the output working bag directory by calling 
@@ -120,12 +142,7 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
         :param lock bool:   if True (default), acquire a lock before executing
                             the preparation.
         """
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                self.ensure_preparation(nodata, who, _action)
-
-        else:
+        with self._lock_when(lock):
             self.ensure_preparation(nodata, who, _action)
 
     def finalize(self, who: Agent=None, lock=True, _action: Action=None):
@@ -138,16 +155,11 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
                              identity will be assumed.  This identity may affect the identifier assigned.
         :param bool lock:    if True (default), acquire a lock before executing
                              the preparation.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
-        if lock:
-            self.ensure_filelock()
-            with self.lock:
-                self.ensure_finalize(who, _action)
-
-        else:
+        with self._lock_when(lock):
             self.ensure_finalize(who, _action)
 
     @abstractmethod
@@ -159,7 +171,7 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
         :param Agent    who:  an actor identifier object, indicating who is requesting this action.  This 
                               will get recorded in the history data.  If None, an internal administrative 
                               identity will be assumed.  This identity may affect the identifier assigned.
-        :param Action _action:  Intended primarily for internal use; if provided, any provence actions 
+        :param Action _action:  Intended primarily for internal use; if provided, any provenance actions 
                              that should be recorded within this function should be added as a subaction
                              of this given one rather than recorded directly as a stand-alone action.
         """
@@ -225,9 +237,14 @@ class SIPBagger(PublishSystem, metaclass=ABCMeta):
         return merge_config(updates, orig)
 
     @abstractmethod
-    def delete(self):
+    def delete(self, who: Agent=None, message: str=None):
         """
         delete the working bag from store; this sets the bagger to a virgin state.
+
+        :param Agent   who:  an actor identifier object, indicating who is requesting this action.  This 
+                             will get recorded in the history data.  If None, an internal administrative 
+                             identity will be assumed.  This identity may affect the identifier assigned.
+        :param str message:  a message to record to the log describing the reason for deleting the bag.
         """
         raise NotImplementedError()
     
@@ -256,7 +273,8 @@ class SIPBaggerFactory(PublishSystem, metaclass=ABCMeta):
         return False
 
     @abstractmethod
-    def create(self, sipid, siptype: str, config: Mapping=None, minter=None) -> SIPBagger:
+    def create(self, sipid, siptype: str, config: Mapping=None,
+               idorminter: Union[str,IDMinter]=None) -> SIPBagger:
         """
         create a new instantiation of an SIPBagger that can process an SIP of the given type.  If config
         is provided, it may get merged in some way with the configuration set at construction time before
@@ -266,7 +284,10 @@ class SIPBaggerFactory(PublishSystem, metaclass=ABCMeta):
                                  subclasses may support more complicated ID types.
         :param str     siptype:  the name given to the SIP convention supported by the SIP reference by sipid
         :param Mapping  config:  bagger configuration parameters that should override the default
-        :param IDMinter minter:  an IDMinter instance that should be used to mint a new PDR-ID
+        :param str|IDMinter idorminter:  either the resource identifier (a str) to assign to the bag 
+                                 or an IDMinter instance to use to create an identifier when the bag
+                                 is eventually created.  Depending on the bagger being created,
+                                 the factory or the underlying bagger is not guaranteed to use either.
         """
         raise NotImplementedError()
 
@@ -274,8 +295,8 @@ class BaseSIPBaggerFactory(SIPBaggerFactory):
     """
     This is a base implementation of the SIPBaggerFactory that adds the following assumptions beyond 
     SIPBaggerFactory:  (1) the configuration follows the multi-SIP configuration schema (described below), 
-    (2) SIP identifiers are strings, and (3) that all SIPBagger implementations support the same constructor 
-    signature.
+    (2) SIP identifiers are strings, and (3) that all SIPBagger implementations support the same 
+    constructor signature.
 
     Configuration Schema:
     """
@@ -312,7 +333,8 @@ class BaseSIPBaggerFactory(SIPBaggerFactory):
         """
         return siptype in self._bgrcls
 
-    def create(self, sipid: str, siptype: str, config: Mapping=None, minter=None) -> SIPBagger:
+    def create(self, sipid: str, siptype: str, config: Mapping=None, 
+               idorminter: Union[str,IDMinter]=None) -> SIPBagger:
         """
         create a new instantiation of an SIPBagger that can process an SIP of the given type.  If provided,
         config will be merged with the default configuration provided by this factory, overriding the 
@@ -325,9 +347,11 @@ class BaseSIPBaggerFactory(SIPBaggerFactory):
         :param str     siptype:  the name given to the SIP convention supported by the SIP reference 
                                  by sipid
         :param Mapping  config:  bagger configuration parameters that should override the default
-        :param IDMinter minter:  an IDMinter instance that should be used to mint a new PDR-ID; if a 
-                                 registered SIPBagger class's constructor does not accept a minter 
-                                 argument, the constructor will be called without one.  
+        :param str|IDMinter idorminter:  either the PDR identifier (a str) to assign to the bag 
+                                 or an IDMinter instance to use to create an identifier when the bag
+                                 is eventually created.  if a registered SIPBagger class's constructor 
+                                 does not accept a minter argument, the constructor will be called
+                                 without one.  
         """
         if not self.supports(siptype):
             raise PublishException("Factory does not support this SIP type: "+siptype, sys=self)
@@ -339,12 +363,17 @@ class BaseSIPBaggerFactory(SIPBaggerFactory):
         except KeyError as ex:
             raise PublishException("No SIPBagger class specified for siptype="+siptype, sys=self)
 
-        try:
-            return cls(sipid, outcfg, minter=minter)
-        except TypeError as ex:
-            if "unexpected keyword argument 'minter'" in str(ex):
-                return cls(sipid, outcfg)
-            raise
+        if isinstance(idorminter, str):
+            # a PDR resource identifier to assign was provided
+            return cls(sipid, outcfg, id=idorminter)
+        else:
+            # a minter was provided
+            try:
+                return cls(sipid, outcfg, minter=idorminter)
+            except TypeError as ex:
+                if "unexpected keyword argument 'minter'" in str(ex):
+                    return cls(sipid, outcfg)
+                raise
 
 
     

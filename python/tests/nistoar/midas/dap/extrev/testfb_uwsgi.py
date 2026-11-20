@@ -5,11 +5,13 @@ import tempfile, sys, os, logging, signal
 import traceback as tb
 from wsgiref.simple_server import make_server, WSGIServer
 from socketserver import ThreadingMixIn
+from typing import Mapping, Callable
 
 from nistoar.midas.dap.extrev import wsgi
 from nistoar.midas.dap.service import mds3
-from nistoar.midas.dbio import AlreadyExists, PUBLIC_GROUP
+from nistoar.midas.dbio import AlreadyExists, PUBLIC_GROUP, AUTOADMIN
 from nistoar.pdr.utils.prov import Agent
+from nistoar.web.rest import Handler
 
 try:
     import uwsgi
@@ -78,8 +80,28 @@ def clean_up(*args):
         tmpdir.cleanup()
         print("Working directory cleaned up", file=sys.stderr)
 
+class TestExtRevApp(wsgi.app):
+    def handle_path_request(self, path: str, env: Mapping, start_resp: Callable, who = None):
+        if path == 'reset':
+            recid = "mds3:0001"
+            who = Agent("test", Agent.AUTO, AUTOADMIN)
+            try:
+                svc = self.svcfact.create_service_for(who)
+                prec = svc.get_record(recid)
+                svc.apply_external_review(recid, "nps1", "requested", _prec=prec)
+                svc._set_review_permissions(prec, PUBLIC_GROUP)
+                prec.save()
+            except Exception as ex:
+                return Handler(path, env, start_resp).send_error(550, message="Reset failure",
+                                                                 content='{"oar:message": "'+str(ex)+'"}',
+                                                                 contenttype="application/json")
+            return Handler(path, env, start_resp).send_ok()
+
+        return super().handle_path_request(path, env, start_resp, who)
+
 def create_app(workdir):
-    return wsgi.app(make_config(workdir))
+    # return wsgi.app(make_config(workdir))
+    return TestExtRevApp(make_config(workdir))
 
 def init_data(fbapp):
     who = Agent("test", Agent.AUTO, "tester")
