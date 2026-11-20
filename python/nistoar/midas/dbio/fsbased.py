@@ -177,9 +177,9 @@ class FSBasedDBClient(base.DBClient):
                         yield rec
                         break
 
-    def adv_select_records(self, perm: base.Permissions = base.ACLs.OWN,
-                           **cst) -> Iterator[base.ProjectRecord]:
-        raise NotImplementedError()
+    def adv_select_records(self, filter: dict,
+                           perm: base.Permissions = base.ACLs.OWN) -> Iterator[base.ProjectRecord]:
+        raise NotImplementedError("advanced search is not supported by the fsbased backend")
 
     def _save_action_data(self, actdata: Mapping):
         self._ensure_collection(base.PROV_ACT_LOG)
