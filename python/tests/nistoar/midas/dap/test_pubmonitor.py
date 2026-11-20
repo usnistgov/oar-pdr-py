@@ -53,7 +53,9 @@ class TestMIDASPublishingMonitor(test.TestCase):
         self.dbfact = InMemoryDBClientFactory(svccfg)
         self.db = self.dbfact._db
         self.dapsvc = ProjectService(dbio.DAP_PROJECTS, self.dbfact, {})
-        self.monitor = pubmonitor.MIDASPublishingMonitor(self.dbfact, self.statusdir, self.qfile)
+        self.dapcfg = { 'nerdstorage': { 'type': 'inmem' }, 'doi_naan': '10.18434' }
+        self.monitor = pubmonitor.MIDASPublishingMonitor(self.dbfact, self.statusdir, self.qfile,
+                                                         dapconfig=self.dapcfg)
         self.client = monitor.FileBasedPublishingMonitorClient(self.qfile)
 
     def tearDown(self):
