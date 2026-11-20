@@ -22,7 +22,7 @@ from typing import Mapping
 
 from nistoar.midas import dbio
 from nistoar.midas.dbio import status as mstatus, ObjectNotFound, NotAuthorized
-from nistoar.midas.dbio.project import ProjectService
+from nistoar.midas.dap.service.mds3 import DAPService
 from nistoar.midas.wsgi import ServiceAppFactory as MIDASServiceAppFactory
 from nistoar.pdr.publish.service import status as pstatus
 from nistoar.pdr.publish.service.monitor import LocalPublishingMonitor, FileBasedPublishingMonitorClient
@@ -42,10 +42,6 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
         initialize the monitor with an internal :py:class:`~nistoar.midas.dbio.project.ProjectService`
         that will be used to update the status of MIDAS records going through the publishing service
         (i.e. "in press").  
-
-        Implementation Note: this internally creates a generic ``ProjectService`` rather than a 
-        :py:class:`~nistoar.midas.dap.service.mds3.DAPService`.  Since this monitor only updates 
-        the status, it does not need to be attached to a particular convention.  
 
         :param DBClientFactory dbclient_factory:  the factory needed to the proper DBIO client instance 
                                     to back the ``ProjectService``.
@@ -69,8 +65,8 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
         if not who:
             who = Agent("MIDASPublishingMonitor", Agent.AUTO, dbio.AUTOADMIN, Agent.ADMIN)
 
-        self.projsvc = ProjectService(dbio.DAP_PROJECTS, dbclient_factory, dapconfig, who,
-                                      self.log.getChild(dbio.DAP_PROJECTS))
+        self.projsvc = DAPService(dbclient_factory, dapconfig, who,
+                                  self.log.getChild(dbio.DAP_PROJECTS))
 
         super(MIDASPublishingMonitor, self).__init__(statusdir, qfile, self.update_status, cyclesecs, log)
 
@@ -92,6 +88,8 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
                            sipid, str(self.projsvc.user))
             raise
 
+        self.log.debug("processing publishing state change to %s", state)
+        precupdated = True
         if state == pstatus.SUBMITTED:
             prec.status.set_state(mstatus.ACCEPTED)
             prec.status.message = message
@@ -108,6 +106,8 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
                                         data.get('last_published_time', -1))
                 else:
                     prec.status.set_state(mstatus.PUBLISHED)
+
+                self.projsvc._unset_review_permissions(prec)
                 prec.status.message = message
         elif state == pstatus.FAILED:
             if mstatus != mstatus.UNWELL:
@@ -116,6 +116,8 @@ class MIDASPublishingMonitor(LocalPublishingMonitor):
         elif state == pstatus.ONHOLD:
             prec.status.set_state(mstatus.INPRESS)
             prec.status.message = "Publication has been paused; admins have been alerted"
+        self.log.info("%s: %s", prec.id, prec.status.message)
+        
         try:
             prec.save()
         except dbio.NotAuthorized as ex:
