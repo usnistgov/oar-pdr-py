@@ -474,9 +474,14 @@ class About(ServiceApp):
 
 def PeopleServiceFactory(servicemodule):
     if not hasattr(servicemodule, "PeopleServiceApp"):
-        raise ValueError(f"service module {servicemodule.__name__} is missing a PeopleServiceApp symbol")
+        raise ValueError(
+            f"service module {servicemodule.__name__} "
+            "is missing a PeopleServiceApp symbol"
+        )
+
     def factory(dbiofact, log, config, name):
         return servicemodule.PeopleServiceApp(config, log, name)
+
     return factory
 
 def DOIServiceFactory(servicemodule):
@@ -638,6 +643,17 @@ class MIDASApp(AuthenticatedWSGIApp):
             self.subapps["group/def"] = self.subapps[f"group/{default_cnv}"]
             self.subapps["group"] = group_about
 
+        # When a MIDAS group changes, update file permissions for the DAP records shared with that group.
+        from .dap.service.permissions import synchronize_records
+
+        def synchronize_permissions(group_id=None, group_overrides=None):
+            synchronize_records(self, group_id, group_overrides)
+
+        # Several paths can refer to the same subapp. Configure each group subapp once.
+        for subapp in {id(app): app for app in self.subapps.values()}.values():
+            if isinstance(subapp, group.MIDASGroupApp):
+                subapp.svc_factory.synchronize_permissions = synchronize_permissions
+
     def authenticate_user(self, env: Mapping, agents: List[str]=None, client_id: str=None) -> Agent:
         """
         determine the authenticated user
@@ -670,9 +686,26 @@ class MIDASApp(AuthenticatedWSGIApp):
         return subapp.handle_path_request(env, start_resp, "/".join(path), who)
 
     def load_people_from(self, datadir=None):
-        if any(k.startswith("nsd/") for k in self.subapps.keys()):
-            nsdapp = [v for k,v in self.subapps.items() if k.startswith("nsd/")][0]
+        if any(k.startswith("nsd/") for k in self.subapps):
+            nsdapp = [
+                app for name, app in self.subapps.items()
+                if name.startswith("nsd/")
+            ][0]
+
+            # Load the staff directory using the existing implementation.
             nsdapp.load_from(datadir)
+
+            # Staff memberships may have changed since the previous deployment.
+            # Update existing DAP file permissions using the directory loaded during this startup.
+            from .dap.service.permissions import synchronize_records
+
+            try:
+                synchronize_records(self)
+            except Exception:
+                # Preserve the current startup behavior: report an FM synchronization failure without stopping DBIO startup.
+                log.exception(
+                    "NSD loaded, but file permission synchronization failed."
+                )
 
 
 app = MIDASApp

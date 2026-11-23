@@ -730,26 +730,18 @@ class FMSpace:
         return PERM_NONE
 
     def get_permissions(self, resource: str):
-        """
-        return permissions for all known users set on the specified resource.  This uses 
-        :py:meth:`get_known_users` to generate a dictionary of users to permissions.
-
-        :param str resource:  the path to the resource relative to the space's root folder
-        :return:  a dictionary whose keys are user IDs and values are the integer-valued 
-                  permissions assigned to each.
-        """
-        out = {}
-        for userid in self.get_known_users():
-            try:
-                out[userid] = self.get_permissions_for(resource, userid)
-            except Exception as ex:
-                self.log.warning("Trouble accessing permissions for user %s: %s", userid, str(ex))
+        """Return every known user's permissions on a resource"""
+        out = {
+            userid: self.get_permissions_for(resource, userid)
+            for userid in self.get_known_users()
+        }
 
         if not out and self.creator:
-            raise FileManagerException("Failed to generate permissions on " + resource)
+            raise FileManagerException(
+                "Failed to generate permissions on " + resource
+            )
 
         return out
-        
 
     def set_permissions_for(self, resource: str, userid: str, perm: int,
                             sync_windows: bool = True,

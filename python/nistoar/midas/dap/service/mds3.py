@@ -3101,43 +3101,34 @@ class DAPServiceFactory(ProjectServiceFactory):
 
     
 class DAPProjectACLsHandler(ProjectACLsHandler):
-    """Synchronize new individual shares and complete unshares through FM."""
+    """Synchronize effective individual and group access through FM."""
 
     def _save_acls(self, prec, previous_acls):
+        from .permissions import (
+            PermissionResolver,
+            record_acls,
+            review_file_role,
+            synchronize_record,
+        )
+
         if not prec.authorized(ACLs.ADMIN):
             raise NotAuthorized(self.who.actor, "update record permissions")
 
-        fmcli = self.svc._fmcli
-        if fmcli:
-            current_acls = {
-                perm: set(prec.acls.iter_perm_granted(perm))
-                for perm in ACLs.OWN
+        if self.svc._fmcli:
+            resolver = PermissionResolver(self.svc.dbcli)
+            maximum = review_file_role(prec)
+            before = resolver.permissions(previous_acls, maximum)
+            after = resolver.permissions(record_acls(prec), maximum)
+
+            # Preserve access supplied by another group or a direct share.
+            changed = {
+                username
+                for username in set(before) | set(after)
+                if before.get(username) != after.get(username)
             }
-            previous_users = set().union(*previous_acls.values())
-            current_users = set().union(*current_acls.values())
-
-            added_users = current_users - previous_users
-            # A user is fully unshared only when absent from all four standard ACLs.
-            removed_users = previous_users - current_users
-
-            permissions = {}
-            for userid in sorted(added_users | removed_users):
-                if userid == prec.owner or userid == ANONYMOUS or ":" in userid:
-                    continue
-
-                if userid in removed_users:
-                    permissions[userid] = "None"
-                elif userid in current_acls[ACLs.ADMIN]:
-                    permissions[userid] = "All"
-                elif userid in current_acls[ACLs.DELETE]:
-                    permissions[userid] = "Delete"
-                elif userid in current_acls[ACLs.WRITE]:
-                    permissions[userid] = "Write"
-                else:
-                    permissions[userid] = "Read"
-
-            if permissions:
-                fmcli.set_space_permissions(prec.id, permissions)
+            synchronize_record(
+                self.svc, prec, after, before, users=changed
+            )
 
         super()._save_acls(prec, previous_acls)
 

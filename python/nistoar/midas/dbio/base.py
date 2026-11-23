@@ -46,6 +46,27 @@ PUBLIC_GROUP = DEF_GROUPS_SHOULDER + ":public"    # all users are implicitly par
 ANONYMOUS = ANONYMOUS_USER
 AUTOADMIN = "dbio:admin"     # a superuser identity that should only be used by internal dbio code
 
+# The portal uses subjects such as "nistdiv:123".
+# NSD stores the corresponding ID in a field such as "divisionOrgID".
+#
+# These are organization IDs, which identify the organization records.
+ORG_FIELDS = {
+    "nistou": "ouOrgID",
+    "nistdiv": "divisionOrgID",
+    "nistgrp": "groupOrgID",
+}
+
+
+def organization_subjects(person):
+    """Return MIDAS organization subjects from the NSD organization ID fields."""
+    result = set()
+    for prefix, field in ORG_FIELDS.items():
+        value = person.get(field)
+        if value:
+            result.add(f"{prefix}:{value}")
+    return result
+
+
 __all__ = ["DBClient", "DBClientFactory", "ProjectRecord", "DBGroups", "Group", "ACLs", "PUBLIC_GROUP",
            "ANONYMOUS", "DAP_PROJECTS", "DMP_PROJECTS", "ObjectNotFound", "NotAuthorized", "AlreadyExists",
            "InvalidRecord", "InvalidUpdate", "DBIOException", "DBIORecordException" ]
@@ -1016,14 +1037,19 @@ class DBClient(ABC):
         return self._whogrps
 
     def all_groups_for(self, who) -> frozenset:
-        """
-        Return the frozen set of all groups a user or group belongs to.
-        """
-        adhoc = self.groups.select_ids_for_user(who)
-        virtual_groups = self._get_virtual_groups_for(who)
-        all_groups = frozenset(adhoc.union(virtual_groups))
+        # Organizational memberships come from the staff directory.
+        virtual = set(self._get_virtual_groups_for(who))
 
-        return all_groups
+        # Custom-group memberships come from DBIO's stored groups.
+        # Combine both sources.
+        groups = set(self.groups.select_ids_for_user(who)) | virtual
+
+        # Custom groups may contain an organizational group.
+        for group_id in virtual:
+            groups.update(self.groups.select_ids_for_user(group_id))
+
+        # Return a set that callers cannot modify.
+        return frozenset(groups)
 
     @property
     def people_service(self) -> PeopleService:
@@ -1034,34 +1060,34 @@ class DBClient(ABC):
         return self._peopsvc
 
     def recache_user_groups(self):
-        """
-        the :py:property:`user_groups` contains a cached list of all the groups the user is
-        a member of.  This function will recache this list (resulting in queries to the backend
-        database).
-        """
-        adhoc_groups = self.groups.select_ids_for_user(self.user_id)
-        virtual_groups = self._get_virtual_groups_for(self.user_id)
-        self._whogrps = frozenset(adhoc_groups.union(virtual_groups))
+        # Refresh this DBIO client's cached memberships
+        self._whogrps = self.all_groups_for(self.user_id)
 
     def _get_virtual_groups_for(self, user_id: str) -> List[str]:
-        """
-        Return the list of 'virtual groups' ids a user is part of, based on the staff directory
-        (PeopleService). Returns an empty list if the PeopleService is not available or the
-        user is not found.
-        """
-        if not self.people_service:
+        people = self.people_service
+        if people is None:
             return []
-        person = self.people_service.get_person_by_eid(user_id)
-        if not person:
-            return []
-        out = []
-        if 'nistou' in person and person['nistou']:
-            out.append(f"nistou:{person['nistou']}")
-        if 'nistdiv' in person and person['nistdiv']:
-            out.append(f"nistdiv:{person['nistdiv']}")
-        if 'nistgrp' in person and person['nistgrp']:
-            out.append(f"nistgrp:{person['nistgrp']}")
-        return out
+
+        person = people.get_person_by_eid(user_id)
+
+        # Select the exact username if the first result belongs to someone else.
+        if person and person.get(people.EID_PROP, user_id) != user_id:
+            person = next(
+                (
+                    entry
+                    for entry in people.select_people(
+                        {people.EID_PROP: user_id}
+                    )
+                    if entry.get(people.EID_PROP) == user_id
+                ),
+                None,
+            )
+
+        # Return subjects such as:
+        # ["nistdiv:123", "nistgrp:456", "nistou:789"]
+        #
+        # No matching person means no organizational memberships
+        return sorted(organization_subjects(person)) if person else []
 
     def create_record(self, name: str, shoulder: str = None,
                       foruser: str = None, localid: str = None) -> ProjectRecord:

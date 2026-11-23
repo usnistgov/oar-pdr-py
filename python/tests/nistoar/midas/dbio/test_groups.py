@@ -390,8 +390,13 @@ class TestVirtualGroups(test.TestCase):
 
     def test_all_groups_for_withMockPeopleService(self):
         staffdata = {
-            "nist0:ava1": { "nistou": "728", "nistdiv": "730" },
-            "nist0:alice": { "nistgrp": "999" }
+            "nist0:ava1": {
+                "ouOrgID": "728",
+                "divisionOrgID": "730",
+            },
+            "nist0:alice": {
+                "groupOrgID": "999",
+            },
         }
         pplsvc = MockPeopleService(staffdata)
         newcli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, self.user)
@@ -414,8 +419,13 @@ class TestVirtualGroups(test.TestCase):
 
     def test_recache_user_groups_withMockPeopleService(self):
         staffdata = {
-            "nist0:ava1": { "nistou": "728", "nistdiv": "730" },
-            "nist0:alice": { "nistgrp": "999" }
+            "nist0:ava1": {
+                "ouOrgID": "728",
+                "divisionOrgID": "730",
+            },
+            "nist0:alice": {
+                "groupOrgID": "999",
+            },
         }
         pplsvc = MockPeopleService(staffdata)
         newcli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, self.user)
@@ -449,8 +459,13 @@ class TestVirtualGroups(test.TestCase):
         # A user whose NSD entry maps to nistou:728 should pass authorized(),
         # while a user in a different OU and a user absent from NSD should not.
         staffdata = {
-            "nist0:ava1": {"nistou": "728", "nistdiv": "730"},
-            "nist0:bob":  {"nistgrp": "999"},
+            "nist0:ava1": {
+                "ouOrgID": "728",
+                "divisionOrgID": "730",
+            },
+            "nist0:bob": {
+                "groupOrgID": "999",
+            },
         }
         pplsvc = MockPeopleService(staffdata)
         cli = self.fact.create_client(base.DMP_PROJECTS, self.clientcfg, "alice")

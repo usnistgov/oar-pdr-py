@@ -40,10 +40,12 @@ class GroupService:
     """
     A service class that wraps basic group operations provided by the Group class
     """
-    def __init__(self, dbclient, log: Logger = None):
+    def __init__(self, dbclient, log: Logger = None,
+                 synchronize_permissions: Callable = None):
         self._cli = dbclient
         self._groups: DBGroups = dbclient.groups
         self.log = log
+        self._sync_permissions = synchronize_permissions
 
     def create_group(self, name: str, foruser: str = None) -> Group:
         """
@@ -72,53 +74,53 @@ class GroupService:
             raise ObjectNotFound(group_id)
         return grp
 
-    def delete_group(self, group_id: str) -> bool:
-        """
-        Delete an existing group. Requires DELETE permission.
+    def _save_group(self, grp):
+        # Check authorization before making any file-permission changes.
+        if not grp.authorized(ACLs.WRITE):
+            raise NotAuthorized(self._cli.user_id, "update group membership")
 
-        :return: True if the group was deleted, False otherwise.
-        """
+        if self._sync_permissions:
+            # Resolve file access using this pending member list.
+            # The database still contains the previous member list.
+            self._sync_permissions(grp.id, {grp.id: grp._data})
+
+        # Save only after FM has accepted the required permission changes.
+        grp.save()
+
+    def delete_group(self, group_id: str) -> bool:
+        grp = self._groups.get(group_id)
+        if not grp:
+            return False
+        if not grp.authorized(ACLs.DELETE):
+            raise NotAuthorized(group_id, "delete group")
+
+        if self._sync_permissions:
+            self._sync_permissions(group_id, {group_id: None})
+
         return self._groups.delete_group(group_id)
 
     def add_members(self, group_id: str, member_ids: list[str]) -> list[str]:
-        """
-        Add one or more user (or group) IDs to this group's membership.
-
-        :return: the updated membership list
-        """
         grp = self.get_group(group_id)
         grp.add_member(*member_ids)
-        grp.save()
+        self._save_group(grp)
         return grp._data["members"]
 
     def replace_members(self, group_id: str, member_ids: list[str]) -> list[str]:
-        """
-        Replace the group's entire membership with the given IDs.
-
-        :return: the updated membership list
-        """
         grp = self.get_group(group_id)
-        # Clear the existing list:
         existing = list(grp._data["members"])
         for old in existing:
             if old in grp._data["members"]:
                 grp._data["members"].remove(old)
-        # Add the new ones
         grp.add_member(*member_ids)
-        grp.save()
+        self._save_group(grp)
         return grp._data["members"]
 
     def remove_member(self, group_id: str, member_id: str) -> bool:
-        """
-        Remove a single user (or group) ID from this group's membership.
-
-        :return: True if the user was removed from membership, False if no change
-        """
         grp = self.get_group(group_id)
         if member_id not in grp._data["members"]:
             return False
         grp.remove_member(member_id)
-        grp.save()
+        self._save_group(grp)
         return True
 
 
@@ -131,6 +133,7 @@ class GroupServiceFactory:
         self.dbcli_factory = dbcli_factory
         self.config = config
         self.log = log
+        self.synchronize_permissions = None
 
     def create_service_for(self, who: Agent) -> GroupService:
         """
@@ -139,7 +142,7 @@ class GroupServiceFactory:
         if who is None:
             who = Agent("dbio.group", Agent.USER, Agent.ANONYMOUS, Agent.PUBLIC)
         dbcli = self.dbcli_factory.create_client("groups", config = self.config, foruser = who.actor)
-        return GroupService(dbcli, self.log)
+        return GroupService(dbcli, self.log, self.synchronize_permissions)
 
 
 class GroupSelectionHandler(DBIOHandler):
