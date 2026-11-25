@@ -2,6 +2,7 @@
 Unit tests for the group.py module in midas/dbio/wsgi.
 
 It tests:
+  - Listing the user's groups (GET /midas/group/grp0)
   - Creating a group (POST /midas/group/grp0)
   - Getting a group (GET /midas/group/grp0/<group_id>)
   - Adding members (POST /midas/group/grp0/<group_id>)
@@ -84,18 +85,85 @@ class TestMIDASGroupApp(test.TestCase):
 
     def test_no_shoulder_provided(self):
         """
-        If we call /midas/group/ with no <shoulder>, we expect a 500 or 400
-        because group.py expects a shoulder.
+        GET /midas/group/ uses the default shoulder and returns the user's groups.
         """
         path = ""
         req = {
             'REQUEST_METHOD': 'GET',
             'PATH_INFO': self.rootpath + path
         }
-        # This should fail because group.py checks for a shoulder
         hdlr = self.app.create_handler(req, self.start, path, test_agent)
         body = hdlr.handle()
-        self.assertIn("405 ", self.resp[0])
+        self.assertIn("200 ", self.resp[0])
+        self.assertEqual(self.body2dict(body), [])
+
+    def test_list_groups_scoped_to_user(self):
+        svc = self.svcfactory.create_service_for(test_agent)
+        owned = svc.create_group("owned")
+        alice = Agent("midas", Agent.USER, "alice", "midas")
+        alice_svc = self.svcfactory.create_service_for(alice)
+        shared = alice_svc.create_group("shared")
+        alice_svc.add_members(shared.id, [test_agent.actor])
+        unrelated = alice_svc.create_group("unrelated")
+        stranger = Agent("midas", Agent.USER, "stranger", "midas")
+
+        for who, expected_ids in [
+            (test_agent, [owned.id, shared.id]),
+            (alice, [shared.id, unrelated.id]),
+            (stranger, [])
+        ]:
+            with self.subTest(user=who.actor):
+                self.resp = []
+                path = "grp0"
+                req = {
+                    'REQUEST_METHOD': 'GET',
+                    'PATH_INFO': self.rootpath + path
+                }
+                hdlr = self.app.create_handler(req, self.start, path, who)
+                body = hdlr.handle()
+
+                self.assertIn("200 ", self.resp[0])
+                groups = self.body2dict(body)
+                self.assertIsInstance(groups, list)
+                self.assertCountEqual([g["id"] for g in groups], expected_ids)
+                for listed in groups:
+                    self.assertIn("name", listed)
+                    self.assertIn("owner", listed)
+                    self.assertIn("members", listed)
+
+    def test_group_collection_options(self):
+        path = "grp0"
+        req = {
+            'REQUEST_METHOD': 'OPTIONS',
+            'PATH_INFO': self.rootpath + path
+        }
+        hdlr = self.app.create_handler(req, self.start, path, test_agent)
+        hdlr.handle()
+
+        self.assertIn("200 ", self.resp[0])
+        allowed = next(
+            header.split(": ", 1)[1] for header in self.resp[1:]
+            if header.startswith("Access-Control-Allow-Methods: ")
+        )
+        self.assertIn("GET", allowed.split(", "))
+        self.assertIn("POST", allowed.split(", "))
+
+    def test_group_collection_rejects_anonymous(self):
+        anonymous = Agent("midas", Agent.USER, Agent.ANONYMOUS, Agent.PUBLIC)
+        for path in ("", "grp0"):
+            for method in ("GET", "POST"):
+                with self.subTest(path=path, method=method):
+                    self.resp = []
+                    req = {
+                        'REQUEST_METHOD': method,
+                        'PATH_INFO': self.rootpath + path,
+                        'wsgi.input': StringIO(json.dumps({"name": "anonymous-group"}))
+                    }
+                    hdlr = self.app.create_handler(req, self.start, path, anonymous)
+                    hdlr.handle()
+                    self.assertIn("401 ", self.resp[0])
+
+        self.assertEqual(self.dbfact._db["groups"], {})
 
     def test_create_group(self):
         """

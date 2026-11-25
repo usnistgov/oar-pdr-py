@@ -242,6 +242,49 @@ class TestDBGroups(test.TestCase):
         self.assertTrue(self.dbg.exists("grp0:nist0:ava1:friends"))
         self.assertGreater(grp.modified, grp.created)
 
+    def test_select_for_user(self):
+        owned = self.dbg.create_group("owned")
+        owned.remove_member(self.user)
+        owned.save()
+        owner_member = self.dbg.create_group("owner-member")
+
+        other_cli = self.fact.create_client(base.DMP_PROJECTS, {}, "alice")
+        shared = other_cli.groups.create_group("shared")
+        shared.add_member(self.user)
+        shared.save()
+        other_cli.groups.create_group("unrelated")
+        indirect = other_cli.groups.create_group("indirect")
+        indirect.add_member(shared.id)
+        indirect.save()
+
+        matches = list(self.dbg.select_for_user(self.user))
+        self.assertTrue(all(isinstance(group, base.Group) for group in matches))
+        self.assertCountEqual(
+            [group.id for group in matches],
+            [owned.id, owner_member.id, shared.id]
+        )
+
+    def test_select_for_user_excludes_deactivated(self):
+        active = self.dbg.create_group("active")
+        deactivated = self.dbg.create_group("deactivated")
+        deactivated.deactivate()
+        deactivated.save()
+
+        other_cli = self.fact.create_client(base.DMP_PROJECTS, {}, "alice")
+        shared = other_cli.groups.create_group("deactivated-shared")
+        shared.add_member(self.user)
+        shared.deactivate()
+        shared.save()
+
+        self.assertEqual(
+            [group.id for group in self.dbg.select_for_user(self.user)],
+            [active.id]
+        )
+
+    def test_select_for_user_empty(self):
+        self.dbg.create_group("unrelated")
+        self.assertEqual(list(self.dbg.select_for_user("alice")), [])
+
     def test_select_ids_for_user(self):
         for s in "abcdefghijklmnopqrstuvwxyz":
             self.dbg.create_group("group-"+s)

@@ -13,6 +13,7 @@ URL path and delegates the handling to a more specific handler class.  In partic
 are handled accordingly:
 
 ``/`` -- :py:class:`GroupSelectionHandler`
+    lists active groups the user owns or directly belongs to (GET)
     creates a new group (POST), returning the newly created record; the user must supply JSON including at least the "name".
 
 ``/<group_id>`` -- :py:class:`GroupHandler`
@@ -60,6 +61,13 @@ class GroupService:
         :return: the newly created Group object
         """
         return self._groups.create_group(name, foruser)
+
+    def list_groups(self) -> list:
+        """Return active groups owned by or directly containing the current user."""
+        return [
+            group.to_dict()
+            for group in self._groups.select_for_user(self._cli.user_id)
+        ]
 
     def get_group(self, group_id: str) -> Group:
         """
@@ -156,8 +164,21 @@ class GroupSelectionHandler(DBIOHandler):
         self.svc = svc
         self._shoulder = shoulder
 
+    def preauthorize(self):
+        return (
+            super().preauthorize()
+            and self.who.actor != Agent.ANONYMOUS
+        )
+
     def do_OPTIONS(self, path):
-        return self.send_options(["POST"])
+        return self.send_options(["GET", "POST"])
+
+    def do_GET(self, path, ashead=False):
+        """List the authenticated user's groups."""
+        try:
+            return self.send_json(self.svc.list_groups(), ashead=ashead)
+        except NotAuthorized:
+            return self.send_unauthorized()
 
     def do_POST(self, path):
         """
